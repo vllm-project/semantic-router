@@ -131,6 +131,17 @@ func DeployPreviewHandler(configPath string, readonlyMode bool) http.HandlerFunc
 			return
 		}
 
+		if !callerCanViewConfigSecrets(r) {
+			currentForDiffBytes, err = redactConfigYAML(currentForDiffBytes)
+			if err == nil {
+				previewBytes, err = redactConfigYAML(previewBytes)
+			}
+			if err != nil {
+				http.Error(w, "Failed to prepare configuration preview", http.StatusInternalServerError)
+				return
+			}
+		}
+		w.Header().Set("Cache-Control", "private, no-store")
 		currentForDiff := canonicalizeYAMLForDiff(currentForDiffBytes)
 		previewForDiff := canonicalizeYAMLForDiff(previewBytes)
 
@@ -275,6 +286,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
+	if rejectKeyReferenceRedirect(w, r, existingData, yamlBytes) {
+		return
+	}
+
 	warnings, err := validateMergedDeploy(yamlBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
@@ -289,7 +304,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -314,10 +329,12 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
+	yamlBytes, keptKeys, err := persistConfig(configPath, yamlBytes)
+	if err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
+	warnings = append(warnings, keptKeys...)
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
@@ -428,7 +445,7 @@ func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal merged config: %w", err)
 	}
-	return mergedYAML, nil
+	return restoreConfigSecrets(currentData, mergedYAML)
 }
 
 // mergeDSLOwnedNodes applies only the configuration surface owned by the DSL:
@@ -621,7 +638,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+	if _, err = checkConfigMapMutationFresh(configPath); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -643,7 +660,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
-	if err := writeConfigAtomically(configPath, backupData); err != nil {
+	if backupData, _, err = persistConfig(configPath, backupData); err != nil {
 		writeConfigPersistenceError(w, err)
 		return
 	}
@@ -655,7 +672,12 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 	if applyErr != nil {
-		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr), http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":   "config_activation_failed",
+			"message": formatRuntimeApplyError("Failed to apply rolled back config to runtime", applyErr),
+		})
 		return
 	}
 	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {

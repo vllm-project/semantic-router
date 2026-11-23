@@ -4,7 +4,7 @@ sidebar_position: 5
 title: 多模型混合
 description: 一个虚拟模型名如何把每个请求路由到独立服务的多个模型，以及 Router 自带的五个 MoM V1 配方。
 translation:
-  source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
+  source_commit: "f041b8ee78de8680ab63e3c4d135b75c63514e63"
   source_file: "docs/overview/mom-model-family.md"
   outdated: false
 ---
@@ -208,10 +208,10 @@ Vault 失败时关闭。若某项判断未得到回答，或输入超出决策�
    vllm-sr serve
    ```
 
-2. 在 Dashboard 中打开 **Models**，连接你的推理端点。
-3. 打开 **Build → Mixture-of-Models → Recipes**，在内置配方上选择 **Create model**。
+2. 在 Dashboard 中打开 **Models → Backend models**，连接你的推理端点。
+3. 打开 **Routing → Recipes**，选择 **Recipes** 标签页，在内置配方上选择 **Create model**。
 4. 为它的入口命名，并为每个决策分配模型。Vault 的 `guard` 不需要分配。
-5. 用 **Preview** 查看信号、决策和选中的候选；再发送真实请求，检查执行情况和延迟。
+5. 打开 **Routing → Topology**，用 **Test a prompt** 查看信号、决策和选中的候选；再发送真实请求，检查执行情况和延迟。
 
 每个模型都需要声明能力、上下文窗口和输出上限。`multi_factor` 决策还会比较模型在所分配推理强度下的质量指标。
 

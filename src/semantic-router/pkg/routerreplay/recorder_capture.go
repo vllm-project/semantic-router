@@ -60,7 +60,7 @@ func omitUncapturedStepText(trace *ToolTrace, policy recorderPolicy) {
 		step := &trace.Steps[i]
 		if !policy.capturesStep(step.Source) {
 			step.Text, step.Arguments, step.RawArguments, step.Output, step.RawOutput = "", "", "", "", ""
-			step.Truncated = false
+			step.Truncated, step.RawTruncated = false, false
 		}
 	}
 }

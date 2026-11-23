@@ -47,7 +47,7 @@ func recordReplayUserTurn(t *testing.T, router *OpenAIRouter, format llmprotocol
 	ctx := &RequestContext{
 		SourceFormat: format, TraceContext: t.Context(),
 		Headers:                  map[string]string{"x-session-id": "shared-session", "x-conversation-id": conversation},
-		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, CaptureResponseBody: true},
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true, CaptureResponseBody: true},
 	}
 	request, immediate := router.prepareProtocolRequest(body, ctx)
 	require.Nil(t, immediate)
@@ -77,7 +77,7 @@ func TestReplayUserTurnsThroughProtocolPipeline(t *testing.T) {
 			_, separate := recordReplayUserTurn(t, router, format, replayUserTurnWire(format, 0, false), "conversation-b")
 			require.Zero(t, separate.TurnIndex)
 
-			response := router.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session").GetImmediateResponse()
+			response := router.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session").GetImmediateResponse()
 			require.EqualValues(t, 200, response.Status.Code)
 			var trajectory struct {
 				RecordCount int                 `json:"record_count"`
@@ -104,7 +104,7 @@ func TestReplayUserTurnsThroughProtocolPipeline(t *testing.T) {
 			_, next := recordReplayUserTurn(t, router, format, replayUserTurnWire(format, 2, true), "conversation-a")
 			require.Equal(t, 1, next.TurnIndex, "an ordinary new user message advances the user turn once")
 			require.Len(t, next.ToolTrace.Steps, 6, "the individual record retains its complete input trace")
-			response = router.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session").GetImmediateResponse()
+			response = router.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session").GetImmediateResponse()
 			require.NoError(t, json.Unmarshal(response.Body, &trajectory))
 			require.Equal(t, 5, trajectory.RecordCount)
 			require.Equal(t, 3, trajectory.TurnCount)
@@ -137,7 +137,7 @@ func TestReplayUserTurnsPreserveRepeatedQuestions(t *testing.T) {
 			recordReplayUserTurn(t, router, format, replayUserTurnWire(format, 0, false), "conversation-a")
 			body := strings.ReplaceAll(string(replayUserTurnWire(format, 0, true)), "Now summarize the state.", "Read the neutral state.")
 			recordReplayUserTurn(t, router, format, []byte(body), "conversation-a")
-			response := router.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session").GetImmediateResponse()
+			response := router.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session").GetImmediateResponse()
 			var trajectory routerReplayTrajectoryResponse
 			require.NoError(t, json.Unmarshal(response.Body, &trajectory))
 			require.Equal(t, 2, trajectory.TurnCount)
@@ -218,7 +218,7 @@ func TestReplayAnthropicToolResultWithTextContinuesTheTurn(t *testing.T) {
 	_, next := recordReplayUserTurn(t, router, llmprotocol.AnthropicMessagesV1, []byte(body), "conversation-a")
 	require.Equal(t, 1, next.TurnIndex)
 
-	response := router.handleRouterReplayTrajectoryAPI("GET", "session_id=shared-session").GetImmediateResponse()
+	response := router.handleRouterReplayTrajectoryAPI(context.Background(), "GET", "session_id=shared-session").GetImmediateResponse()
 	var trajectory routerReplayTrajectoryResponse
 	require.NoError(t, json.Unmarshal(response.Body, &trajectory))
 	require.Equal(t, 4, trajectory.RecordCount)

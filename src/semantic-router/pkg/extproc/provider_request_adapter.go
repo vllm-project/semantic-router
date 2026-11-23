@@ -37,17 +37,76 @@ func (r *OpenAIRouter) adaptProviderRequest(
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
 			"the selected backend has no effective reasoning-off control", nil)
 	}
+	enabled := dispatch != nil && dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch)
 	if mutation != nil {
-		r.observeReasoningMutation(mutation, dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch))
+		r.observeReasoningMutation(mutation, enabled)
 	}
 	if dispatch != nil {
+		dispatch.reasoningMode = r.sentReasoningMode(dispatch, mutation, enabled)
+		dispatch.reasoningEffort = sentReasoningEffort(body, mutation, enabled)
 		body, err = adaptOllamaOutputLimit(body, dispatch.targetFormat, dispatch.profile)
 		if err != nil {
 			return body, err
 		}
 	}
 	reportDroppedReasoningSummary(ctx, dispatch, encoded, body)
+	r.reportApproximatedReasoningDisplay(ctx, dispatch)
 	return body, nil
+}
+
+// sentReasoningMode is on or off where the Router wrote reasoning for the
+// dispatched model: the reasoning projection rewrote the request, or the
+// decision's controls went to a model with a reasoning family. A request passed
+// through with its reasoning as the client sent it, such as one to a model
+// without a reasoning family, carries no mode of the Router's.
+func (r *OpenAIRouter) sentReasoningMode(dispatch *providerDispatch, mutation *reasoningRequestMutation, enabled bool) string {
+	if mutation == nil && (dispatch.decisionName == "" || r.getModelReasoningFamily(dispatch.effectiveBackendModel()) == nil) {
+		return ""
+	}
+	if enabled {
+		return "on"
+	}
+	return "off"
+}
+
+// sentReasoningEffort is the reasoning effort a provider request carries:
+// the one the reasoning projection wrote when it rewrote the request's
+// reasoning, none when it turned reasoning off, and otherwise the effort the
+// request was encoded with, which reaches the backend as the client sent it.
+func sentReasoningEffort(body []byte, mutation *reasoningRequestMutation, enabled bool) string {
+	if mutation != nil {
+		if !enabled {
+			return ""
+		}
+		return mutation.appliedEffort
+	}
+	for _, path := range [...]string{"reasoning_effort", "reasoning.effort", "output_config.effort"} {
+		if effort := gjson.GetBytes(body, path); effort.Type == gjson.String {
+			return effort.String()
+		}
+	}
+	return ""
+}
+
+// reportApproximatedReasoningDisplay records an Anthropic summarized or updates
+// display sent to a Chat or Responses backend whose reasoning is on: a model
+// with a reasoning family the decision does not turn reasoning off for. The
+// Router knows nothing of the reasoning of a model without a family.
+func (r *OpenAIRouter) reportApproximatedReasoningDisplay(ctx *RequestContext, dispatch *providerDispatch) {
+	if ctx == nil || ctx.SemanticRequest == nil || dispatch == nil ||
+		ctx.SourceFormat != llmprotocol.AnthropicMessagesV1 || dispatch.targetFormat == llmprotocol.AnthropicMessagesV1 ||
+		(ctx.SemanticRequest.ReasoningDisplay != "summarized" && ctx.SemanticRequest.ReasoningDisplay != "updates") ||
+		r.getModelReasoningFamily(dispatch.effectiveBackendModel()) == nil ||
+		(dispatch.decisionName != "" && !dispatch.useReasoning) {
+		return
+	}
+	diagnostic := llmprotocol.Diagnostic{
+		Source: llmprotocol.AnthropicMessagesV1, Target: dispatch.targetFormat, Field: "thinking.display",
+		Action: llmprotocol.DiagnosticApproximated, Reason: "the backend's reasoning is returned as it is, not summarized",
+	}
+	if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
+		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
+	}
 }
 
 // reportDroppedReasoningSummary records a Responses summary request removed by

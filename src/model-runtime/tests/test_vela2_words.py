@@ -7,6 +7,7 @@ from vllm_srun.families.vela2.words import (
     decode_spans,
     split_words,
     trim,
+    without_separators,
     words_of,
 )
 
@@ -42,6 +43,42 @@ def test_trim_edges_and_url_tails() -> None:
     url = "see www.example.com/x)."
     start = url.index("www")
     assert url[slice(*trim(url, start, len(url)))] == "www.example.com/x"
+
+
+def test_trim_keeps_an_edge_bracket_whose_partner_is_inside() -> None:
+    for text, kept in (
+        ("(415) 555-0100", "(415) 555-0100"),
+        ("(tom@example.com)", "tom@example.com"),
+        ("[[a] b]", "[a] b"),
+        ("a (b)", "a (b)"),
+        ("(a) b)", "(a) b"),
+        ("(a", "a"),
+    ):
+        assert text[slice(*trim(text, 0, len(text)))] == kept, text
+
+
+def test_a_decoded_span_ends_after_the_combining_marks_that_follow_it() -> None:
+    text = "met Jose\u0301 now"
+    offsets = np.asarray(split_words(text), dtype=np.int32)
+    assert [text[a:b] for a, b in offsets] == ["met", "Jose", "\u0301", "now"]
+    spans = decode_spans(
+        np.asarray([[0.1], [0.9], [0.1], [0.1]]), offsets, ["PERSON"], text, 0.5
+    )
+    assert [(s["start"], s["end"]) for s in spans] == [(4, 9)]
+    assert abs(spans[0]["probability"] - 0.9) < 1e-6
+
+
+def test_without_separators_drops_commas_and_like_marks_at_the_edges() -> None:
+    text = "Park,mina@example.com; +82 10-4821-3390|x=y"
+
+    def kept(start: int, end: int) -> str:
+        return text[slice(*without_separators(text, start, end))]
+
+    assert kept(4, text.index(";") + 1) == "mina@example.com"
+    assert kept(text.index(";"), text.index("|") + 1) == "+82 10-4821-3390"
+    assert kept(text.index("="), len(text)) == "y"
+    assert without_separators("::1", 0, 3) == (0, 3)
+    assert without_separators(",", 0, 1) == (1, 1)
 
 
 def _decode(text: str, rows: list[list[float]], threshold: float = 0.5):

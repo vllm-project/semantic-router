@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -43,6 +44,10 @@ type Serving struct {
 	// a request path (nil accepts every model), or false and the detail of
 	// the 404 a path it does not serve answers.
 	Gate func(path string) (models []string, detail string, served bool)
+	// UnservedRoute, when set, is the model a request on a path is routed as
+	// when it names a model the path's API does not accept or the Router
+	// does not serve; empty, such a request is refused.
+	UnservedRoute func(path string) string
 	// ListsLLM and ListsSystemOne say which models GET /v1/models lists: the
 	// LLM APIs' as OpenAI data, the systemone API's as models.
 	ListsLLM, ListsSystemOne bool
@@ -125,6 +130,9 @@ const DefaultMaxRequestBodyBytes = 500 << 20
 // Handler serves inference traffic through the routing core.
 type Handler struct {
 	opts Options
+	// inFlight counts the requests being served, on every protocol, for a
+	// drain to wait on (Drain).
+	inFlight atomic.Int64
 }
 
 // NewHandler returns a Handler for opts.
@@ -139,6 +147,8 @@ func NewHandler(opts Options) (*Handler, error) {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.inFlight.Add(1)
+	defer h.inFlight.Add(-1)
 	if h.serveProbe(w, r) {
 		return
 	}
@@ -192,7 +202,8 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		serving.SystemOne.ServeHTTP(w, r)
 		return
 	}
-	if !newAPIKeys(serving.APIKeys).authorize(r) {
+	keys := newAPIKeys(serving.APIKeys)
+	if !keys.check(r) {
 		writeUnauthorized(w)
 		return
 	}
@@ -201,16 +212,21 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	if listing && serving.ListsSystemOne && serving.SystemOne != nil {
-		h.serveListing(w, r, serving, x)
+		h.serveListing(w, r, serving, x, keys)
 		return
 	}
-	h.serveRouted(w, r, serving, x, models)
+	keys.strip(r)
+	route := ""
+	if serving.UnservedRoute != nil && !listing {
+		route = serving.UnservedRoute(r.URL.Path)
+	}
+	h.serveRouted(w, r, serving, x, models, route)
 }
 
 // isSystemOnePath reports whether a path is one of the System One API's.
 func isSystemOnePath(path string) bool {
 	switch path {
-	case "/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models":
+	case "/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models", "/v1/systemone/rules":
 		return true
 	}
 	return false
@@ -218,15 +234,22 @@ func isSystemOnePath(path string) bool {
 
 // serveListing answers GET /v1/models on a listener that serves LLM APIs and
 // systemone: the LLM models as OpenAI data, with the System One listing's
-// models beside them.
-func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
+// models beside them. A listing that already carries models, the empty
+// catalog Codex asks for, stays as the routing core wrote it.
+func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, keys *apiKeys) {
+	// The systemone listing checks the listener's key itself, so it gets the
+	// request before the credential is removed; the routed listing forwards a
+	// request that carries none.
+	systemOneRequest := r.Clone(r.Context())
+	keys.strip(r)
 	llm := newBufferedResponse()
-	h.serveRouted(llm, r, serving, x, serving.Models)
+	h.serveRouted(llm, r, serving, x, serving.Models, "")
 	systemOne := newBufferedResponse()
-	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
+	serving.SystemOne.ServeHTTP(systemOne, systemOneRequest)
 	var listed, native map[string]json.RawMessage
 	if llm.status != http.StatusOK || json.Unmarshal(llm.body.Bytes(), &listed) != nil || listed == nil ||
-		systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil || native["models"] == nil {
+		listed["models"] != nil || systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil ||
+		native["models"] == nil {
 		llm.writeTo(w)
 		return
 	}
@@ -242,21 +265,14 @@ func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving S
 }
 
 // serveRouted serves a request through the routing core, accepting the
-// request models in models (nil accepts every model).
-func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string) {
-	ctx := routing.WithListenerModels(r.Context(), models)
+// request models in models (nil accepts every model) and routing any other
+// as route when one is set.
+func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, models []string, route string) {
+	ctx := routing.WithUnservedModelRoute(routing.WithListenerModels(r.Context(), models), route)
 	x.record.RequestID = r.Header.Get(headers.RequestID)
 	body, err := readBody(r, h.opts.MaxRequestBodyBytes)
-	if errors.Is(err, errBodyTooLarge) {
-		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
-		return
-	}
-	if errors.Is(err, os.ErrDeadlineExceeded) {
-		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
-		return
-	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+		writeBodyReadError(w, err)
 		return
 	}
 	var strip map[string]bool
@@ -281,7 +297,8 @@ func (h *Handler) serveRouted(w http.ResponseWriter, r *http.Request, serving Se
 
 var errResponseStarted = errors.New("the response failed after it started")
 
-// serve answers a plan and returns why the exchange ended early, or nil.
+// serve answers a plan and returns why the exchange ended early, the local
+// reply it answered with, or nil.
 func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serving, plan *routing.Plan, x *exchange) error {
 	if plan.Immediate != nil {
 		return transportError(ctx, writeResponse(w, plan.Immediate))
@@ -294,7 +311,13 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 		return transportError(ctx, err)
 	}
 	defer closeBody()
-	return transportError(ctx, writeResponse(w, resp))
+	if err := writeResponse(w, resp); err != nil {
+		return transportError(ctx, err)
+	}
+	if x.local != nil {
+		return x.local
+	}
+	return nil
 }
 
 // forward sends the planned call upstream and runs the response phases. The
@@ -302,7 +325,8 @@ func (h *Handler) serve(ctx context.Context, w http.ResponseWriter, serving Serv
 //
 // A local reply skips the response phases: Envoy's ext_proc ends processing
 // on Envoy's own local replies, so behind Envoy the client gets the reply as
-// it is, and the session ends as the ext_proc stream then does.
+// it is. The session then ends with the reply, as x.local, so it knows what
+// the client got.
 func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Plan, x *exchange) (*routing.Response, func(), error) {
 	sent := time.Now()
 	result, err := serving.Upstream.Execute(ctx, plan.Call, h.opts.Listener)
@@ -311,7 +335,9 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 			return nil, nil, ctx.Err()
 		}
 		x.record.UpstreamServiceTime = time.Since(sent)
-		return verbatim(localReply(err)), func() {}, nil
+		reply := localReply(err)
+		x.local = &routing.LocalReply{Status: reply.StatusCode, Failure: string(upstream.KindOf(err))}
+		return verbatim(reply), func() {}, nil
 	}
 	x.record.UpstreamServiceTime = time.Since(sent)
 	if result.Immediate != nil {
@@ -324,12 +350,14 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 	}
 	closeBody := func() { _ = resp.Body.Close() }
 	if resp.Local != nil {
+		x.local = &routing.LocalReply{Status: resp.StatusCode, Failure: string(resp.Local.Kind)}
 		return verbatim(resp), closeBody, nil
 	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{
-		Status: resp.StatusCode,
-		Header: routingHeader(resp.Header),
-		Body:   responseBody(plan.Call, resp),
+		Status:   resp.StatusCode,
+		Header:   routingHeader(resp.Header),
+		Body:     responseBody(plan.Call, resp),
+		Deadline: resp.Deadline,
 	})
 	if err != nil {
 		closeBody()
@@ -442,6 +470,20 @@ func transportError(ctx context.Context, err error) error {
 }
 
 var errBodyTooLarge = errors.New("request body too large")
+
+// writeBodyReadError is shared by normal ingress and the h2c adapter, which
+// must consume the initial Upgrade body before it can enter the Handler.
+func writeBodyReadError(w http.ResponseWriter, err error) {
+	var sizeErr *http.MaxBytesError
+	switch {
+	case errors.Is(err, errBodyTooLarge), errors.As(err, &sizeErr):
+		writeError(w, http.StatusRequestEntityTooLarge, "request_too_large", "The request body is too large.")
+	case errors.Is(err, os.ErrDeadlineExceeded):
+		writeError(w, http.StatusRequestTimeout, "request_timeout", "The request body did not arrive in time.")
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_request_body", "The request body could not be read.")
+	}
+}
 
 func readBody(r *http.Request, limit int64) ([]byte, error) {
 	if r.Body == nil || r.Body == http.NoBody {

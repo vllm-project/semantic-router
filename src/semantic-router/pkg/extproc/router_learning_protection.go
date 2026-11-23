@@ -44,6 +44,7 @@ func (r *OpenAIRouter) applyProtectionPreflight(input routerLearningInput) route
 		if input.ctx != nil {
 			input.ctx.VSRLearningSessionID = identity.memoryKey
 			input.ctx.VSRLearningConversationID = identity.declaredConversationID()
+			input.ctx.protectionKeyApart = identity.agentID != "" || identity.sideClass != ""
 		}
 	}
 	if mode == config.DecisionAdaptationModeBypass {
@@ -563,16 +564,6 @@ func holdCurrentModelInResult(
 	return true
 }
 
-// protectionSessionID is the session id protection keys on and the header it
-// came from: identity.headers.session when configured, else the session id
-// the request pins.
-func protectionSessionID(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) (string, string) {
-	if header := cfg.HeaderName("session"); header != "" {
-		return strings.TrimSpace(headerValueCI(ctx, header)), header
-	}
-	return pinnedSessionID(ctx)
-}
-
 // protectionConversationID is the conversation id protection keys on and
 // whether the Router derived it: the configured conversation header, else,
 // under scope conversation and only beside a session id, the request's
@@ -601,12 +592,8 @@ func (r *OpenAIRouter) protectionIdentity(
 	scope := cfg.EffectiveScope()
 	sessionID, sessionHeader := protectionSessionID(ctx, cfg)
 	conversationHeader := cfg.HeaderName("conversation")
-	agentHeader := cfg.HeaderName("agent")
+	agentID, agentHeader := protectionAgentID(ctx, cfg)
 	conversationID, conversationDerived := protectionConversationID(ctx, cfg, sessionID)
-	agentID := ""
-	if agentHeader != "" {
-		agentID = strings.TrimSpace(headerValueCI(ctx, agentHeader))
-	}
 	if sessionID == "" {
 		return routerLearningIdentity{}, false
 	}
@@ -622,6 +609,10 @@ func (r *OpenAIRouter) protectionIdentity(
 		// or conversation key has, so the two can never collide.
 		components = append(components, "agent", agentID)
 	}
+	sideClass := protectionSideRequestClass(ctx)
+	if sideClass != "" {
+		components = append(components, "class", sideClass)
+	}
 	return routerLearningIdentity{
 		sessionID:           sessionID,
 		conversationID:      conversationID,
@@ -632,6 +623,7 @@ func (r *OpenAIRouter) protectionIdentity(
 		conversationHeader:  conversationHeader,
 		agentID:             agentID,
 		agentHeader:         agentHeader,
+		sideClass:           sideClass,
 	}, true
 }
 
@@ -672,6 +664,7 @@ func protectionSelectionConfig(cfg config.RouterLearningProtectionConfig) *selec
 	if tuning.SwitchMargin != nil {
 		result.SwitchMargin = *tuning.SwitchMargin
 	}
+	result.CacheEconomics = tuning.CacheEconomics.EffectiveConfig()
 	applyProtectionStabilityWeight(result, learningProtectionStabilityWeight(cfg))
 	return result
 }

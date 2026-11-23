@@ -18,7 +18,7 @@ export function getCuratedPluginFieldSchema(pluginType: string): FieldSchema[] {
     case 'response_guard':
       return getResponseGuardPluginFieldSchema()
     case 'router_replay':
-      return getRouterReplayPluginFieldSchema()
+      return []
     case 'header_mutation':
       return getHeaderMutationPluginFieldSchema()
     case 'fast_response':
@@ -103,56 +103,6 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
   ]
 }
 
-// router_replay's shadow block: a sampled copy to a candidate model.
-const routerReplayShadowFields: FieldSchema[] = [
-  { key: 'model', label: 'Shadow Model', type: 'string', placeholder: 'candidate-model' },
-  { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },
-  { key: 'max_concurrency', label: 'Max Concurrency', type: 'number', placeholder: '2' },
-  { key: 'max_queue_depth', label: 'Max Queue Depth', type: 'number', placeholder: '8' },
-  { key: 'timeout_seconds', label: 'Timeout Seconds', type: 'number', placeholder: '30' },
-  {
-    key: 'max_response_bytes',
-    label: 'Max Response Bytes',
-    type: 'number',
-    placeholder: '1048576',
-  },
-  { key: 'max_retries', label: 'Max Retries', type: 'number', placeholder: '0' },
-  { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
-  { key: 'max_capture_bytes', label: 'Max Capture Bytes', type: 'number', placeholder: '4096' },
-  { key: 'tls_skip_verify', label: 'Skip TLS Verification', type: 'boolean' },
-  {
-    key: 'forward_headers',
-    label: 'Forwarded Decision Headers',
-    type: 'string[]',
-    placeholder: 'x-tenant',
-    description:
-      'Decision header mutations the shadow copy may carry; credential headers are never forwarded',
-  },
-]
-
-function getRouterReplayPluginFieldSchema(): FieldSchema[] {
-  return [
-    { key: 'enabled', label: 'Enabled', type: 'boolean' },
-    { key: 'max_records', label: 'Max Records', type: 'number', placeholder: '10000' },
-    { key: 'capture_request_body', label: 'Capture Request Body', type: 'boolean' },
-    { key: 'capture_response_body', label: 'Capture Response Body', type: 'boolean' },
-    {
-      key: 'capture_tool_results',
-      label: 'Capture Tool Results',
-      type: 'boolean',
-      description: 'Store client tool-result text; requires request body and personal data capture',
-    },
-    { key: 'max_body_bytes', label: 'Max Body Bytes', type: 'number', placeholder: '4096' },
-    {
-      key: 'shadow',
-      label: 'Shadow',
-      type: 'object',
-      description: 'Send a sampled copy to a candidate model; the replay record keeps its outcome',
-      fields: routerReplayShadowFields,
-    },
-  ]
-}
-
 function getHeaderMutationPluginFieldSchema(): FieldSchema[] {
   return [
     {
@@ -201,6 +151,12 @@ function getFastResponsePluginFieldSchema(): FieldSchema[] {
       required: true,
       placeholder: 'I cannot help with that request.',
       description: 'The response message returned directly to the client',
+    },
+    {
+      key: 'block',
+      label: 'Block the request',
+      type: 'boolean',
+      description: 'Refuse the request with HTTP 403 and this message instead of answering with it',
     },
   ]
 }

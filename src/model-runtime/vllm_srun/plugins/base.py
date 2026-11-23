@@ -14,7 +14,7 @@ register through the same entry points as third-party ones
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from functools import partial
@@ -155,8 +155,19 @@ class DtypePolicy:
     (``EngineOptions.reduced_precision``): ``"bfloat16"`` on GPUs; on CPUs
     ``"bfloat16"`` (only where ``DeviceInfo.bf16``), ``"float32-packed"``
     (oneDNN's pre-packed FP32 linear) or ``"int8"`` (dynamic); None keeps the
-    exact weights. ``approximate_kernels`` consents to the accelerator's
-    approximate kernels (``EngineOptions.exact_kernels_only`` off). Consented
+    exact weights. ``approximate_kernels`` consents to an accelerator's
+    approximate kernels on GPUs and NPUs, ``approximate_cpu_kernels`` to the
+    CPU accelerator's (``EngineOptions.exact_kernels_only`` off), each on the
+    strength of a record on that device class: a GPU record says nothing about
+    a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
+    slot, or the names of the slots (``linear``, ``sdpa``) the family's record
+    covers, so a kernel added to another slot later does not change its answers.
+    ``approximate_accelerators`` scopes that accelerator consent to the named
+    accelerators (None: every accelerator the spec runs on).
+    ``cpu_bf16_references`` names the CPU hardware keys
+    (``CPUAccelerator.golden_reference``) on which every golden request has a
+    BF16 reference: on such a host ``--dtype auto`` holds BF16 instead of
+    ``cpu_weights`` (``dtypes.on_host``), checked against that reference. Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -172,6 +183,9 @@ class DtypePolicy:
     reduced_gpu: str | None = None
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
+    approximate_cpu_kernels: bool | frozenset[str] = False
+    cpu_bf16_references: frozenset[str] = frozenset()
+    approximate_accelerators: frozenset[str] | None = None
 
     @property
     def needs_gpu_bf16(self) -> bool:
@@ -248,6 +262,20 @@ class AdapterGate:
 
 
 @dataclass(frozen=True)
+class LMHeadSpec:
+    """How a decoder reads next-token logits from its last hidden state.
+
+    ``tied`` uses the input embedding (the checkpoint's ``tie_word_embeddings``).
+    Otherwise ``weight_file`` holds ``tensor``, cast to the embedding's dtype:
+    vela3-flash's grafted definition head.
+    """
+
+    tied: bool = True
+    weight_file: Path | None = None
+    tensor: str = "lm_head.weight"
+
+
+@dataclass(frozen=True)
 class BackboneSpec:
     """A backbone architecture and the files that hold its weights.
 
@@ -258,6 +286,7 @@ class BackboneSpec:
     layers the checkpoint holds as int4, FP8 or NVFP4 weights (``quantization.py``).
     ``gated`` names gated LoRA adapters on the backbone's own Linears
     (``GatedAdapterSpec``), one of which a forward may switch on.
+    ``lm_head`` is how ``generate`` reads next-token logits; none on a model that does not generate.
     """
 
     model_type: str
@@ -269,6 +298,7 @@ class BackboneSpec:
     quantized: QuantizedWeights | None = None
     adapters: Mapping[str, AdapterSpec] = field(default_factory=dict)
     gated: Mapping[str, GatedAdapterSpec] = field(default_factory=dict)
+    lm_head: LMHeadSpec | None = None
 
     @property
     def requires(self) -> Mapping[str, tuple[str, ...]]:
@@ -560,6 +590,8 @@ class EngineModel(ABC):
     spec: ModelSpec | None = None
     # Set at load when every encoder forward returns each row the same alone or in any batch.
     batch_invariant: bool = False
+    # The LM head ``generate`` reads, when the spec names one. A tied head is the input embedding.
+    lm_head: torch.Tensor | None = None
 
     @property
     def replays_graphs(self) -> bool:
@@ -574,6 +606,20 @@ class EngineModel(ABC):
     def forward(self, batch: ForwardBatch) -> ForwardOutput:
         """Run a decoder backbone and gather the requested rows (on the device)."""
         raise NotImplementedError(f"{type(self).__name__} has no decoder forward")
+
+    def generate(
+        self,
+        input_ids: Sequence[Sequence[int]],
+        *,
+        max_new_tokens: int,
+        eos_token_id: int | None,
+        pad_token_id: int,
+    ) -> list[list[int]]:
+        """Greedy new token ids for each row, adapters off, right-padded with ``pad_token_id``.
+
+        ``eos_token_id`` ends a row and is not returned. A model with no ``lm_head`` cannot generate.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not generate")
 
     def encode(self, batch: EncoderBatch) -> EncoderOutput:
         """Run an encoder and return hidden states at the requested exits or graph outputs."""
@@ -721,6 +767,11 @@ class Accelerator(ABC):
     def golden_reference(self, device: DeviceInfo) -> str | None:
         """Optional hardware reference key; callers own device-class fallback."""
         return f"{self.name}:{device.arch}" if device.arch else None
+
+    def golden_references(self, device: DeviceInfo) -> tuple[str, ...]:
+        """The hardware reference keys to try, most specific first; callers own device-class fallback."""
+        key = self.golden_reference(device)
+        return (key,) if key else ()
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""
@@ -907,6 +958,18 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     says each item names its own shared context (a state-once model's state),
     so one shared-context batch may hold several requests: the batcher then
     packs whole requests into shared forwards.
+    ``splits_forwards`` says ``run`` splits a batch over the forward token
+    budget itself (a state-once family's branched forwards), so the batcher
+    may pack rows costlier than the budget into one batch instead of running
+    each alone — only rows whose ``packing_key`` matches (``coalesced`` and
+    ``shared_batches`` key over-budget rows by it). A family that sets it
+    must bound every pass it runs of such a batch by the forward token
+    budget, including replay passes; a family whose passes are bounded only
+    by a row count (``TurboDecisions``' replays) must not set it.
+    ``packing_key`` returns the key its own grouping dedupes on (a state-once
+    family's state key), so the batcher packs over-budget rows together
+    exactly when the family encodes them once; None (the default) or a
+    mismatch keeps the runs-alone rule.
 
     ``device_thread`` False says ``run`` never starts a parallel torch op (an
     ONNX Runtime engine with NumPy readouts): the scheduler then calls it on
@@ -921,9 +984,12 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
     device_thread: ClassVar[bool] = True
     shared_context_default: ClassVar[bool] = False
     merges_shared_batches: ClassVar[bool] = False
+    splits_forwards: ClassVar[bool] = False
     batch_invariant: bool = False
     packs_rows: bool = False
     packs_merged_rows: bool = False
+    # Planning can run a forward (a family that generates text while it plans).
+    plans_run_forwards: bool = False
 
     @abstractmethod
     def plan_surface(self, surface: str, request: SurfaceRequest) -> SurfacePlan[ItemT]:
@@ -1035,6 +1101,18 @@ class LoadedModel(ABC, Generic[ItemT, ResultT]):
         A positive value runs them through ``run_shared(items, value)``,
         0 batches them as usual, and None lets the scheduler find the common
         token prefix of decision items itself.
+        """
+        return None
+
+    def packing_key(self, item: ItemT) -> Hashable | None:
+        """What lets this row share a batch when the batch outgrows the budget.
+
+        None (the default): the row runs alone when costlier than the forward
+        token budget, whatever ``splits_forwards`` says. A family whose
+        ``splits_forwards`` is True overrides this with the key its own
+        grouping dedupes on (a state-once family's state key), so the batcher
+        packs over-budget rows together exactly when the family encodes them
+        once; rows of a different key still run alone.
         """
         return None
 

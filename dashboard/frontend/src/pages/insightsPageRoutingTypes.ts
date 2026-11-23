@@ -89,6 +89,10 @@ export interface InsightsTrajectoryRoute {
   session_policy_applied: boolean
   session_action?: string
   session_reason?: string
+  agent?: string
+  /** The record's Codex turn ids, as on InsightsRecord. */
+  turn_id?: string
+  parent_turn_id?: string
   lifecycle_state: string
   response_status?: number
   duration_ms: number

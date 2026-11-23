@@ -93,24 +93,31 @@ type API struct {
 	Aliases []string
 }
 
+// unservedModelsSetting is the route policy of the APIs a client may name
+// any model on.
+var unservedModelsSetting = Setting{Name: "unserved_models", Summary: "route models the API does not serve to one of its models instead of refusing them"}
+
 var registry = []API{
 	{
 		Name: ChatCompletions, Summary: "OpenAI Chat Completions", Paths: []string{"/v1/chat/completions"}, Kind: KindLLM,
 		Pattern:         `^(/v1/chat/completions|/openai/v1/chat/completions|/openai/deployments/.+/chat/completions)$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIChatV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true, Aliases: []string{"openai"},
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Responses, Summary: "OpenAI Responses", Paths: []string{"/v1/responses"}, Kind: KindLLM,
 		Pattern:         `^(/v1/responses(/[^/]+(/input_items)?)?|/openai/responses|/openai/v1/responses)$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIResponsesV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Messages, Summary: "Anthropic Messages", Paths: []string{"/v1/messages", "/v1/messages/count_tokens"}, Kind: KindLLM,
 		Pattern:         `^/v1/messages(/count_tokens)?$`,
 		Schemas:         []Schema{{ID: SchemaAnthropic20230601, WireFormat: llmprotocol.AnthropicMessagesV1}},
 		ListenerDefault: SchemaAnthropic20230601, UpstreamDefault: SchemaAnthropic20230601, DefaultOn: true, Aliases: []string{"anthropic"},
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Images, Summary: "OpenAI Images", Paths: []string{"/v1/images/generations"}, Kind: KindLLM,
@@ -120,8 +127,8 @@ var registry = []API{
 	},
 	{
 		Name: SystemOne, Summary: "System One decisions", Kind: KindDecision,
-		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models"},
-		Pattern: `^/v1/(systemone(/batch|/models)?|decisions)$`,
+		Paths:   []string{"/v1/systemone", "/v1/systemone/batch", "/v1/decisions", "/v1/systemone/models", "/v1/systemone/rules"},
+		Pattern: `^/v1/(systemone(/batch|/models|/rules)?|decisions)$`,
 		Schemas: []Schema{
 			{ID: SchemaVLLMSR50, SystemOne: systemonecodec.SchemaVLLMSR50},
 			{ID: SchemaVLLMSR40, SystemOne: systemonecodec.SchemaID(SchemaVLLMSR40)},
@@ -129,7 +136,10 @@ var registry = []API{
 		},
 		ListenerDefault: SchemaVLLMSR50, UpstreamDefault: SchemaSystemOne02, Versioned: true,
 		ListenerSchemas: []string{SchemaVLLMSR50, SchemaVLLMSR40},
-		Settings:        []Setting{{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"}},
+		Settings: []Setting{
+			{Name: "max_deadline_ms", Summary: "the most a request's deadline may ask a directly called model to take"},
+			{Name: "vsr", Summary: "what the vSR agent plugins pointed at the listener turn on, from its System One listing"},
+		},
 	},
 }
 

@@ -299,9 +299,11 @@ metadata.
 
 All five recipes, including Vault, enable PostgreSQL Replay by default so
 Dashboard Insights can show their requests and routing decisions. The defaults
-keep records for seven days, limit raw request and response excerpts to 4,096
-bytes each, and limit structured tool traces to 100 steps. Expired PostgreSQL
-records are removed during subsequent writes.
+keep records for seven days and keep routing data only: no request or response
+text, and no prompt read for personal data. With `prompt_capture: raw`, raw
+request and response excerpts are limited to 4,096 bytes each and structured
+tool traces to 100 steps. Expired PostgreSQL records are removed during
+subsequent writes.
 
 `vllm-sr recipe builtin init` preserves explicit operator settings, including
 `enabled: false`. Local `vllm-sr serve` manages PostgreSQL and its persistent
@@ -313,10 +315,11 @@ in `global.services.router_replay.postgres`.
 - To disable capture for one recipe or decision, set its `router_replay` plugin
   to `configuration: {enabled: false}`. A decision's plugin overrides its
   recipe's, which overrides `global.plugins`, field by field.
-- Set `capture_personal_data: false` globally or in the decision plugin to omit
-  content when PII is detected or its status is unknown. Balance declares no
-  PII rule, so with that setting its records keep no request or response
-  content.
+- Set `prompt_capture: raw` globally or in the decision plugin to keep request
+  and response text as it came, or `prompt_capture: verified` to keep each
+  prompt alone once a PII rule reads it whole and finds no personal data.
+  Balance declares no PII rule, so under `verified` its records keep no
+  prompt.
 
 Vault's other data-handling restrictions still apply. Replay settings do not
 change provider retention or delete previously captured conversations. See the
@@ -358,7 +361,7 @@ See the [conformance guide](../../../CONFORMANCE.md) for commands.
 The probes are calibrated on Vela 2.0 0.8B: through the router, with its
 container limited to 4 CPUs, all 366 reach their expected decision. Re-run them with the
 decision model you deploy. Because the decision model reads long inputs slowly
-on a CPU, CI splits the bundle's probes into 16 jobs of similar cost
+on a CPU, CI splits the bundle's probes into 8 jobs of similar cost
 (`evaluation.shards` in `probes.yaml`) and merges their reports.
 
 ## Limitations

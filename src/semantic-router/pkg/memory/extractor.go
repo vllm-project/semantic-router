@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -387,39 +388,38 @@ func countTurns(history []openai.ChatCompletionMessageParamUnion) int {
 // buildSessionChunk concatenates the last windowSize turns from history plus
 // the current turn into a single multi-turn context chunk.
 func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg, assistantResp string, windowSize int) string {
-	// Collect the tail of history: last (windowSize-1) user-assistant pairs
-	// plus the current turn = windowSize total turns.
 	var pairs []string
-
-	// Walk history backwards to find the last (windowSize-1) user messages
-	// and their following assistant responses.
-	type turn struct{ user, assistant string }
-	var turns []turn
-	for i := len(history) - 1; i >= 0 && len(turns) < windowSize-1; i-- {
+	turnEnd := len(history)
+	for i := len(history) - 1; i >= 0 && len(pairs) < windowSize-1; i-- {
 		if history[i].OfUser != nil {
-			t := turn{user: SDKMessageContent(history[i])}
-			// Look ahead for the assistant response
-			if i+1 < len(history) && history[i+1].OfAssistant != nil {
-				t.assistant = StripThinkTags(SDKMessageContent(history[i+1]))
-			}
-			turns = append(turns, t)
+			answer := historicalTurnAnswer(history[i+1 : turnEnd])
+			pairs = append(pairs, formatTurnChunk(SDKMessageContent(history[i]), answer))
+			turnEnd = i
 		}
 	}
-
-	// Reverse to chronological order
-	for i, j := 0, len(turns)-1; i < j; i, j = i+1, j-1 {
-		turns[i], turns[j] = turns[j], turns[i]
-	}
-
-	// Format each historical turn
-	for _, t := range turns {
-		pairs = append(pairs, formatTurnChunk(t.user, t.assistant))
-	}
-
-	// Append current turn
+	slices.Reverse(pairs)
 	pairs = append(pairs, formatTurnChunk(userMsg, assistantResp))
-
 	return strings.Join(pairs, "\n---\n")
+}
+
+// Plain turns use the reply immediately following the user. A tool exchange
+// discards provisional prose and starts a new search for the final visible text.
+func historicalTurnAnswer(messages []openai.ChatCompletionMessageParamUnion) string {
+	var answer string
+	afterTool := false
+	for i, msg := range messages {
+		assistant := msg.OfAssistant
+		switch {
+		case msg.OfTool != nil || (assistant != nil && len(assistant.ToolCalls) > 0):
+			afterTool = true
+			answer = ""
+		case assistant != nil && (i == 0 || afterTool):
+			if text := StripThinkTags(extractAssistantContentString(assistant.Content)); text != "" {
+				answer = text
+			}
+		}
+	}
+	return answer
 }
 
 // formatTurnChunk combines a user message and assistant response into a single

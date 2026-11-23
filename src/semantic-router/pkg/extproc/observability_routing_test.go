@@ -297,7 +297,7 @@ func TestRoutingTraceLocalResponseErrorKeepsProviderStatus(t *testing.T) {
 		name string
 		code int
 		eos  bool
-	}{{"guard block before EOS", 403, false}, {"guard block at EOS", 403, true}, {"decode error", 502, true}} {
+	}{{"guard block before EOS", 400, false}, {"guard block at EOS", 400, true}, {"decode error", 502, true}} {
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := routingTraceRecorder(t)
 			server := newJailbreakDecider(0.95)

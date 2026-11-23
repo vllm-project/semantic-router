@@ -12,7 +12,7 @@ import (
 )
 
 // Codes of the one-line load errors and warnings. The removed_* codes,
-// invalid_value and the two renamed_* codes name forms the Router no longer
+// invalid_value and the renamed_* codes name forms the Router no longer
 // reads as written, which `vllm-sr config migrate` rewrites; the others are
 // checks of a canonical configuration.
 const (
@@ -24,6 +24,7 @@ const (
 	CodeInvalidValue             = "invalid_value"
 	CodeRenamedSignalType        = "renamed_signal_type"
 	CodeRenamedAlgorithmType     = "renamed_algorithm_type"
+	CodeRenamedField             = "renamed_field"
 	CodeReservedHeader           = "reserved_header"
 	CodeSpanRequired             = "span_required"
 	CodeInputModalityUnsupported = "input_modality_unsupported"
@@ -34,6 +35,9 @@ const (
 	// CodeUncalibratedPreset warns of a preset asked with the neutral
 	// threshold, because the answering model has no calibrated one.
 	CodeUncalibratedPreset = "uncalibrated_preset"
+	// CodeRetryOnWithoutCount warns of a provider model that names retry
+	// conditions and no retry count, which turns its default retries off.
+	CodeRetryOnWithoutCount = "retry_on_without_count"
 )
 
 // LocatedError is a one-line load error that names its own place in the
@@ -69,9 +73,9 @@ func migrateHint(what, becomes string) string {
 }
 
 // ConfigForm is a form of the configuration the Router no longer reads as
-// written. A removed form fails the load; a renamed one (only decision ->
-// systemone) loads as its canonical form, with a warning. `vllm-sr config
-// migrate` rewrites both with Migrate.
+// written. A removed form fails the load; a renamed one (decision ->
+// systemone, capture_personal_data -> prompt_capture) loads as its canonical
+// form, with a warning. `vllm-sr config migrate` rewrites both with Migrate.
 type ConfigForm struct {
 	Code string
 	// Paths are patterns over the raw document: dotted mapping keys, `name[]`

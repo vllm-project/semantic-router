@@ -1,24 +1,19 @@
 import { useCallback, useState } from 'react'
-
-import styles from './ChatComponent.module.css'
+import { Check, Copy } from 'lucide-react'
 
 const CopyResponseButton = ({ copied, onCopy }: { copied: boolean; onCopy: () => void }) => {
   return (
     <button
-      className={styles.actionButton}
+      type="button"
+      className="grid size-7 place-items-center rounded-md text-subtle-foreground outline-none transition-[color,background-color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:scale-95"
       onClick={onCopy}
       title={copied ? 'Copied!' : 'Copy'}
       aria-label={copied ? 'Copied!' : 'Copy'}
     >
       {copied ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+        <Check className="size-4 text-success" strokeWidth={2.4} />
       ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="9" y="9" width="13" height="13" rx="2" />
-          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-        </svg>
+        <Copy className="size-4" />
       )}
     </button>
   )
@@ -50,7 +45,7 @@ export const MessageActionBar = ({ content }: { content: string }) => {
   }, [content])
 
   return (
-    <div className={styles.messageActionBar}>
+    <div className="flex items-center gap-1">
       <CopyResponseButton copied={copied} onCopy={handleCopy} />
     </div>
   )

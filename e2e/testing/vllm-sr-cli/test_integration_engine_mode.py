@@ -137,8 +137,13 @@ def engine_config():
                 "address": "0.0.0.0",
                 "port": 8899,
                 "api_keys": [API_KEY],
-                "models": ["vllm-sr/auto"],
-                "systemone": {"models": [PUBLIC_MODEL]},
+                "apis": {
+                    "openai": {"models": ["vllm-sr/auto"]},
+                    "systemone": {
+                        "schema": "vllm-sr/4.0",
+                        "models": [PUBLIC_MODEL],
+                    },
+                },
             }
         ],
         "providers": {
@@ -477,11 +482,11 @@ class TestEngineModeEngineArgs(EngineStack):
 
 
 class TestEngineModeDeadlineLimit(EngineStack):
-    """The listener's systemone.max_deadline_ms bounds a request's deadline_ms."""
+    """The listener's apis.systemone.max_deadline_ms bounds a request's deadline_ms."""
 
     def serve(self, *, engine):
         config = engine_config()
-        config["listeners"][0]["systemone"]["max_deadline_ms"] = 1
+        config["listeners"][0]["apis"]["systemone"]["max_deadline_ms"] = 1
         self.config.write_text(yaml.safe_dump(config))
         super().serve(engine=engine)
 
@@ -571,7 +576,7 @@ class TestEngineModeImages(EngineStack):
         self.assertNotEqual(both["answers"], seen["answers"])
         status, failure = self.ask("/v1/systemone", ["data:image/png;base64,AAAA"])
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed image", failure)
         status, clip = self.ask("/v1/systemone", videos=[TINY_MP4])
         self.assertEqual(status, 200, clip)
@@ -581,7 +586,7 @@ class TestEngineModeImages(EngineStack):
             "/v1/systemone", videos=["data:video/mp4;base64,AAAA"]
         )
         self.assertEqual(status, 400, failure)
-        self.assertEqual(failure["error"]["code"], "invalid_request", failure)
+        self.assertEqual(failure["error"]["code"], "invalid_media", failure)
         self.assertEqual(failure["error"]["message"], "malformed video", failure)
         body = copy.deepcopy(page_requests(QUICKSTART)["/v1/systemone"])
         body["model"] = PUBLIC_MODEL

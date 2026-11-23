@@ -77,7 +77,9 @@ recipes:
 `providers.models[].param_size` first, `cost` the cheapest priced model
 first, and omitting it keeps the `modelRefs` order. `size` reads the leading
 count of a size, so `397B (17B active)` is 397B and `1.6T` is 1600B. A model
-without a readable size, or for `cost` without pricing, is tried last.
+without a readable size, or for `cost` without pricing, is tried last; a Model
+whose catalog [list price](../../../installation/catalog-backed-models#list-prices)
+prices it is placed by that price.
 
 `accept` names exactly one check:
 
@@ -362,12 +364,12 @@ for the response fields and error contract.
 
 To try it in Dashboard:
 
-1. Open **System One → Decision Playground**, and choose `vllm-sr/auto` under
-   **Automatic routes**.
+1. Open **Models → Decision models**, select the **Playground** tab, and choose
+   `vllm-sr/auto` under **Automatic routes**.
 2. Load an example your recipe supports, or enter your own questions, then
    select **Run**. Dashboard uses your signed-in management permissions, so no
    public API key is needed.
-3. Open **Decision Monitoring** for stage outcomes, request rates and latency.
+3. Open the **Monitoring** tab for stage outcomes, request rates and latency.
 
 These views describe live execution; evaluate labeled requests separately to
 measure accuracy.

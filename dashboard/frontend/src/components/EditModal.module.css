@@ -1,246 +1,31 @@
-.overlay {
-  position: fixed;
-  inset: 0;
-  /* Cover the physical viewport, including both stable scrollbar gutters. */
-  inset-inline: calc((100vw - 100%) / -2);
-  z-index: 1300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(8px);
-  animation: overlay-in 180ms ease-out;
-}
-
-.modal {
-  width: min(var(--product-dialog-content-width), calc(100vw - 3rem));
-  max-height: min(880px, calc(100dvh - 3rem));
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--product-dialog-surface);
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  border-radius: var(--radius-xl);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.58);
-  backdrop-filter: blur(28px) saturate(140%);
-  animation: dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.header {
-  position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 68px;
-  padding: 1rem 1.25rem;
-  background: rgba(9, 9, 10, 0.82);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.headerIdentity {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.875rem;
-}
-
-.headerLogo {
-  flex: 0 0 auto;
-  width: 38px;
-  height: 38px;
-  object-fit: contain;
-}
-
-.headerCopy {
-  min-width: 0;
-}
-
-.eyebrow {
-  display: block;
-  margin-bottom: 0.125rem;
-  color: var(--text-muted);
-  font-size: 0.6875rem;
-  font-weight: 720;
-  letter-spacing: 0.11em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
-.title {
-  min-width: 0;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 1.25rem;
-  font-weight: 760;
-  letter-spacing: -0.025em;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.closeButton {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  padding: 0;
-  color: var(--text-secondary);
-  font-size: 1.5rem;
-  line-height: 1;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  transition:
-    color var(--transition-fast),
-    background-color var(--transition-fast),
-    border-color var(--transition-fast);
-}
-
-.closeButton svg {
-  width: 16px;
-  height: 16px;
-}
-
-.closeButton:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.075);
-  border-color: var(--border-strong);
-}
-
-.closeButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.46;
-}
-
-.closeButton:focus-visible,
-.cancelButton:focus-visible,
-.saveButton:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.form {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.error {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1.5rem;
-  color: #fca5a5;
-  font-size: 0.875rem;
-  background: rgba(239, 68, 68, 0.1);
-  border-bottom: 1px solid rgba(239, 68, 68, 0.28);
-}
-
-.errorIcon {
-  font-size: 1.25rem;
-}
-
-.fields {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.fieldSection {
-  min-width: 0;
-  padding: 0.9rem;
-  background: rgba(255, 255, 255, 0.018);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.sectionTitle {
-  margin: 0 0 0.75rem;
-  padding-bottom: 0.55rem;
-  color: var(--text-secondary);
-  font-size: 0.72rem;
-  font-weight: 720;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.fieldGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 0.8rem 1rem;
-}
-
-.field {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.fieldFull {
-  grid-column: 1 / -1;
-}
-
-.label {
-  display: block;
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 0.8125rem;
-  font-weight: 680;
-  letter-spacing: 0.01em;
-}
-
-.required {
-  margin-left: 0.25rem;
-  color: #f87171;
-}
-
-.description {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.8125rem;
-  font-style: normal;
-  line-height: 1.5;
-}
-
-.control {
-  min-width: 0;
-  margin-top: auto;
-  padding-top: 0.15rem;
-}
-
+/*
+ * Native control styles for custom EditModal field renderers that still use
+ * plain <input>/<select>/<textarea>. They mirror the design-system inputs.
+ */
 .input,
 .select,
 .textarea {
+  box-sizing: border-box;
   width: 100%;
-  padding: 0.6875rem 0.75rem;
-  color: var(--text-primary);
-  font-family: inherit;
-  font-size: 0.875rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  min-width: 0;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  background-color: var(--surface);
+  border: 1px solid var(--input);
+  border-radius: calc(var(--radius) - 2px);
+  box-shadow: var(--shadow-xs);
+  outline: none;
   transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    background-color var(--transition-fast);
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--subtle-foreground);
 }
 
 .input:hover,
@@ -249,223 +34,49 @@
   border-color: var(--border-strong);
 }
 
-.input:focus,
-.select:focus,
-.textarea:focus {
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 40%, transparent);
   outline: none;
-  background: #1d1d21;
-  border-color: rgba(255, 255, 255, 0.38);
-  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.09);
+}
+
+.input:read-only {
+  color: var(--muted-foreground);
+  background-color: var(--surface-subtle);
+}
+
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.select {
+  padding-right: 2rem;
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--subtle-foreground) 50%),
+    linear-gradient(135deg, var(--subtle-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 52%,
+    calc(100% - 10.5px) 52%;
+  background-size: 4.5px 4.5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+.select option {
+  color: var(--popover-foreground);
+  background: var(--popover);
 }
 
 .textarea {
-  min-height: 5.75rem;
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  line-height: 1.55;
+  height: auto;
+  min-height: 5rem;
+  padding: 0.5rem 0.75rem;
+  line-height: 1.6;
   resize: vertical;
-}
-
-.multiselect {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-  max-height: min(320px, 38vh);
-  padding: 0.5rem;
-  overflow-y: auto;
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overscroll-behavior: contain;
-}
-
-.multiselectOption {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-height: 40px;
-  padding: 0.5rem 0.625rem;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-}
-
-.multiselectOption:hover {
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.multiselectOption span,
-.checkbox span {
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-}
-
-.checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  min-height: 40px;
-  padding: 0.5rem 0.7rem;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  user-select: none;
-}
-
-.actions {
-  flex: 0 0 auto;
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.625rem;
-  padding: 0.85rem 1.25rem;
-  background: rgba(9, 9, 10, 0.94);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.cancelButton,
-.saveButton {
-  min-width: 96px;
-  min-height: 40px;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 680;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.42rem;
-  transition:
-    color var(--transition-fast),
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    opacity var(--transition-fast);
-}
-
-.cancelButton svg,
-.saveButton svg {
-  width: 15px;
-  height: 15px;
-}
-
-.cancelButton {
-  color: var(--text-secondary);
-  background: transparent;
-}
-
-.cancelButton:hover:not(:disabled) {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.055);
-  border-color: var(--border-strong);
-}
-
-.saveButton {
-  color: #09090a;
-  background: var(--action-primary-bg);
-  border-color: var(--action-primary-bg);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
-}
-
-.saveButton:hover:not(:disabled) {
-  background: #ffffff;
-  border-color: #ffffff;
-}
-
-.cancelButton:disabled,
-.saveButton:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
-}
-
-@keyframes overlay-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes dialog-in {
-  from {
-    transform: translate3d(0, 12px, 0) scale(0.985);
-    opacity: 0;
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-  }
-}
-
-@media (max-width: 768px) {
-  .overlay {
-    align-items: flex-end;
-    padding: 0;
-    backdrop-filter: none;
-  }
-
-  .modal {
-    width: 100vw;
-    max-height: 100dvh;
-    height: auto;
-    border: 0;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-    box-shadow: none;
-  }
-
-  .header {
-    min-height: 68px;
-    padding: max(1rem, env(safe-area-inset-top)) 1rem 1rem;
-  }
-
-  .headerLogo {
-    width: 34px;
-    height: 34px;
-  }
-
-  .fields {
-    padding: 1rem;
-  }
-
-  .fieldGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .fieldFull {
-    grid-column: 1;
-  }
-
-  .actions {
-    padding: 0.875rem 1rem max(0.875rem, env(safe-area-inset-bottom));
-  }
-}
-
-@media (max-width: 440px) {
-  .actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .cancelButton,
-  .saveButton {
-    width: 100%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .overlay,
-  .modal {
-    animation: none;
-  }
-
-  .closeButton,
-  .input,
-  .select,
-  .textarea,
-  .multiselectOption,
-  .cancelButton,
-  .saveButton {
-    transition: none;
-  }
 }

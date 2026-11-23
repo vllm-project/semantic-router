@@ -1,0 +1,66 @@
+{
+  "cases": [
+    {
+      "name": "parameters_omitted",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "What time is it?",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "name": "get_time",
+              "parameters": {
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "parameters_null",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "input": [
+            {
+              "content": [
+                {
+                  "text": "What time is it?",
+                  "type": "input_text"
+                }
+              ],
+              "role": "user",
+              "type": "message"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "name": "get_time",
+              "parameters": {
+                "type": "object"
+              },
+              "type": "function"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

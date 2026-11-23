@@ -58,3 +58,76 @@ func TestPluginFieldTyposFailToCompile(t *testing.T) {
 		}
 	}
 }
+
+// A masking plugin's rules, typed references to rules that find text, keep
+// their type and name through compile and decompile, as do its index mode
+// and identity namespace.
+func TestMaskingRulesRoundTrip(t *testing.T) {
+	const source = `
+SIGNAL keyword employee_id { operator: "OR" method: "regex" keywords: ["\\bE-\\d{6}\\b"] }
+ROUTE masked {
+  PRIORITY 1
+  WHEN keyword("employee_id")
+  MODEL "m:1b"
+  PLUGIN masking {
+    enabled: true
+    rules: [{ type: "keyword", name: "employee_id" }]
+    placeholders: { employee_id: "[EMPLOYEE_{index}]" }
+    index: "registry"
+    identity_namespace: "local"
+  }
+}
+`
+	for round, cfg := 0, mustCompile(t, source); round < 2; round++ {
+		masking := cfg.Decisions[0].GetMaskingConfig()
+		if masking == nil || len(masking.Rules) != 1 || masking.Rules[0].Type != "keyword" || masking.Rules[0].Name != "employee_id" ||
+			masking.Placeholders["employee_id"] != "[EMPLOYEE_{index}]" || masking.Index != "registry" || masking.IdentityNamespace != "local" {
+			t.Fatalf("round %d: masking = %+v, want the keyword rule employee_id, its placeholder and the registry namespace", round, masking)
+		}
+		decompiled, err := Decompile(cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg = mustCompile(t, decompiled)
+	}
+}
+
+// Builder ASTs can carry null even though the text DSL has no null literal.
+func TestReplayShadowRejectsNullASTFields(t *testing.T) {
+	for _, field := range []string{"execution", "budget", "capture", "capture.enabled"} {
+		t.Run(field, func(t *testing.T) {
+			shadow := map[string]Value{
+				"models": ArrayValue{Items: []Value{StringValue{V: "candidate"}}},
+			}
+			fields := map[string]Value{
+				"enabled": BoolValue{V: false},
+				"shadow":  ObjectValue{Fields: shadow},
+			}
+			switch field {
+			case "capture.enabled":
+				shadow["capture"] = ObjectValue{Fields: map[string]Value{"enabled": nil}}
+			default:
+				shadow[field] = nil
+			}
+			compiler := &Compiler{}
+			if _, ok := compiler.compileRouterReplayPluginConfig(fields); ok {
+				t.Fatalf("accepted null %s", field)
+			}
+		})
+	}
+}
+
+func TestReplayNullShadowClearsInheritedConfig(t *testing.T) {
+	compiler := &Compiler{}
+	payload, ok := compiler.compileRouterReplayPluginConfig(map[string]Value{"shadow": nil})
+	if !ok {
+		t.Fatal("null shadow must remain an explicit inheritance override")
+	}
+	fields, ok := payload.(map[string]interface{})
+	if !ok {
+		t.Fatalf("unexpected replay payload: %T", payload)
+	}
+	if value, present := fields["shadow"]; !present || value != nil {
+		t.Fatalf("null shadow override was lost: %#v", fields)
+	}
+}

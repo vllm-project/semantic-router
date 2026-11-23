@@ -63,6 +63,11 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 	finalizeLooperQuorumOutcome(reqCtx, evidence.fusionQuorum, decision, false)
 
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
+	// A run a spend budget stopped answers as the refused call would alone,
+	// read again now that its other calls have settled.
+	if refusal := reqCtx.spend.hopRefusal(); refusal != nil {
+		return r.respondLooperBudgetRefused(reqCtx, reqCtx.spend.recheck(refusal), evidenceArgs...)
+	}
 	status, message, reason := 500, "Looper execution failed: "+err.Error(), "looper_execution_failed"
 	// A model's rate limit or failure that ended the run reaches the client
 	// with the model's status, as it would without a Looper.
@@ -75,6 +80,28 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 		status, message, reason = 401, delegatedCredentialMessage, delegatedCredentialCode
 	}
 	return r.recordLooperFailure(reqCtx, originalModel, decision, status, message, reason, evidenceArgs...)
+}
+
+// respondLooperBudgetRefused answers a Looper run whose call a spend budget
+// refused with that refusal, and records the run as refused, with what its
+// other calls used and spent.
+func (r *OpenAIRouter) respondLooperBudgetRefused(
+	ctx *RequestContext,
+	refusal *budgetRefusal,
+	executionEvidence ...looperFailureEvidence,
+) *ext_proc.ProcessingResponse {
+	if len(executionEvidence) > 0 {
+		applyLooperFailureEvidence(ctx, executionEvidence[0])
+	}
+	ctx.spend.setReport(refusal.status, refusal.estimate)
+	response := r.budgetRefusalResponse(ctx, refusal)
+	status := int(response.GetImmediateResponse().GetStatus().GetCode())
+	response = r.recordRejection(ctx, ctx.spend.model, "", status, response, refusal.code)
+	if len(executionEvidence) > 0 {
+		r.updateLooperReplayUsage(ctx, executionEvidence[0].usage, executionEvidence[0].iterations)
+	}
+	r.refreshReplayBudget(ctx)
+	return response
 }
 
 func looperFailureEvidenceFromError(err error) (looperFailureEvidence, bool) {
@@ -168,7 +195,7 @@ func (r *OpenAIRouter) recordLooperFailure(
 
 	r.startRouterReplay(ctx, originalModel, "", decisionName)
 	if len(executionEvidence) > 0 {
-		r.updateLooperReplayUsage(ctx, executionEvidence[0].usage)
+		r.updateLooperReplayUsage(ctx, executionEvidence[0].usage, executionEvidence[0].iterations)
 	}
 	r.updateRouterReplayStatus(ctx, statusCode, false)
 	if immediate := response.GetImmediateResponse(); immediate != nil {

@@ -1,6 +1,9 @@
 package dsl
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func applyRawRouting(prog *Program, raw *rawRoutingDecl) []error {
 	fields := entriesToMap(raw.Fields)
@@ -42,6 +45,12 @@ func rawToEntrypoint(raw *rawEntrypointDecl) (*EntrypointDecl, []error) {
 	}
 	if recipe, ok := getStringField(fields, "recipe"); ok {
 		decl.Recipe = recipe
+	}
+	if review, ok := getStringField(fields, "review_model"); ok {
+		decl.ReviewModel = strings.TrimSpace(review)
+	}
+	if memory, ok := getStringField(fields, "memory_model"); ok {
+		decl.MemoryModel = strings.TrimSpace(memory)
 	}
 	if marked, ok := fields["default"].(BoolValue); ok {
 		decl.Default = marked.V

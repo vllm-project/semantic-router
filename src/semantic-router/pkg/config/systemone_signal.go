@@ -115,6 +115,12 @@ type SystemOneInput struct {
 	Context bool `yaml:"context,omitempty"`
 	// ToolResults adds the request's tool results.
 	ToolResults bool `yaml:"tool_results,omitempty"`
+	// MaxStateBytes caps, tail-first, each conversation-sized part the rule
+	// reads - tool results, previous turns, the current turn - so the state
+	// stays within the answering deployment's question budget. 0, the
+	// default, keeps every part whole; a rule that must scan a part in full,
+	// such as a safety span scan, should not set it.
+	MaxStateBytes int `yaml:"max_state_bytes,omitempty"`
 	// Request false leaves the current user turn out, so a request-stage rule
 	// reads only the earlier user turns or the tool results it names, and is
 	// not asked when they hold no text. An agent's user turn carries its

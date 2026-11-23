@@ -8,6 +8,14 @@ import (
 // ReasoningDetailType names one variant of a typed reasoning continuity block.
 type ReasoningDetailType string
 
+// ReasoningFormatResponses identifies opaque OpenAI Responses continuation state.
+const ReasoningFormatResponses = "openai-responses-encrypted-v1"
+
+// IsResponsesReasoning reports whether a detail carries Responses ciphertext.
+func IsResponsesReasoning(detail *ReasoningDetail) bool {
+	return detail != nil && detail.Type == ReasoningDetailEncrypted && detail.Format.Set() && detail.Format.Value == ReasoningFormatResponses
+}
+
 const (
 	ReasoningDetailText      ReasoningDetailType = "text"
 	ReasoningDetailSummary   ReasoningDetailType = "summary"

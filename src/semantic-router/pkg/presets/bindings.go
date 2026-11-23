@@ -4,12 +4,14 @@ import "slices"
 
 // Model families with trained bindings. The vela3_d3 sizes (vela3-lite,
 // -mini, -flash, -turbo) turn a trained adapter on by exact question ID;
-// vela3 (vela3-fast) and vela2 (Vela 2.0) pick it by exact wording, which for
-// every preset they were trained on is the canonical wording.
+// vela3 (vela3-fast), vela3_pico (the Vela 3.1 picos) and vela2 (Vela 2.0)
+// pick it by exact wording, which for every preset they were trained on is
+// the canonical wording.
 const (
-	FamilyVela3   = "vela3"
-	FamilyVela3D3 = "vela3_d3"
-	FamilyVela2   = "vela2"
+	FamilyVela3     = "vela3"
+	FamilyVela3D3   = "vela3_d3"
+	FamilyVela3Pico = "vela3_pico"
+	FamilyVela2     = "vela2"
 )
 
 // Binding is the form a model family was trained to be asked a preset in.
@@ -90,9 +92,11 @@ var (
 	}
 )
 
-// vela3Bindings are the router questions both Vela 3.0 families were
+// vela3Bindings are the router questions the Vela 3.0 and 3.1 families were
 // trained on (router_questions.json), under their trained IDs. The vela3_d3
-// sizes answer the guards with their base instead (baseOnly).
+// sizes answer the guards with their base instead (baseOnly). The picos have
+// vela3-fast's question IDs and texts and read the Router's options as given
+// (render31), so they take vela3-fast's bindings.
 func vela3Bindings(family string) map[bindingKey]Binding {
 	bindings := map[bindingKey]Binding{
 		{family, Domain, StageRequest}:         {ID: "domain"},
@@ -104,7 +108,7 @@ func vela3Bindings(family string) map[bindingKey]Binding {
 		{family, PII, StageRequest}:            {ModelPreset: "pii"},
 		{family, Hallucination, StageResponse}: {ModelPreset: "halu"},
 	}
-	if family == FamilyVela3 {
+	if family == FamilyVela3 || family == FamilyVela3Pico {
 		bindings[bindingKey{family, Jailbreak, StageRequest}] = Binding{ID: "attack"}
 		bindings[bindingKey{family, Jailbreak, StageResponse}] = Binding{ID: "attack"}
 		bindings[bindingKey{family, Harm, StageRequest}] = Binding{ID: "p_harm"}
@@ -128,7 +132,7 @@ func vela3Bindings(family string) map[bindingKey]Binding {
 
 var bindings = func() map[bindingKey]Binding {
 	all := map[bindingKey]Binding{}
-	for _, family := range []string{FamilyVela3, FamilyVela3D3} {
+	for _, family := range []string{FamilyVela3, FamilyVela3D3, FamilyVela3Pico} {
 		for key, binding := range vela3Bindings(family) {
 			all[key] = binding
 		}

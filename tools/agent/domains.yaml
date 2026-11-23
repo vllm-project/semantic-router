@@ -12,6 +12,7 @@ domains:
       - .github/copilot-instructions.md
       - .github/PULL_REQUEST_TEMPLATE.md
       - .github/ISSUE_TEMPLATE/**
+      - .github/actionlint.yaml
       - .github/actions/**
       - .github/workflows/**
       - .mergify.yml
@@ -36,7 +37,7 @@ domains:
       - README.md
       - CONTRIBUTING.md
       - website/**
-    checks: [make docs-check-translation-coverage]
+    checks: [make docs-check-translation-coverage, make docs-i18n-shell-test]
     verifications: []
 
   generated-model-catalog:
@@ -267,7 +268,25 @@ domains:
     checks:
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
       - python3 -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
-    verifications: []
+    verifications: [agent-plugins]
+
+  codex-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .agents/plugins/**
+      - src/agent-harness/codex/**
+    checks:
+      - python3 -m unittest discover -s src/agent-harness/codex/hooks
+    verifications: [agent-plugins]
+
+  vscode-extension:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - src/agent-harness/vscode/**
+    checks: [make agent-vscode-test]
+    verifications: [agent-plugins]
 
   vela-omni-artifacts:
     owner: model-runtime
@@ -445,6 +464,19 @@ domains:
       - config/recipes/built-in/**
       - e2e/config/config.memory-user.yaml
       - src/semantic-router/pkg/configschema/router-config-v0.5.schema.json
+    checks: [make vllm-sr-test]
+    verifications: [cli-unit]
+
+  # The CLI unit suite checks the Dashboard image's build and entrypoint
+  # (src/vllm-sr/tests/test_dashboard_dockerfile_surface.py). Not part of
+  # vllm-sr-cli, whose match publishes the CLI on main.
+  cli-checked-dashboard-image:
+    owner: vllm-sr-cli
+    paths:
+      - dashboard/backend/Dockerfile
+      - dashboard/backend/entrypoint.sh
+      - dashboard/backend/entrypoint_permissions.py
+      - dashboard/backend/handlers/logs.go
     checks: [make vllm-sr-test]
     verifications: [cli-unit]
 
@@ -745,6 +777,14 @@ domains:
     checks: [make test-agent-crew]
     verifications: [bench-tools]
 
+  agent-kv-tier-bench:
+    owner: evaluation-quality
+    paths:
+      - bench/agent_kv_tier/**
+      - tools/make/tooling.mk
+    checks: [make test-agent-kv-tier-bench]
+    verifications: [bench-tools]
+
   paper:
     owner: paper
     paths: [paper/**]
@@ -812,7 +852,7 @@ domains:
     paths:
       - tools/ci/python_test_evidence.py
     checks: [make harness-check]
-    verifications: [cli-unit, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
+    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, learning-tools, harness-tools, mock-provider, onnx-artifacts]
 
   component-execution:
     owner: maintainers
@@ -839,7 +879,7 @@ domains:
       - tools/ci/verification_catalog.yaml
       - tools/ci/worker_process.py
     checks: [make harness-check]
-    verifications: [cli-unit, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
+    verifications: [cli-unit, agent-plugins, model-runtime, bench-tools, training, onnx-artifacts, mock-provider, learning-tools, harness-tools, e2e-unit, soak-tools]
 
   runtime-evidence:
     owner: maintainers
@@ -945,6 +985,7 @@ profiles:
       - e2e/profiles/standalone/**
       - e2e/testcases/standalone_gateway.go
       - e2e/testcases/standalone_streaming.go
+      - e2e/testcases/standalone_h2c_bounds.go
       - e2e/testcases/standalone_helm_upgrade.go
       - e2e/testcases/routing_error_codes.go
       - deploy/helm/semantic-router/Chart.yaml
