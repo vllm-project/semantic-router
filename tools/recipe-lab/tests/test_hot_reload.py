@@ -25,13 +25,14 @@ from pathlib import Path
 import pytest
 from recipe_lab.adapters.router_replay import CaseJoin, records_to_cases_by_request_id
 from recipe_lab.bank import BankEntry
-from recipe_lab.contract import OraclePolicy
 from recipe_lab.runner import (
     HotReloadSession,
     RunnerEnv,
     candidate_tag,
     request_id_for_case,
 )
+
+from recipe_lab.contract import OraclePolicy
 
 POLICY = OraclePolicy.from_dict(
     {"math": "local/model-math", "code": "local/model-code"}

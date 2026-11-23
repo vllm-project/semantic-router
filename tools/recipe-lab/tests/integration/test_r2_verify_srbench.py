@@ -27,8 +27,9 @@ from pathlib import Path
 
 import pytest
 import yaml
-from recipe_lab.cli import main
 from recipe_lab.splitting import load_cases
+
+from recipe_lab.cli import main
 from recipe_lab.srbench import cases_to_srbench_rows
 
 pytestmark = [

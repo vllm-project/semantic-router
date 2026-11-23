@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import math
 import re
 
@@ -48,10 +49,8 @@ def verify_promotion_evidence(spec: ExperimentSpec, record: dict) -> None:
             r"(?:^|;\s*)baseline=([-+0-9.eE]+)(?:;|$)", record.get("notes", "")
         )
         if match:
-            try:
+            with contextlib.suppress(ValueError):
                 baseline = float(match.group(1))
-            except ValueError:
-                pass
     baseline = _number(baseline, "baseline objective")
 
     measurements = evidence.get("guard_measurements", [])

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from recipe_lab.contract import Constraint, ContractError, OraclePolicy
 from recipe_lab.runner import (
     RunnerEnv,
     RunnerError,
@@ -19,6 +18,8 @@ from recipe_lab.runner import (
     replay_metric_value,
     routed_cost_index,
 )
+
+from recipe_lab.contract import Constraint, ContractError, OraclePolicy
 
 
 def test_attribution_delta_counts_fixed_errors():

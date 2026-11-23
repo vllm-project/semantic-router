@@ -192,7 +192,7 @@ def main() -> None:
         "for fault-injection polls (env: RECIPE_LAB_MOCK_DELAY_MS)",
     )
     args = parser.parse_args()
-    global _DELAY_SECONDS
+    global _DELAY_SECONDS  # noqa: PLW0603 - env-tunable stub knob
     _DELAY_SECONDS = args.delay_ms / 1000.0
     if args.cases:
         _CAPABILITY_TABLE.clear()

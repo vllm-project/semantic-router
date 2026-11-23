@@ -68,7 +68,7 @@ def _check_projection(source, deployed, defaults, path=(), local_tracing=False):
         return
     if isinstance(source, list) and isinstance(deployed, list):
         check(len(source) == len(deployed), "the deployment changed an authored list")
-        for index, (left, right) in enumerate(zip(source, deployed)):
+        for index, (left, right) in enumerate(zip(source, deployed, strict=False)):
             _check_projection(left, right, defaults, (*path, index), local_tracing)
         return
     expected = source

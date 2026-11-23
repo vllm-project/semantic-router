@@ -6,8 +6,9 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from recipe_lab.contract import ContractError, ExperimentSpec
 from recipe_lab.ledger import Ledger, LedgerRecord
+
+from recipe_lab.contract import ContractError, ExperimentSpec
 from tests.fixtures import VALID_SPEC
 
 

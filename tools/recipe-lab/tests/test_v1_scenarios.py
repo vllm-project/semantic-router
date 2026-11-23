@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from recipe_lab.cli import main
 from recipe_lab.ledger import Ledger, LedgerRecord
 from recipe_lab.runner import (
     HotReloadSession,
@@ -25,8 +24,6 @@ from recipe_lab.runner import (
     RunnerError,
     evaluate_candidate,
 )
-
-from tests.test_cli import _write_frozen_spec
 from tests.test_hot_reload import (
     BANK,
     CASES,
@@ -38,6 +35,9 @@ from tests.test_hot_reload import (
     _seed_state,
     _StateView,
 )
+
+from recipe_lab.cli import main
+from tests.test_cli import _write_frozen_spec
 
 EXIT_CONTRACT_ERROR = 2
 

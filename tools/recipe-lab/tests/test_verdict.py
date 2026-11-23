@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import pytest
+
 from recipe_lab.verdict import (
     GuardResult,
     PairedStats,

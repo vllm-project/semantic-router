@@ -7,16 +7,16 @@ import re
 import subprocess
 import tempfile
 import time
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
+from .contract import ContractError
 from .deployed_config import config_identity
 from .loop_evidence import check, digest, sha, target
-from collections.abc import Iterable
-from dataclasses import dataclass
-from typing import Any
-from .contract import ContractError
 
 
 def encoded(value):
@@ -57,7 +57,7 @@ class SrBench:
         self.executable = executable
 
     def command(self, command, *arguments):
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510 - the wrapper checks the code
             [self.executable, "benchmark", command, *arguments],
             capture_output=True,
             encoding="utf-8",
@@ -293,8 +293,8 @@ def read_candidate(args, receipt):
         "expected proposer agent:<id>",
     )
     check(
-        0 <= args.min_speedup_pct <= 100,
-        "expected a speedup threshold between 0 and 100",
+        0 <= args.min_speedup_pct <= MAX_SPEEDUP_PCT,
+        f"expected a speedup threshold between 0 and {MAX_SPEEDUP_PCT}",
     )
     check(
         math.isfinite(args.wait_seconds) and args.wait_seconds >= 0,
@@ -501,6 +501,10 @@ def evaluate(args):
             receipt=None,
         )
     return receipt
+
+
+# The largest latency reduction a candidate may request, in percent.
+MAX_SPEEDUP_PCT = 100
 
 
 class SrbenchError(RuntimeError):

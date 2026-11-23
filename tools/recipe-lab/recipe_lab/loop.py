@@ -220,15 +220,15 @@ def compare(ledger, args):
         "record the reason for the disposition",
     )
     return ledger.append(
-        dict(
-            kind="comparison",
-            baseline=base["record_id"],
-            candidate=candidate["record_id"],
-            split=base["split"],
-            wins=wins,
-            losses=losses,
-            jointly_correct=jointly_correct,
-            disposition=args.disposition,
-            reason=args.reason,
-        )
+        {
+            "kind": "comparison",
+            "baseline": base["record_id"],
+            "candidate": candidate["record_id"],
+            "split": base["split"],
+            "wins": wins,
+            "losses": losses,
+            "jointly_correct": jointly_correct,
+            "disposition": args.disposition,
+            "reason": args.reason,
+        }
     )

@@ -97,6 +97,9 @@ from .verdict import (
     evidence_quality_reasons,
 )
 
+# An AB/BA pair always carries exactly two arms' metrics.
+PAIRED_ARM_COUNT = 2
+
 _MEASUREMENT_KEYS = ("name", "candidate", "baseline")
 
 
@@ -246,7 +249,7 @@ def _pair_metrics(
                 candidate_metric = cand_values[0] if cand_values else None
             return baseline_metric, candidate_metric
     values = extract_metric_values(comparison, metric_key)
-    if len(values) == 2:
+    if len(values) == PAIRED_ARM_COUNT:
         return values[0], values[1]
     incomplete.append(
         f"ambiguous compare payload for {metric_key!r}: {len(values)} numeric values found"
@@ -317,7 +320,7 @@ def paired_stats_from_comparison(comparison: Any) -> PairedStats | None:
     def _interval(raw: Any) -> tuple[float, float] | None:
         if (
             isinstance(raw, (list, tuple))
-            and len(raw) == 2
+            and len(raw) == PAIRED_ARM_COUNT
             and all(
                 not isinstance(v, bool) and isinstance(v, (int, float)) for v in raw
             )
@@ -486,7 +489,7 @@ def _evidence_entry(
     percentage ceilings and land in `incomplete_reasons` (INCONCLUSIVE).
     `finish_reason_length_rate` is reference only and never gated.
     """
-    entry: dict[str, float | None] = {key: None for key in _EVIDENCE_RATE_KEYS}
+    entry: dict[str, float | None] = dict.fromkeys(_EVIDENCE_RATE_KEYS)
     if rates is not None:
         entry.update({key: rates.get(key) for key in _EVIDENCE_RATE_KEYS})
     incomplete.extend(

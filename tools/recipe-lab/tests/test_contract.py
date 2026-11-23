@@ -8,6 +8,7 @@ import json
 
 import pytest
 import yaml
+
 from recipe_lab.contract import (
     ContractError,
     ExperimentSpec,

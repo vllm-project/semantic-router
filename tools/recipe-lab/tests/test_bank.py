@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from recipe_lab.bank import BankEntry, apply_bank, grade, load_bank, write_bank
+
 from recipe_lab.contract import ContractError
 
 

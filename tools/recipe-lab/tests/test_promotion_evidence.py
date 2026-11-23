@@ -3,9 +3,9 @@
 import json
 
 import pytest
+from recipe_lab.ledger import compute_record_id
 
 from recipe_lab.contract import ContractError, ExperimentSpec
-from recipe_lab.ledger import compute_record_id
 from recipe_lab.live import measurements_from_rows, resolve_gates
 from recipe_lab.promotion_evidence import verify_promotion_evidence
 from tests.fixtures import VALID_SPEC

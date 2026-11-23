@@ -7,8 +7,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from recipe_lab import loop
 from recipe_lab.loop_evidence import digest
+
+from recipe_lab import loop
 
 
 class LedgerTest(unittest.TestCase):
@@ -100,19 +101,19 @@ class LedgerTest(unittest.TestCase):
         config, evidence = self._graded_fixtures()
 
         def measurement(hypothesis):
-            return dict(
-                kind="measurement",
-                split="dev",
-                arm="fixed",
-                recipe="main",
-                public_model="public",
-                strong_model="A",
-                config=str(config),
-                config_sha256=digest(config.read_bytes()),
-                hypothesis=hypothesis,
-                evidence=evidence,
-                cases={},
-            )
+            return {
+                "kind": "measurement",
+                "split": "dev",
+                "arm": "fixed",
+                "recipe": "main",
+                "public_model": "public",
+                "strong_model": "A",
+                "config": str(config),
+                "config_sha256": digest(config.read_bytes()),
+                "hypothesis": hypothesis,
+                "evidence": evidence,
+                "cases": {},
+            }
 
         first = self.ledger.append(measurement("first import"))
         second = self.ledger.append(measurement("Relabel the same physical run"))

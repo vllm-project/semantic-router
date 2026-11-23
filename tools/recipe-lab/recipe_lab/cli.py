@@ -62,8 +62,8 @@ from .contract import (
 from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_refs
 from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
-from .proposers import rule_threshold, threshold_search
 from .live import live_verdict_from_runs, measurements_from_rows, verify_live
+from .proposers import rule_threshold, threshold_search
 from .runner import (
     COST_PROXY_METRIC,
     HotReloadSession,
