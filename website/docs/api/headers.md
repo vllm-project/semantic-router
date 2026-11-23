@@ -36,10 +36,13 @@ Every response of the routing pipeline carries the headers that apply to it: ans
 | `x-vsr-selected-decision` | v0.1 | Decision the decision engine selected; omitted when no decision matched. |
 | `x-vsr-selected-model` | v0.1 | Model alias the Router selected. |
 | `x-vsr-replay-id` | v0.2 | Router Replay record id, when the record was persisted. |
-| `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses only. |
+| `x-vsr-cost` | v0.4 | Usage priced with the served model's configured pricing; buffered responses and Looper answers only. A Looper answer's cost is the sum of its calls, when every one has a price. |
 | `x-vsr-cost-currency` | v0.4 | Currency of `x-vsr-cost`, from `pricing.currency`. |
-| `x-vsr-budget-remaining` | v0.5 | What the tightest spend budget of the request has left, in `global.services.budgets.currency`: after the call's actual cost on a buffered response, after its reservation on a stream and on a `budget_exceeded` refusal. |
+| `x-vsr-budget-remaining` | v0.5 | What the tightest spend budget of the request has left, in `global.services.budgets.currency`, on every reply to a request a budget covers: after the call's actual cost on a buffered response and a Looper answer, after a failed call's reservation ends, and after its reservation on a stream and on a `budget_exceeded` refusal. |
 | `x-vsr-budget-scope` | v0.5 | The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`. |
+| `x-should-retry` | v0.5 | On a spend budget refusal, whether a retry may succeed: `false` on `budget_unpriced` and on a `budget_exceeded` no retry before the budget's window starts again can clear, `true` on one only calls in flight cause. OpenAI and Anthropic SDKs, Claude Code and Pi follow it. |
+| `x-codex-promo-message` | v0.5 | The message of an out-of-budget refusal on the Responses API, which Codex shows with the usage limit error it ends the turn on. |
+| `anthropic-ratelimit-unified-overage-disabled-reason` | v0.5 | `budget_exceeded` on an out-of-budget refusal on the Messages API, as Anthropic marks a spend limit refusal: Claude Code on a Claude login or a gateway login then shows the message as it is, rather than as a temporary limit that is not the user's. |
 | `x-ratelimit-limit` | v0.2 | Limit of the rate-limit window that rejected the request. |
 | `x-ratelimit-remaining` | v0.2 | Requests left in that window. |
 | `x-ratelimit-reset` | v0.2 | Unix time the window resets at. |
