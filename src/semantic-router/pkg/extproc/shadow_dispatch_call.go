@@ -53,10 +53,14 @@ func (p *preparedShadowCall) estimateTokens(engine *protocolcodec.Engine) (shado
 		return shadowTokenEstimate{}, err
 	}
 	output := request.Sampling.MaxOutputTokens
-	if output == nil || *output <= 0 || (request.CandidateCount != nil && *request.CandidateCount > 1) {
-		return shadowTokenEstimate{}, errors.New("shadow token estimate requires an explicit output limit and a single completion")
+	if request.CandidateCount != nil && *request.CandidateCount > 1 {
+		return shadowTokenEstimate{}, errors.New("shadow token estimate requires a single completion")
 	}
-	return shadowTokenEstimate{input: llmprotocol.EstimateInput(&request).Tokens, output: *output}, nil
+	tokens := shadowTokenEstimate{input: llmprotocol.EstimateInput(&request).Tokens}
+	if output != nil {
+		tokens.output = *output
+	}
+	return tokens, nil
 }
 
 func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResult {

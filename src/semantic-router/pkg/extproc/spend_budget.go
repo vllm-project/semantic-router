@@ -11,6 +11,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -164,18 +165,29 @@ func (r *OpenAIRouter) dispatchSpendEstimate(model string, request *llmprotocol.
 	if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
 		return 0, false
 	}
-	output := r.Config.Budgets.EffectiveOutputReserveTokens()
-	limit := r.Config.ModelConfig[model].MaxOutputTokens
-	if limit > 0 {
-		output = limit
+	var requested int64
+	if request != nil && request.Sampling.MaxOutputTokens != nil {
+		requested = *request.Sampling.MaxOutputTokens
 	}
-	if request != nil && request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens > 0 {
-		output = int(min(*request.Sampling.MaxOutputTokens, int64(math.MaxInt32)))
+	output := estimatedOutputTokens(r.Config, model, requested)
+	return estimateDispatchCost(llmprotocol.EstimateInput(request).Tokens, output, pricing), true
+}
+
+// estimatedOutputTokens supplies a value for spend estimation without changing
+// the request sent to the provider.
+func estimatedOutputTokens(cfg *config.RouterConfig, model string, requested int64) int64 {
+	limit := int64(cfg.ModelConfig[model].MaxOutputTokens)
+	if requested > 0 {
+		output := min(requested, math.MaxInt32)
 		if limit > 0 {
 			output = min(output, limit)
 		}
+		return output
 	}
-	return estimateDispatchCost(llmprotocol.EstimateInput(request).Tokens, int64(output), pricing), true
+	if limit > 0 {
+		return limit
+	}
+	return int64(cfg.Budgets.EffectiveOutputReserveTokens())
 }
 
 // settleRequestSpend replaces the reservation with the priced usage, or with

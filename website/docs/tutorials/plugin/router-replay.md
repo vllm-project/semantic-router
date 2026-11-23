@@ -564,7 +564,9 @@ Here `N` is the number of configured models. All integer bounds must be positive
 | `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
 | `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
 
-When `budget.max_estimated_cost` is set, the Router prices each encoded request using its estimated input tokens and explicit output limit. It skips the group if the sum exceeds the limit or any candidate has no compatible price, has no explicit output limit, or requests multiple completions. Replay records the reason. Each attempted candidate records its estimate and a cost based on reported usage when available, or the estimate otherwise. The ceiling applies at admission and actual charges can differ. Primary requests retain their own run and user budget rules.
+When `budget.max_estimated_cost` is set, the Router prices each encoded request using its estimated input tokens and the same output estimate as the spend budget. It uses the request’s output limit, capped by the model’s `max_output_tokens` when set. If the request omits the limit, it uses the model limit or `global.services.budgets.output_reserve_tokens` (default 4096). The estimate does not change the outgoing request.
+
+The Router skips the group if the sum exceeds the limit, a candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. For attempted calls, it records the estimate and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
 
 The old flat shadow fields are rejected; use the nested structure above.
 

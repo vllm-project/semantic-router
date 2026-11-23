@@ -548,7 +548,7 @@ func TestShadowGroupSpendBudget(t *testing.T) {
 		{"combined estimate just exceeds limit", 0.299, 100, 0, "budget_exhausted", "", "USD", true},
 		{"combined estimate exactly fits", 0.30, 100, 2, "completed", "estimate", "USD", true},
 		{"both candidates fit", 500, 100, 2, "completed", "usage", "USD", false},
-		{"no output bound", 500, 0, 0, "budget_unbounded_output", "", "USD", false},
+		{"default output reserve exceeds budget", 500, 0, 0, "budget_exhausted", "", "USD", false},
 		{"usage missing after dispatch", 500, 100, 2, "completed", "estimate", "USD", false},
 		{"no budget and no output bound", 0, 0, 2, "completed", "", "USD", false},
 		{"second candidate has no price", 500, 100, 0, "budget_unpriced", "", "", false},
@@ -615,6 +615,51 @@ func TestShadowGroupSpendBudget(t *testing.T) {
 						t.Fatalf("missing usage did not account for the estimate: %+v", outcome.Metadata)
 					}
 				}
+			}
+		})
+	}
+}
+
+func TestShadowSpendEstimatesOmittedOutputLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		modelLimit    int
+		outputReserve int
+		wantEstimate  string
+	}{
+		{"model limit takes precedence", 120, 240, "120"},
+		{"configured reserve", 0, 240, "240"},
+		{"default reserve", 0, 0, "4096"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primary := newShadowTestRouter(t, backend)
+			model := router.Config.ModelConfig[shadowTestModel]
+			model.MaxOutputTokens = tc.modelLimit
+			model.Pricing = config.ModelPricing{Currency: "USD", CompletionPer1M: 1e6}
+			router.Config.ModelConfig[shadowTestModel] = model
+			router.Config.Budgets.OutputReserveTokens = tc.outputReserve
+			cfg := shadowTestPluginConfig()
+			limit := 5000.0
+			cfg.Budget.MaxEstimatedCost = &limit
+
+			run := runShadowRequest(t, router, primary, cfg, nil)
+			waitForShadow(t, router)
+			outcome := singleShadowOutcome(t, run)
+			if outcome.Reason != shadowReasonCompleted || outcome.Metadata["budget_estimated_cost"] != tc.wantEstimate {
+				t.Fatalf("got reason %q and estimate %q, want completion with estimate %s", outcome.Reason, outcome.Metadata["budget_estimated_cost"], tc.wantEstimate)
+			}
+			backend.mu.Lock()
+			defer backend.mu.Unlock()
+			if len(backend.bodies) != 1 {
+				t.Fatalf("got %d requests, want 1", len(backend.bodies))
+			}
+			var wire map[string]json.RawMessage
+			if err := json.Unmarshal(backend.bodies[0], &wire); err != nil {
+				t.Fatal(err)
+			}
+			if wire["max_tokens"] != nil || wire["max_completion_tokens"] != nil {
+				t.Fatalf("estimate changed the outgoing output limit: %s", backend.bodies[0])
 			}
 		})
 	}
