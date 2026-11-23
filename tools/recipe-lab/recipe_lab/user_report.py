@@ -5,6 +5,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+# A backend/model identifier longer than this is treated as untrusted text.
+MAX_LABEL_LENGTH = 128
+
 
 @dataclass
 class Finding:
@@ -77,7 +80,7 @@ def _label(value):
         or not re.fullmatch(
             r"[a-zA-Z0-9_-][a-zA-Z0-9._-]*(?:[:/][a-zA-Z0-9_-][a-zA-Z0-9._-]*)*", value
         )
-        or len(value) > 128
+        or len(value) > MAX_LABEL_LENGTH
         or _KEY.search(value)
         or re.search(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", value)
     ):

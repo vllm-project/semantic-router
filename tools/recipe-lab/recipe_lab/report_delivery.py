@@ -13,7 +13,9 @@ from .user_report import render_report
 def _publish(path, data):
     """Publish complete bytes once. Concurrent identical writes are idempotent."""
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-    stream = tempfile.NamedTemporaryFile(dir=path.parent, delete=False)
+    stream = tempfile.NamedTemporaryFile(  # noqa: SIM115 - renamed, not closed here
+        dir=path.parent, delete=False
+    )
     staged = Path(stream.name)
     try:
         with stream:
@@ -27,9 +29,11 @@ def _publish(path, data):
                 staged.rename(path)
             else:
                 os.link(staged, path)
-        except FileExistsError:
+        except FileExistsError as exc:
             if path.is_symlink() or path.read_bytes() != data:
-                raise ValueError(f"refusing to replace existing output: {path}")
+                raise ValueError(
+                    f"refusing to replace existing output: {path}"
+                ) from exc
     finally:
         staged.unlink(missing_ok=True)
 

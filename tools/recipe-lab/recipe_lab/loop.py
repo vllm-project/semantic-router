@@ -221,8 +221,7 @@ def compare(ledger, args):
         not args.disposition or bool(args.reason and args.reason.strip()),
         "record the reason for the disposition",
     )
-<<<<<<< HEAD
-    return ledger.append(
+    result = ledger.append(
         {
             "kind": "comparison",
             "baseline": base["record_id"],
@@ -234,20 +233,6 @@ def compare(ledger, args):
             "disposition": args.disposition,
             "reason": args.reason,
         }
-=======
-    result = ledger.append(
-        dict(
-            kind="comparison",
-            baseline=base["record_id"],
-            candidate=candidate["record_id"],
-            split=base["split"],
-            wins=wins,
-            losses=losses,
-            jointly_correct=jointly_correct,
-            disposition=args.disposition,
-            reason=args.reason,
-        )
->>>>>>> 12e060d73 (feat(recipe-lab): ledger-backed reports, agent context and provenance manifests (sub-issue 4))
     )
     if getattr(args, "workspace", None):
         # The local handoff lives outside the signed comparison record.

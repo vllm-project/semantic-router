@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-
 from recipe_lab import cli, loop, report_delivery, srbench
 from recipe_lab.loop_evidence import digest
 
@@ -46,7 +45,7 @@ def test_explicit_evidence_order_and_safe_output(tmp_path, capsys):
     before = dest.read_bytes()
     assert b"Review both attempts." in before
     with pytest.raises(SystemExit) as error:
-        cli.main(args[:-1] + ["Revised background."])
+        cli.main([*args[:-1], "Revised background."])
     assert error.value.code == 2 and dest.read_bytes() == before
     invalid = tmp_path / "invalid.json"
     invalid.write_text('{"schema":"unknown"}', encoding="utf-8")
@@ -109,19 +108,19 @@ def _graded_fixtures(tmp_path):
         }
 
     def measurement(evidence):
-        return dict(
-            kind="measurement",
-            split="dev",
-            arm="fixed",
-            recipe="main",
-            public_model="public",
-            strong_model="A",
-            config=str(config),
-            config_sha256=digest(config.read_bytes()),
-            hypothesis="graded import",
-            evidence=evidence,
-            cases={},
-        )
+        return {
+            "kind": "measurement",
+            "split": "dev",
+            "arm": "fixed",
+            "recipe": "main",
+            "public_model": "public",
+            "strong_model": "A",
+            "config": str(config),
+            "config_sha256": digest(config.read_bytes()),
+            "hypothesis": "graded import",
+            "evidence": evidence,
+            "cases": {},
+        }
 
     return measurement
 
