@@ -19,6 +19,10 @@
     "message": "安装指南",
     "description": "The label of footer link with label=Installation linking to /docs/installation"
   },
+  "link.item.label.Contributor Guide": {
+    "message": "贡献者指南",
+    "description": "The label of footer link with label=Contributor Guide linking to /community/contributor-guide"
+  },
   "link.item.label.Governance": {
     "message": "治理机制",
     "description": "The label of footer link with label=Governance linking to /community/team"

@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -70,7 +71,7 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 							Port: 8000,
 						},
 					},
-					Weight: 100,
+					Weight: ptr.To(100),
 				},
 			},
 		},
