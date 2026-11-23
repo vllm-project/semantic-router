@@ -161,7 +161,9 @@ class DtypePolicy:
     strength of a record on that device class: a GPU record says nothing about
     a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
     slot, or the names of the slots (``linear``, ``sdpa``) the family's record
-    covers, so a kernel added to another slot later does not change its answers. Consented
+    covers, so a kernel added to another slot later does not change its answers.
+    ``approximate_accelerators`` scopes that accelerator consent to the named
+    accelerators (None: every accelerator the spec runs on). Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -178,6 +180,7 @@ class DtypePolicy:
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
     approximate_cpu_kernels: bool | frozenset[str] = False
+    approximate_accelerators: frozenset[str] | None = None
 
     @property
     def needs_gpu_bf16(self) -> bool:

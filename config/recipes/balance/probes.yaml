@@ -935,11 +935,6 @@ decisions:
     messages:
     - role: user
       content: ' '
-    expected_signal_errors:
-      systemone:task: systemone_rejected
-      systemone:verification: systemone_rejected
-      systemone:correction: systemone_rejected
-      systemone:clarify: systemone_rejected
     tags:
     - fallback
     - negative
