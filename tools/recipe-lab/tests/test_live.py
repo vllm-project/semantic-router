@@ -82,14 +82,14 @@ def test_live_verdict_binds_nondefault_workload():
         "candidate": {"capability.score": 0.9},
     }
     cli.show.return_value = copy.deepcopy(_RUN_DOC)
-    args = dict(
-        spec=spec,
-        cli=cli,
-        workload=second,
-        baseline_run_id="a",
-        candidate_run_id="b",
-        measurements=[],
-    )
+    args = {
+        "spec": spec,
+        "cli": cli,
+        "workload": second,
+        "baseline_run_id": "a",
+        "candidate_run_id": "b",
+        "measurements": [],
+    }
     with pytest.raises(ContractError, match="scored dataset"):
         live_verdict_from_runs(**args)
     cli.show.return_value["manifest"]["dataset"]["sha256"] = new_hash
@@ -1712,9 +1712,8 @@ def test_merge_paired_stats_repeated_runs_do_not_dilute_min_cases():
         min_improvement_pp=2.0,
     )
     assert result.verdict == "INCONCLUSIVE"
-    assert (
-        "insufficient paired sample: 70 paired cases < min_cases 200"
-        in (result.reasons[0])
+    assert "insufficient paired sample: 70 paired cases < min_cases 200" in (
+        result.reasons[0]
     )
 
 
@@ -2431,9 +2430,8 @@ def test_verify_failed_reference_arm_is_inconclusive(tmp_path):
         work_dir=tmp_path,
     )
     assert result["verdict"] == "INCONCLUSIVE"
-    assert (
-        "reference arm 'strong' run run-ref-ref-strong ended 'failed'"
-        in (result["reasons"])
+    assert "reference arm 'strong' run run-ref-ref-strong ended 'failed'" in (
+        result["reasons"]
     )
     # a failed reference run carries no metric evidence at all
     assert result["references"]["strong"].get("metric") is None

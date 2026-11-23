@@ -358,15 +358,15 @@ def test_restart_shared_and_unknown_stores_isolate_repeated_trials(
         return list(previous), {"id": 200}, {}
 
     monkeypatch.setattr(runner, "probe_records", probe)
-    args = dict(
-        candidate_config=cfg,
-        env=RunnerEnv(
+    args = {
+        "candidate_config": cfg,
+        "env": RunnerEnv(
             router_bin="x", mock_backend_script="x", python_bin="x", work_dir=tmp_path
         ),
-        cases=[{"case_id": "id", "prompt": "p", "truth": "test"}],
-        oracle_policy=OraclePolicy.from_dict({"test": "a"}),
-        bank={},
-    )
+        "cases": [{"case_id": "id", "prompt": "p", "truth": "test"}],
+        "oracle_policy": OraclePolicy.from_dict({"test": "a"}),
+        "bank": {},
+    }
     first = evaluate_candidate(**args)
     stale = evaluate_candidate(**args)
     assert "summary" in first and stale["incomplete"]

@@ -456,7 +456,10 @@ class LiveArmCli:
             }
 
         return {
-            "baseline": {METRIC_KEY: base["accuracy"], "total_spend_usd": base["spend"]},
+            "baseline": {
+                METRIC_KEY: base["accuracy"],
+                "total_spend_usd": base["spend"],
+            },
             "candidate": {
                 METRIC_KEY: cand["accuracy"],
                 "total_spend_usd": cand["spend"],
@@ -616,7 +619,9 @@ class LiveArmCli:
                 by_session[fixture],
                 key=lambda row: int(row.get("session", {}).get("turn_index") or 0),
             )
-            routed = [str(row.get("routed") or "") for row in requests if row.get("routed")]
+            routed = [
+                str(row.get("routed") or "") for row in requests if row.get("routed")
+            ]
             if len(requests) > 1:
                 multi += 1
             task_switches = 0
@@ -1262,7 +1267,9 @@ def test_v6_scenario_1_cold_start(stack, recipe_lab_bin, tmp_path):
     assert first_models.get("simple") == MODEL_A
 
     reference_runs = {
-        run["target_id"]: run for run in cli.runs.values() if run["target_id"] in PRICING
+        run["target_id"]: run
+        for run in cli.runs.values()
+        if run["target_id"] in PRICING
     }
     assert reference_runs[MODEL_A]["accuracy"] == pytest.approx(0.4)
     assert reference_runs[MODEL_B]["accuracy"] == pytest.approx(1.0)
@@ -1430,10 +1437,11 @@ def test_v6_scenario_2_tuning(stack, recipe_lab_bin, tmp_path):
     )
     tuned_record = _route_evidence(tuned_records)
     assert tuned_record.get("status") is None, tuned_record["reasons"]
-    tuned_evidence = json.loads(
-        tuned_record["notes"].split("routing-evidence=", 1)[1]
+    tuned_evidence = json.loads(tuned_record["notes"].split("routing-evidence=", 1)[1])
+    assert (
+        tuned_evidence["tool_loop_switches"]
+        == tuned_evidence["decision_drift_switches"]
     )
-    assert tuned_evidence["tool_loop_switches"] == tuned_evidence["decision_drift_switches"]
 
     # live comparison: baseline (protection disabled) vs the remedy. The two
     # arms complete the same tasks (protection changes stability, not
