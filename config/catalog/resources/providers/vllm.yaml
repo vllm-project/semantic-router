@@ -5,7 +5,9 @@ category: start_here
 support_tier: runtime
 # vllm serve exposes /v1/messages since 0.11.1 behind the same bearer token as
 # its OpenAI routes, and vLLM-Omni serves image generation models on
-# /v1/images/generations. /v1/models is one OpenAI-shaped list whatever the
+# /v1/images/generations. Speech (POST /v1/audio/speech) is not listed here:
+# plain vLLM does not serve that route. See providers/vllm-omni.yaml.
+# /v1/models is one OpenAI-shaped list whatever the
 # protocol, which is what the served context window check reads.
 protocols:
 - openai/chat-completions@1

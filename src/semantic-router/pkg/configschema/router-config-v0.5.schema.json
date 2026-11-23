@@ -910,6 +910,7 @@
             "responses",
             "messages",
             "images",
+            "speech",
             "systemone",
             "openai",
             "anthropic"
@@ -3473,6 +3474,7 @@
               "responses",
               "messages",
               "images",
+              "speech",
               "systemone",
               "openai",
               "anthropic"
