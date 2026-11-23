@@ -5,7 +5,7 @@ description: 查看哪些后端目标形式能在 Docker、Helm、Operator、控
 translation:
   source_commit: "9156d5bc1ed9edff626b95a2b8260a77cb1712c5"
   source_file: "docs/installation/backend-target-compatibility.md"
-  outdated: false
+  outdated: true
 ---
 
 # 后端目标兼容性

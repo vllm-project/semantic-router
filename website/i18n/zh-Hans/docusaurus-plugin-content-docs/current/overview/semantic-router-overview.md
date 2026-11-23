@@ -6,7 +6,7 @@ description: vLLM Semantic Router 的数据面、控制面、配置模型和请�
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/overview/semantic-router-overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 系统概览 {#system-overview}

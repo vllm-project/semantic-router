@@ -5,7 +5,7 @@ description: 为缓存、记忆、回放、响应历史和向量数据选择支�
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"
   source_file: "docs/installation/storage-overview.md"
-  outdated: false
+  outdated: true
 ---
 
 # 数据与存储

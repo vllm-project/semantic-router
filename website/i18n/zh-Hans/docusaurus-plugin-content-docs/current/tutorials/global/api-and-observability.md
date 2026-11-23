@@ -3,7 +3,7 @@ is_mtpe: false
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/tutorials/global/api-and-observability.md"
-  outdated: false
+  outdated: true
 ---
 
 # API 与可观测性

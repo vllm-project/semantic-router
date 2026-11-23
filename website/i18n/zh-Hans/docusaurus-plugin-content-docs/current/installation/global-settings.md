@@ -6,7 +6,7 @@ is_mtpe: false
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/installation/global-settings.md"
-  outdated: false
+  outdated: true
 ---
 
 # 全局设置 {#global-settings}

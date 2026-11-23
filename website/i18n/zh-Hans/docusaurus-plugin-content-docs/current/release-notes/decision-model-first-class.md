@@ -5,7 +5,7 @@ is_mtpe: false
 translation:
   source_commit: "118fb72eb67a0e7193697e350d7b494dc016631e"
   source_file: "docs/release-notes/decision-model-first-class.md"
-  outdated: false
+  outdated: true
 ---
 
 # 发布说明：v0.5，决策模型成为一等模型 {#release-note-v05-the-decision-model-is-first-class}

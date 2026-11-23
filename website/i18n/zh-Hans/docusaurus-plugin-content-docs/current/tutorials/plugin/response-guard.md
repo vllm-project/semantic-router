@@ -3,7 +3,7 @@ is_mtpe: true
 translation:
   source_commit: "72b3d17c5fdcaa506e603b1697fdb2d4b6318a6e"
   source_file: "docs/tutorials/plugin/response-guard.md"
-  outdated: false
+  outdated: true
 ---
 
 # 响应守卫

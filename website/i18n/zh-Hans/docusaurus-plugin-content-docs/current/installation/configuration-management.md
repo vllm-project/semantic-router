@@ -5,7 +5,7 @@ description: 运行中的 Router 如何激活一次配置变更、变更会重�
 translation:
   source_commit: "2e7e0775e88b0fc9426daf7c4fa0fe6e0ec20654"
   source_file: "docs/installation/configuration-management.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置管理

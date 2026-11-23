@@ -7,7 +7,7 @@ is_mtpe: false
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/system-one/reference/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # System One 配置参考 {#system-one-configuration-reference}

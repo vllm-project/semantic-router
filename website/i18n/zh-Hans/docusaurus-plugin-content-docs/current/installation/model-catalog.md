@@ -6,7 +6,7 @@ description: global.model_catalog.deployments 的每个字段、各 provider 及
 translation:
   source_commit: "3e9e4262e5c4e286ede3fb75cdac83edb985b6aa"
   source_file: "docs/installation/model-catalog.md"
-  outdated: false
+  outdated: true
 ---
 
 # 模型目录参考

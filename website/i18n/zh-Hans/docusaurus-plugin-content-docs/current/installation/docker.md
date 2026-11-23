@@ -5,7 +5,7 @@ description: 将 Semantic Router 作为本地或单主机容器栈运行，并�
 translation:
   source_commit: "bc5c6bfb747ffe9c5f35d98b203427dada8c4c56"
   source_file: "docs/installation/docker.md"
-  outdated: false
+  outdated: true
 ---
 
 # 使用 Docker 部署 {#deploy-with-docker}
