@@ -11,7 +11,6 @@ import {
   homeSnapshotKey,
   homeTrafficView,
   latencyStats,
-  moreCurrenciesLabel,
   needsTrafficWindow,
   parseHomeSnapshot,
   percentile,
@@ -25,6 +24,8 @@ import {
   trafficFromSeries,
   trafficFromWindow,
   untitledSessions,
+  unpricedHint,
+  unpricedNote,
   type HomeAggregate,
   type HomeSnapshot,
 } from './homeSupport'
@@ -185,39 +186,85 @@ describe('home traffic helpers', () => {
       currency: 'USD',
       spend: 2.6,
       saved: 1.5,
+      actual: 2.5,
       baseline: 4,
-      otherCurrencies: 0,
+      routerCalls: 0,
+      otherCurrencies: [],
+      noPrice: 0,
     })
     expect(
       spendSummary({
         summary: { ...aggregate.summary, cost_record_count: 0, total_spend: undefined },
       } as InsightsAggregateResponse),
-    ).toMatchObject({ spend: 2.5, saved: undefined, baseline: undefined })
+    ).toMatchObject({ spend: 2.5, saved: undefined, actual: undefined, baseline: undefined })
   })
 
-  it('leads with the currency that carries the spend and counts only charged ones', () => {
-    const group = (currency: string, spend: number) => ({
+  it('reads the saving before the Router’s own calls, which it keeps apart', () => {
+    const aggregate = {
+      summary: {
+        total_saved: 3.25,
+        gross_saved: 4,
+        netted_router_call_spend: 0.75,
+        baseline_spend: 6,
+        actual_spend: 2,
+        router_call_spend: 0.875,
+        total_spend: 4.875,
+        currency: 'USD',
+        cost_record_count: 2,
+        excluded_record_count: 0,
+      },
+    } as InsightsAggregateResponse
+    expect(spendSummary(aggregate)).toMatchObject({
+      saved: 4,
+      actual: 2,
+      baseline: 6,
+      routerCalls: 0.875,
+    })
+    // a router without gross_saved has the same difference in its two spends
+    const older = { ...aggregate.summary, gross_saved: undefined }
+    expect(spendSummary({ summary: older } as InsightsAggregateResponse).saved).toBe(4)
+  })
+
+  it('reads money in one currency: a real one before plain units, the rest counted, never added', () => {
+    const group = (currency: string, spend: number, calls = spend > 0 ? 1 : 0) => ({
       currency,
       total_saved: 0,
       baseline_spend: 0,
       actual_spend: spend,
       total_spend: spend,
-      cost_record_count: spend > 0 ? 1 : 0,
+      cost_record_count: calls,
     })
     const aggregate = (...groups: ReturnType<typeof group>[]) =>
       ({
-        summary: { ...groups[0], excluded_record_count: 0, by_currency: groups },
+        summary: {
+          ...groups[0],
+          excluded_record_count: 0,
+          by_currency: groups,
+          coverage: { unpriced_records: 93 },
+        },
       }) as InsightsAggregateResponse
+    // plain units lead only where nothing else priced a call
     expect(spendSummary(aggregate(group('USD', 0), group('XXX', 0.29)))).toMatchObject({
       currency: 'XXX',
       spend: 0.29,
-      otherCurrencies: 0,
+      otherCurrencies: [],
     })
+    // USD leads over a larger plain-unit spend: the older prices are counted, not added
+    const mixed = spendSummary(aggregate(group('USD', 28.27, 11465), group('XXX', 144.2, 56397)))
+    expect(mixed).toMatchObject({
+      currency: 'USD',
+      spend: 28.27,
+      otherCurrencies: [{ currency: 'XXX', calls: 56397 }],
+      noPrice: 93,
+    })
+    expect(unpricedHint(mixed)).toBe('56,490 calls unpriced')
+    expect(unpricedNote(mixed)).toBe(
+      'The total is in USD only. Not added: 56,397 calls priced in plain units, by rates set without a currency; 93 without a price (no usage or not completed).',
+    )
     expect(
       spendSummary(aggregate(group('USD', 1), group('EUR', 3), group('XXX', 0))),
-    ).toMatchObject({ currency: 'EUR', otherCurrencies: 1 })
-    expect(moreCurrenciesLabel(0)).toBeUndefined()
-    expect(moreCurrenciesLabel(2)).toBe('+2 more currencies')
+    ).toMatchObject({ currency: 'EUR', otherCurrencies: [{ currency: 'USD', calls: 1 }] })
+    expect(unpricedHint({ otherCurrencies: [], noPrice: 0 })).toBeUndefined()
   })
 
   it('charts the aggregate series when the router has one, else the newest records', () => {
@@ -327,6 +374,8 @@ describe('home traffic helpers', () => {
     expect(parseHomeSnapshot(JSON.stringify({ ...JSON.parse(text), rows: {} }), now)).toBeNull()
     expect(parseHomeSnapshot('{', now)).toBeNull()
     expect(parseHomeSnapshot(null, now)).toBeNull()
+    const counted = { ...snapshot, harnessCounts: { claude_code: 3, api_client: 1 } }
+    expect(parseHomeSnapshot(serializeHomeSnapshot(counted), now)).toEqual(counted)
     expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-2', '7d'))
     expect(homeSnapshotKey('user-1', '7d')).not.toBe(homeSnapshotKey('user-1', '24h'))
   })

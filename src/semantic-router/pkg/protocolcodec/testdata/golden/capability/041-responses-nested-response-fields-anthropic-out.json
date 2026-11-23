@@ -48,7 +48,7 @@
           "container": null,
           "content": [
             {
-              "id": "call_1",
+              "id": "toolu_74196fe72e4cdc135c1033e0",
               "input": {
                 "q": "weather"
               },
@@ -56,7 +56,7 @@
               "type": "tool_use"
             }
           ],
-          "id": "resp_tool",
+          "id": "msg_17a9919dfa29156bc5fa2239",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,

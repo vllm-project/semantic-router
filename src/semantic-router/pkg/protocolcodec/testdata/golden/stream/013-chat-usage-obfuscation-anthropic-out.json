@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_1",
+          "id": "msg_a6011a73bfde3687b0eab07b",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,

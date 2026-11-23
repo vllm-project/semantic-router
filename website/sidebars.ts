@@ -403,6 +403,7 @@ const sidebars: SidebarsConfig = {
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/success-constrained-selection',
+            'proposals/concur-strategy-routing',
             'proposals/prompt-classification-routing',
           ],
         },
@@ -425,6 +426,13 @@ const sidebars: SidebarsConfig = {
             'proposals/model-execution-fallback',
             'proposals/Prism-153key',
             'proposals/hallucination-mitigation-milestone',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluation & Quality',
+          items: [
+            'proposals/mom-first-class-evaluation',
           ],
         },
         {

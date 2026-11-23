@@ -42,6 +42,10 @@ type providerDispatch struct {
 	targetFormat   llmprotocol.WireFormat
 	decisionName   string
 	useReasoning   bool
+	// reasoningMode and reasoningEffort are the reasoning the adapted provider
+	// request carries; the mode is empty where the Router wrote none.
+	reasoningMode   string
+	reasoningEffort string
 }
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
@@ -254,6 +258,10 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (bool, error) {
+	if explicitAnthropicReasoningDisabled(ctx, dispatch) {
+		// The backend keeps the client's thinking off whatever a decision chose.
+		ctx.VSRReasoningMode = "off"
+	}
 	if dispatch.decisionName == "" {
 		// A Looper hop already carries its decision's prompt; a request that
 		// matched no decision, or names a concrete model, runs its defaults'.
@@ -409,6 +417,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, prepared.byteLength())
+	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = dispatch.reasoningMode, dispatch.reasoningEffort
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
 	}

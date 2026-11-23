@@ -52,6 +52,10 @@ var BaselineRouterContract = []string{
 	// byte-replay-eligible requests, and the client only sees usage it asked
 	// for (issue #3182)
 	"streaming-usage-settlement",
+	// One request through Chat, Messages, and Responses selects the same
+	// recipe, decision, and backend, lands identical plugin effects at the
+	// provider, and short-circuits identically on a guardrail (issue #3182)
+	"protocol-translation-routing-parity",
 	// Session observability
 	"session-pricing-chat-completions",
 	// Keyword routing of event payloads (issue #3178)

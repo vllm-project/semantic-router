@@ -41,6 +41,36 @@ func (r *OpenAIRouter) listenerModelRejection(model string, ctx *RequestContext)
 	return r.createErrorResponse(http.StatusForbidden, message)
 }
 
+// maxRequestedModelBytes bounds the client's model name a routed request
+// keeps for its receipts.
+const maxRequestedModelBytes = 256
+
+// routeUnservedModel is the model a request is routed as: the one it names,
+// or the listener API's unserved_models route_to when the API routes models
+// it does not accept or the Router does not serve. The name the client gave
+// is kept for the record and the trace only; no signal reads it. A System
+// One model keeps its own answer.
+func (r *OpenAIRouter) routeUnservedModel(model string, ctx *RequestContext) string {
+	if ctx == nil || ctx.UnservedModelRoute == "" || model == "" || model == ctx.UnservedModelRoute {
+		return model
+	}
+	if r.Config != nil && r.Config.IsSystemOneBackend(model) {
+		return model
+	}
+	if (ctx.ListenerModels == nil || ctx.ListenerModels.Allows(model)) && r.servesModel(model) {
+		return model
+	}
+	ctx.RequestedModel = truncateShadowText(model, maxRequestedModelBytes)
+	if ctx.SemanticRequest != nil {
+		ctx.SemanticRequest.Model = ctx.UnservedModelRoute
+	}
+	logging.ComponentDebugEvent("extproc", "unserved_model_routed", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"route_to":   ctx.UnservedModelRoute,
+	})
+	return ctx.UnservedModelRoute
+}
+
 // servesModel reports whether a request naming model reaches anything the
 // Router serves, on any listener: an entrypoint of either API, a model with a
 // backend or one of its LoRA adapters, a model an external gateway serves, or

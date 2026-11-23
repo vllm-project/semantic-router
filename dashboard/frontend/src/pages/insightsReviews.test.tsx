@@ -191,7 +191,8 @@ describe('Insights reviews', () => {
         reviews={{ ...reviews, approval_rate: undefined, cost: [], latency_p50_ms: undefined }}
       />,
     )
-    expect(none).toContain('N/A')
+    expect(none).toContain('—')
+    expect(none).not.toContain('N/A')
     expect(none).toContain('Not priced')
   })
 

@@ -76,7 +76,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		failed := llmprotocol.Event{
 			Type: llmprotocol.EventResponseFailed, ResponseID: response.ID,
 			Model: response.Model, StopReason: llmprotocol.StopError, Error: response.Error,
-			Failure: llmprotocol.FailureResponse,
+			Failure: llmprotocol.FailureResponse, CreatedAt: response.CreatedAt,
 		}
 		if response.Usage.State != "" {
 			usage := response.Usage
@@ -88,6 +88,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
+		CreatedAt:  response.CreatedAt,
 	}
 	if response.Usage.State != "" {
 		usage := response.Usage
@@ -140,7 +141,8 @@ func groupResponseStreamContent(contents []llmprotocol.Content) []responseStream
 	groups := make([]responseStreamContentGroup, 0, len(contents))
 	for _, content := range contents {
 		family := responseStreamContentFamily(content.Kind)
-		if family == llmprotocol.ContentToolCall || len(groups) == 0 || groups[len(groups)-1].family != family {
+		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool ||
+			len(groups) == 0 || groups[len(groups)-1].family != family {
 			groups = append(groups, responseStreamContentGroup{family: family})
 		}
 		groups[len(groups)-1].contents = append(groups[len(groups)-1].contents, content)
@@ -185,6 +187,12 @@ func neutralContentGroupEvents(
 			)
 		}
 		return neutralToolCallEvents(started, completed, group.contents[0])
+	}
+	if group.family == llmprotocol.ContentServerTool {
+		// A server tool block streams whole, as the Messages decoder hands it
+		// on: one item that starts with the block and completes.
+		started.Content = &group.contents[0]
+		return []llmprotocol.Event{started, completed}, nil
 	}
 
 	events := []llmprotocol.Event{started}

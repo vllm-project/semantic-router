@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_cancel",
+          "id": "msg_fa06fbeaef1bd353a0e61954",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,

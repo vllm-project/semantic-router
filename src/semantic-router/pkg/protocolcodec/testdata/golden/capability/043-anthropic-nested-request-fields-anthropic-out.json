@@ -78,10 +78,29 @@
     {
       "name": "server_tool_use_metadata",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_content"
+        "status": "ok",
+        "body": {
+          "max_tokens": 32,
+          "messages": [
+            {
+              "content": [
+                {
+                  "caller": "model",
+                  "context": {
+                    "source": "conversation"
+                  },
+                  "file_id": "file_1",
+                  "id": "srvtool_1",
+                  "input": {},
+                  "name": "web_search",
+                  "toolset_name": "web",
+                  "type": "server_tool_use"
+                }
+              ],
+              "role": "assistant"
+            }
+          ],
+          "model": "routed-model"
         }
       }
     },

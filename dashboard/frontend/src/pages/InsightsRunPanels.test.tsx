@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
+import { TooltipProvider } from '../ui'
+
 import { RunAgentsPanel, RunCallsPanel, RunOutcomesPanel } from './InsightsRunPanels'
 import type { RunCall, RunSummary } from './insightsRunTypes'
 
@@ -71,7 +73,12 @@ const run: RunSummary = {
 }
 
 const numbers = new Map(calls.map((entry, index) => [entry.record_id, index + 1]))
-const render = (node: React.ReactNode) => renderToStaticMarkup(<MemoryRouter>{node}</MemoryRouter>)
+const render = (node: React.ReactNode) =>
+  renderToStaticMarkup(
+    <MemoryRouter>
+      <TooltipProvider>{node}</TooltipProvider>
+    </MemoryRouter>,
+  )
 
 describe('run panels', () => {
   it('pages the calls in the browser and keeps the agent and event filters', () => {
@@ -100,7 +107,11 @@ describe('run panels', () => {
       />,
     )
     expect(followed).toContain('1–1 of 1 call')
-    expect(followed).toContain('data-marker="failure"')
+    // the event the list is filtered by reads as a labelled badge, solid as its Timeline marker
+    expect(followed).toMatch(/data-event="failure"[^>]*>.*Failed<\/span>/)
+    expect(followed).toMatch(
+      /class="[^"]*bg-destructive[^"]*text-white[^"]*"[^>]*data-event="failure"|data-event="failure"[^>]*class="[^"]*bg-destructive/,
+    )
   })
 
   it('lists the agents as a tree with who spawned each', () => {

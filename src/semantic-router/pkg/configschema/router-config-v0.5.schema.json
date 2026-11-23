@@ -53,7 +53,9 @@
             "claude_code",
             "codex",
             "opencode",
-            "deepseek_harness"
+            "deepseek_harness",
+            "cursor",
+            "openclaw"
           ]
         },
         "types": {
@@ -1232,6 +1234,12 @@
               "reasoning.signature",
               "store"
             ]
+          },
+          "type": "array"
+        },
+        "allow_request_extension_fields": {
+          "items": {
+            "type": "string"
           },
           "type": "array"
         },
@@ -3502,6 +3510,9 @@
         },
         "vsr": {
           "$ref": "#/$defs/VSRProfile"
+        },
+        "unserved_models": {
+          "$ref": "#/$defs/UnservedModels"
         }
       },
       "additionalProperties": false,
@@ -6334,7 +6345,14 @@
           "type": "string"
         },
         "shadow": {
-          "$ref": "#/$defs/RouterReplayShadowConfig"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/RouterReplayShadowConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "capture_personal_data": {
           "type": "boolean",
@@ -6434,35 +6452,30 @@
     },
     "RouterReplayShadowConfig": {
       "properties": {
-        "model": {
-          "type": "string"
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "sample_rate": {
-          "type": "number"
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "max_concurrency": {
-          "type": "integer"
+        "execution": {
+          "$ref": "#/$defs/ShadowExecutionConfig"
         },
-        "max_queue_depth": {
-          "type": "integer"
+        "budget": {
+          "$ref": "#/$defs/ShadowBudgetConfig"
         },
-        "timeout_seconds": {
-          "type": "integer"
-        },
-        "max_response_bytes": {
-          "type": "integer"
-        },
-        "max_retries": {
-          "type": "integer"
-        },
-        "capture_response_body": {
-          "type": "boolean"
-        },
-        "max_capture_bytes": {
-          "type": "integer"
-        },
-        "tls_skip_verify": {
-          "type": "boolean"
+        "capture": {
+          "$ref": "#/$defs/ShadowCaptureConfig"
         },
         "forward_headers": {
           "items": {
@@ -6646,6 +6659,83 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ShadowBudgetConfig": {
+      "properties": {
+        "max_response_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_estimated_cost": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowCaptureConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_bytes": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ShadowExecutionConfig": {
+      "properties": {
+        "max_concurrency": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_queue_size": {
+          "oneOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timeout": {
+          "type": "string",
+          "maxLength": 128,
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "SignalOverloadPolicy": {
       "properties": {
         "action": {
@@ -6772,6 +6862,9 @@
         },
         "tool_results": {
           "type": "boolean"
+        },
+        "max_state_bytes": {
+          "type": "integer"
         },
         "request": {
           "type": "boolean"
@@ -7204,6 +7297,22 @@
       "properties": {
         "previous_turns": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "UnservedModels": {
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": [
+            "reject",
+            "route"
+          ]
+        },
+        "route_to": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

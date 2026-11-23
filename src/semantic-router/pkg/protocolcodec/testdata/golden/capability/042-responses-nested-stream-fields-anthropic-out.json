@@ -31,7 +31,7 @@
                 "message": {
                   "container": null,
                   "content": [],
-                  "id": "resp_2",
+                  "id": "msg_5aaab330b3dd4348ee387081",
                   "model": "public-model",
                   "role": "assistant",
                   "stop_details": null,
@@ -65,6 +65,7 @@
             {
               "data": {
                 "content_block": {
+                  "signature": "",
                   "thinking": "",
                   "type": "thinking"
                 },

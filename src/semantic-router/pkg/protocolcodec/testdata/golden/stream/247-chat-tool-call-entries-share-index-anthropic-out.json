@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_split_1",
+          "id": "msg_fc0b86477fb5fb60dd0f49a3",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,
@@ -40,7 +40,7 @@
       "event": "content_block_start",
       "data": {
         "content_block": {
-          "id": "call_weather_1",
+          "id": "toolu_9c52ec38b52f25e269273d98",
           "input": {},
           "name": "lookup_weather",
           "type": "tool_use"

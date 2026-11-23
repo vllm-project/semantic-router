@@ -338,6 +338,10 @@ class ServedModel:
         # The dtype the model runs: "auto" (its published precision) or an explicit one.
         self.dtype = "auto"
         self.precision = "float32"
+        # The dtype the golden references checking an ``auto`` model are recorded at, when not ``auto``.
+        self.golden_dtype: str | None = None
+        # Why an ``auto`` model computes in FP32 on a CPU class with BF16 references.
+        self.bf16_refused: str | None = None
         self.shared = False
         self.numerics = "exact"
         self.scheduler: Scheduler | None = None
@@ -375,8 +379,33 @@ class ServedModel:
     # -- lifecycle -----------------------------------------------------------
 
     def load(self) -> None:
+        """Load the model; an ``auto`` model in BF16 on a CPU that fails its BF16 golden check loads again in FP32.
+
+        A CPU class's BF16 references can't vouch for a later CPU that shares
+        its key but rounds BF16 otherwise (#5273); FP32 answers agree on every
+        CPU class, so the model serves in FP32 there instead of failing. Any
+        failed check falls back (a mismatch, answers that aren't deterministic,
+        malformed answers), and the reason names which. The retry is placed at
+        the FP32 size, so a memory budget has to fit FP32 for it to serve.
+        """
+        self.bf16_refused = None
+        try:
+            self._load(cpu_bf16=True)
+        except VerificationError:
+            if self.golden_dtype is None:
+                raise
+            golden = self.health.golden
+            detail = golden.detail or "golden check failed"
+            if golden.reference is not None:
+                detail = f"{detail} ({golden.reference})"
+            self.bf16_refused = f"BF16 {detail}; computes in FP32"
+            log.warning("%s: %s", self.label, self.bf16_refused)
+            self._load(cpu_bf16=False)
+
+    def _load(self, cpu_bf16: bool) -> None:
         process = self.runtime.config
         config = self.config
+        self.golden_dtype = None
         check_device(config.model, config.device)
         self.health.set("loading", "resolving the model")
         options = RegistryOptions(
@@ -420,11 +449,20 @@ class ServedModel:
             budget,
             _bf16_parameters(spec, config, dtype),
             dtype,
+            cpu_bf16,
         )
         device = placement.device
         self.args, self.limits_source = calibration.resolve(self.requested_args, device)
         # The dtype policy a device follows is its torch device's, as the engines read it.
         gpu = placement.accelerator.torch_device(device).type != "cpu"
+        host = (
+            dtypes.on_host(spec, self.args.dtype, placement.accelerator, device)
+            if cpu_bf16
+            else spec
+        )
+        # BF16 on a CPU class with its own BF16 references, checked against them.
+        self.golden_dtype = "bfloat16" if host is not spec else None
+        spec = host
         self.dtype = dtypes.resolve(self.args.dtype, spec.dtype, gpu)
         self.precision = (
             dtypes.published(spec.dtype, gpu) if self.dtype == "auto" else self.dtype
@@ -526,7 +564,7 @@ class ServedModel:
                 metrics.model_memory.labels(model=self.label).set(
                     model.engine_model.memory_bytes()
                 )
-                self.health.set("ready", self.unpinned)
+                self.health.set("ready", self.unpinned or self.bf16_refused)
 
         except BaseException:
             self.stop()
@@ -603,8 +641,8 @@ class ServedModel:
             model.golden_compare,
             self.family.golden(self.package),
             placement.device.accelerator,
-            placement.accelerator.golden_reference(placement.device),
-            self.dtype,
+            placement.accelerator.golden_references(placement.device),
+            self.golden_dtype or self.dtype,
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":
             self.health.golden = replace(
