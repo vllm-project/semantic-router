@@ -236,11 +236,11 @@ def _require_nonempty_str(value: Any, name: str) -> None:
         raise ContractError(f"{name} must be a non-empty string")
 
 
-def _best_replay(records: list[dict], metric_key: str) -> dict | None:
+def best_replay(records: list[dict], metric_key: str) -> dict | None:
     """A2: pure best-replay selection over raw ledger records.
 
     Highest ``metrics[metric_key]`` among tier "replay" / verdict "RANKED"
-    records; coverage_warning records, A5 status records (a trial that
+    records; coverage_warning records and A5 status records (a trial that
     produced no usable metric) and E2 constraint_warning records (a
     candidate that violates a declared constraint under the replay cost
     proxy) are excluded. Ties keep the earliest record.
@@ -399,4 +399,4 @@ class Ledger:
 
         This is the hand-off contract to the live tier (Sub-issue 3); A2 routes
         it through the shared pure `best_replay` selection."""
-        return _best_replay(self.read(), metric_key)
+        return best_replay(self.read(), metric_key)

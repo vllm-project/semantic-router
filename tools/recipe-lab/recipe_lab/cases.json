@@ -1,0 +1,120 @@
+[
+  {
+    "id": "e7b-tool-progress",
+    "title": "Use tool progress to locate candidate handoffs",
+    "tags": [
+      "tool_history_concentrated_on_strong",
+      "tool_cycle_threshold"
+    ],
+    "match_phrases": [
+      "tool turns stay on the strong model",
+      "tool history concentrated on strong"
+    ],
+    "config_version": "v0.5; the measured SWE-bench router supported assistant_tool_cycle.",
+    "routing_references": [
+      {
+        "id": "e7b-35b",
+        "strong_ids": ["GLM-5.3"],
+        "fast_ids": ["Qwen3.5-35B-A3B", "Qwen/Qwen3.5-35B-A3B"],
+        "feature": "tool_results",
+        "lower": 30,
+        "required_overrides": []
+      },
+      {
+        "id": "e7b-9b",
+        "strong_ids": ["deepseek-v4-flash"],
+        "fast_ids": ["Qwen3.5-9B", "Qwen/Qwen3.5-9B"],
+        "feature": "tool_results",
+        "lower": 35,
+        "required_overrides": ["long_context"]
+      }
+    ],
+    "applies_when": "The strong backend handles most tool-result turns. The fast backend can use the tools and the request fits its context and output limits.",
+    "change": "Keep the strong default. The 9B recipe used a completed-tool-cycle threshold of 35 with a higher-priority long-context override. A separate GLM-5.3 and Qwen3.5-35B-A3B deployment counted visible tool-role results and preferred the fast backend starting at 30.",
+    "evidence": "9B study: of 20 SWE-bench Verified tasks, 16 had grader images. The router solved 16, direct strong solved 15, and direct 9B solved 11. Mean wall time over all 20 attempts was 187.45s routed and 325.07s direct strong. The fast route handled 299 of 979 requests. Separate 35B study: the hand-tuned router solved 20/20 and direct GLM solved 19/20. On their 19 joint successes, routed and direct wall times totaled 8361.10s and 16011.98s. In a later blinded development trial, a mid-history rule sent calls 11–14 of one 30-call trace to 35B. Replaying the hand-tuned predicate on those same requests flagged calls 27–30. The mid-history candidate failed the official grade.",
+    "limitations": "The 9B timing denominator includes failures. The historical 35B timings use accepted attempts after startup retries. Predicate replay measures exposure only. The four later calls actually went to GLM, and the outcome of switching them is unknown. Changes to earlier answers, tool calls or context compaction can change which later requests exist.",
+    "verify": "Identify the counted role and boundary in the installed router. On a current passing parent trace, locate the calls affected by the reference and the proposed predicate, and measure the remaining work. Probe both sides of the boundary, capability fallback and tool formatting. Compare whole tasks with contemporaneous baselines, then confirm on fresh tasks.",
+    "historical_evidence_sha256": [
+      "bf7f4698054925c58754451665e31fbd86f48ceb26c3d6ba4046460bb748a4ab",
+      "c91fd895453a8591d3ec8f58c5e47d55e4d5a8e015b007a5032e736bdbda0c7a",
+      "0eda9df69ebc370d9b8d8cb58b602dc106b8ba213a16e6f25a65849b47b01b0a"
+    ],
+    "sources": ["tools/recipe-lab/tests/test_planning_space.py"]
+  },
+  {
+    "id": "vela-execution-phase",
+    "title": "Check the task phase before switching tool turns",
+    "tags": [
+      "semantic_execution_phase",
+      "tool_history_concentrated_on_strong"
+    ],
+    "match_phrases": [
+      "execution phase",
+      "tool turns stay on the strong model"
+    ],
+    "config_version": "v0.5 experiment with conversation counts and SystemOne history projection.",
+    "applies_when": "A tool-progress gate catches enough traffic but includes exploration or unresolved decisions. The installed router and decision model support recent turns and tool results as classifier input.",
+    "change": "Require both the progress signal and an execution-phase label. The reference configuration used eight recent turns with tool results and stronger context/invalid-tool-call overrides. The V3 run lowered the phase threshold from 0.7 to 0.5.",
+    "evidence": "The V3 batch resolved 19 of 20 independently graded SWE-bench tasks. Only two tasks overlapped the earlier direct-strong batch.",
+    "limitations": "The phase question described coding activities. A threshold tuned for edits and tests has no established operating point for office or planning work. The 19/20 batch cannot establish a same-task speed gain against that earlier batch.",
+    "verify": "Inspect stage labels on development tool histories from the target domain and compare count-only with count-plus-phase coverage. Check actual selected models at the public entrypoint and grade matched complete episodes.",
+    "historical_evidence_sha256": [
+      "46a6fc7795a42296be54a618a6a54f94362e5f6f5df5823bf6f2e26bb2594dc9",
+      "97418ffef37bb49b589f4e055b3632d926c5c1b8d0f90acdd0f5b9f96fc10d3b"
+    ],
+    "sources": ["tools/recipe-lab/recipe_lab/planning_space.py"]
+  },
+  {
+    "id": "active-stream-deadline",
+    "title": "Keep an active backend stream open past the whole-call deadline",
+    "tags": [
+      "active_stream_cutoff",
+      "missing_done",
+      "long_stream_retry"
+    ],
+    "match_phrases": [
+      "missing [done]",
+      "active stream cutoff",
+      "long stream repeatedly disconnects"
+    ],
+    "config_version": "v0.5 Speed decisions with a listener idle timeout.",
+    "applies_when": "A stream is still emitting data but closes near a repeatable deadline without the end marker. Repeated request-body fingerprints help distinguish resubmission from a new agent action.",
+    "change": "The tested --agent-streaming option set reliability.total_timeout to 0s on the three Speed decisions while retaining the listener's idle limit. Apply it only where active long calls should be allowed.",
+    "evidence": "Across two development tasks and two SR arms, 12/72 old requests lost the end marker near 300s. All 127/127 requests on the repaired arms received [DONE], including a 338.092s response ending with finish_reason=length. In scaled controls all six active routes completed, all six silent routes timed out, and the old active-stream control cut off.",
+    "limitations": "A complete stream with finish_reason=length can still exhaust the client's output budget. In both repaired arms the production-planning task scored 1/20 checks and submitted no SQL. HTTP 200 alone does not verify stream completion.",
+    "verify": "On the bound recipe compare a regularly emitting stream and a stalled stream. Record HTTP, elapsed time, finish reason, [DONE], and exact redispatches. Use the independent task grader to evaluate business completion.",
+    "historical_evidence_sha256": ["97418ffef37bb49b589f4e055b3632d926c5c1b8d0f90acdd0f5b9f96fc10d3b"],
+    "sources": ["tools/recipe-lab/recipe_lab/speed_draft.py"]
+  },
+  {
+    "id": "tool-window-routing-boundary",
+    "title": "Verify window hits against the delivered request",
+    "tags": ["tool_window_expansion", "same_backend_different_parameters"],
+    "match_phrases": [
+      "wider tool-result window",
+      "same backend different parameters"
+    ],
+    "config_version": "v0.5 with a lower count and a negated upper count on assistant_tool_cycle.",
+    "applies_when": "A proposed count-window edit is intended to move tool turns, or candidate equivalence was inferred from the backend name.",
+    "change": "Measure the single predicate on a pinned development arm, then send the same boundary and guard requests through both gateways. Compare the actual delivery and effective generation fields.",
+    "evidence": "On 65 observable development requests the wider window changed six predicate results. In 18 separate gateway requests, counts four and eight switched destinations while counts three and nine kept theirs. Three further probes reached the same strong fixture with effective output limits 4096, 8192 and an explicit 17.",
+    "limitations": "The prefixes and the live probes are separate inputs. The generation backends used to inspect delivered requests were fixtures. The subsequent two-task development study had zero jointly successful pairs, so it supplied no paired successful-task latency estimate for this edit.",
+    "verify": "Repeat using the target configuration and tool protocol. Check priority, hard capability rejection and the upstream request. Reopen the conclusion if rule ordering, effective limits or the observed task mix changes. Use fresh paired tasks for a quality or latency claim.",
+    "historical_evidence_sha256": ["0d4095edac518f34a32e9ffb51743e15215c025956638d817e447636dc7b04a9"],
+    "sources": ["tools/recipe-lab/recipe_lab/signature.py"]
+  },
+  {
+    "id": "native-output-limit-on-strict-failure",
+    "title": "Trace output exhaustion on a failed whole task",
+    "tags": ["strict_failure_native_output_limit", "native_output_limit"],
+    "match_phrases": ["strict failure native output limit", "native output limit"],
+    "config_version": "v0.5 development gateway with stock DSH and streamed chat completions.",
+    "applies_when": "The independent grade failed and the runner recorded native_output_limit. A length finish on an earlier call can occur in an episode that later succeeds.",
+    "change": "Inspect the final client dispatch, the matching completed response, model-reported token usage and runner termination before proposing a recipe edit.",
+    "evidence": "In one two-task Terminal-Bench development comparison, three of four attempts failed strict grading with native_output_limit. Each final call explicitly requested max_completion_tokens=32768 at the client boundary, ended with length and reported 32768 completion tokens including 32768 reasoning tokens. The successful attempt used the same explicit limit and ended with stop.",
+    "limitations": "The client-side receipt cannot establish the final provider request, a model's maximum output, or whether increasing a limit would solve the task. Reported reasoning tokens are included in the completion total.",
+    "verify": "Compare the same call across the client input, the router's outbound request and the response usage. Check the deployment's effective capabilities independently. Register a fresh paired development comparison with unchanged DSH and grading to test any proposed intervention.",
+    "historical_evidence_sha256": ["0d4095edac518f34a32e9ffb51743e15215c025956638d817e447636dc7b04a9"],
+    "sources": ["tools/recipe-lab/recipe_lab/decision_summary.py"]
+  }
+]
