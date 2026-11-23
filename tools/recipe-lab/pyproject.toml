@@ -20,3 +20,6 @@ include = ["recipe_lab*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: real-component tests (V2); need RECIPE_LAB_ROUTER_BIN (and RECIPE_LAB_SRBENCH_URL for verify)",
+]
