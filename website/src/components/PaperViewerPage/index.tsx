@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import clsx from 'clsx'
 import Translate, { translate } from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
@@ -9,14 +10,14 @@ import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import styles from './index.module.css'
 
 const MOBILE_BREAKPOINT = 768
-const MAX_SPREAD_VIEWPORT_WIDTH = 1400
-const VIEWPORT_SIDE_PADDING = 120
+const MAX_SPREAD_WIDTH = 1400
 const SPREAD_GAP = 16
 const PDF_PAGE_RATIO = Math.SQRT2
 const PAGINATION_HEIGHT = 56
 const VIEWER_VERTICAL_PADDING = 40
-const MIN_SPREAD_PAGE_WIDTH = 620
+const MIN_SPREAD_PAGE_WIDTH = 600
 const SPREAD_FILL_THRESHOLD = 0.82
+const MIN_SINGLE_PAGE_WIDTH = 320
 const MAX_SINGLE_PAGE_WIDTH = 980
 
 interface PaperViewerPageProps {
@@ -27,8 +28,24 @@ interface PaperViewerPageProps {
   title: string
 }
 
-interface PaperViewerContentProps {
+export interface PaperChapter {
+  title: string
+  description?: string
+  page: number
+}
+
+interface PaperViewerProps {
   pdfUrl: string
+  /**
+   * Chapter starts, in page order, listed beside the page. A reader with
+   * chapters shows one page at a time.
+   */
+  chapters?: PaperChapter[]
+}
+
+function contentWidth(element: HTMLElement): number {
+  const style = window.getComputedStyle(element)
+  return element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
 }
 
 function isKeyboardInputTarget(target: EventTarget | null): boolean {
@@ -43,7 +60,7 @@ function isKeyboardInputTarget(target: EventTarget | null): boolean {
     || target instanceof HTMLSelectElement
 }
 
-function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
+function PaperViewerContent({ pdfUrl, chapters }: PaperViewerProps): JSX.Element {
   // Lazily load react-pdf only in the browser to avoid SSG DOMMatrix errors.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { Document, Page, pdfjs } = require('react-pdf') as typeof import('react-pdf')
@@ -52,7 +69,10 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('react-pdf/dist/Page/TextLayer.css')
 
-  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
+  // Keep the scheme: on an http:// origin such as a local preview, a
+  // protocol-relative URL loads http://unpkg.com, whose redirect to HTTPS has
+  // no CORS header, so the module worker never loads.
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
 
   const [numPages, setNumPages] = useState<number>(0)
   const [pageNumber, setPageNumber] = useState<number>(1)
@@ -62,6 +82,8 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
   const viewerAreaRef = useRef<HTMLDivElement>(null)
+  const chapterListRef = useRef<HTMLOListElement>(null)
+  const hasChapters = Boolean(chapters?.length)
 
   useEffect(() => {
     const updateSize = () => {
@@ -70,19 +92,24 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
       const mobile = vw <= MOBILE_BREAKPOINT
       setIsMobile(mobile)
 
+      // The viewer's own box, not the window: the page around it decides how
+      // much room it has, and pages sized from the window overflow it.
+      const viewerWidth = viewerAreaRef.current ? contentWidth(viewerAreaRef.current) : vw
+
       if (mobile) {
-        const viewerWidth = viewerAreaRef.current?.clientWidth ?? vw
         setIsSpread(false)
         setPageWidth(Math.max(1, Math.floor(viewerWidth)))
         return
       }
 
-      const available = Math.min(vw - VIEWPORT_SIDE_PADDING, MAX_SPREAD_VIEWPORT_WIDTH)
+      const available = Math.min(viewerWidth, MAX_SPREAD_WIDTH)
       const spreadPageWidth = Math.floor(available / 2) - SPREAD_GAP
       const viewerHeight = Math.max(vh - PAGINATION_HEIGHT - VIEWER_VERTICAL_PADDING, 1)
       const spreadPageHeight = spreadPageWidth * PDF_PAGE_RATIO
       const spreadFillsViewport = spreadPageHeight >= viewerHeight * SPREAD_FILL_THRESHOLD
-      const canUseSpread = spreadPageWidth >= MIN_SPREAD_PAGE_WIDTH && spreadFillsViewport
+      const canUseSpread = !hasChapters
+        && spreadPageWidth >= MIN_SPREAD_PAGE_WIDTH
+        && spreadFillsViewport
 
       setIsSpread(canUseSpread)
 
@@ -91,15 +118,17 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
         return
       }
 
-      const widthByViewport = Math.min(vw - 96, MAX_SINGLE_PAGE_WIDTH)
       const widthByHeight = Math.floor(viewerHeight / PDF_PAGE_RATIO)
-      setPageWidth(Math.max(320, Math.min(widthByViewport, widthByHeight)))
+      setPageWidth(Math.max(
+        MIN_SINGLE_PAGE_WIDTH,
+        Math.min(viewerWidth, widthByHeight, MAX_SINGLE_PAGE_WIDTH),
+      ))
     }
 
     updateSize()
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
-  }, [])
+  }, [hasChapters])
 
   useEffect(() => {
     setPageNumber((current) => {
@@ -140,6 +169,30 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
     setPageNumber(p => Math.min(Math.max(1, numPages), p + step))
     scrollMobilePageIntoView()
   }, [numPages, scrollMobilePageIntoView, step])
+  const goToPage = useCallback((page: number) => {
+    setPageNumber(Math.min(Math.max(1, page), Math.max(1, numPages)))
+    scrollMobilePageIntoView()
+  }, [numPages, scrollMobilePageIntoView])
+
+  const showChapters = hasChapters && !error
+  const activeChapter = (chapters ?? []).reduce(
+    (active, chapter, index) => (chapter.page <= pageNumber ? index : active),
+    -1,
+  )
+
+  // Stacked above the page, the chapters scroll sideways: keep the current one
+  // in view without scrolling the document.
+  useEffect(() => {
+    const list = chapterListRef.current
+    const item = activeChapter >= 0 ? list?.children[activeChapter] : undefined
+    if (!list || !(item instanceof HTMLElement) || list.scrollWidth <= list.clientWidth)
+      return
+
+    list.scrollTo({
+      left: item.offsetLeft - (list.clientWidth - item.offsetWidth) / 2,
+      behavior: 'smooth',
+    })
+  }, [activeChapter])
 
   const rightPage = pageNumber + 1
   const hasRight = isSpread && rightPage <= numPages
@@ -174,10 +227,40 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
 
   return (
     <div
-      className={styles.viewerShell}
+      className={clsx(styles.viewerShell, showChapters && styles.viewerShellChapters)}
       tabIndex={-1}
       aria-keyshortcuts="ArrowLeft ArrowRight"
     >
+      {showChapters && (
+        <nav
+          className={styles.chapters}
+          aria-label={translate({
+            id: 'paperViewer.chapters.label',
+            message: 'Chapters',
+          })}
+        >
+          <ol ref={chapterListRef}>
+            {chapters?.map((chapter, index) => (
+              <li key={chapter.page}>
+                <button
+                  type="button"
+                  className={styles.chapter}
+                  onClick={() => goToPage(chapter.page)}
+                  disabled={loading}
+                  aria-current={index === activeChapter ? 'true' : undefined}
+                >
+                  <span className={styles.chapterNumber}>{String(index + 1).padStart(2, '0')}</span>
+                  <span className={styles.chapterTitle}>{chapter.title}</span>
+                  {chapter.description && (
+                    <span className={styles.chapterDescription}>{chapter.description}</span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
+
       <div ref={viewerAreaRef} className={styles.viewerArea}>
         {error
           ? (
@@ -288,6 +371,21 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   )
 }
 
+/** The reader without the page around it, for pages that frame it themselves. */
+export function PaperViewer(props: PaperViewerProps): JSX.Element {
+  return (
+    <BrowserOnly
+      fallback={(
+        <div className={styles.loadingText}>
+          <Translate id="paperViewer.loading">Loading PDF…</Translate>
+        </div>
+      )}
+    >
+      {() => <PaperViewerContent {...props} />}
+    </BrowserOnly>
+  )
+}
+
 export default function PaperViewerPage({
   heroDescription,
   metaDescription,
@@ -340,15 +438,7 @@ export default function PaperViewerPage({
         </div>
 
         <div className="site-shell-container">
-          <BrowserOnly
-            fallback={(
-              <div className={styles.loadingText}>
-                <Translate id="paperViewer.loading">Loading PDF…</Translate>
-              </div>
-            )}
-          >
-            {() => <PaperViewerContent pdfUrl={pdfUrl} />}
-          </BrowserOnly>
+          <PaperViewer pdfUrl={pdfUrl} />
         </div>
       </main>
     </Layout>
