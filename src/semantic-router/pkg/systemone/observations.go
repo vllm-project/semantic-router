@@ -36,9 +36,12 @@ type Question struct {
 	FullInput         bool
 	ChoiceKeys        map[string]bool
 	Levels            int
-	// Labels are the names a set question declares: its answer gives each a
-	// probability and selects any number of them.
+	// Labels are the names a set or span question declares. A set answer gives
+	// each a probability and selects any number of them; a span answer finds
+	// any number of spans of each.
 	Labels map[string]bool
+	// Target is the text a span question reads. Its spans are ranges of it.
+	Target string
 }
 
 // Observation is a typed answer and its available evidence. Missing evidence
@@ -164,6 +167,7 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			Levels           []json.RawMessage `json:"levels"`
 			Choices          []keyed           `json:"choices"`
 			Labels           []keyed           `json:"labels"`
+			Over             json.RawMessage   `json:"over"`
 		}
 		if key == "" || json.Unmarshal(state.Questions[key], &question) != nil || question.Preset != "" {
 			return errors.New("auto requires explicit named questions without model-specific presets")
@@ -187,6 +191,16 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 					return fmt.Errorf("a label answer %s.<label> is another question's name", key)
 				}
 			}
+		case "span":
+			q.Labels = optionNames(question.Labels, question.Criteria)
+			if len(q.Labels) == 0 {
+				return errors.New("span requires at least one named label")
+			}
+			target, settled := spanTarget(trimmed, question.Over)
+			if !settled {
+				return errors.New("auto checks a span against the text its question reads: send a text state, or name a text part of an object state with over")
+			}
+			q.Target = target
 		case "score":
 			levels := question.Levels
 			if len(levels) == 0 {
@@ -205,7 +219,8 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 	return nil
 }
 
-// keyed is one entry of a vllm-sr/4.0 option list: choices, or a set's labels.
+// keyed is one entry of a vllm-sr/4.0 option list: choices, or the labels of a
+// set or a span.
 type keyed struct {
 	Key string `json:"key"`
 }
@@ -225,6 +240,31 @@ func optionNames(listed []keyed, criteria json.RawMessage) map[string]bool {
 		}
 	}
 	return names
+}
+
+// spanTarget is the text a span question reads when its request settles it: a
+// text state, or the text part of an object state that over names. Elsewhere
+// the model that answers picks the part and joins its keys, each family in its
+// own way, so auto could not tell which text a span is a range of.
+func spanTarget(state, over json.RawMessage) (string, bool) {
+	if target, isText := textOf(state); isText {
+		return target, true
+	}
+	var parts map[string]json.RawMessage
+	name, named := textOf(over)
+	if !named || json.Unmarshal(state, &parts) != nil {
+		return "", false
+	}
+	return textOf(parts[name])
+}
+
+// textOf reads a JSON string. A null and an absent value are not text.
+func textOf(raw json.RawMessage) (string, bool) {
+	var text *string
+	if json.Unmarshal(raw, &text) != nil || text == nil {
+		return "", false
+	}
+	return *text, true
 }
 
 // requirementsOf are what a task's questions and media need of its model:
@@ -319,8 +359,11 @@ func (r *NativeRequest) Observe(body json.RawMessage) []Observation {
 
 // observe checks what the state answers to one question.
 func (s stateAnswers) observe(q Question) Observation {
-	if q.Type == "set" {
+	switch q.Type {
+	case "set":
 		return observeSet(q, s)
+	case "span":
+		return observeSpan(q, s)
 	}
 	return observeAnswer(q, s.Answers[q.Name])
 }
@@ -374,6 +417,42 @@ func observeSet(q Question, state stateAnswers) Observation {
 		probabilities[label] = *p
 	}
 	out.Valid, out.LabelProbabilities = true, probabilities
+	return out
+}
+
+// observeSpan checks a span answer against the labels its question declares
+// and the text it reads. The answer is a Noul, which carries its statistics,
+// and a list of spans beside the answers. Finding no span is an answer; a
+// missing or null list is not. Each span names a declared label and a range of
+// the text in code points, the end excluded, and repeats that range's text.
+func observeSpan(q Question, state stateAnswers) Observation {
+	noul := q
+	noul.Type = "noul"
+	out := observeAnswer(noul, state.Answers[q.Name])
+	out.Question = q
+	// A span answer has no confidence: its Noul is the surest word's probability.
+	out.Confidence = nil
+	var spans []struct {
+		Label       string   `json:"label"`
+		Start       *int     `json:"start"`
+		End         *int     `json:"end"`
+		Text        *string  `json:"text"`
+		Probability *float64 `json:"probability"`
+	}
+	if !out.Valid || json.Unmarshal(state.Spans[q.Name], &spans) != nil || spans == nil {
+		return Observation{Question: q}
+	}
+	var target []rune
+	if len(spans) > 0 {
+		target = []rune(q.Target)
+	}
+	for _, span := range spans {
+		if !q.Labels[span.Label] || !probability(span.Probability) || span.Start == nil || span.End == nil || span.Text == nil ||
+			*span.Start < 0 || *span.Start >= *span.End || *span.End > len(target) ||
+			string(target[*span.Start:*span.End]) != *span.Text {
+			return Observation{Question: q}
+		}
+	}
 	return out
 }
 

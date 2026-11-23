@@ -20,7 +20,8 @@ import (
 // A box question to vllm-sr/auto goes only to the pool member whose backend
 // lists box questions and images; when no member does, the request is
 // refused before any call, with a detail naming what is missing and every
-// member. A set question goes the same way, and its sets reach the client.
+// member. A set question and a span question go the same way, and their sets
+// and spans reach the client.
 func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -56,6 +57,28 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 			request:    `{"model":"vllm-sr/auto","state":"Mail me at a@example.com","questions":{"tags":{"type":"set","instructions":"Which apply?","criteria":{"pii":"Personal data"}}}}`,
 			status:     http.StatusBadRequest,
 			body:       []string{"unsupported_capability", "needs set", "text lacks set (listing)", "vision lacks set (listing)"},
+		},
+		{
+			name:       "a span question",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","span"]}`,
+			request:    `{"model":"vllm-sr/auto","state":"Mail me at a@example.com","questions":{"pii":{"type":"span","instructions":"Find personal data.","criteria":{"EMAIL":"An email address"}}}}`,
+			answer:     `"answers":{"pii":{"type":"noul","noul":0.97}},"spans":{"pii":[{"label":"EMAIL","start":11,"end":24,"text":"a@example.com","probability":0.97}]},"thresholds":{"pii":0.5}`,
+			status:     http.StatusOK, posts: []string{"vision-native"},
+			body: []string{`"selected_model":"vision"`, `"spans":{"pii":[{"label":"EMAIL","start":11,"end":24,"text":"a@example.com","probability":0.97}]}`, `"pii":{"type":"noul","noul":0.97}`},
+		},
+		{
+			name:       "no member that answers spans",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","set"]}`,
+			request:    `{"model":"vllm-sr/auto","state":"Mail me at a@example.com","questions":{"pii":{"type":"span","instructions":"Find personal data.","criteria":{"EMAIL":"An email address"}}}}`,
+			status:     http.StatusBadRequest,
+			body:       []string{"unsupported_capability", "needs span", "text lacks span (listing)", "vision lacks span (listing)"},
+		},
+		{
+			name:       "a span question over a part auto cannot name",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","span"]}`,
+			request:    `{"model":"vllm-sr/auto","state":{"request":"Who wrote it?","answer":"Tom did."},"questions":{"pii":{"type":"span","instructions":"Find personal data.","criteria":{"NAME":"A person's name"}}}}`,
+			status:     http.StatusBadRequest,
+			body:       []string{"invalid_request", "name a text part of an object state with over"},
 		},
 		{
 			name:       "a question type auto does not route",
