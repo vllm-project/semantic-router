@@ -30,6 +30,7 @@ from ...plugins.base import (
 )
 from ...registry import builtin
 from ...registry.resolve import download
+from ...supervision.readiness import recorded_at
 from ..decision3.family import Decision3Family
 from ..decision3.package import is_state_once
 from ..vela3_shared import PRESETS
@@ -225,10 +226,16 @@ class Vela3D3Family(ModelFamily):
             # approximate kernels (cuda-fused-approximate.md) keep the base's
             # consent, which is off -- no GPU record covers this family. The
             # decision3 base's own dtype is otherwise unchanged.
+            # BF16 on a CPU class rests on this model's own BF16 references, not the base's.
             dtype=replace(
                 spec.dtype,
                 approximate_kernels=True,
                 approximate_accelerators=frozenset({"npu"}),
+                cpu_bf16_references=(
+                    recorded_at(self.golden(package), "bfloat16")
+                    if spec.dtype.cpu_bf16_references
+                    else frozenset()
+                ),
             ),
         )
 

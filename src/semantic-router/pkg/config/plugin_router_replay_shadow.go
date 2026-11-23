@@ -107,6 +107,9 @@ func (c *RouterReplayShadowConfig) UnmarshalJSON(data []byte) error {
 	if isNullJSON(capture.Enabled) {
 		return fmt.Errorf("capture.enabled must be a boolean when provided")
 	}
+	if err := decoded.Budget.validateEstimatedCost(); err != nil {
+		return err
+	}
 	*c = RouterReplayShadowConfig(decoded)
 	return nil
 }
@@ -196,6 +199,9 @@ func (c *RouterReplayShadowConfig) Validate() error {
 	if err != nil || duration <= 0 || duration > maxShadowTimeout || len(effective.Execution.Timeout) > maxShadowTimeoutLength || !shadowDurationPattern.MatchString(effective.Execution.Timeout) {
 		return fmt.Errorf("execution.timeout must be a positive duration at most 5m")
 	}
+	if err := c.Budget.validateEstimatedCost(); err != nil {
+		return err
+	}
 	if *effective.Budget.MaxResponseBytes < 2*len(c.Models) {
 		return fmt.Errorf("budget.max_response_bytes must allocate at least two bytes to each model")
 	}
@@ -203,6 +209,13 @@ func (c *RouterReplayShadowConfig) Validate() error {
 		if err := validateForwardedHeaderName("forward_headers", name); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func (b ShadowBudgetConfig) validateEstimatedCost() error {
+	if cost := b.MaxEstimatedCost; cost != nil && (*cost <= 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0)) {
+		return fmt.Errorf("budget.max_estimated_cost must be finite and positive")
 	}
 	return nil
 }
