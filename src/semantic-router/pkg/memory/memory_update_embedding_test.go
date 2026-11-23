@@ -287,6 +287,9 @@ func (c *memoryUpdateValkeyClient) HSet(_ context.Context, key string, fields ma
 		c.failNextHSet = false
 		return 0, errors.New("injected Valkey HSET failure")
 	}
+	if c.hashes[key] == nil {
+		c.hashes[key] = make(map[string]string)
+	}
 	for name, value := range fields {
 		c.hashes[key][name] = value
 	}
@@ -302,6 +305,21 @@ func (c *memoryUpdateValkeyClient) Del(_ context.Context, keys []string) (int64,
 		}
 	}
 	return deleted, nil
+}
+
+func TestValkeyStore_Update_NotFound(t *testing.T) {
+	client := &memoryUpdateValkeyClient{hashes: make(map[string]map[string]string)}
+	store := &ValkeyStore{client: client, enabled: true, maxRetries: 1, collectionPrefix: "mem:"}
+
+	err := store.Update(context.Background(), "non-existent", &Memory{
+		Content:   "New content",
+		UserID:    "user-123",
+		Type:      MemoryTypeSemantic,
+		CreatedAt: time.Unix(1704067200, 0),
+		Embedding: memoryUpdateTestVector(1),
+	})
+	assert.ErrorContains(t, err, "memory not found")
+	assert.Zero(t, client.hsetCalls, "Update must not create a missing memory")
 }
 
 func TestValkeyStore_UpdateEmbedding(t *testing.T) {
