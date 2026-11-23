@@ -376,8 +376,9 @@ to update your fork's `main` before retrying the push. GitHub permits workflow
 files without that scope when the same paths and contents already exist on
 another branch in the fork. See [GitHub's scope documentation][oauth-scopes].
 
-Once PR Gate passes on the new head, the required approvals still hold, and
-all review conversations are resolved, the rule requeues the PR automatically.
+Once the checks required by the queue pass on the new head, the required
+approvals still hold, and all review conversations are resolved, the rule
+requeues the PR automatically.
 The `@mergifyio queue` command and
 **Requeue** checkbox require write permission by default; contributors do not
 need them for this recovery.

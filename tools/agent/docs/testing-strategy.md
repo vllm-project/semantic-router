@@ -199,6 +199,11 @@ A standalone workflow dispatch cannot replace the PR Gate. Verified Mergify
 queue PRs automatically qualify affected changes at the queue merge revision;
 a human-created branch with the same prefix gets no exemption.
 
+The Mergify queue requires both `PR Qualification` and `CI Execution` from
+GitHub Actions. The trusted publisher reports `PR Qualification` for the
+verified PR run and attempt. `CI Execution` records the native workflow outcome
+and must also pass on the incoming PR and on the queue draft.
+
 The publisher is installed on main. During its introduction, branches based on
 the old entrypoint retain the strict legacy PR Gate; missing qualification
 still fails that legacy check. Update such a branch after the publisher lands

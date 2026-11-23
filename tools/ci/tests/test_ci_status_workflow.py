@@ -282,6 +282,50 @@ class CIStatusWorkflowTests(unittest.TestCase):
                 validate_mergify_contract(errors)
         self.assertTrue(any("max_checks_retries" in error for error in errors), errors)
 
+    def test_queue_requires_both_checks_from_github_actions(self) -> None:
+        config = yaml.safe_load((ROOT / ".mergify.yml").read_text(encoding="utf-8"))
+        for section in ("queue_conditions", "merge_conditions"):
+            for context in ("PR Qualification", "CI Execution"):
+                qualified = f"check-success = @github-actions/{context}"
+                replacements = (
+                    f"check-success = {context}",
+                    {"or": [qualified, "check-success = PR Gate"]},
+                )
+                for replacement in replacements:
+                    with self.subTest(section=section, replacement=replacement):
+                        modified = copy.deepcopy(config)
+                        conditions = modified["queue_rules"][0][section]
+                        conditions[conditions.index(qualified)] = replacement
+                        with tempfile.TemporaryDirectory() as root:
+                            (Path(root) / ".mergify.yml").write_text(
+                                yaml.safe_dump(modified), encoding="utf-8"
+                            )
+                            errors: list[str] = []
+                            with mock.patch.object(
+                                workflow_policy_validation, "REPO_ROOT", Path(root)
+                            ):
+                                validate_mergify_contract(errors)
+                        self.assertIn(
+                            f".mergify.yml: {section} must require @github-actions/{context}",
+                            errors,
+                        )
+
+    def test_queue_rejects_a_required_legacy_gate(self) -> None:
+        config = yaml.safe_load((ROOT / ".mergify.yml").read_text(encoding="utf-8"))
+        config["queue_rules"][0]["merge_conditions"].append(
+            "check-success = @github-actions/PR Gate"
+        )
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / ".mergify.yml").write_text(
+                yaml.safe_dump(config), encoding="utf-8"
+            )
+            errors: list[str] = []
+            with mock.patch.object(workflow_policy_validation, "REPO_ROOT", Path(root)):
+                validate_mergify_contract(errors)
+        self.assertEqual(
+            errors, [".mergify.yml: merge_conditions retains compatibility contexts"]
+        )
+
     def test_publisher_checkout_cannot_use_the_observed_pr_head(self) -> None:
         checkout = self.publisher.jobs["publish"]["steps"][0]
         checkout["with"]["ref"] = "${{ github.event.workflow_run.head_sha }}"
