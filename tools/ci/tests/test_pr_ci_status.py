@@ -4,6 +4,7 @@ import copy
 import hashlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -72,6 +73,8 @@ class Client:
             for name in ["CI / Gate", "CI Execution", "Quality"]
         ]
         self.checks, self.comments, self.writes = [], [], []
+        self.commit_statuses = []
+        self.status_writes = []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
@@ -141,6 +144,8 @@ class Client:
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
+        if path.startswith(f"commits/{HEAD}/statuses?"):
+            return copy.deepcopy(self.commit_statuses)
         if path.startswith("check-runs/"):
             identity = int(path.rsplit("/", 1)[1])
             return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
@@ -207,6 +212,15 @@ class Client:
         return buffer.getvalue()
 
     def write(self, endpoint, payload, **kwargs):
+        if endpoint == f"repos/{REPO}/statuses/{HEAD}":
+            self.status_writes.append(payload)
+            status = {
+                **payload,
+                "id": 70 + len(self.commit_statuses),
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+            self.commit_statuses.insert(0, status)
+            return copy.deepcopy(status)
         self.writes.append((endpoint, payload, kwargs))
         if endpoint.endswith("/check-runs"):
             check = {
@@ -234,6 +248,107 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_commit_status_uses_the_current_qualification_verdict(self):
+        for case, expected in (
+            ("waiting", "pending"),
+            ("partial", "pending"),
+            ("failure", "failure"),
+            ("success", "success"),
+        ):
+            with self.subTest(case=case):
+                client = Client()
+                if case != "waiting":
+                    client.run["run_attempt"] = 2
+                if case == "partial":
+                    client.plan["expected_verification_ids"].append("local.cli")
+                    client.plan["required_verification_ids"].append("local.cli")
+                if case == "failure":
+                    client.run["conclusion"] = "failure"
+                if case == "success":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["check"]["name"], "PR Gate")
+                self.assertEqual(result["check"].get("conclusion", "pending"), expected)
+                self.assertEqual(len(client.status_writes), 1)
+                status = client.status_writes[0]
+                self.assertEqual(status["context"], "PR Qualification")
+                self.assertEqual(status["state"], expected)
+                self.assertEqual(
+                    status["target_url"],
+                    f"https://github.com/{REPO}/actions/runs/101/attempts/{client.run['run_attempt']}",
+                )
+
+    def test_reconciliation_preserves_legacy_checks_and_reuses_the_commit_status(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for _ in range(2):
+            reconcile(client, REPO, 101)
+        self.assertEqual(len(client.checks), 1)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.checks[0]["conclusion"], "success")
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.status_writes[0]["context"], "PR Qualification")
+
+    def test_commit_status_ignores_a_superseded_attempt_before_publishing(self):
+        class ConcurrentRerun(Client):
+            def request(self, endpoint, **kwargs):
+                if endpoint.startswith(f"repos/{REPO}/commits/{HEAD}/statuses?"):
+                    self.run["run_attempt"] = 2
+                return super().request(endpoint, **kwargs)
+
+        client = ConcurrentRerun()
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+    def test_commit_status_waits_for_the_attempt_named_in_the_pending_fence(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        client.commit_statuses = [
+            {
+                "context": "PR Qualification",
+                "state": "pending",
+                "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/2",
+                "description": "Waiting for authorized CI rerun",
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+        ]
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+        client.run["run_attempt"] = 2
+        client.refresh_report()
+        reconcile(client, REPO, 101)
+        statuses = [payload["state"] for payload in client.status_writes]
+        self.assertEqual(statuses, ["success"])
+
+    def test_commit_status_timeout_preserves_legacy_gate_and_guidance(self):
+        class StatusTimeout(Client):
+            def write(self, endpoint, payload, **kwargs):
+                if "/statuses/" in endpoint:
+                    raise subprocess.TimeoutExpired(["gh", "api"], 20)
+                return super().write(endpoint, payload, **kwargs)
+
+        client = StatusTimeout()
+        result = reconcile(client, REPO, 101)
+        self.assertIn("qualification_status_error", result)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.writes[-1][0], f"repos/{REPO}/issues/3/comments")
+
     def test_draft_receipt_cannot_qualify_the_same_head_after_ready(self):
         client = Client()
         ready_plan = client.plan.copy()
@@ -291,9 +406,11 @@ class PRStatusTests(unittest.TestCase):
                 result = reconcile(client, REPO, 101)
                 if author_id == MERGIFY_BOT_ID:
                     self.assertEqual(result["check"]["conclusion"], "success")
+                    self.assertEqual(client.status_writes[0]["state"], "success")
                 else:
                     self.assertIsNone(result.get("check"))
                     self.assertEqual(client.writes, [])
+                    self.assertEqual(client.status_writes, [])
 
     def test_publish_rechecks_draft_before_marking_success(self):
         class ConvertedToDraft(Client):
