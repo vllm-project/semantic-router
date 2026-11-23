@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -272,6 +273,7 @@ func estimateStoredResponseTokens(resp *responseapi.StoredResponse) int {
 	total := 0
 	for _, item := range resp.Input {
 		total += estimateTokenLength(extractContentFromInputItem(item))
+		total += estimateToolItemTokens(item.Type, item.Arguments, derefToolInput(item.Input), string(item.Output))
 	}
 
 	if resp.OutputText != "" {
@@ -280,9 +282,51 @@ func estimateStoredResponseTokens(resp *responseapi.StoredResponse) int {
 
 	for _, item := range resp.Output {
 		total += estimateTokenLength(extractContentFromOutputItem(item))
+		total += estimateToolItemTokens(item.Type, item.Arguments, derefToolInput(item.Input), item.Output)
 	}
 
 	return total
+}
+
+// estimateToolItemTokens counts the payload of tool-call and tool-output
+// items, whose text lives outside the content fields the generic extractors
+// read. A historical tool result is the bulk of an agent session's history,
+// so a session gate reading the estimate would otherwise never see the bytes
+// the tool loop added.
+func estimateToolItemTokens(itemType, arguments, customInput, output string) int {
+	switch itemType {
+	case "function_call":
+		return estimateTokenLength(arguments)
+	case "custom_tool_call":
+		return estimateTokenLength(customInput)
+	case "function_call_output", "custom_tool_call_output":
+		return estimateTokenLength(toolOutputText(output))
+	}
+	return 0
+}
+
+func derefToolInput(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+// toolOutputText renders a tool output for the token estimate: a JSON string,
+// an array of content parts, or any opaque payload by its raw bytes.
+func toolOutputText(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal([]byte(raw), &text); err == nil {
+		return text
+	}
+	var parts []responseapi.ContentPart
+	if err := json.Unmarshal([]byte(raw), &parts); err == nil {
+		return extractTextFromContentParts(parts)
+	}
+	return raw
 }
 
 func historyTokensFromSemanticMessages(messages []llmprotocol.Message) int {
@@ -295,12 +339,37 @@ func historyTokensFromSemanticMessages(messages []llmprotocol.Message) int {
 	}
 	total := 0
 	for _, msg := range prior {
-		total += estimateTokenLength(semanticText(msg.Content))
+		total += estimateTokenLength(historyMessageText(msg))
 		if total >= historyTokensCap {
 			return historyTokensCap
 		}
 	}
 	return total
+}
+
+// historyMessageText is the text whose token size the history estimate counts
+// for one message: display text plus tool-call arguments plus the payload of
+// tool-result blocks. semanticText alone reads only display text, so an agent
+// session's tool loop — the bulk of its history — contributed nothing to the
+// estimate. For a message without tool blocks it is exactly semanticText.
+func historyMessageText(msg llmprotocol.Message) string {
+	parts := make([]string, 0, len(msg.Content))
+	var walk func(contents []llmprotocol.Content)
+	walk = func(contents []llmprotocol.Content) {
+		for _, content := range contents {
+			if content.Text != "" {
+				parts = append(parts, content.Text)
+			}
+			if content.ToolCall != nil && content.ToolCall.Arguments != "" {
+				parts = append(parts, content.ToolCall.Arguments)
+			}
+			if content.ToolResult != nil {
+				walk(content.ToolResult.Content)
+			}
+		}
+	}
+	walk(msg.Content)
+	return strings.Join(parts, " ")
 }
 
 func estimateTokenLength(text string) int {

@@ -210,3 +210,32 @@ func TestPopulatePinnedSessionFromHeaders_NoSessionHeader_ProvenanceStaysNone(t 
 		t.Fatalf("AuthenticatedPrincipal = %q, want %q", ctx.AuthenticatedPrincipal, "user-42")
 	}
 }
+
+// The session_history_tokens estimate must count the text a tool loop adds to
+// the history: tool-result payloads and tool-call arguments. Growing a
+// historical tool result from a few bytes to thousands once left the estimate
+// flat, so a gte threshold on the signal never fired.
+func TestHistoryTokensCountToolResultPayload(t *testing.T) {
+	result := strings.Repeat("x", 8000)
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run it"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "shell", Arguments: `{"command":"ls"}`}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: result}}}}}},
+	}
+	if got := historyTokensFromSemanticMessages(messages); got < 1024 {
+		t.Fatalf("an 8000-byte tool result estimated %d tokens, want at least 1024", got)
+	}
+}
+
+func TestStoredResponseTokensCountToolOutput(t *testing.T) {
+	output, err := json.Marshal(strings.Repeat("x", 8000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := &responseapi.StoredResponse{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}
+	if got := estimateStoredResponseTokens(resp); got < 1024 {
+		t.Fatalf("an 8000-byte tool output estimated %d tokens, want at least 1024", got)
+	}
+}
