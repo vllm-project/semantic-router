@@ -28,8 +28,34 @@ export interface SelectionObjectiveStage {
   candidates: SelectionCandidateValue[]
 }
 
-/** Base objective evidence, before Learning or session protection. */
+export type SelectionEstimateStatus = 'available' | 'unavailable' | 'deadline_exceeded'
+
+/** One candidate's estimate; its values are present only when available. */
+export interface SelectionCandidateEstimate {
+  candidate: SelectionCandidateRef
+  status: SelectionEstimateStatus
+  reason?: string
+  success_probability?: number
+  calibrated: boolean
+  expected_output_tokens?: number
+  estimated_cost?: number
+  currency?: string
+  source: string
+  deployment?: string
+}
+
+/** Per-request candidate estimates; observe mode records them only. */
+export interface SelectionCandidateEstimates {
+  mode: 'observe'
+  candidates: SelectionCandidateEstimate[]
+}
+
+/**
+ * Base objective evidence, before Learning or session protection. A weighted
+ * objective records no stages or survivors, only candidate estimates.
+ */
 export interface SelectionTrace {
-  stages: SelectionObjectiveStage[]
-  final_survivors: SelectionCandidateRef[]
+  stages?: SelectionObjectiveStage[]
+  final_survivors?: SelectionCandidateRef[]
+  estimates?: SelectionCandidateEstimates
 }

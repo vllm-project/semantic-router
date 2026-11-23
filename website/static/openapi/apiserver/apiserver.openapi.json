@@ -22076,6 +22076,100 @@
                                 "nullable": true,
                                 "type": "object",
                                 "properties": {
+                                  "estimates": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "properties": {
+                                      "candidates": {
+                                        "nullable": true,
+                                        "type": "array",
+                                        "items": {
+                                          "type": "object",
+                                          "properties": {
+                                            "calibrated": {
+                                              "type": "boolean"
+                                            },
+                                            "candidate": {
+                                              "type": "object",
+                                              "properties": {
+                                                "LoRAName": {
+                                                  "type": "string"
+                                                },
+                                                "Model": {
+                                                  "type": "string"
+                                                },
+                                                "ReasoningDescription": {
+                                                  "type": "string"
+                                                },
+                                                "ReasoningEffort": {
+                                                  "type": "string"
+                                                },
+                                                "ReasoningMode": {
+                                                  "type": "string"
+                                                },
+                                                "UseReasoning": {
+                                                  "nullable": true,
+                                                  "type": "boolean"
+                                                },
+                                                "Weight": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "Model",
+                                                "LoRAName",
+                                                "Weight",
+                                                "UseReasoning",
+                                                "ReasoningDescription",
+                                                "ReasoningMode",
+                                                "ReasoningEffort"
+                                              ]
+                                            },
+                                            "currency": {
+                                              "type": "string"
+                                            },
+                                            "deployment": {
+                                              "type": "string"
+                                            },
+                                            "estimated_cost": {
+                                              "nullable": true,
+                                              "type": "number"
+                                            },
+                                            "expected_output_tokens": {
+                                              "nullable": true,
+                                              "type": "integer"
+                                            },
+                                            "reason": {
+                                              "type": "string"
+                                            },
+                                            "source": {
+                                              "type": "string"
+                                            },
+                                            "status": {
+                                              "type": "string"
+                                            },
+                                            "success_probability": {
+                                              "nullable": true,
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "candidate",
+                                            "status",
+                                            "calibrated",
+                                            "source"
+                                          ]
+                                        }
+                                      },
+                                      "mode": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "mode",
+                                      "candidates"
+                                    ]
+                                  },
                                   "final_survivors": {
                                     "nullable": true,
                                     "type": "array",
@@ -22216,11 +22310,7 @@
                                       ]
                                     }
                                   }
-                                },
-                                "required": [
-                                  "stages",
-                                  "final_survivors"
-                                ]
+                                }
                               },
                               "session_action": {
                                 "type": "string"
@@ -29824,6 +29914,100 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "estimates": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "candidates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "candidate": {
+                                        "type": "object",
+                                        "properties": {
+                                          "LoRAName": {
+                                            "type": "string"
+                                          },
+                                          "Model": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningDescription": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningEffort": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningMode": {
+                                            "type": "string"
+                                          },
+                                          "UseReasoning": {
+                                            "nullable": true,
+                                            "type": "boolean"
+                                          },
+                                          "Weight": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "Model",
+                                          "LoRAName",
+                                          "Weight",
+                                          "UseReasoning",
+                                          "ReasoningDescription",
+                                          "ReasoningMode",
+                                          "ReasoningEffort"
+                                        ]
+                                      },
+                                      "currency": {
+                                        "type": "string"
+                                      },
+                                      "deployment": {
+                                        "type": "string"
+                                      },
+                                      "estimated_cost": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "expected_output_tokens": {
+                                        "nullable": true,
+                                        "type": "integer"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "success_probability": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "candidate",
+                                      "status",
+                                      "calibrated",
+                                      "source"
+                                    ]
+                                  }
+                                },
+                                "mode": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "mode",
+                                "candidates"
+                              ]
+                            },
                             "final_survivors": {
                               "nullable": true,
                               "type": "array",
@@ -29964,11 +30148,7 @@
                                 ]
                               }
                             }
-                          },
-                          "required": [
-                            "stages",
-                            "final_survivors"
-                          ]
+                          }
                         },
                         "session_action": {
                           "type": "string"
@@ -36927,6 +37107,100 @@
                       "nullable": true,
                       "type": "object",
                       "properties": {
+                        "estimates": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "calibrated": {
+                                    "type": "boolean"
+                                  },
+                                  "candidate": {
+                                    "type": "object",
+                                    "properties": {
+                                      "LoRAName": {
+                                        "type": "string"
+                                      },
+                                      "Model": {
+                                        "type": "string"
+                                      },
+                                      "ReasoningDescription": {
+                                        "type": "string"
+                                      },
+                                      "ReasoningEffort": {
+                                        "type": "string"
+                                      },
+                                      "ReasoningMode": {
+                                        "type": "string"
+                                      },
+                                      "UseReasoning": {
+                                        "nullable": true,
+                                        "type": "boolean"
+                                      },
+                                      "Weight": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "Model",
+                                      "LoRAName",
+                                      "Weight",
+                                      "UseReasoning",
+                                      "ReasoningDescription",
+                                      "ReasoningMode",
+                                      "ReasoningEffort"
+                                    ]
+                                  },
+                                  "currency": {
+                                    "type": "string"
+                                  },
+                                  "deployment": {
+                                    "type": "string"
+                                  },
+                                  "estimated_cost": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  },
+                                  "expected_output_tokens": {
+                                    "nullable": true,
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "source": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "success_probability": {
+                                    "nullable": true,
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "candidate",
+                                  "status",
+                                  "calibrated",
+                                  "source"
+                                ]
+                              }
+                            },
+                            "mode": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "candidates"
+                          ]
+                        },
                         "final_survivors": {
                           "nullable": true,
                           "type": "array",
@@ -37067,11 +37341,7 @@
                             ]
                           }
                         }
-                      },
-                      "required": [
-                        "stages",
-                        "final_survivors"
-                      ]
+                      }
                     },
                     "signal_confidences": {
                       "nullable": true,
@@ -38542,6 +38812,100 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "estimates": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "candidates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "calibrated": {
+                                        "type": "boolean"
+                                      },
+                                      "candidate": {
+                                        "type": "object",
+                                        "properties": {
+                                          "LoRAName": {
+                                            "type": "string"
+                                          },
+                                          "Model": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningDescription": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningEffort": {
+                                            "type": "string"
+                                          },
+                                          "ReasoningMode": {
+                                            "type": "string"
+                                          },
+                                          "UseReasoning": {
+                                            "nullable": true,
+                                            "type": "boolean"
+                                          },
+                                          "Weight": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "Model",
+                                          "LoRAName",
+                                          "Weight",
+                                          "UseReasoning",
+                                          "ReasoningDescription",
+                                          "ReasoningMode",
+                                          "ReasoningEffort"
+                                        ]
+                                      },
+                                      "currency": {
+                                        "type": "string"
+                                      },
+                                      "deployment": {
+                                        "type": "string"
+                                      },
+                                      "estimated_cost": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      },
+                                      "expected_output_tokens": {
+                                        "nullable": true,
+                                        "type": "integer"
+                                      },
+                                      "reason": {
+                                        "type": "string"
+                                      },
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "status": {
+                                        "type": "string"
+                                      },
+                                      "success_probability": {
+                                        "nullable": true,
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "candidate",
+                                      "status",
+                                      "calibrated",
+                                      "source"
+                                    ]
+                                  }
+                                },
+                                "mode": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "mode",
+                                "candidates"
+                              ]
+                            },
                             "final_survivors": {
                               "nullable": true,
                               "type": "array",
@@ -38682,11 +39046,7 @@
                                 ]
                               }
                             }
-                          },
-                          "required": [
-                            "stages",
-                            "final_survivors"
-                          ]
+                          }
                         },
                         "signal_confidences": {
                           "nullable": true,

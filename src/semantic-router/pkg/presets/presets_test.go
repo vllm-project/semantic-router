@@ -159,3 +159,54 @@ func TestThePicosAreAskedInVela3FastsTrainedForms(t *testing.T) {
 		t.Fatal("the picos have no calibrated thresholds")
 	}
 }
+
+// The output_length options are its bands in order, each band starts where
+// the one before it ends, and each counts as a length inside it.
+func TestOutputLengthBandsAreThePresetOptions(t *testing.T) {
+	preset, ok := Lookup(OutputLength, StageRequest)
+	if !ok || preset.Type != Choice || !preset.Input.Candidate {
+		t.Fatalf("output_length: %+v %v", preset, ok)
+	}
+	bands := OutputLengthBands()
+	if !reflect.DeepEqual(preset.OptionKeys(), func() []string {
+		keys := make([]string, len(bands))
+		for i, band := range bands {
+			keys[i] = band.Key
+		}
+		return keys
+	}()) {
+		t.Fatalf("options %v do not match the bands", preset.OptionKeys())
+	}
+	for i, band := range bands {
+		last := i == len(bands)-1
+		if i == 0 && band.Min != 0 || i > 0 && band.Min != bands[i-1].Max {
+			t.Fatalf("band %s does not start where the one before it ends", band.Key)
+		}
+		if last && (band.Max != 0 || band.Tokens != 2*band.Min) || !last && band.Tokens != (band.Min+band.Max)/2 {
+			t.Fatalf("band %s counts as %d tokens", band.Key, band.Tokens)
+		}
+	}
+	if success, ok := Lookup(CandidateSuccess, StageRequest); !ok || success.Type != Noul || !success.Input.Candidate {
+		t.Fatalf("candidate_success: %+v %v", success, ok)
+	}
+}
+
+func TestExpectedOutputTokens(t *testing.T) {
+	even := map[string]float64{"under_256": .25, "256_to_1k": .25, "1k_to_4k": .25, "over_4k": .25}
+	if got, ok := ExpectedOutputTokens(even, 0); !ok || got != (128+640+2560+8192)/4.0 {
+		t.Fatalf("unbounded: %v %v", got, ok)
+	}
+	// A capacity bounds every band, so a long band cannot count past it.
+	if got, ok := ExpectedOutputTokens(even, 1000); !ok || got != (128+640+1000+1000)/4.0 {
+		t.Fatalf("bounded: %v %v", got, ok)
+	}
+	for _, bad := range []map[string]float64{
+		{"under_256": 1},
+		{"under_256": 0, "256_to_1k": 0, "1k_to_4k": 0, "over_4k": 0},
+		{"under_256": 1.5, "256_to_1k": 0, "1k_to_4k": 0, "over_4k": 0},
+	} {
+		if _, ok := ExpectedOutputTokens(bad, 0); ok {
+			t.Fatalf("accepted %v", bad)
+		}
+	}
+}

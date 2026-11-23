@@ -96,7 +96,7 @@ func (m *Matcher) score(ctx context.Context, spec config.MatchJudge, deployment 
 		}
 	}
 	errs := make([]error, len(asked))
-	fan(ctx, len(asked), func(ctx context.Context, i int) {
+	modelservice.FanStates(ctx, len(asked), func(ctx context.Context, i int) {
 		parts := map[string]string{requestPart: input.Request, candidatePart: candidates[asked[i]].Text}
 		if strings.TrimSpace(input.History) != "" {
 			parts[historyPart] = input.History
@@ -200,18 +200,4 @@ func keep(spec config.MatchJudge, candidates []Scored, scores []float64) []Score
 		kept = kept[:spec.TopK]
 	}
 	return kept
-}
-
-// fan runs work for each of n states as participants of the context's
-// bundle, so that one call carries them all; a caller without a bundle gets
-// one of its own.
-func fan(ctx context.Context, n int, work func(ctx context.Context, i int)) {
-	if modelservice.InBundle(ctx) {
-		modelservice.Fan(ctx, n, func(i int) { work(ctx, i) })
-		return
-	}
-	stage, bundle := modelservice.WithBundle(ctx, 0)
-	leave := bundle.Join()
-	defer leave()
-	modelservice.Fan(stage, n, func(i int) { work(stage, i) })
 }

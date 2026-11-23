@@ -134,6 +134,7 @@ func TestMultiFactorObjectiveAndQualityRoundTrip(t *testing.T) {
   latency_metric: ttft
   latency_percentile: 90
   on_no_candidates: fail
+  estimates: {mode: observe, deployment: estimator, timeout_ms: 300}
  }
 }`
 	cfg, errs := Compile(source)
@@ -141,6 +142,9 @@ func TestMultiFactorObjectiveAndQualityRoundTrip(t *testing.T) {
 		t.Fatal(errs)
 	}
 	want := cfg.Decisions[0].Algorithm
+	if estimates := want.MultiFactor.Estimates; estimates == nil || *estimates != (config.MultiFactorEstimatesConfig{Mode: "observe", Deployment: "estimator", TimeoutMs: 300}) {
+		t.Fatalf("compile lost the estimates: %+v", estimates)
+	}
 	if want.MultiFactor.Objective == nil || want.MultiFactor.Quality.MinScore == nil || *want.MultiFactor.Quality.MinScore != 0 || want.MultiFactor.Quality.MinCoverage != 0.8 || want.MultiFactor.LatencyMetric != "ttft" {
 		t.Fatal("compile lost fields")
 	}
@@ -158,6 +162,7 @@ func TestMultiFactorObjectiveAndQualityRoundTrip(t *testing.T) {
 	for _, bad := range []string{
 		strings.Replace(source, "min_coverage: 0.8", "min_coverge: 0.8", 1),
 		strings.Replace(source, "priorities: [{factor: latency, tolerance: 0.05}, {factor: cost}]", "priorities: false", 1),
+		strings.Replace(source, "timeout_ms: 300", "timeout: 300", 1),
 	} {
 		if _, errs := Compile(bad); len(errs) == 0 {
 			t.Fatal("invalid algorithm field was silently discarded")

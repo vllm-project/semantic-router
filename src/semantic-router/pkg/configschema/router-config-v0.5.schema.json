@@ -4558,6 +4558,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "MultiFactorEstimatesConfig": {
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "observe"
+          ]
+        },
+        "deployment": {
+          "type": "string"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "mode"
+      ]
+    },
     "MultiFactorObjectiveConfig": {
       "properties": {
         "strategy": {
@@ -4616,6 +4637,9 @@
         },
         "quality": {
           "$ref": "#/$defs/QualityEvidenceConfig"
+        },
+        "estimates": {
+          "$ref": "#/$defs/MultiFactorEstimatesConfig"
         },
         "expected_output_tokens": {
           "type": "integer",

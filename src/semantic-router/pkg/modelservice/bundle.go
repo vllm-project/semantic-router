@@ -355,6 +355,20 @@ func Fan(ctx context.Context, n int, work func(i int)) {
 	}
 }
 
+// FanStates runs work for each of n states as participants of the context's
+// bundle, so that one call carries them all; a caller without a bundle gets
+// one of its own.
+func FanStates(ctx context.Context, n int, work func(ctx context.Context, i int)) {
+	if InBundle(ctx) {
+		Fan(ctx, n, func(i int) { work(ctx, i) })
+		return
+	}
+	stage, bundle := WithBundle(ctx, 0)
+	leave := bundle.Join()
+	defer leave()
+	Fan(stage, n, func(i int) { work(stage, i) })
+}
+
 // Flushes reports how many times the bundle has sent calls (tests, metrics).
 func (b *Bundle) Flushes() int {
 	b.mu.Lock()

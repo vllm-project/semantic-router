@@ -16,9 +16,9 @@ type modelCardProvider interface {
 
 // prepareDecisionSelectionCards admits the System One questions decisions ask
 // about their candidates while building a generation: the systemone
-// selector's, a Chat escalation's answer_check or refusal, and the judges of
-// match blocks. Requests only read this snapshot; no discovery runs on their
-// selection path.
+// selector's, a Chat escalation's answer_check or refusal, multi_factor's
+// candidate estimates, and the judges of match blocks. Requests only read
+// this snapshot; no discovery runs on their selection path.
 func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider modelCardProvider) (map[string]modelservice.ModelCard, error) {
 	cards := map[string]modelservice.ModelCard{}
 	if cfg == nil {
@@ -46,6 +46,15 @@ func prepareDecisionSelectionCards(cfg *config.RouterConfig, provider modelCardP
 			case algorithm.EscalateChecksAnswers():
 				if err := prepareEscalateCheck(cards, cfg, provider, algorithm.Escalate.Accept); err != nil {
 					return nil, fmt.Errorf("prepare escalate %s: %w", decision.Name, err)
+				}
+			case algorithm.MultiFactorEstimates() != nil:
+				estimates := *algorithm.MultiFactorEstimates()
+				card, err := preparedCard(cards, cfg, provider, cfg.MultiFactorEstimatesDeployment(estimates), estimates.EffectiveTimeout())
+				if err == nil {
+					_, err = compileCandidateEstimates(card)
+				}
+				if err != nil {
+					return nil, fmt.Errorf("prepare candidate estimates of %s: %w", decision.Name, err)
 				}
 			}
 		}

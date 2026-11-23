@@ -1967,6 +1967,11 @@ recipes:
             latency_percentile: 95
             latency_metric: ttft
             on_no_candidates: cheapest
+            # Ask the decision model, per candidate, for P(success) and the
+            # output length; recorded in Router Replay, selection unchanged.
+            estimates:
+              mode: observe
+              timeout_ms: 1000
 
       - name: random_route
         description: Uniform random baseline for routing experiments and evaluations.

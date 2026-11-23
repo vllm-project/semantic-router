@@ -69,6 +69,13 @@ describe('DSL structured field schemas', () => {
       'exclude',
       'disable_quality',
     ])
+    const estimates = requireField(multiFactor, 'estimates')
+    expect(estimates.fields?.map((field) => field.key)).toEqual([
+      'mode',
+      'deployment',
+      'timeout_ms',
+    ])
+    expect(requireField(estimates.fields || [], 'mode').options).toEqual(['observe'])
 
     const systemOne = getAlgorithmFieldSchema('systemone')
     const systemOneConfig = requireField(systemOne, 'systemone')

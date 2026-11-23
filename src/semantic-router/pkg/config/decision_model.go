@@ -140,6 +140,13 @@ func (c *RouterConfig) SystemOneSelectorDeployment(selector SystemOneSelectionCo
 	return c.deploymentOrDecisionModel(selector.Deployment)
 }
 
+// MultiFactorEstimatesDeployment returns the deployment that answers a
+// multi_factor algorithm's candidate estimates: its own, or the decision
+// model's.
+func (c *RouterConfig) MultiFactorEstimatesDeployment(estimates MultiFactorEstimatesConfig) string {
+	return c.deploymentOrDecisionModel(estimates.Deployment)
+}
+
 // EscalateCheckDeployment returns the deployment a Chat escalation asks
 // about its answers: the answer check's own, or the decision model's shared
 // deployment, which also answers the refusal check.

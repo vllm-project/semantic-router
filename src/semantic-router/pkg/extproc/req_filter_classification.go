@@ -122,7 +122,11 @@ func (r *OpenAIRouter) modelSelectorForRequest(ctx *RequestContext) *selection.R
 }
 
 func (r *OpenAIRouter) newDecisionMultiFactorSelector(decisionCfg *config.MultiFactorSelectionConfig) selection.Selector {
-	selector := selection.NewMultiFactorSelector(buildMultiFactorSelectionConfig(decisionCfg))
+	selectorCfg := buildMultiFactorSelectionConfig(decisionCfg)
+	if r != nil && r.Config != nil && decisionCfg != nil && decisionCfg.Estimates != nil {
+		selectorCfg.Estimates = r.multiFactorEstimates(*decisionCfg.Estimates)
+	}
+	selector := selection.NewMultiFactorSelector(selectorCfg)
 	if r != nil && r.Config != nil && r.Config.ModelConfig != nil {
 		selector.InitializeFromConfig(r.Config.ModelConfig)
 	}

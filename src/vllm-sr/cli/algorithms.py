@@ -17,7 +17,7 @@ from cli.config_schema import routing_surface_catalog, surface_types
 
 from .config_contract import QuorumFailurePolicy
 from .models_native import AlgorithmBudget, EscalateAlgorithm
-from .models_systemone import SystemOneSelectionConfig
+from .models_systemone import MAX_SYSTEMONE_TIMEOUT_MS, SystemOneSelectionConfig
 
 SUPPORTED_ALGORITHM_TYPES = frozenset(surface_types("algorithms"))
 
@@ -350,6 +350,31 @@ class MultiFactorObjectiveConfig(BaseModel):
         return self
 
 
+class MultiFactorEstimatesConfig(BaseModel):
+    """Per-request candidate estimates the decision model answers.
+
+    In observe mode, the only mode, they are recorded in Router Replay and the
+    selection is unchanged. Without a deployment, the decision model answers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["observe"]
+    deployment: str | None = None
+    timeout_ms: int | None = Field(default=None, ge=0, le=MAX_SYSTEMONE_TIMEOUT_MS)
+
+    @model_validator(mode="after")
+    def validate_deployment(self):
+        if self.deployment is not None and (
+            not self.deployment.strip() or self.deployment != self.deployment.strip()
+        ):
+            raise ValueError(
+                "deployment must name a model_runtime or systemone deployment; "
+                "omit it to ask the decision model"
+            )
+        return self
+
+
 class MultiFactorSelectionConfig(BaseModel):
     """Configuration for the canonical multi_factor selector."""
 
@@ -362,6 +387,7 @@ class MultiFactorSelectionConfig(BaseModel):
     latency_percentile: int | None = Field(default=95, ge=1, le=100)
     latency_metric: Literal["ttft", "tpot"] | None = None
     on_no_candidates: Literal["cheapest", "first", "fail"] | None = "cheapest"
+    estimates: MultiFactorEstimatesConfig | None = None
 
     @model_validator(mode="after")
     def validate_objective(self):

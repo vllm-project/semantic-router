@@ -28,8 +28,9 @@ const (
 )
 
 // Preset IDs. Relevance, SameRequest, ToolRank, ToolNeed and AnswerCheck are
-// the presets a configuration names (match judges, executors); the others back
-// application signals.
+// the presets a configuration names (match judges, executors), and
+// CandidateSuccess and OutputLength the ones multi_factor's candidate
+// estimates ask; the others back application signals.
 const (
 	Domain         = "domain"
 	FactCheck      = "fact_check"
@@ -48,6 +49,9 @@ const (
 	ToolRank       = "tool_rank"
 	ToolNeed       = "tool_need"
 	AnswerCheck    = "answer_check"
+
+	CandidateSuccess = "candidate_success"
+	OutputLength     = "output_length"
 )
 
 // System One protocol limits per question.
@@ -83,7 +87,8 @@ type Input struct {
 	// ToolResults adds the request's tool results.
 	ToolResults bool
 	// Candidate adds the item a match judge scores (a document, a cached
-	// request, a candidate answer).
+	// request, a candidate answer), or the description of a candidate model
+	// a candidate estimate asks about.
 	Candidate bool
 }
 

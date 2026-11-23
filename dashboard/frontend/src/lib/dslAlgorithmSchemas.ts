@@ -431,6 +431,23 @@ function getAlgorithmSpecificFieldSchema(algoType: string): FieldSchema[] {
           type: 'select',
           options: ['', 'cheapest', 'first', 'fail'],
         },
+        {
+          key: 'estimates',
+          label: 'Candidate Estimates',
+          type: 'object',
+          description:
+            'Ask the decision model, per candidate, for its success probability and output length; observe records them in Router Replay and leaves the selection unchanged',
+          fields: [
+            { key: 'mode', label: 'Mode', type: 'select', required: true, options: ['observe'] },
+            {
+              key: 'deployment',
+              label: 'Deployment',
+              type: 'string',
+              description: 'Defaults to the decision model',
+            },
+            { key: 'timeout_ms', label: 'Timeout (ms)', type: 'number', placeholder: '1000' },
+          ],
+        },
       ]
     default:
       return []

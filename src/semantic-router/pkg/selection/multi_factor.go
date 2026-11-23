@@ -45,6 +45,8 @@ type MultiFactorConfig struct {
 	LatencyPercentile    int
 	LatencyMetric        string
 	OnNoCandidates       string
+	// Estimates, when set, records per-request candidate estimates.
+	Estimates *MultiFactorEstimates
 }
 
 // MultiFactorObjective selects weighted or ordered lexicographic comparison.
@@ -159,7 +161,12 @@ func (s *MultiFactorSelector) InitializeFromConfig(modelConfig map[string]config
 }
 
 // Select applies hard eligibility filters, then the configured objective.
-func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+// With candidate estimates on, it asks for the estimates of the candidates
+// within the SLO ceilings and records them in the trace; in observe mode
+// they do not change the selection. They are asked before the quality
+// floor and evidence policy, which read the catalog index the estimates
+// may later stand in for.
+func (s *MultiFactorSelector) Select(ctx context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
 	if len(selCtx.CandidateDemands) > 0 && s.config.ExpectedOutputTokens == nil {
 		return nil, fmt.Errorf("automatic output requires multi_factor.expected_output_tokens as a cost forecast")
 	}
@@ -174,18 +181,22 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 	if len(kept) == 0 {
 		return s.applyNoCandidatePolicy(selCtx, "slo", len(dropped))
 	}
+	estimates := s.estimateCandidates(ctx, selCtx, kept)
 
 	signals := s.gatherSignals(kept, selCtx)
 	kept, signals, qualityFloorExcluded := s.applyQualityFloor(kept, signals)
 	if len(kept) == 0 {
-		return s.applyNoCandidatePolicy(selCtx, "quality_floor", qualityFloorExcluded)
+		result, err := s.applyNoCandidatePolicy(selCtx, "quality_floor", qualityFloorExcluded)
+		return resultWithEstimates(result, estimates), err
 	}
 	kept, signals, qualityExcluded, qualityDisabled := s.applyQualityEvidencePolicy(kept, signals)
 	if len(kept) == 0 {
-		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
+		result, err := s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
+		return resultWithEstimates(result, estimates), err
 	}
 	mins, maxs := signalExtrema(signals)
 	bestIdx, allScores, bestScore, secondBest, survivors, trace := s.chooseCandidate(signals, mins, maxs, selCtx.CacheAffinityCtx)
+	trace = withEstimates(trace, estimates)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5

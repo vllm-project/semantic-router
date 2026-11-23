@@ -204,6 +204,32 @@ class TestMultiFactorSelectionConfig:
         with pytest.raises(PydanticValidationError):
             MultiFactorSelectionConfig(quality=quality)
 
+    def test_estimates_observe_on_the_decision_model_or_a_deployment(self):
+        assert MultiFactorSelectionConfig().estimates is None
+        config = MultiFactorSelectionConfig(estimates={"mode": "observe"})
+        assert config.estimates.mode == "observe"
+        assert config.estimates.deployment is None
+        config = MultiFactorSelectionConfig(
+            estimates={"mode": "observe", "deployment": "decider", "timeout_ms": 300}
+        )
+        assert config.estimates.deployment == "decider"
+        assert config.estimates.timeout_ms == 300
+
+    @pytest.mark.parametrize(
+        "estimates",
+        [
+            {},
+            {"mode": "apply"},
+            {"mode": "observe", "deployment": " decider"},
+            {"mode": "observe", "timeout_ms": -1},
+            {"mode": "observe", "timeout_ms": 60_001},
+            {"mode": "observe", "timeout": 300},
+        ],
+    )
+    def test_estimates_reject_what_the_router_rejects(self, estimates):
+        with pytest.raises(PydanticValidationError):
+            MultiFactorSelectionConfig(estimates=estimates)
+
 
 class TestReMoMAlgorithmConfig:
     """Test ReMoM (Reasoning for Mixture of Models) configuration."""
