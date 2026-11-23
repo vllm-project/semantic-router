@@ -82,8 +82,8 @@ func TestTypedWireValuesRejectCaseFoldedFieldNames(t *testing.T) {
 		body     string
 		wantCode string
 	}{
-		{name: "client top level", body: `{"Model":"m","items":[]}`, wantCode: "invalid_json"},
-		{name: "client nested array", body: `{"model":"m","items":[{"Type":"text"}]}`, wantCode: "invalid_json"},
+		{name: "client top level", body: `{"Model":"m","items":[]}`, wantCode: "unknown_parameter"},
+		{name: "client nested array", body: `{"model":"m","items":[{"Type":"text"}]}`, wantCode: "unknown_parameter"},
 		{name: "provider top level", provider: true, body: `{"Model":"m","items":[]}`, wantCode: "invalid_upstream_json"},
 		{name: "provider nested array", provider: true, body: `{"model":"m","items":[{"Type":"text"}]}`, wantCode: "invalid_upstream_json"},
 	}

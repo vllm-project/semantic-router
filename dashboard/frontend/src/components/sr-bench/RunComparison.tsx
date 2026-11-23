@@ -1,26 +1,27 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { ArrowRight, FileDown } from 'lucide-react'
+import { Button, Checkbox, Label, cn } from '../../ui'
 import { benchApi } from './api'
 import { targetLabel, targetName } from './targetPresentation'
 import { changeDirection, changeSummary, formatSignedChange } from './comparisonMetrics'
 import AccountingCorrection from './AccountingCorrection'
 import { money, number, percent, seconds, tokenTotal } from './model'
 import type { Comparison, Report, Run } from './types'
-import styles from './SrBench.module.css'
-import ProductLoadingState from '../ProductLoadingState'
-import ProductIcon from '../ProductIcon'
 import ComparisonSetup from './ComparisonSetup'
 import useExperimentComparison from './useExperimentComparison'
 import { comparisonSelectionReady } from './experimentComparison'
 import BenchPagination from './BenchPagination'
 import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
+import { ActionRow, BenchLoading, Disclosure, Notice, TableFrame } from './benchUi'
+import { benchTable, benchText, identityClass } from './benchStyles'
 
 const changeClass = (value: number | null | undefined) =>
   ({
-    positive: styles.changePositive,
-    negative: styles.changeNegative,
-    neutral: styles.changeNeutral,
-    unknown: styles.changeUnknown,
+    positive: 'text-success-foreground',
+    negative: 'text-destructive-foreground',
+    neutral: 'text-foreground',
+    unknown: 'text-muted-foreground',
   })[changeDirection(value)]
 function ChangeValue({
   value,
@@ -36,7 +37,7 @@ function ChangeValue({
       {formatSignedChange(value)}
       {changeDirection(value) !== 'unknown' ? unit : ''}
       {metric && (
-        <small className={styles.changeCaption}>
+        <small className="mt-0.5 block text-xs font-normal text-current opacity-85">
           {value === 0 ? 'No change' : changeSummary(value, metric)}
         </small>
       )}
@@ -58,14 +59,13 @@ function ChangeInterval({ values }: { values: [number, number] }) {
 
 function ComparisonCostBreakdown({ row }: { row: Comparison['comparisons'][number] }) {
   return (
-    <details className={styles.details}>
-      <summary>Cost breakdown</summary>
-      <p className={styles.muted}>
+    <Disclosure summary="Cost breakdown" bare className="my-2">
+      <p className={benchText.muted}>
         Evaluation includes judges, simulators and other auxiliary calls. Unknown costs are not
         treated as zero.
       </p>
-      <div className={styles.tableScroll}>
-        <table aria-label="Cost breakdown">
+      <TableFrame className="my-2">
+        <table className={benchTable} aria-label="Cost breakdown">
           <thead>
             <tr>
               <th>Cost</th>
@@ -91,11 +91,11 @@ function ComparisonCostBreakdown({ row }: { row: Comparison['comparisons'][numbe
             </tr>
           </tbody>
         </table>
-      </div>
-      <p>
+      </TableFrame>
+      <p className="text-xs text-muted-foreground">
         Subject model saving: <ChangeValue value={row.subject_cost_saving_percent} unit="%" />
       </p>
-    </details>
+    </Disclosure>
   )
 }
 
@@ -365,30 +365,27 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     (target) => target.id === results[0]?.comparison?.comparisons[0]?.baseline_target_id,
   )
   return (
-    <section className={styles.panel}>
-      <h2>Compare iterations</h2>
-      <p>Choose a single-model baseline and compare compatible saved results.</p>
+    <div className="min-w-0">
       {!!results.length && (
-        <p className={styles.muted}>
+        <p className={`${benchText.muted} max-w-3xl`}>
           Total cost includes model answers and evaluation calls, priced from recorded usage at
           frozen rates. These are estimates, not invoices or hardware costs.
         </p>
       )}
       {experiment && (
-        <label className={styles.checkbox}>
-          <input
-            type="checkbox"
+        <Label className="mt-3 w-fit gap-2 font-normal text-foreground">
+          <Checkbox
             checked={includeOutside}
-            onChange={(event) => {
+            onCheckedChange={(checked) => {
               const next = new URLSearchParams({ view: 'compare', experiment })
-              if (event.target.checked) next.set('comparison_scope', 'all')
+              if (checked === true) next.set('comparison_scope', 'all')
               setBaseline('')
               setCandidates([])
               setSearch(next)
             }}
           />
           Include runs outside this experiment
-        </label>
+        </Label>
       )}
       <ComparisonSetup
         baseline={baseline}
@@ -400,25 +397,25 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         onCompare={compare}
       />
       {draftChanged && savedResults.length > 0 && (
-        <p className={styles.notice}>
+        <Notice tone="info" as="p">
           Selection changed. Choose Compare runs to update the displayed evidence.
-        </p>
+        </Notice>
       )}
       {error && (
-        <p className={styles.error} role="alert">
+        <Notice tone="danger" as="p" role="alert">
           {error}
-        </p>
+        </Notice>
       )}
-      {pending && <ProductLoadingState compact label="Comparing saved evaluation evidence…" />}
+      {pending && <BenchLoading label="Comparing saved evaluation evidence…" lines={3} />}
       {qualified && (baselineFailures > 0 || candidateFailures > 0) && (
-        <p className={styles.notice}>
+        <Notice tone="warning" as="p">
           {number(baselineFailures)} failed baseline results · {number(candidateFailures)} failed
           candidate results. Scores use all planned cases; explicit failed outcomes count as
           incorrect. Run statuses remain unchanged, and unknown costs cannot support a saving claim.
-        </p>
+        </Notice>
       )}
       {qualified && (
-        <div className={styles.chartGrid}>
+        <div className="my-4 grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2 [&>section]:my-0">
           <QualityCostChart points={points} costBasis="total" />
           {trajectory.length > 1 && (
             <IterationChart
@@ -433,19 +430,26 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         </div>
       )}
       {results.length > 0 && !qualified && !pending && (
-        <p className={styles.notice}>
+        <Notice tone="warning" as="p">
           A continuous trend is withheld until every selected iteration has a complete, compatible
           comparison.
-        </p>
+        </Notice>
       )}
       {results.length > 0 && (
-        <div className={styles.iterationCards}>
+        <div className="my-4 grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-3">
           {results.slice(currentEvidencePage * 6, currentEvidencePage * 6 + 6).map((item) => (
-            <article className={styles.iterationCard} key={item.id}>
-              <p className={styles.eyebrow}>{item.stage}</p>
-              <h3>{runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}</h3>
+            <article
+              key={item.id}
+              className="flex min-w-0 flex-col rounded-xl border border-border bg-surface p-4 shadow-xs"
+            >
+              <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground">
+                {item.stage}
+              </p>
+              <h3 className={`${benchText.h3} mb-3 mt-1 break-words`}>
+                {runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}
+              </h3>
               {item.comparison && !item.comparison.candidate_quality_complete && (
-                <p className={styles.muted}>
+                <p className={`${benchText.muted} mb-2`}>
                   {item.comparison.candidate_status} ·{' '}
                   {number(
                     item.comparison.candidate_targets.reduce(
@@ -457,14 +461,16 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                 </p>
               )}
               {item.error ? (
-                <p className={styles.error}>Comparison withheld: {item.error}</p>
+                <Notice tone="danger" as="p" className="my-0">
+                  Comparison withheld: {item.error}
+                </Notice>
               ) : (
                 item.comparison?.comparisons.map((row) => (
-                  <div key={row.candidate_target_id}>
-                    <div className={styles.iterationNumbers}>
-                      <div>
-                        <span>Quality Δ</span>
-                        <strong>
+                  <div key={row.candidate_target_id} className="min-w-0">
+                    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+                      <div className="flex flex-col gap-0.5 bg-card px-3 py-2.5">
+                        <span className="text-xs text-muted-foreground">Quality Δ</span>
+                        <strong className="text-lg font-semibold leading-tight tabular-nums">
                           <ChangeValue
                             value={row.quality_delta * 100}
                             unit=" pp"
@@ -472,9 +478,9 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                           />
                         </strong>
                       </div>
-                      <div>
-                        <span>Total cost saving</span>
-                        <strong>
+                      <div className="flex flex-col gap-0.5 bg-card px-3 py-2.5">
+                        <span className="text-xs text-muted-foreground">Total cost saving</span>
+                        <strong className="text-lg font-semibold leading-tight tabular-nums">
                           <ChangeValue
                             value={row.total_cost_saving_percent}
                             unit="%"
@@ -484,14 +490,16 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                       </div>
                     </div>
                     {row.total_cost_comparison_reason && (
-                      <p className={styles.muted}>{row.total_cost_comparison_reason}</p>
+                      <p className={`${benchText.muted} mt-2`}>
+                        {row.total_cost_comparison_reason}
+                      </p>
                     )}
                     <ComparisonCostBreakdown row={row} />
-                    <p className={styles.muted}>
+                    <p className={benchText.muted}>
                       95% paired interval <ChangeInterval values={row.quality_delta_ci95} /> ·{' '}
                       {number(row.paired_cases)} cases
                     </p>
-                    <p className={styles.muted}>
+                    <p className={`${benchText.muted} mt-1`}>
                       {row.quality_delta_ci95[0] <= 0 && row.quality_delta_ci95[1] >= 0
                         ? 'Interval includes zero; improvement is not established.'
                         : 'See the comparison assumptions before making a quality claim.'}
@@ -500,17 +508,21 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                 ))
               )}
               {item.report?.provenance.accounting_correction && (
-                <p className={styles.notice}>
+                <Notice tone="info" as="p" className="mb-0">
                   {item.report.provenance.accounting_correction.qualified
                     ? 'Accounting verified'
                     : 'Partial accounting'}{' '}
                   · {number(item.report.provenance.accounting_correction.corrected_call_count)}{' '}
                   corrected calls. Original receipts preserved; full correction evidence below.
-                </p>
+                </Notice>
               )}
-              <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
-                Open run <ProductIcon name="arrow-right" />
-              </a>
+              <div className="mt-auto pt-3">
+                <Button variant="ghost" size="xs" className="-ml-2" asChild>
+                  <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
+                    Open run <ArrowRight aria-hidden="true" />
+                  </a>
+                </Button>
+              </div>
             </article>
           ))}
         </div>
@@ -525,14 +537,13 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       {baselineReport && (
         <>
           <AccountingCorrection report={baselineReport} />
-          <details className={styles.details}>
-            <summary>Single-model baseline metrics</summary>
-            <p>
+          <Disclosure summary="Single-model baseline metrics">
+            <p className={benchText.muted}>
               {reviewedBaseline?.manifest.name ?? savedBaseline} ·{' '}
               {baselineComparison?.baseline_status}
             </p>
-            <div className={styles.tableScroll}>
-              <table>
+            <TableFrame>
+              <table className={benchTable}>
                 <thead>
                   <tr>
                     <th>Single model</th>
@@ -578,38 +589,47 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     ))}
                 </tbody>
               </table>
-            </div>
-          </details>
+            </TableFrame>
+          </Disclosure>
         </>
       )}
       {!!results.length && (
         <>
-          <div className={styles.sectionHeading}>
-            <h3>Comparison evidence</h3>
-            <div className={styles.actions}>
-              <button onClick={() => download('csv')}>Export comparison CSV</button>
-              <button onClick={() => download('json')}>Export comparison JSON</button>
-            </div>
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <h3 className={benchText.h3}>Comparison evidence</h3>
+            <ActionRow>
+              <Button variant="outline" size="sm" onClick={() => download('csv')}>
+                <FileDown aria-hidden="true" />
+                Export comparison CSV
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => download('json')}>
+                <FileDown aria-hidden="true" />
+                Export comparison JSON
+              </Button>
+            </ActionRow>
           </div>
-          <p className={styles.mobileHint}>Swipe the tables horizontally to inspect all metrics.</p>
-          <p className={styles.muted}>
+          <p className={`${benchText.muted} mt-2 md:hidden`}>
+            Swipe the tables horizontally to inspect all metrics.
+          </p>
+          <p className={`${benchText.muted} mt-2 max-w-3xl`}>
             Quality differences are percentage points. Intervals that include zero do not establish
             an improvement. Unknown cost cannot support a saving claim. Development-set gains
             require a separate holdout check.
           </p>
           {!!baselineComparison?.baseline_selection_qualification &&
             (baselineFailures > 0 || candidateFailures > 0) && (
-              <p className={styles.muted}>{baselineComparison.baseline_selection_qualification}</p>
+              <p className={`${benchText.muted} mt-2 max-w-3xl`}>
+                {baselineComparison.baseline_selection_qualification}
+              </p>
             )}
-          <p className={styles.muted}>
+          <p className={`${benchText.muted} mt-2 max-w-3xl`}>
             Cache-neutral estimates cover subject model calls only, using the same selected
             baseline. They reprice prompt tokens at the frozen fresh-input rate plus output,
             excluding evaluation calls and cache discounts or premiums. They are not measured spend.
           </p>
-          <details className={styles.details}>
-            <summary>Detailed iteration metrics and uncertainty</summary>
-            <div className={styles.tableScroll}>
-              <table>
+          <Disclosure summary="Detailed iteration metrics and uncertainty">
+            <TableFrame className="my-0">
+              <table className={benchTable}>
                 <thead>
                   <tr>
                     <th>Iteration / target</th>
@@ -638,7 +658,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                               {item.stage}
                               <small>
                                 {item.report?.provenance.accounting_correction && (
-                                  <p className={styles.notice}>
+                                  <span className="block text-warning-foreground">
                                     {item.report.provenance.accounting_correction.qualified
                                       ? 'Accounting verified'
                                       : 'Partial accounting'}{' '}
@@ -649,7 +669,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                                     )}{' '}
                                     corrected calls. Original receipts preserved; full correction
                                     evidence below.
-                                  </p>
+                                  </span>
                                 )}
                                 <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
                                   {candidateRun?.manifest.name ?? item.id}
@@ -687,8 +707,12 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                               <small>{number(row.paired_cases)} paired cases</small>
                               {(row.quality_delta_ci95_qualification ||
                                 row.quality_delta_bootstrap_ci95) && (
-                                <details>
-                                  <summary>Uncertainty details</summary>
+                                <Disclosure
+                                  summary="Uncertainty details"
+                                  bare
+                                  className="my-1 whitespace-normal"
+                                  bodyClassName="max-w-[22rem] text-xs text-muted-foreground"
+                                >
                                   {row.quality_delta_ci95_qualification && (
                                     <p>{row.quality_delta_ci95_qualification}</p>
                                   )}
@@ -701,7 +725,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                                       diagnostic interval.
                                     </p>
                                   )}
-                                </details>
+                                </Disclosure>
                               )}
                             </td>
                             <td>
@@ -736,67 +760,69 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                   )}
                 </tbody>
               </table>
-            </div>
-          </details>
-          <details className={styles.details}>
-            <summary>Technical comparison evidence</summary>
-            {results.map((item) => (
-              <section className={styles.comparisonRow} key={item.id}>
-                <h4>
-                  {item.stage} · {runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}
-                </h4>
-                {item.error ? (
-                  <p className={styles.error} role="alert">
-                    Comparison withheld: {item.error}
-                  </p>
-                ) : (
-                  <>
-                    <AccountingCorrection report={item.report ?? null} />
-                    <details className={styles.details}>
-                      <summary>Baseline selection policy</summary>
-                      <p className={styles.muted}>{item.comparison?.baseline_selection}</p>
-                      {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
-                        <p className={styles.notice}>
-                          Tied best single models:{' '}
-                          {item.comparison?.baseline_tied_best_target_ids
-                            ?.map((id) => targetName(reviewedBaseline?.manifest, id))
-                            .join(', ')}
-                          . {item.comparison?.baseline_tie_policy}
-                        </p>
+            </TableFrame>
+          </Disclosure>
+          <Disclosure summary="Technical comparison evidence">
+            <div className="divide-y divide-border">
+              {results.map((item) => (
+                <section className="min-w-0 py-3 first:pt-0 last:pb-0" key={item.id}>
+                  <h4 className={benchText.h4}>
+                    {item.stage} ·{' '}
+                    {runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}
+                  </h4>
+                  {item.error ? (
+                    <Notice tone="danger" as="p" role="alert">
+                      Comparison withheld: {item.error}
+                    </Notice>
+                  ) : (
+                    <>
+                      <AccountingCorrection report={item.report ?? null} />
+                      <Disclosure summary="Baseline selection policy" bare className="my-1">
+                        <p className={benchText.muted}>{item.comparison?.baseline_selection}</p>
+                        {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
+                          <Notice tone="info" as="p">
+                            Tied best single models:{' '}
+                            {item.comparison?.baseline_tied_best_target_ids
+                              ?.map((id) => targetName(reviewedBaseline?.manifest, id))
+                              .join(', ')}
+                            . {item.comparison?.baseline_tie_policy}
+                          </Notice>
+                        )}
+                      </Disclosure>
+                      {item.comparison?.baseline_cost_comparison_eligible === false && (
+                        <Notice tone="warning" as="p">
+                          Cost saving withheld:{' '}
+                          {item.comparison.baseline_cost_comparison_reason ??
+                            'Baseline cost evidence is incomplete.'}
+                        </Notice>
                       )}
-                    </details>
-                    {item.comparison?.baseline_cost_comparison_eligible === false && (
-                      <p className={styles.notice}>
-                        Cost saving withheld:{' '}
-                        {item.comparison.baseline_cost_comparison_reason ??
-                          'Baseline cost evidence is incomplete.'}
-                      </p>
-                    )}
-                    <details className={styles.details}>
-                      <summary>Frozen configuration identity</summary>
-                      <dl className={styles.identity}>
-                        {runs
-                          .find((run) => run.id === item.id)
-                          ?.manifest.targets.filter((target) => target.kind === 'mom')
-                          .map((target) => (
-                            <div key={target.id}>
-                              <dt>{targetLabel(target)} frozen configuration</dt>
-                              <dd>
-                                <code>
-                                  {target.config_hash ?? 'Configuration identity unavailable'}
-                                </code>
-                              </dd>
-                            </div>
-                          ))}
-                      </dl>
-                    </details>
-                  </>
-                )}
-              </section>
-            ))}
-          </details>
+                      <Disclosure summary="Frozen configuration identity" bare className="my-1">
+                        <dl
+                          className={cn(identityClass, 'grid-cols-1 [&>div]:grid [&>div]:gap-0.5')}
+                        >
+                          {runs
+                            .find((run) => run.id === item.id)
+                            ?.manifest.targets.filter((target) => target.kind === 'mom')
+                            .map((target) => (
+                              <div key={target.id}>
+                                <dt>{targetLabel(target)} frozen configuration</dt>
+                                <dd>
+                                  <code>
+                                    {target.config_hash ?? 'Configuration identity unavailable'}
+                                  </code>
+                                </dd>
+                              </div>
+                            ))}
+                        </dl>
+                      </Disclosure>
+                    </>
+                  )}
+                </section>
+              ))}
+            </div>
+          </Disclosure>
         </>
       )}
-    </section>
+    </div>
   )
 }

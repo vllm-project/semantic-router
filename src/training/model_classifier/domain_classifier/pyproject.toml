@@ -2,7 +2,7 @@
 name = "domain-classifier"
 version = "0.0.0"
 description = "Environment for the domain classifier data preparation under src/training/model_classifier/domain_classifier"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # No requirements.txt here; lower bounds follow fact_check_fine_tuning_lora, upper bounds stop at the next major.
     "pyarrow>=14,<27",

@@ -164,18 +164,25 @@ func (a *moduleSystemOneAPI) answered() [][]string {
 
 func moduleSystemOneRouterConfig(t *testing.T, raw string, api http.Handler) *config.RouterConfig {
 	t.Helper()
+	cfg, err := moduleSystemOneRouterConfigTry(t, raw, api)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
+// moduleSystemOneRouterConfigTry is moduleSystemOneRouterConfig for tests
+// that expect a refusal: it returns the load error instead of failing.
+func moduleSystemOneRouterConfigTry(t *testing.T, raw string, api http.Handler) (*config.RouterConfig, error) {
+	t.Helper()
 	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
 	t.Cleanup(backend.Close)
 	t.Setenv("REMOTE_DECISION_TEST_KEY", "fake-decision-key")
-	cfg, err := config.ParseYAMLBytes([]byte(strings.NewReplacer(
+	return config.ParseYAMLBytes([]byte(strings.NewReplacer(
 		"BACKEND", strings.TrimPrefix(backend.URL, "http://"), "API", server.URL,
 	).Replace(raw)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cfg
 }
 
 func TestBuiltInSignalsAskASystemOneDecisionModelInOneCallPerStage(t *testing.T) {

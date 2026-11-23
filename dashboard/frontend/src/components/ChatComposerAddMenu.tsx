@@ -8,8 +8,9 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react'
+import { Check, Globe, Paperclip, Plus } from 'lucide-react'
 
-import styles from './ChatComposerAddMenu.module.css'
+import { cn } from '../ui'
 
 interface ChatComposerAddMenuProps {
   attachFilesDisabled?: boolean
@@ -30,29 +31,6 @@ interface ComposerMenuItem {
   onSelect: () => void
   restoreFocusOnSelect?: boolean
 }
-
-const AttachmentIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <path
-      d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66l-9.2 9.19a2 2 0 1 1-2.83-2.83l8.49-8.48"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)
-
-const WebSearchIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M3 12h18M12 3c2.4 2.45 3.65 5.45 3.65 9S14.4 18.55 12 21c-2.4-2.45-3.65-5.45-3.65-9S9.6 5.45 12 3Z" />
-  </svg>
-)
-
-const CheckIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <path d="m3 8.2 3.1 3.1L13 4.8" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
 
 export default function ChatComposerAddMenu({
   attachFilesDisabled = false,
@@ -83,7 +61,7 @@ export default function ChatComposerAddMenu({
         closeOnSelect: true,
         description: 'Add files up to 10 MB each',
         disabled: attachFilesDisabled,
-        icon: <AttachmentIcon />,
+        icon: <Paperclip />,
         id: 'attach-files',
         label: 'Attach files',
         onSelect: onAttachFiles,
@@ -95,7 +73,7 @@ export default function ChatComposerAddMenu({
       checked: webSearchEnabled,
       description: 'Use current information from the web',
       disabled: webSearchDisabled || !onToggleWebSearch,
-      icon: <WebSearchIcon />,
+      icon: <Globe />,
       id: 'web-search',
       label: 'Web search',
       onSelect: onToggleWebSearch ?? (() => undefined),
@@ -166,7 +144,7 @@ export default function ChatComposerAddMenu({
   return (
     <div
       ref={rootRef}
-      className={styles.root}
+      className="relative"
       onBlur={(event) => {
         const nextTarget = event.relatedTarget
         if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
@@ -177,7 +155,10 @@ export default function ChatComposerAddMenu({
       <button
         ref={triggerRef}
         type="button"
-        className={`${styles.trigger} ${isOpen ? styles.triggerOpen : ''}`}
+        className={cn(
+          'grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-[color,background-color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:scale-95',
+          isOpen && 'bg-accent text-foreground',
+        )}
         aria-controls={menuId}
         aria-expanded={isOpen}
         aria-haspopup="menu"
@@ -186,22 +167,14 @@ export default function ChatComposerAddMenu({
         onClick={() => setIsOpen((current) => !current)}
         title="Add to prompt"
       >
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.7"
-          aria-hidden="true"
-        >
-          <path d="M10 3v14M3 10h14" strokeLinecap="round" />
-        </svg>
+        <Plus className={cn('size-4 transition-transform duration-200', isOpen && 'rotate-45')} />
       </button>
 
       {isOpen ? (
         <div
           ref={menuRef}
           id={menuId}
-          className={styles.menu}
+          className="absolute bottom-[calc(100%+8px)] left-0 z-40 flex w-[min(17rem,calc(100vw-2.5rem))] flex-col gap-0.5 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1"
           role="menu"
           aria-label="Add to prompt"
           data-testid="playground-composer-add-menu"
@@ -217,7 +190,7 @@ export default function ChatComposerAddMenu({
               <button
                 key={item.id}
                 type="button"
-                className={`${styles.item} ${item.checked ? styles.itemActive : ''}`}
+                className="flex items-start gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent disabled:pointer-events-none disabled:opacity-45"
                 disabled={item.disabled}
                 role={isToggle ? 'menuitemcheckbox' : 'menuitem'}
                 aria-checked={isToggle ? item.checked : undefined}
@@ -234,15 +207,20 @@ export default function ChatComposerAddMenu({
                   }
                 }}
               >
-                <span className={styles.itemIcon}>{item.icon}</span>
-                <span className={styles.itemCopy}>
-                  <span className={styles.itemLabel}>{item.label}</span>
-                  <span className={styles.itemDescription}>{item.description}</span>
+                <span
+                  className={cn(
+                    'mt-0.5 grid size-7 shrink-0 place-items-center rounded-md border border-border bg-surface [&_svg]:size-3.5',
+                    item.checked ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                >
+                  {item.icon}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-[13px] font-medium">{item.label}</span>
+                  <span className="text-xs text-subtle-foreground">{item.description}</span>
                 </span>
                 {item.checked ? (
-                  <span className={styles.itemCheck}>
-                    <CheckIcon />
-                  </span>
+                  <Check className="mt-1 size-3.5 shrink-0 text-primary" strokeWidth={2.6} />
                 ) : null}
               </button>
             )

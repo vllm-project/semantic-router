@@ -29,6 +29,9 @@ func newReplayRunEntry(record routerreplay.RoutingRecord) replayRunEntry {
 	entry.agent.ID = agentOf(record)
 	entry.toolResults, entry.toolFailures = replayNewToolResults(record.ToolTrace)
 	entry.call.ToolResults, entry.call.ToolFailures = len(entry.toolResults), len(entry.toolFailures)
+	if entry.call.ToolResults > 0 {
+		entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolLoop)
+	}
 	if entry.call.ToolFailures > 0 {
 		entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolFailure)
 	}
@@ -44,7 +47,10 @@ func buildReplayRunCall(record routerreplay.RoutingRecord) routerreplay.RunCall 
 		LifecycleState: record.LifecycleState, ResponseStatus: record.ResponseStatus, TerminalReason: record.TerminalReason,
 		PromptTokens: record.PromptTokens, CompletionTokens: record.CompletionTokens,
 		RouterCalls: replayRouterCalls(record), FinalAnswer: replayEndsWithFinalAnswer(record.ToolTrace),
-		Outcomes: replayReportedOutcomes(record.Outcomes),
+		Outcomes: replayReportedOutcomes(record.Outcomes), ImageCount: record.ImageCount,
+	}
+	if record.Agent != nil {
+		call.RequestClass, call.AgentType = record.Agent.RequestClass, record.Agent.Type
 	}
 	if currency := replayRecordCurrency(record); currency != "" && finiteReplayCost(record.ActualCost) {
 		call.Cost, call.Currency = record.ActualCost, currency
@@ -68,12 +74,23 @@ func buildReplayRunCall(record routerreplay.RoutingRecord) routerreplay.RunCall 
 func replayRunCallMarkers(record routerreplay.RoutingRecord) []string {
 	var markers []string
 	guard := record.JailbreakDetected || record.PIIDetected || record.HallucinationDetected
-	block := record.PIIBlocked || (guard && record.ResponseStatus >= 400 && record.ResponseStatus < 500)
+	// A guard decision that answers with its fast response refuses with a
+	// 200 and calls no model.
+	refused := (record.JailbreakDetected || record.PIIDetected) &&
+		(record.SelectionMethod == "fast_response" || record.SelectedModel == "")
+	block := record.PIIBlocked || refused || (guard && record.ResponseStatus >= 400 && record.ResponseStatus < 500)
 	failed := !block && (record.LifecycleState == routerreplay.LifecycleFailed || record.ResponseStatus >= 400)
+	requestClass := ""
+	if record.Agent != nil {
+		requestClass = record.Agent.RequestClass
+	}
 	for _, marker := range []struct {
 		name string
 		set  bool
 	}{
+		{routerreplay.RunMarkerCompaction, requestClass == config.AgentRequestClassCompaction},
+		{routerreplay.RunMarkerHousekeeping, requestClass == config.AgentRequestClassAuxiliary || record.RequestKind == store.RequestKindSessionTitle},
+		{routerreplay.RunMarkerImage, record.ImageCount > 0},
 		{routerreplay.RunMarkerEscalation, replayLooperEscalated(record)},
 		{routerreplay.RunMarkerGuard, guard},
 		{routerreplay.RunMarkerBlock, block},
@@ -203,15 +220,44 @@ func replayMatchedSignals(signals routerreplay.Signal) []string {
 	return matched
 }
 
+// replaySignalFamily is one signal type and the signals of it a record matched.
+type replaySignalFamily struct {
+	name    string
+	matched []string
+}
+
+// replaySignalFamilies is a record's matched signals by signal type, as an
+// array so that a scan over the whole history allocates nothing for them.
+func replaySignalFamilies(s routerreplay.Signal) [17]replaySignalFamily {
+	return [...]replaySignalFamily{
+		{"keyword", s.Keyword},
+		{"domain", s.Domain},
+		{"fact_check", s.FactCheck},
+		{"user_feedback", s.UserFeedback},
+		{"turn_relation", s.TurnRelation},
+		{"language", s.Language},
+		{"context", s.Context},
+		{"complexity", s.Complexity},
+		{"modality", s.Modality},
+		{"authz", s.Authz},
+		{"jailbreak", s.Jailbreak},
+		{"safety", s.Safety},
+		{"pii", s.PII},
+		{"conversation", s.Conversation},
+		{"metadata", s.Metadata},
+		{"input_modality", s.InputModality},
+		{"decision", s.Decision},
+	}
+}
+
 // replaySignalGroups is a record's matched signals by signal type.
 func replaySignalGroups(s routerreplay.Signal) map[string][]string {
-	return map[string][]string{
-		"keyword": s.Keyword, "domain": s.Domain, "fact_check": s.FactCheck,
-		"user_feedback": s.UserFeedback, "turn_relation": s.TurnRelation, "language": s.Language,
-		"context": s.Context, "complexity": s.Complexity, "modality": s.Modality, "authz": s.Authz,
-		"jailbreak": s.Jailbreak, "safety": s.Safety, "pii": s.PII, "conversation": s.Conversation,
-		"metadata": s.Metadata, "input_modality": s.InputModality, "decision": s.Decision,
+	families := replaySignalFamilies(s)
+	groups := make(map[string][]string, len(families))
+	for _, family := range families {
+		groups[family.name] = family.matched
 	}
+	return groups
 }
 
 func firstNonEmptyString(values ...string) string {

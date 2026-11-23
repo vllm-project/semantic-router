@@ -282,7 +282,7 @@ def render(reference: dict) -> str:
         "- Recipe names scope local signal, projection, decision, cache, replay, "
         "metric, and learning or session identities. Use `x-vsr-selected-recipe` "
         "together with the local decision and signal names when correlating a "
-        "response with Insights or metrics.",
+        "response with the Dashboard's Requests page or metrics.",
         "",
         "## The trace {#the-trace}",
         "",

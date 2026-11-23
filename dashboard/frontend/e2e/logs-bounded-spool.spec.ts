@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
-test('renders centrally redacted bounded-spool logs', async ({ page }) => {
+test('renders centrally redacted bounded-spool logs and keeps them when a follow poll fails', async ({
+  page,
+}) => {
+  await page.clock.install()
   await mockAuthenticatedAppShell(page)
   let failRefresh = false
   await page.route('**/api/logs**', async (route) => {
@@ -17,8 +20,9 @@ test('renders centrally redacted bounded-spool logs', async ({ page }) => {
         deployment_type: 'local-spool',
         service: 'all',
         supported: true,
+        components: ['router', 'envoy', 'dashboard'],
         logs: [
-          { service: 'router', line: '[router] [INFO] request completed' },
+          { service: 'router', line: '[INFO] request completed' },
           { service: 'dashboard', line: 'Authorization: [REDACTED]' },
         ],
         count: 2,
@@ -26,20 +30,25 @@ test('renders centrally redacted bounded-spool logs', async ({ page }) => {
     })
   })
 
-  await page.goto('/logs')
+  await page.goto('/observe/logs')
 
-  await expect(page.getByRole('heading', { name: 'System Logs' })).toBeVisible()
-  await expect(page.getByText('Available', { exact: true })).toBeVisible()
-  await expect(page.getByText('[router] [INFO] request completed')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Logs', exact: true, level: 1 })).toBeVisible()
+  await expect(page.getByText('Log spool', { exact: true })).toBeVisible()
+  await expect(page.getByRole('radio', { name: 'Envoy', exact: true })).toBeVisible()
+  await expect(page.getByText('[INFO] request completed')).toBeVisible()
   await expect(page.getByText('Authorization: [REDACTED]')).toBeVisible()
+  // Follow is the only way to refresh; there is no separate refresh control.
+  await expect(page.getByRole('button', { name: 'Refresh' })).toHaveCount(0)
+  await expect(page.getByRole('switch', { name: 'Follow' })).toBeChecked()
 
   failRefresh = true
-  await page.getByRole('button', { name: 'Refresh' }).click()
-  await expect(page.getByText(/Failed to fetch logs/)).toBeVisible()
-  await expect(page.getByText('[router] [INFO] request completed')).toBeVisible()
+  await page.clock.fastForward(5_100)
+  await expect(page.getByText(/Showing the last lines received/)).toBeVisible()
+  await expect(page.getByText(/HTTP 503/)).toBeVisible()
+  await expect(page.getByText('[INFO] request completed')).toBeVisible()
 })
 
-test('explains when the deployment has no bounded log spool', async ({ page }) => {
+test('explains when the deployment has no log source', async ({ page }) => {
   await mockAuthenticatedAppShell(page)
   await page.route('**/api/logs**', async (route) => {
     await route.fulfill({
@@ -49,17 +58,18 @@ test('explains when the deployment has no bounded log spool', async ({ page }) =
         deployment_type: 'unsupported',
         service: 'all',
         supported: false,
+        components: [],
         logs: [],
         count: 0,
         message:
-          'Runtime logs are unsupported for this deployment because the bounded shared log spool is not mounted.',
+          'Runtime logs are unavailable: no bounded log spool is mounted, and the Dashboard is not running in Kubernetes.',
       }),
     })
   })
 
-  await page.goto('/logs')
+  await page.goto('/observe/logs')
 
-  await expect(page.getByText('Unavailable', { exact: true })).toBeVisible()
-  await expect(page.getByText('Runtime logs unavailable')).toBeVisible()
-  await expect(page.getByText(/bounded shared log spool is not mounted/)).toBeVisible()
+  await expect(page.getByText('No log source')).toBeVisible()
+  await expect(page.getByText(/no bounded log spool is mounted/)).toBeVisible()
+  await expect(page.getByRole('switch', { name: 'Follow' })).toBeDisabled()
 })

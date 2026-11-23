@@ -43,6 +43,11 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			return fallbackResp, nil
 		}
 	}
+	if !outcome.isSuccessful {
+		// The failed call's reservation ends before its headers report the
+		// budget.
+		r.releaseFailedSpend(ctx)
+	}
 	// Once response headers are continued to Envoy, Envoy's response_header_mode: SEND
 	// sends the headers downstream to the client, committing the response.
 	// ResponseHeadersContinued must be true to prevent subsequent body-stage
@@ -64,7 +69,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 			&ext_proc.HeaderMutation{RemoveHeaders: []string{"content-length"}})
 	}
 	response = buildResponseHeadersContinueResponse(headerMutation, outcome.bodyStreamed)
-	holdStreamForResponseGuard(ctx, response)
+	holdStreamedAnswer(ctx, response)
 	return response, nil
 }
 

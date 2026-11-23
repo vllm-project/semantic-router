@@ -139,6 +139,7 @@ func (request *RequestIR) removeMessages(ids []int) {
 		removed[id] = true
 	}
 	kept := make([]*MessageIR, 0, len(request.Messages)-len(ids))
+	keptPositions := make([]bool, len(request.Messages))
 	var semantic []llmprotocol.Message
 	var raw []interface{}
 	for position, message := range request.Messages {
@@ -146,6 +147,7 @@ func (request *RequestIR) removeMessages(ids []int) {
 			continue
 		}
 		kept = append(kept, message)
+		keptPositions[position] = true
 		if request.Semantic != nil {
 			semantic = append(semantic, request.Semantic.Messages[position])
 		} else {
@@ -155,6 +157,7 @@ func (request *RequestIR) removeMessages(ids []int) {
 	request.Messages = kept
 	if request.Semantic != nil {
 		request.Semantic.Messages = semantic
+		request.Semantic.Instructions = llmprotocol.KeepInstructionPositions(request.Semantic.Instructions, keptPositions)
 		request.Semantic.Generation++
 	} else {
 		request.Raw["messages"] = raw

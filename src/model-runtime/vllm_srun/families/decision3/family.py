@@ -33,6 +33,7 @@ from __future__ import annotations
 import itertools
 import math
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any, ClassVar, TypeVar, cast
 
@@ -193,6 +194,8 @@ class Item:
     readouts: tuple[tuple[int, int], ...] | None = None
     block_images: tuple[img.ProcessedImage, ...] = ()
     at: float | None = None
+    # An image Box read from a padded photo (``img.pad_short_axis``): where the photo sits in it.
+    box_frame: tuple[float, float, float, float] | None = None
     # The request's temperature (``temperature_by_questions``); None: the package's.
     temperature: float | None = None
 
@@ -290,6 +293,14 @@ class Decision3Family(ModelFamily):
                 # few of a quantized package's answers; BF16 packages keep exact
                 # kernels.
                 approximate_kernels=quantized is not None,
+                # docs/records/cpu-zentorch-d3.md: zentorch's FP32 linear changed
+                # no decision of the FP32 CPU answers. Its SDPA changed none either
+                # but added at most 2% over the linear, so the sdpa slot stays exact
+                # until a record shows it pays. Quantized packages have no CPU record
+                # and keep exact kernels; vela3_d3 shares this policy.
+                approximate_cpu_kernels=(
+                    frozenset({"linear"}) if quantized is None else False
+                ),
             ),
             max_input_tokens=package.max_input_tokens,
             kernel_variants=CONV_VARIANT,
@@ -454,7 +465,7 @@ class Decision3Family(ModelFamily):
                 usage="state_once",
                 limits={**info.limits, "max_request_tokens": package.max_input_tokens},
             )
-        return model_class(
+        model = model_class(
             info,
             engine_model,
             backend,
@@ -466,6 +477,8 @@ class Decision3Family(ModelFamily):
             video_settings,
             video_token,
         )
+        model.box_padding = box_padding(self.options.model_options)
+        return model
 
     def golden(self, package: VerifiedPackage) -> list[dict[str, Any]]:
         requests = builtin.golden(
@@ -485,6 +498,24 @@ class Decision3Family(ModelFamily):
                 },
             )
         return requests
+
+
+def box_padding(options: Mapping[str, Any]) -> img.BoxPadding | None:
+    """The family options ``box_pad_rows`` (off when absent) and ``box_pad_min_aspect`` (default 4)."""
+    rows = options.get("box_pad_rows")
+    if rows is None:
+        return None
+    if isinstance(rows, bool) or not isinstance(rows, int) or rows < 1:
+        raise PackageError("options.box_pad_rows must be a positive integer")
+    aspect = options.get("box_pad_min_aspect", 4.0)
+    if (
+        isinstance(aspect, bool)
+        or not isinstance(aspect, (int, float))
+        or not math.isfinite(aspect)
+        or aspect < 1
+    ):
+        raise PackageError("options.box_pad_min_aspect must be a number of at least 1")
+    return img.BoxPadding(rows, float(aspect))
 
 
 def product_answer(item: Item, probabilities: list[float]) -> dict[str, Any]:
@@ -523,6 +554,8 @@ def product_answer(item: Item, probabilities: list[float]) -> dict[str, Any]:
 
 class Decision3Model(DecisionModel[Item, list[float] | None]):
     image_inputs: ClassVar[bool] = True
+    # Pads an image Box's wide, short photo (family options ``box_pad_rows``); off by default.
+    box_padding: img.BoxPadding | None = None
 
     def __init__(
         self,
@@ -540,6 +573,7 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         self.info = info
         self.engine_model = engine_model
         self.tokenizer = tokenizer
+        self.prompts = prompt.PromptEncoder(tokenizer)
         self.pad_id = pad_id
         self.readout = readout
         self.codes: list[str] = decision["codes"]
@@ -582,22 +616,35 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         return cap if limit is None else min(cap, limit)
 
     def calibration_items(self, rows: int, row_tokens: int) -> list[Item] | None:
-        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration."""
+        """Text rows of ``row_tokens`` tokens of a two-option question, for the startup calibration.
+
+        Each row opens with its own ``case N:`` marker: the rows stay uniform
+        in shape but content-distinct for any ``rows`` — the burst calibration
+        times the no-sharing case, which content dedup would otherwise
+        collapse. (Rotating a cyclic filler repeats every ``len(filler)``
+        rows: 11 distinct states among 32 calibration rows on the d3
+        tokenizer.)
+        """
         filler = self.tokenizer.encode(
             "Decide whether this request needs a careful answer. ",
             add_special_tokens=False,
         ).ids
-        ids = list(itertools.islice(itertools.cycle(filler), row_tokens))
-        return [
-            Item(
-                question_id=f"calibration{row}",
-                task_type="noul",
-                ids=ids,
-                keys=["false", "true"],
-                descriptions=[None, None],
+        base = list(itertools.islice(itertools.cycle(filler), row_tokens))
+        out = []
+        for row in range(rows):
+            marker = self.tokenizer.encode(
+                f"Case {row}: ", add_special_tokens=False
+            ).ids
+            out.append(
+                Item(
+                    question_id=f"calibration{row}",
+                    task_type="noul",
+                    ids=(marker + base)[:row_tokens],
+                    keys=["false", "true"],
+                    descriptions=[None, None],
+                )
             )
-            for row in range(rows)
-        ]
+        return out
 
     def shared_context(self, items: list[Item], token_budget: int | None) -> int | None:
         return 0
@@ -699,40 +746,32 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
         tokens = 0
         read, errors = self._read(questions)
         header = self._header(read, media)
-        rendered: list[tuple[str, str, list[str], list[Any], str]] = []
-        for question_id, kind, instructions, keys, texts, descriptions in read:
-            text = prompt.render(
-                prompt.user_prompt(state, instructions, texts, self.codes, header),
-                images,
-                videos,
+        rendered = [
+            (
+                question_id,
+                kind,
+                keys,
+                descriptions,
+                prompt.render(
+                    prompt.user_prompt(state, instructions, texts, self.codes, header),
+                    images,
+                    videos,
+                ),
             )
-            if media and (
-                text.count(prompt.IMAGE_TOKEN) != images
-                or text.count(prompt.VIDEO_TOKEN) != videos
-            ):
-                errors[question_id] = question_error(
-                    kind,
-                    QuestionError(
-                        INVALID_QUESTION,
-                        "the state or question contains a literal image or video placeholder token",
-                    ),
-                )
-                continue
-            rendered.append((question_id, kind, keys, descriptions, text))
+            for question_id, kind, instructions, keys, texts, descriptions in read
+        ]
         temperature = self.request_temperature(len(rendered))
-        # One call for all questions: the tokenizer releases the GIL for a batch, not for a single text.
-        encodings = self.tokenizer.encode_batch(
-            [entry[-1] for entry in rendered], add_special_tokens=False
-        )
+        # A prompt holds one placeholder token for each image and video, where
+        # its length counts their visual tokens.
+        room = self.question_cap()[0] - visual + images + videos
+        encodings = self.prompts.read_batch([entry[-1] for entry in rendered], room)
         for (question_id, kind, keys, descriptions, _), encoding in zip(
             rendered, encodings, strict=True
         ):
-            ids = encoding.ids
-            length = len(ids) - images - videos + visual
-            refused = self.length_error(length)
-            if refused is not None:
-                errors[question_id] = question_error(kind, refused)
+            if encoding is None:
+                errors[question_id] = question_error(kind, self.over_cap())
                 continue
+            ids = encoding.ids
             if media:
                 ids = self._expand(ids, media)
             tokens += len(ids)
@@ -769,11 +808,13 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             return self.validated, True
         return self.limit, False
 
-    def length_error(self, length: int) -> QuestionError | None:
-        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+    def over_cap(self, length: int | None = None) -> QuestionError:
+        """Why a question prompt over ``question_cap`` is refused.
+
+        ``length`` is its token count. None is a prompt that was not tokenized
+        to its end, so its count is not known and the message names none.
+        """
         limit, capped = self.question_cap()
-        if length <= limit:
-            return None
         hint = (
             f"the length this model was validated at; long context "
             f"(options.long_context) reads up to "
@@ -781,16 +822,36 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
             if capped
             else "the maximum context length"
         )
+        size = (
+            f"more than {limit} tokens"
+            if length is None
+            else f"{length} tokens, over {limit} tokens"
+        )
         return QuestionError(
             MAX_LENGTH_EXCEEDED,
-            f"the question prompt has {length} tokens, over {limit} tokens, {hint}; "
-            "nothing was truncated",
+            f"the question prompt has {size}, {hint}; nothing was truncated",
             "question_tokens",
         )
 
+    def length_error(self, length: int) -> QuestionError | None:
+        """Why a question prompt of ``length`` tokens is refused (over ``question_cap``), or None."""
+        if length <= self.question_cap()[0]:
+            return None
+        return self.over_cap(length)
+
     def _expand(self, ids: list[int], media: RequestMedia) -> list[int]:
         """Each image placeholder repeated once per input token of its image, and each video placeholder as its
-        expansion (timestamped frame pairs), images and videos in order."""
+        expansion (timestamped frame pairs), images and videos in order. Placeholders that do not match the
+        media one for one refuse the request before any is expanded."""
+        held = (
+            ids.count(self.image_token) if self.image_token is not None else 0,
+            ids.count(self.video_token) if self.video_token is not None else 0,
+        )
+        if held != (len(media.images), len(media.videos)):
+            raise ValueError(
+                f"the prompt holds {held[0]} image and {held[1]} video placeholders for "
+                f"{len(media.images)} images and {len(media.videos)} videos"
+            )
         out: list[int] = []
         images = iter(media.images)
         videos = iter(media.video_ids)
@@ -1289,6 +1350,8 @@ class Decision3Model(DecisionModel[Item, list[float] | None]):
                         "confidence": answer["confidence"],
                         "visible": float(rows[0][1] / sum(rows[0])),
                     }
+                if item.box_frame is not None:
+                    answer["box"] = composed.unpad(answer["box"], item.box_frame)
                 if item.at is not None:
                     answer["time"] = item.at
                 return answer

@@ -48,7 +48,7 @@ func TestChatUsageStreamFilterPreservesExtensionsAndArbitraryChunking(t *testing
 
 func TestChatPublicStreamFilterReplaysUndecoratedFramesByteForByte(t *testing.T) {
 	frame := []byte("data: { \"id\" : \"chunk_1\", \"choices\" : [{\"index\":0,\"delta\":{\"content\":\"hello\"}}], \"usage\" : {\"total_tokens\":3} }\n\n")
-	filter := NewChatPublicStreamFilter(1<<20, true)
+	filter := NewChatPublicStreamFilter(1<<20, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 	if output, err := filter.Push(frame[:len(frame)-1]); err != nil || len(output) != 0 {
 		t.Fatalf("partial frame escaped: output=%q err=%v", output, err)
 	}
@@ -65,15 +65,15 @@ func TestChatPublicStreamFilterReplaysUndecoratedFramesByteForByte(t *testing.T)
 }
 
 func TestChatPublicStreamFilterOmitsOnlyRepeatedContentFreeFinish(t *testing.T) {
-	filter := NewChatPublicStreamFilter(1<<20, true)
+	filter := NewChatPublicStreamFilter(1<<20, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 	first := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
 	other := []byte("data: {\"choices\":[{\"index\":1,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
 	repeated := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":\"stop\"}]}\n\n")
 	withContent := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"late\"},\"finish_reason\":\"stop\"}]}\n\n")
 	for _, frame := range [][]byte{first, other, withContent} {
 		output, err := filter.Push(frame)
-		if err != nil || !bytes.Equal(output, frame) {
-			t.Fatalf("nonduplicate finish changed: output=%q want=%q err=%v", output, frame, err)
+		if err != nil || !bytes.Equal(output, withNullUsage(frame)) {
+			t.Fatalf("nonduplicate finish changed: output=%q want=%q err=%v", output, withNullUsage(frame), err)
 		}
 	}
 	if output, err := filter.Push(repeated); err != nil || len(output) != 0 {
@@ -146,7 +146,7 @@ func TestChatPublicStreamFilterDropsProviderErrorEvent(t *testing.T) {
 		"data after the error":   {content, event, later, done},
 	} {
 		t.Run(name, func(t *testing.T) {
-			filter := NewChatPublicStreamFilter(1<<20, true)
+			filter := NewChatPublicStreamFilter(1<<20, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 			var output []byte
 			for _, read := range reads {
 				out, err := filter.Push(read)
@@ -160,7 +160,7 @@ func TestChatPublicStreamFilterDropsProviderErrorEvent(t *testing.T) {
 				t.Fatalf("finalize failed: %v", err)
 			}
 			output = append(output, out...)
-			if !bytes.Equal(output, content) {
+			if !bytes.Equal(output, withNullUsage(content)) {
 				t.Fatalf("want only the content frame, got %q", output)
 			}
 			if !filter.UpstreamFailed() {
@@ -173,7 +173,7 @@ func TestChatPublicStreamFilterDropsProviderErrorEvent(t *testing.T) {
 // After [DONE], an error event is data after the terminal and fails the
 // stream, as any other data there does.
 func TestChatPublicStreamFilterRejectsAnErrorEventAfterTerminal(t *testing.T) {
-	filter := NewChatPublicStreamFilter(1<<20, true)
+	filter := NewChatPublicStreamFilter(1<<20, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 	if output, err := filter.Push([]byte("data: [DONE]\n\n")); err != nil || len(output) != 0 {
 		t.Fatalf("terminal was not held: output=%q err=%v", output, err)
 	}
@@ -186,8 +186,8 @@ func TestChatPublicStreamFilterRejectsAnErrorEventAfterTerminal(t *testing.T) {
 
 func TestChatPublicStreamFilterTreatsNullErrorAsData(t *testing.T) {
 	frame := []byte("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"}}],\"error\":null}\n\n")
-	filter := NewChatPublicStreamFilter(1<<20, true)
-	if output, err := filter.Push(frame); err != nil || !bytes.Equal(output, frame) || filter.UpstreamFailed() {
+	filter := NewChatPublicStreamFilter(1<<20, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
+	if output, err := filter.Push(frame); err != nil || !bytes.Equal(output, withNullUsage(frame)) || filter.UpstreamFailed() {
 		t.Fatalf("null error changed the stream: output=%q err=%v failed=%v", output, err, filter.UpstreamFailed())
 	}
 	var missing *ChatUsageStreamFilter

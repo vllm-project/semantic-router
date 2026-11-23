@@ -85,8 +85,8 @@ the session keeps its own key. See
 A harness such as Claude Code sends one session ID for a run and its subagents.
 Protection reads the agent each request is for and holds each agent on its own
 model, so a subagent keeps the model chosen for its first request, under the
-same rules as a session, while its parent keeps its own. Claude Code and Codex
-CLI need no identity headers configured for this:
+same rules as a session, while its parent keeps its own. Claude Code, Codex
+CLI and OpenCode need no identity headers configured for this:
 
 ```yaml
 protection:
@@ -106,6 +106,20 @@ protection:
   after `codex exec resume`, so protection holds the root and each child on
   their own models for the whole session. `codex exec review` starts a new
   session, so its review child gets its own key either way.
+- **Claude Code side requests**, such as its session title and its
+  compactions, carry the session ID of the agent they serve. With
+  `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` Claude Code also sends
+  `x-claude-code-request-class`, and a request whose class is not `main`,
+  `subagent` or `workflow` is held under a key of its own class beside its
+  agent's. Each class keeps the model its first request got, and a side
+  request never sets or moves its agent's model or replaces its cache
+  receipt, even when the title request is the session's first call. Route
+  them with the `agent` signal's `request_classes`.
+- **OpenCode** sends its session in `x-session-id` on every request. A
+  subagent runs in a child session of its own and also sends the session that
+  spawned it in `x-parent-session-id`. Unless the request pins a session in
+  `x-vsr-session-id`, the subagent is keyed as an agent of that session under
+  its own child session id, while the main agent keeps the session key.
 
 [Session identification](../../api/session-identification#choose-the-identity-you-need)
 lists the headers read by default. `identity.headers` replaces them: naming
@@ -113,8 +127,8 @@ lists the headers read by default. `identity.headers` replaces them: naming
 does not send holds every subagent on the model its parent was given, even
 when a decision routes the subagent's request elsewhere.
 
-These headers were checked with Codex CLI 0.167.0 and 0.166.0 and Claude Code
-2.1.325, configured as the
+These headers were checked with Codex CLI 0.167.0 and 0.166.0, Claude Code
+2.1.325 and OpenCode 1.18.10, configured as the
 [protocol compatibility guide](../../installation/protocol-compatibility)
 requires.
 
@@ -224,6 +238,11 @@ underpowered:
   outcome, though its signals can change the matched decision.
 - **Not failover.** Rescue needs another eligible proposal and enough
   evidence; it is not immediate backend failover.
+- **After a fallback.** When a decision's
+  [fallback](../../installation/model-configuration#fall-back-to-another-model)
+  candidate answers in place of the failed model, the key passes to the
+  candidate, so the next request is held on the model that answered and holds
+  its cache, not sent to the failing model again.
 
 Rescue boundaries:
 
@@ -325,10 +344,12 @@ missing, the switch guard decides as before and replay records why:
 | `currency_mismatch` | The two models are priced in different currencies. |
 
 The economics do not apply to an honored release, a rescue switch or a hard
-lock. Under `scope: session` the current model is held before the switch guard
-runs, so the economics apply once the idle timeout has released it; per-agent
-keys and `scope: conversation` are priced on every switch. Long-context price
-tiers are not modeled.
+lock. Under `scope: session` the session, each subagent and each side request
+are held on their current model before the switch guard runs, as
+[Agents that delegate to subagents](#agents-that-delegate-to-subagents)
+describes, so the economics apply once the idle timeout has released the
+hold. Under `scope: conversation` every proposed switch is priced, the
+subagents' included. Long-context price tiers are not modeled.
 
 Replay records the proposed switch in `session_policy.cache_economics`, and
 each priced candidate in `session_policy.candidate_traces.<model>.cache_economics`:

@@ -11,14 +11,14 @@ judges and simulators that some benchmarks require.
 
 ## Prepare tasks
 
-Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks, an
-evaluation size, models or recipes, and limits. Benchmarks don't need to be
-downloaded first:
+In the Dashboard, open **Observe → Evaluations**, choose **New evaluation**, and
+pick benchmarks, an evaluation size, models or recipes, and limits. Benchmarks
+don't need to be downloaded first:
 
 1. **Review plan** reuses verified data, and prepares missing datasets and
    their supported data dependencies.
-2. The creation page shows progress through installation, download and
-   freezing, then presents the frozen plan.
+2. The **New evaluation** sheet shows progress through installation, download
+   and freezing, then presents the frozen plan.
 3. **Start evaluation** begins model requests, only after that review.
 
 For independent data management, **Datasets → Prepare dataset** uses the same
