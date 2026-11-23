@@ -5,7 +5,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
@@ -27,18 +29,94 @@ from recipe_lab.live import (
     verify_live,
 )
 from recipe_lab.verdict import PairedStats, evaluate_verdict
+
 from tests.fixtures import VALID_SPEC, VALID_SPLITS_SPEC
 from tests.test_contract import _write_splits_dataset
 
 # ---- A3: the contract is the only source of guard floors ----
 
+
+@pytest.mark.parametrize("command", ["verify", "live-verdict"])
+def test_tune_dev_cannot_be_final(tmp_path, capsys, command):
+    spec = str(_write_splits_dataset(tmp_path))
+    args = (
+        ["--candidate", "unused.json"]
+        if command == "verify"
+        else ["--baseline-run-id", "a", "--candidate-run-id", "b"]
+    )
+    assert main([command, "--spec", spec, "--final", "--split", "dev", *args]) == 2
+    assert "--final requires frozen_test" in capsys.readouterr().err
+
+
+def test_existing_agentic_runs_without_replays_cannot_pass():
+    spec = replace(_spec(), gates=())
+    workload = _agentic_workload()
+    spec = replace(spec, workloads=(workload,))
+    cli = Mock()
+    cli.show.return_value = _RUN_DOC
+    cli.compare.return_value = {
+        "baseline": {"capability.score": 0.8},
+        "candidate": {"capability.score": 0.9},
+    }
+    result = live_verdict_from_runs(
+        spec=spec, cli=cli, baseline_run_id="a", candidate_run_id="b", measurements=[]
+    )
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert result["agentic"]["gates"] == dict.fromkeys(
+        workload.resolved_agentic_gates(), "incomplete"
+    )
+
+
+def test_live_verdict_binds_nondefault_workload():
+    spec = replace(_spec(), gates=())
+    new_hash = "sha256:" + "b" * 64
+    first = spec.workload
+    second = replace(
+        first,
+        name="second",
+        splits={"dev": replace(first.splits["dev"], content_hash=new_hash)},
+    )
+    spec = replace(spec, workloads=(first, second))
+    cli = Mock()
+    cli.compare.return_value = {
+        "baseline": {"capability.score": 0.8},
+        "candidate": {"capability.score": 0.9},
+    }
+    cli.show.return_value = copy.deepcopy(_RUN_DOC)
+    args = dict(
+        spec=spec,
+        cli=cli,
+        workload=second,
+        baseline_run_id="a",
+        candidate_run_id="b",
+        measurements=[],
+    )
+    with pytest.raises(ContractError, match="scored dataset"):
+        live_verdict_from_runs(**args)
+    cli.show.return_value["manifest"]["dataset"]["sha256"] = new_hash
+    assert live_verdict_from_runs(**args)["verdict"] == "PASS"
+
+
 # VALID_SPEC's legacy workload hash (tests.fixtures); every FakeCli run doc
 # carries it so the M1 dataset binding passes unless a test overrides it.
 _LEGACY_HASH = "sha256:" + "0" * 64
+# Y4: the candidate run's manifest embeds the registered MoM target with its
+# frozen config_hash - live-verdict binds the candidate to that config.
+_MOM_CONFIG_HEX = "c" * 64
 _RUN_DOC = {
     "id": "run-x",
     "status": "completed",
-    "manifest": {"dataset": {"sha256": _LEGACY_HASH}},
+    "manifest": {
+        "dataset": {"sha256": _LEGACY_HASH},
+        "targets": [
+            {
+                "id": "mom-x",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+            }
+        ],
+    },
 }
 
 
@@ -197,6 +275,8 @@ def test_live_verdict_pass_flow():
     assert result["gates"] == {"pii-recall-floor": "pass"}
     assert result["undeclared_measurements"] == []
     assert result["bench_refs"] == ["run-a", "run-b"]
+    # Y4: the candidate's frozen config hash rides the result
+    assert result["config_sha256"] == "sha256:" + _MOM_CONFIG_HEX
 
 
 def test_live_verdict_baseline_floor_breach_fails():
@@ -414,12 +494,34 @@ class VerifyStub:
         self.ref_statuses = dict(ref_statuses or {})
         self.ref_reports: dict[str, dict] = {}
         self.ref_runs = 0
-        # R2: operator-registered targets, verbatim from the registry
-        self.registry = list(registry or [])
+        # R2: operator-registered targets, verbatim from the registry.
+        # Y4: the candidate MoM target must carry a frozen config_hash; a
+        # test that passes its own registry must include the mom target.
+        self.registry = (
+            list(registry)
+            if registry is not None
+            else [
+                {
+                    "id": "mom-router",
+                    "kind": "mom",
+                    "mode": "live",
+                    "config_hash": _MOM_CONFIG_HEX,
+                }
+            ]
+        )
         self.events: list[tuple] = []
         self.manifest_runs = 0
         self.compares: list[tuple] = []
         self._cand = 0
+        # AG1: scripted `benchmark setup` response (None = not expected).
+        self.setup_response: dict | None = None
+        self.submitted_manifests: list[dict] = []
+
+    def run_command(self, args):
+        self.events.append(tuple(args))
+        if self.setup_response is None:
+            raise AssertionError(f"unexpected run_command {args!r}")
+        return self.setup_response
 
     def show(self, run_id):
         self.events.append(("show", run_id))
@@ -454,6 +556,7 @@ class VerifyStub:
         # M4: a reference arm submits the frozen baseline manifest with a
         # single registry target; recognize it by its lone target alias
         raw = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
+        self.submitted_manifests.append(raw)
         submitted = raw.get("targets") if isinstance(raw, dict) else None
         if (
             isinstance(submitted, list)
@@ -509,9 +612,11 @@ def test_verify_live_pass_flow(tmp_path):
     assert result["metrics"] == {"baseline": 0.80, "candidate": 0.86}
     assert result["gates"] == {"pii-recall-floor": "pass"}
     assert result["preview"]["distribution"] == {"local/model-a": 7, "local/model-b": 5}
-    # AB/BA: preview first, then each pair runs baseline and candidate arms
-    # in alternating order (schedule: base0, cand0, cand1, base1)
+    # AB/BA: the Y4 registry check first, then preview, then each pair runs
+    # baseline and candidate arms in alternating order
+    # (schedule: base0, cand0, cand1, base1)
     assert stub.events == [
+        ("targets",),
         ("show", "run-base"),
         ("plan", "preview"),
         ("report", "run-preview"),
@@ -520,6 +625,8 @@ def test_verify_live_pass_flow(tmp_path):
         ("plan", "live"),
         ("manifest",),
     ]
+    # Y4: the frozen config hash of the registered MoM target
+    assert result["config_sha256"] == "sha256:" + _MOM_CONFIG_HEX
     assert stub.manifest_runs == 2
     assert len(stub.compares) == 2
     assert result["abba_summary"]["baseline"]["median"] == 0.80
@@ -882,6 +989,8 @@ def test_live_verdict_insight_refs_four_forms_merge_and_dedupe(
             "gates": {},
             "constraints": [],
             "bench_refs": ["run-a", "run-b"],
+            # Y4: the CLI ledger copies this into the record's candidate.
+            "config_sha256": "sha256:" + _MOM_CONFIG_HEX,
             "metrics": {"baseline": 0.5, "candidate": 0.6},
         },
     )
@@ -1121,12 +1230,24 @@ def test_live_cli_record_carries_constraint_evidence(monkeypatch, tmp_path, caps
                 }
             ],
             "bench_refs": ["run-a", "run-b"],
+            # Y4: the CLI ledger copies this into the record's candidate.
+            "config_sha256": "sha256:" + _MOM_CONFIG_HEX,
             "metrics": {"baseline": 0.5, "candidate": 0.6},
         }
 
     monkeypatch.setattr(cli, "live_verdict_from_runs", fake_verdict)
     ledger_path = tmp_path / "ledger.jsonl"
-    assert main([*_live_verdict_args(str(spec_path), str(ledger_path)), "--final"]) == 0
+    assert (
+        main(
+            [
+                *_live_verdict_args(str(spec_path), str(ledger_path)),
+                "--split",
+                "frozen_test",
+                "--final",
+            ]
+        )
+        == 0
+    )
     rows = [
         json.loads(line)
         for line in ledger_path.read_text(encoding="utf-8").splitlines()
@@ -1163,6 +1284,7 @@ def test_live_verdict_rejects_frozen_test_without_final(tmp_path, capsys):
 
 def test_live_verdict_final_cites_frozen_test(monkeypatch, tmp_path, capsys):
     from recipe_lab import cli
+    from recipe_lab.ledger import compute_record_id
 
     spec_path = str(_write_splits_dataset(tmp_path))
 
@@ -1173,10 +1295,17 @@ def test_live_verdict_final_cites_frozen_test(monkeypatch, tmp_path, capsys):
             "gates": {},
             "constraints": [],
             "bench_refs": ["run-a", "run-b"],
+            # Y4: the CLI ledger copies this into the record's candidate.
+            "config_sha256": "sha256:" + _MOM_CONFIG_HEX,
             "metrics": {"baseline": 0.5, "candidate": 0.6},
         }
 
     monkeypatch.setattr(cli, "live_verdict_from_runs", fake_verdict)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": str(tmp_path / "winner.yaml")})
+    )
     ledger_path = tmp_path / "ledger.jsonl"
     assert (
         main(
@@ -1191,6 +1320,8 @@ def test_live_verdict_final_cites_frozen_test(monkeypatch, tmp_path, capsys):
                 "--split",
                 "frozen_test",
                 "--final",
+                "--candidate",
+                str(candidate),
                 "--ledger",
                 str(ledger_path),
             ]
@@ -1205,6 +1336,9 @@ def test_live_verdict_final_cites_frozen_test(monkeypatch, tmp_path, capsys):
         if line.strip()
     ]
     assert rows[-1]["split"] == "frozen_test"
+    assert rows[-1]["candidate"]["ref"] == str(Path("~") / "winner.yaml")
+    assert rows[-1]["record_id"] == compute_record_id(rows[-1])
+    assert json.loads(candidate.read_text())["ref"] == str(tmp_path / "winner.yaml")
     expected = (
         "sha256:"
         + hashlib.sha256((tmp_path / "frozen_test.jsonl").read_bytes()).hexdigest()
@@ -1265,7 +1399,10 @@ def test_live_verdict_accepts_bare_hexdigest_dataset_hash():
             return {
                 "id": run_id,
                 "status": "completed",
-                "manifest": {"dataset": {"sha256": "0" * 64}},
+                "manifest": {
+                    "dataset": {"sha256": "0" * 64},
+                    "targets": _RUN_DOC["manifest"]["targets"],
+                },
             }
 
         def compare(self, base, cand):
@@ -1310,7 +1447,10 @@ def test_live_verdict_binds_srbench_dataset_hash_when_declared():
             return {
                 "id": run_id,
                 "status": "completed",
-                "manifest": {"dataset": {"sha256": srbench_hex}},
+                "manifest": {
+                    "dataset": {"sha256": srbench_hex},
+                    "targets": _RUN_DOC["manifest"]["targets"],
+                },
             }
 
         def compare(self, base, cand):
@@ -1573,8 +1713,9 @@ def test_merge_paired_stats_repeated_runs_do_not_dilute_min_cases():
         min_improvement_pp=2.0,
     )
     assert result.verdict == "INCONCLUSIVE"
-    assert "insufficient paired sample: 70 paired cases < min_cases 200" in (
-        result.reasons[0]
+    assert (
+        "insufficient paired sample: 70 paired cases < min_cases 200"
+        in (result.reasons[0])
     )
 
 
@@ -1888,8 +2029,12 @@ def _scored_target(target_id: str, score: float, **extra: object) -> dict:
     return entry
 
 
-def _ref_bound_spec(**objective_overrides: object) -> ExperimentSpec:
+def _ref_bound_spec(
+    *, cost_basis=None, **objective_overrides: object
+) -> ExperimentSpec:
     spec_dict = copy.deepcopy(VALID_SPEC)
+    if cost_basis:
+        spec_dict["cost_basis"] = cost_basis
     spec_dict["references"] = {"strong": "ref-strong", "weak": "ref-weak"}
     spec_dict["objective"]["constraints"] = [
         {
@@ -1940,6 +2085,46 @@ def test_live_verdict_ref_bound_resolves_against_sections():
         ("baseline", "single-a", None),
         ("candidate", "mom-x", None),
     ]
+
+
+@pytest.mark.parametrize(
+    "reference_cost, expected", [(0.1, "FAIL"), (None, "INCONCLUSIVE")]
+)
+def test_reference_cost_constraint_uses_cost_not_accuracy(reference_cost, expected):
+    spec = _ref_bound_spec(
+        cost_basis={"source": "provider_pricing"},
+        constraints=[
+            {
+                "name": "budget",
+                "metric": "total_spend_usd",
+                "op": "lte",
+                "bound": "ref:strong",
+                "factor": 0.7,
+            }
+        ],
+    )
+    cli = Mock()
+    cli.show.return_value = _RUN_DOC
+    cli.compare.return_value = _sectioned_payload(
+        baseline_targets=[
+            _scored_target("ref-strong", 0.85, total_spend_usd=reference_cost),
+            _scored_target("single-a", 0.8, total_spend_usd=0.2),
+        ],
+        candidate_targets=[
+            _scored_target("mom-x", 0.9, kind="mom", total_spend_usd=0.15)
+        ],
+    )
+    result = live_verdict_from_runs(
+        spec=spec,
+        cli=cli,
+        baseline_run_id="a",
+        candidate_run_id="b",
+        measurements=[{"name": "pii-recall-floor", "candidate": 1.0, "baseline": 1.0}],
+    )
+    assert result["verdict"] == expected
+    [constraint] = result["constraints"]
+    assert constraint["ref_metric"] == "total_spend_usd"
+    assert constraint.get("ref_value") == reference_cost
 
 
 def test_live_verdict_missing_reference_arm_is_inconclusive():
@@ -2165,7 +2350,11 @@ def test_verify_reference_arms_bind_and_cache(tmp_path):
     stub = VerifyStub(
         compare_values=_ref_compare_payload(),
         ref_statuses={"ref-strong": "completed", "ref-weak": "completed"},
-        registry=[{"id": "ref-strong"}, {"id": "ref-weak"}],
+        registry=[
+            {"id": "mom-router", "config_hash": _MOM_CONFIG_HEX},
+            {"id": "ref-strong"},
+            {"id": "ref-weak"},
+        ],
     )
     stub.ref_reports = reports
     result = verify_live(cli=stub, **kwargs)
@@ -2206,7 +2395,11 @@ def test_verify_reference_arms_bind_and_cache(tmp_path):
     stub2 = VerifyStub(
         compare_values=_ref_compare_payload(),
         ref_statuses={"ref-strong": "completed", "ref-weak": "completed"},
-        registry=[{"id": "ref-strong"}, {"id": "ref-weak"}],
+        registry=[
+            {"id": "mom-router", "config_hash": _MOM_CONFIG_HEX},
+            {"id": "ref-strong"},
+            {"id": "ref-weak"},
+        ],
     )
     stub2.ref_reports = reports
     result2 = verify_live(cli=stub2, **kwargs)
@@ -2220,7 +2413,11 @@ def test_verify_failed_reference_arm_is_inconclusive(tmp_path):
     stub = VerifyStub(
         compare_values=_ref_compare_payload(),
         ref_statuses={"ref-strong": "failed", "ref-weak": "completed"},
-        registry=[{"id": "ref-strong"}, {"id": "ref-weak"}],
+        registry=[
+            {"id": "mom-router", "config_hash": _MOM_CONFIG_HEX},
+            {"id": "ref-strong"},
+            {"id": "ref-weak"},
+        ],
     )
     stub.ref_reports = {"ref-weak": _ref_report("ref-weak", 0.70)}
     result = verify_live(
@@ -2235,8 +2432,9 @@ def test_verify_failed_reference_arm_is_inconclusive(tmp_path):
         work_dir=tmp_path,
     )
     assert result["verdict"] == "INCONCLUSIVE"
-    assert "reference arm 'strong' run run-ref-ref-strong ended 'failed'" in (
-        result["reasons"]
+    assert (
+        "reference arm 'strong' run run-ref-ref-strong ended 'failed'"
+        in (result["reasons"])
     )
     # a failed reference run carries no metric evidence at all
     assert result["references"]["strong"].get("metric") is None
@@ -2311,7 +2509,11 @@ def test_verify_manifest_injects_registry_single_arm(tmp_path):
         baseline_statuses=["completed", "completed"],
         compare_values=_ref_compare_payload(),
         ref_statuses={"ref-strong": "completed", "ref-weak": "completed"},
-        registry=[_REGISTRY_SINGLE, dict(_REGISTRY_SINGLE, id="ref-weak")],
+        registry=[
+            {"id": "mom-router", "config_hash": _MOM_CONFIG_HEX},
+            _REGISTRY_SINGLE,
+            dict(_REGISTRY_SINGLE, id="ref-weak"),
+        ],
     )
     stub.ref_reports = {
         "ref-strong": _ref_report("ref-strong", 0.85),
@@ -2365,7 +2567,10 @@ def test_verify_manifest_with_single_arm_submits_verbatim(tmp_path):
         work_dir=tmp_path,
     )
 
-    assert ("targets",) not in stub.events
+    # the Y4 registry check runs first; beyond it no registry re-fetch
+    # happens - the single arm comes from the manifest verbatim
+    assert stub.events[0] == ("targets",)
+    assert ("targets",) not in stub.events[1:]
     frozen = json.loads(
         (tmp_path / "baseline-manifest.submitted.json").read_text("utf-8")
     )
@@ -2394,7 +2599,119 @@ def test_verify_rejects_ambiguous_baseline_source(tmp_path):
     # neither source: same contract error
     with pytest.raises(ContractError, match="exactly one"):
         verify_live(baseline_run_id=None, baseline_manifest=None, **base_kwargs)
+    # the ambiguity check precedes the Y4 registry check: nothing ran
     assert stub.events == []
+
+
+def test_verify_rejects_target_without_config_hash(tmp_path):
+    # Y4: a live MoM target without a frozen config_hash cannot be bound to
+    # a config - the verdict would grade an unnamed recipe.
+    stub = VerifyStub(registry=[{"id": "mom-router", "kind": "mom"}])
+    with pytest.raises(ContractError, match="no frozen config_hash"):
+        verify_live(
+            spec=_verify_spec(),
+            cli=stub,
+            baseline_run_id="run-base",
+            targets=["mom-router"],
+            repetitions=1,
+            measurements=[],
+            work_dir=tmp_path,
+        )
+    assert stub.events == [("targets",)]
+
+
+def test_verify_rejects_unregistered_candidate_target(tmp_path):
+    stub = VerifyStub()
+    with pytest.raises(ContractError, match="not registered"):
+        verify_live(
+            spec=_verify_spec(),
+            cli=stub,
+            baseline_run_id="run-base",
+            targets=["mom-other"],
+            repetitions=1,
+            measurements=[],
+            work_dir=tmp_path,
+        )
+
+
+def test_verify_rejects_disagreeing_candidate_target_hashes(tmp_path):
+    stub = VerifyStub(
+        registry=[
+            {"id": "mom-router", "config_hash": "c" * 64},
+            {"id": "mom-router-2", "config_hash": "d" * 64},
+        ]
+    )
+    with pytest.raises(ContractError, match="disagree on config_hash"):
+        verify_live(
+            spec=_verify_spec(),
+            cli=stub,
+            baseline_run_id="run-base",
+            targets=["mom-router", "mom-router-2"],
+            repetitions=1,
+            measurements=[],
+            work_dir=tmp_path,
+        )
+
+
+def test_live_verdict_rejects_candidate_without_config_hash():
+    # Y4: a candidate run whose manifest has no MoM config hash cannot
+    # name the config it graded - the verdict is never written.
+    class FakeCli:
+        def show(self, run_id):
+            return {
+                "id": run_id,
+                "status": "completed",
+                "manifest": {
+                    "dataset": {"sha256": _LEGACY_HASH},
+                    "targets": [{"id": "mom-x", "kind": "mom"}],
+                },
+            }
+
+        def compare(self, base, cand):
+            return {
+                "baseline": {"capability.score": 0.80},
+                "candidate": {"capability.score": 0.86},
+            }
+
+    with pytest.raises(ContractError, match="config_hash"):
+        live_verdict_from_runs(
+            spec=_spec(),
+            cli=FakeCli(),
+            baseline_run_id="run-a",
+            candidate_run_id="run-b",
+            measurements=[],
+        )
+
+
+def test_live_verdict_rejects_conflicting_candidate_config_hashes():
+    class FakeCli:
+        def show(self, run_id):
+            return {
+                "id": run_id,
+                "status": "completed",
+                "manifest": {
+                    "dataset": {"sha256": _LEGACY_HASH},
+                    "targets": [
+                        {"id": "mom-x", "kind": "mom", "config_hash": "c" * 64},
+                        {"id": "mom-y", "kind": "mom", "config_hash": "d" * 64},
+                    ],
+                },
+            }
+
+        def compare(self, base, cand):
+            return {
+                "baseline": {"capability.score": 0.80},
+                "candidate": {"capability.score": 0.86},
+            }
+
+    with pytest.raises(ContractError, match="conflicting config"):
+        live_verdict_from_runs(
+            spec=_spec(),
+            cli=FakeCli(),
+            baseline_run_id="run-a",
+            candidate_run_id="run-b",
+            measurements=[],
+        )
 
 
 def test_verify_manifest_dataset_mismatch_rejected_before_submission(tmp_path):
@@ -2418,7 +2735,8 @@ def test_verify_manifest_dataset_mismatch_rejected_before_submission(tmp_path):
             work_dir=tmp_path,
         )
     assert stub.manifest_runs == 0
-    assert stub.events == []
+    # only the Y4 registry check ran; no run-dispatching call
+    assert stub.events == [("targets",)]
 
 
 def test_verify_manifest_check_binds_srbench_rendering(tmp_path):
@@ -2440,3 +2758,841 @@ def test_verify_manifest_check_binds_srbench_rendering(tmp_path):
             measurements=[],
             work_dir=tmp_path,
         )
+
+
+# ---- AG1: verify x sr-bench agentic workloads ----
+
+
+def _agentic_workload():
+    from recipe_lab.contract import Workload
+
+    return Workload(
+        profile="quick",
+        split_rule=None,
+        splits=_verify_spec().workload.splits,
+        legacy=False,
+        name="agentic",
+        kind="agentic",
+        benchmark="terminal-bench-2.1",
+        repetitions=1,
+    )
+
+
+_SETUP_READY = {
+    "version": "sr-bench-1.0",
+    "benchmarks": [{"benchmark": "terminal-bench-2.1", "installed": True}],
+}
+
+
+def test_agentic_harness_check_names_install_command():
+    from recipe_lab.live import _agentic_harness_ready
+
+    workload = _agentic_workload()
+    missing = VerifyStub()
+    missing.setup_response = {
+        "benchmarks": [{"benchmark": "terminal-bench-2.1", "installed": False}]
+    }
+    with pytest.raises(ContractError, match="--install"):
+        _agentic_harness_ready(missing, workload)
+    unknown = VerifyStub()
+    unknown.setup_response = {"benchmarks": []}
+    with pytest.raises(ContractError, match="not installed"):
+        _agentic_harness_ready(unknown, workload)
+    ready = VerifyStub()
+    ready.setup_response = _SETUP_READY
+    _agentic_harness_ready(ready, workload)
+    assert ready.events == [("setup", "--benchmark", "terminal-bench-2.1")]
+
+
+def test_verify_live_agentic_requires_session_aware_target(tmp_path):
+    stub = VerifyStub()
+    stub.setup_response = _SETUP_READY
+    with pytest.raises(ContractError, match="session-aware arms"):
+        verify_live(
+            spec=_verify_spec(),
+            cli=stub,
+            baseline_run_id="run-base",
+            targets=["mom-router"],
+            repetitions=1,
+            measurements=[],
+            work_dir=tmp_path,
+            workload=_agentic_workload(),
+        )
+    # the harness check ran before anything was spent on runs
+    assert ("setup", "--benchmark", "terminal-bench-2.1") in stub.events
+    assert not any(event[0] == "show" for event in stub.events)
+
+
+def test_verify_live_agentic_baseline_run_requires_session_mode(tmp_path):
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ]
+    )
+    stub.setup_response = _SETUP_READY
+    # the registered target is session-aware but the completed baseline run's
+    # frozen manifest is not - the AB/BA pairs would inherit it verbatim
+    stub.baseline_doc["manifest"]["targets"] = [
+        {"id": "mom-router", "kind": "mom", "config_hash": _MOM_CONFIG_HEX}
+    ]
+    with pytest.raises(ContractError, match="session-aware baseline manifest"):
+        verify_live(
+            spec=_verify_spec(),
+            cli=stub,
+            baseline_run_id="run-base",
+            targets=["mom-router"],
+            repetitions=1,
+            measurements=[],
+            work_dir=tmp_path,
+            workload=_agentic_workload(),
+        )
+
+
+def test_verify_live_agentic_pass_flow_records_continuity(tmp_path):
+    continuity = {
+        "session_mode": "session_aware",
+        "multi_request_tasks": 2,
+        "model_switches": 0,
+        "switched_tasks": 0,
+        "unswitched_tasks": 2,
+        "mean_switches_per_task": 0.0,
+        "model_switches_by_phase": {},
+    }
+    # Z5: one clean session of replay rows - the switch gates read the
+    # drift split from it (zero switches, one task) alongside the
+    # event-count gates at zero.
+    replay_rows = [
+        {
+            "routed": "local/weak",
+            "request_id": "req-1",
+            "record_ts": "10",
+            "session": {
+                "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+        }
+    ]
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [{"id": "mom-router", "continuity": continuity}],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        replay_rows=replay_rows,
+        baseline_replay_rows=replay_rows,
+    )
+    assert result["verdict"] == "PASS"
+    # AG1: the candidate arm's continuity sections ride the result verbatim
+    # AG7: the stability gates and the cost side ride beside them
+    assert result["agentic"]["workload"] == "agentic"
+    assert result["agentic"]["benchmark"] == "terminal-bench-2.1"
+    assert result["agentic"]["continuity"] == [
+        {"repetition": 0, "target_id": "mom-router", "continuity": continuity}
+    ]
+    assert result["agentic"]["gates"] == {
+        "max_mean_switches_per_task": "pass",
+        "max_selection_rejected": "pass",
+        "max_tool_loop_interrupted": "pass",
+        "max_unprotected_tool_loop_switches": "pass",
+        "max_decision_drift_switches_per_task": "pass",
+    }
+    assert result["agentic"]["switch_evidence"] == {
+        "tool_loop_switches": 0.0,
+        "decision_drift": 0.0,
+        "sessions": 1,
+        "unprotected": 0.0,
+    }
+    assert result["agentic"]["cost"]["complete"] is False
+
+
+@pytest.mark.parametrize("switch_counts", [(2, 0), (0, 2), (0, 0)])
+def test_verify_agentic_checks_every_repetition(tmp_path, monkeypatch, switch_counts):
+    target = {
+        "id": "mom-router",
+        "kind": "mom",
+        "mode": "live",
+        "config_hash": _MOM_CONFIG_HEX,
+        "session_mode": "session_aware",
+    }
+    stub = VerifyStub(registry=[target])
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [target]
+    counts = iter(switch_counts)
+
+    def compare(base, cand):
+        return {
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [
+                {
+                    **target,
+                    "continuity": {
+                        "model_switches_by_phase": {"tool_loop": next(counts)},
+                        "mean_switches_per_task": 0.0,
+                        "session_mode": "session_aware",
+                    },
+                }
+            ],
+        }
+
+    monkeypatch.setattr(stub, "compare", compare)
+
+    def replay(run):
+        return {
+            "session": {"conversation_id": run + "-task", "turn_index": 0},
+            "routed": "A",
+        }
+
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        repetitions=2,
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        replay_rows=[replay("run-cand-1"), replay("run-cand-2")],
+        baseline_replay_rows=[replay("run-base-trial-1"), replay("run-base-trial-2")],
+    )
+    assert result["verdict"] == ("FAIL" if any(switch_counts) else "PASS")
+    trials = result["agentic"]["stability_by_repetition"]
+    assert [trial["replay_evidence"]["candidate"]["rows"] for trial in trials] == [1, 1]
+    assert [
+        next(
+            g["value"]
+            for g in trial["gates_detail"]
+            if g["name"] == "max_unprotected_tool_loop_switches"
+        )
+        for trial in trials
+    ] == list(switch_counts)
+
+
+def test_verify_live_agentic_tool_loop_switch_fails_the_verdict(tmp_path):
+    continuity = {
+        "session_mode": "session_aware",
+        "multi_request_tasks": 2,
+        "model_switches": 2,
+        "switched_tasks": 1,
+        "unswitched_tasks": 1,
+        "mean_switches_per_task": 1.0,
+        "model_switches_by_phase": {"tool_loop": 2},
+    }
+    # Z5: the replay rows record no drift releases, so both continuity
+    # tool-loop switches stay in the unprotected residual
+    replay_rows = [
+        {
+            "routed": "local/weak",
+            "request_id": "req-1",
+            "record_ts": "10",
+            "session": {
+                "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+        }
+    ]
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.90),
+            "candidate_targets": [{"id": "mom-router", "continuity": continuity}],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        replay_rows=replay_rows,
+        baseline_replay_rows=replay_rows,
+    )
+    # the stability veto outranks the paired improvement (0.80 -> 0.90)
+    assert result["verdict"] == "FAIL"
+    assert result["agentic"]["gates"]["max_unprotected_tool_loop_switches"] == "fail"
+    assert any(
+        "agentic stability gate exceeded" in reason for reason in result["reasons"]
+    )
+    assert result["agentic"]["switch_evidence"] == {
+        "tool_loop_switches": 0.0,
+        "decision_drift": 0.0,
+        "sessions": 1,
+        "unprotected": 0.0,
+    }
+
+
+def test_verify_live_agentic_drift_ceiling_points_at_calibration(tmp_path):
+    # Z5: drift releases are in-design (#5567) - exceeding the per-task
+    # drift ceiling still fails the verdict, but with a clean unprotected
+    # residual the reason points at threshold calibration, not a routing
+    # regression.
+    continuity = {
+        "session_mode": "session_aware",
+        "multi_request_tasks": 2,
+        "model_switches": 2,
+        "switched_tasks": 2,
+        "unswitched_tasks": 0,
+        "mean_switches_per_task": 1.0,
+        "model_switches_by_phase": {"tool_loop": 2},
+    }
+    replay_rows = [
+        {
+            "routed": "local/weak",
+            "request_id": "req-1",
+            "record_ts": "10",
+            "session": {
+                "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+        },
+        {
+            "routed": "local/strong",
+            "request_id": "req-2",
+            "record_ts": "11",
+            "session": {
+                "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+            "session_policy": {"phase": "tool_loop", "decision_drift": True},
+        },
+        {
+            "routed": "local/weak",
+            "request_id": "req-3",
+            "record_ts": "20",
+            "session": {
+                "conversation_id": "run-cand-1-cafebabecafe0123456789cd",
+                "session_id": "run-cand-1-cafebabecafe0123456789cd",
+                "turn_index": 1,
+            },
+        },
+        {
+            "routed": "local/strong",
+            "request_id": "req-4",
+            "record_ts": "21",
+            "session": {
+                "conversation_id": "run-cand-1-cafebabecafe0123456789cd",
+                "session_id": "run-cand-1-cafebabecafe0123456789cd",
+                "turn_index": 1,
+            },
+            "session_policy": {"phase": "tool_loop", "decision_drift": True},
+        },
+    ]
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.90),
+            "candidate_targets": [{"id": "mom-router", "continuity": continuity}],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        replay_rows=replay_rows,
+        baseline_replay_rows=replay_rows,
+    )
+    assert result["verdict"] == "FAIL"
+    # both continuity switches were drift releases: the unprotected
+    # residual is clean, the per-task drift rate (2 / 2 = 1.0 > 0.2) failed
+    assert result["agentic"]["gates"]["max_unprotected_tool_loop_switches"] == "pass"
+    assert result["agentic"]["gates"]["max_decision_drift_switches_per_task"] == "fail"
+    assert any(
+        "recalibrate the drift threshold" in reason for reason in result["reasons"]
+    )
+    assert result["agentic"]["switch_evidence"] == {
+        "tool_loop_switches": 2.0,
+        "decision_drift": 2.0,
+        "sessions": 2,
+        "unprotected": 0.0,
+    }
+
+
+def test_verify_live_agentic_gates_without_replay_records_stay_incomplete(
+    tmp_path,
+):
+    continuity = {
+        "session_mode": "session_aware",
+        "multi_request_tasks": 2,
+        "model_switches": 0,
+        "mean_switches_per_task": 0.0,
+        "model_switches_by_phase": {},
+    }
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [{"id": "mom-router", "continuity": continuity}],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+    )
+    # AG7: replay-sourced gates without replay records are unevaluated -
+    # missing evidence is INCONCLUSIVE, never a pass
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert result["agentic"]["gates"]["max_selection_rejected"] == "incomplete"
+    assert result["agentic"]["gates"]["max_tool_loop_interrupted"] == "incomplete"
+    assert any(
+        "agentic stability gate evaluation incomplete" in reason
+        for reason in result["reasons"]
+    )
+
+
+def test_verify_live_agentic_fetches_arm_replays_by_session_id(tmp_path, monkeypatch):
+    # Z4: with the arms' router management endpoints, verify pulls the
+    # completed arm runs' replay records itself - the run's session
+    # identities filter the router's records, the baseline pin resolves
+    # from the baseline arm's own rows, and a rejected selection in the
+    # candidate arm vetoes the verdict (the paired improvement 0.80 ->
+    # 0.86 never masks it).
+    from recipe_lab.adapters.router_replay import session_rows_for_run
+
+    fetched: list[str] = []
+
+    def fake_fetch(url: str):
+        fetched.append(url)
+        if "8081" in url:  # candidate arm router
+            return [
+                {
+                    "request_id": "req-c1",
+                    "lifecycle_state": "failed",
+                    "terminal_reason": "selection_rejected",
+                    "response_status": 503,
+                    "timestamp": "10",
+                    "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                    "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                    "turn_index": 1,
+                },
+                {
+                    "request_id": "req-c2",
+                    "selected_model": "local/strong",
+                    "timestamp": "11",
+                    "conversation_id": "run-cand-1-deadbeefcafe0123456789ab",
+                    "session_id": "run-cand-1-deadbeefcafe0123456789ab",
+                    "turn_index": 1,
+                    "session_action": "resumed",
+                },
+                {
+                    "request_id": "req-c3",
+                    "selected_model": "local/strong",
+                    "timestamp": "20",
+                    "conversation_id": "run-cand-1-cafebabecafe0123456789cd",
+                    "turn_index": 2,
+                },
+                # other traffic on the same router must stay out of the judgment
+                {
+                    "request_id": "req-foreign",
+                    "selected_model": "local/weak",
+                    "lifecycle_state": "failed",
+                    "timestamp": "30",
+                    "conversation_id": "run-other-1-deadbeefcafe0123456789ef",
+                    "turn_index": 1,
+                },
+            ]
+        return [  # baseline arm router
+            {
+                "request_id": "req-b1",
+                "lifecycle_state": "failed",
+                "timestamp": "5",
+                "conversation_id": "run-base-trial-1-deadbeefcafe0123456789ab",
+                "session_id": "run-base-trial-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+            {
+                "request_id": "req-b2",
+                "selected_model": "local/weak",
+                "timestamp": "6",
+                "conversation_id": "run-base-trial-1-deadbeefcafe0123456789ab",
+                "turn_index": 1,
+            },
+        ]
+
+    monkeypatch.setattr("recipe_lab.live.fetch_replays", fake_fetch)
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [
+                {
+                    "id": "mom-router",
+                    "continuity": {
+                        "session_mode": "session_aware",
+                        "multi_request_tasks": 2,
+                        "model_switches": 0,
+                        "mean_switches_per_task": 0.0,
+                        "model_switches_by_phase": {},
+                    },
+                }
+            ],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        candidate_management_endpoint="http://127.0.0.1:8081",
+        baseline_management_endpoint="http://127.0.0.1:8080",
+    )
+    # one fetch per completed MoM arm run: baseline arm first, then candidate
+    assert fetched == ["http://127.0.0.1:8080", "http://127.0.0.1:8081"]
+    assert result["verdict"] == "FAIL"
+    gates = {g["name"]: g for g in result["agentic"]["gates_detail"]}
+    assert gates["max_selection_rejected"] == {
+        "name": "max_selection_rejected",
+        "value": 1.0,
+        "bound": 0.0,
+    }
+    assert gates["max_tool_loop_interrupted"] == {
+        "name": "max_tool_loop_interrupted",
+        "value": 1.0,
+        "bound": 1.0,  # the baseline pin resolved from the baseline arm's rows
+    }
+    evidence = result["agentic"]["replay_evidence"]
+    assert evidence["candidate"] == {
+        "run_id": "run-cand-1",
+        "endpoint": "http://127.0.0.1:8081",
+        "rows": 3,  # the foreign record stayed out
+    }
+    assert evidence["baseline"] == {
+        "run_id": "run-base-trial-1",
+        "endpoint": "http://127.0.0.1:8080",
+        "rows": 2,
+    }
+    # Z5: the candidate arm's switch classification rides the result too -
+    # two sessions, no routed changes, nothing drift-released
+    assert result["agentic"]["switch_evidence"] == {
+        "tool_loop_switches": 0.0,
+        "decision_drift": 0.0,
+        "sessions": 2,
+        "unprotected": 0.0,
+    }
+    assert any(
+        "agentic stability gate exceeded" in reason for reason in result["reasons"]
+    )
+    # the filter helper itself: session identity prefix only, no digest math
+    rows = session_rows_for_run(fake_fetch("http://127.0.0.1:8081"), "run-cand-1")
+    assert [row["request_id"] for row in rows] == ["req-c1", "req-c2", "req-c3"]
+    assert "session_action" not in rows[0]["session"]
+
+
+def test_verify_live_agentic_replay_fetch_failure_stays_incomplete(
+    tmp_path, monkeypatch
+):
+    # Z4: a failed fetch is a diagnostic - the replay-sourced gates stay
+    # unevaluated and the verdict stays INCONCLUSIVE, never a pass.
+    from recipe_lab.adapters.router_replay import ReplayFetchError
+
+    def broken_fetch(url: str):
+        raise ReplayFetchError(f"management api unreachable: {url}")
+
+    monkeypatch.setattr("recipe_lab.live.fetch_replays", broken_fetch)
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [
+                {
+                    "id": "mom-router",
+                    "continuity": {
+                        "session_mode": "session_aware",
+                        "multi_request_tasks": 2,
+                        "model_switches": 0,
+                        "mean_switches_per_task": 0.0,
+                        "model_switches_by_phase": {},
+                    },
+                }
+            ],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        candidate_management_endpoint="http://127.0.0.1:8081",
+        baseline_management_endpoint="http://127.0.0.1:8080",
+    )
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert result["agentic"]["gates"]["max_selection_rejected"] == "incomplete"
+    assert result["agentic"]["gates"]["max_tool_loop_interrupted"] == "incomplete"
+    evidence = result["agentic"]["replay_evidence"]
+    assert evidence["candidate"]["rows"] is None
+    assert "failed" in evidence["candidate"]["note"]
+    assert any("replay fetch from" in reason for reason in result["reasons"])
+
+
+def test_verify_live_agentic_cost_side_by_side(tmp_path):
+    comparison_entry = {
+        "baseline_total_cost_usd": 5.0,
+        "candidate_total_cost_usd": 4.0,
+        "cache_neutral_baseline_cost_usd": 5.0,
+        "cache_neutral_candidate_cost_usd": 5.5,
+        "total_cost_comparison_reason": "both arms measured",
+        "cache_neutral_cost_basis": "counterfactual",
+    }
+    stub = VerifyStub(
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+        compare_values={
+            **_compare_values(0.80, 0.86),
+            "candidate_targets": [
+                {
+                    "id": "mom-router",
+                    "continuity": {
+                        "session_mode": "session_aware",
+                        "multi_request_tasks": 1,
+                        "model_switches": 0,
+                        "mean_switches_per_task": 0.0,
+                        "model_switches_by_phase": {},
+                    },
+                }
+            ],
+            "comparisons": [comparison_entry],
+        },
+    )
+    stub.setup_response = _SETUP_READY
+    stub.baseline_doc["manifest"]["targets"] = [
+        {
+            "id": "mom-router",
+            "kind": "mom",
+            "config_hash": _MOM_CONFIG_HEX,
+            "session_mode": "session_aware",
+        }
+    ]
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+        replay_rows=[],
+        baseline_replay_rows=[],
+    )
+    cost = result["agentic"]["cost"]
+    assert cost["complete"] is True
+    assert cost["actual_cost_usd"] == {"baseline": 5.0, "candidate": 4.0}
+    assert cost["cache_neutral_cost_usd"] == {
+        "baseline": 5.0,
+        "candidate": 5.5,
+    }
+    # actual spend improved 20%, the cache-neutral counterfactual regressed
+    assert cost["saving_percent"]["total"] == pytest.approx(20.0)
+    assert cost["saving_percent"]["cache_neutral"] == pytest.approx(-10.0)
+    assert cost["notes"]["total_cost_reason"] == "both arms measured"
+
+
+def test_verify_live_agentic_baseline_manifest_injects_session_mode(tmp_path):
+    single = {
+        "id": "local-strong",
+        "kind": "single",
+        "model": "local/strong",
+        "base_url": "http://127.0.0.1:9000",
+    }
+    manifest = _mom_manifest(tmp_path, [single, dict(_MOM_TARGET)])
+    stub = VerifyStub(
+        candidate_statuses=["completed"],
+        baseline_statuses=["completed", "completed"],
+        compare_values=_compare_values(0.80, 0.86),
+        registry=[
+            {
+                "id": "mom-router",
+                "kind": "mom",
+                "mode": "live",
+                "config_hash": _MOM_CONFIG_HEX,
+                "session_mode": "session_aware",
+            }
+        ],
+    )
+    stub.setup_response = _SETUP_READY
+    result = verify_live(
+        spec=_verify_spec(),
+        cli=stub,
+        baseline_run_id=None,
+        baseline_manifest=str(manifest),
+        targets=["mom-router"],
+        repetitions=1,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+        workload=_agentic_workload(),
+    )
+    # AG1: every subject arm in the submitted baseline manifest runs
+    # session-aware, the caller's single-model arm included
+    submitted = stub.submitted_manifests[0]
+    assert all(
+        entry.get("session_mode") == "session_aware" for entry in submitted["targets"]
+    )
+    # AG7: the flat compare carries no continuity and no replay records were
+    # provided, so the stability gates are unevaluated - the verdict cannot
+    # be a PASS, but the manifest-injection behavior this test exercises
+    # still ran end to end
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert set(result["agentic"]["gates"].values()) == {"incomplete"}

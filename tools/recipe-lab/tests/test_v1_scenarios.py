@@ -1,4 +1,4 @@
-"""V1 verdict-scenario pins (doc §7 acceptance evidence), unit-level.
+﻿"""V1 verdict-scenario pins (doc §7 acceptance evidence), unit-level.
 
 No GPU, no real router binary: the fake-router machinery is imported from
 test_hot_reload. Pins the V1 criteria the existing suite does not: report/
@@ -75,6 +75,37 @@ def _seed_ledger(path) -> None:
             bench_refs=["sr-run-1", "sr-cmp-1"],
         )
     )
+
+
+def test_report_and_next_outputs_are_deterministic(tmp_path):
+    # V1 criterion 3: same inputs run twice -> byte-identical outputs. Checked
+    # against report.py/next.py: neither renderer embeds wall-clock timestamps
+    # (ts stays inside the ledger) and record ids are content hashes of the
+    # ledger rows themselves, so plain byte equality is the contract; no
+    # timestamp masking is needed.
+    ledger_path = tmp_path / "ledger.jsonl"
+    _seed_ledger(ledger_path)
+    spec_path, _cases = _write_frozen_spec(tmp_path)
+
+    def render(tag):
+        """Run report + next once against the frozen ledger; return both texts."""
+        report_out = tmp_path / f"report-{tag}.md"
+        next_out = tmp_path / f"next-{tag}.md"
+        ledger_flag = ["--ledger", str(ledger_path)]
+        assert main(["report", *ledger_flag, "--output", str(report_out)]) == 0
+        assert (
+            main(["next", "--spec", spec_path, *ledger_flag, "--output", str(next_out)])
+            == 0
+        )
+        return (
+            report_out.read_text(encoding="utf-8"),
+            next_out.read_text(encoding="utf-8"),
+        )
+
+    first = render("one")
+    assert first == render("two")
+    # sanity: the exports actually replay the ledger (records cited by id)
+    assert "rec-" in first[0] and "rec-" in first[1]
 
 
 def _fake_env(tmp_path, work_dir, state_path, reload_mode):
@@ -205,6 +236,14 @@ def test_router_death_mid_run_records_incomplete(monkeypatch, tmp_path):
                 "statuses": {"c1": 200, "c2": 200},
                 "incomplete": True,
                 "incomplete_reason": "replay pull: 1 rows for 2 cases",
+                "replay_failures": [
+                    {
+                        "case_id": "c2",
+                        "request_id": "rl-test-c2",
+                        "http_status": 503,
+                        "replay_count": 0,
+                    }
+                ],
                 "reload": "restart",
                 "timings": {},
             }
@@ -217,6 +256,7 @@ def test_router_death_mid_run_records_incomplete(monkeypatch, tmp_path):
     assert [row.get("status") for row in rows] == [None, "incomplete"]
     assert rows[0]["metrics"] == {"routed_accuracy": 0.9}
     assert rows[1]["metrics"] == {} and rows[1]["coverage_warning"] is True
+    assert rows[1]["replay_failures"][0]["request_id"] == "rl-test-c2"
     # the ranking skips the incomplete candidate entirely
     best = Ledger(ledger_a).top_replay("routed_accuracy")
     assert best is not None and "cand-2" not in best["candidate"]["ref"]
@@ -248,6 +288,7 @@ def test_same_contract_feeds_replay_then_live(monkeypatch, tmp_path, capsys):
     from recipe_lab import cli as cli_module
     from recipe_lab.contract import ContractError, ExperimentSpec
     from recipe_lab.live import live_verdict_from_runs
+
     from tests.fixtures import VALID_SPLITS_SPEC
 
     cases = tmp_path / "dev.jsonl"
@@ -345,7 +386,19 @@ def test_same_contract_feeds_replay_then_live(monkeypatch, tmp_path, capsys):
                 return {
                     "id": run_id,
                     "status": "completed",
-                    "manifest": {"dataset": {"sha256": hexdigest}},
+                    "manifest": {
+                        "dataset": {"sha256": hexdigest},
+                        # Y4: the run's MoM target carries the frozen config
+                        # the verdict binds to
+                        "targets": [
+                            {
+                                "id": "mom-x",
+                                "kind": "mom",
+                                "mode": "live",
+                                "config_hash": "a" * 64,
+                            }
+                        ],
+                    },
                 }
 
             def compare(self, base, cand):
@@ -366,6 +419,8 @@ def test_same_contract_feeds_replay_then_live(monkeypatch, tmp_path, capsys):
         ],
     )
     assert result["verdict"] == "PASS"
+    # Y4: the verdict names the config the run's MoM target froze
+    assert result["config_sha256"] == "sha256:" + "a" * 64
 
     # a run that scored the cases file itself cannot bind on this contract
     with pytest.raises(ContractError, match="scored dataset"):

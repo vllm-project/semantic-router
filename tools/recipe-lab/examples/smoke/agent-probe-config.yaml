@@ -1,0 +1,180 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 1200s
+
+global:
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: true
+        candidate_set: decision
+        strategy: routing_sampling
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        artifact: vllm-sr/d3-lite
+    system:
+      decision_model:
+        deployment: primary
+
+providers:
+  defaults:
+    model: local/private-qwen
+  models:
+    - name: local/private-qwen
+      provider_model_id: local/private-qwen
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: local/omni
+      provider_model_id: local/omni
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: cloud/frontier-reasoning
+      provider_model_id: cloud/frontier-reasoning
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+          weight: 1
+
+routing:
+  modelCards:
+    - name: local/private-qwen
+      context_window_size: 131072
+      description: Local low-cost lane for ordinary requests and simple coding.
+      capabilities:
+        - chat
+        - text
+        - tool_use
+      modality: text
+    - name: local/omni
+      context_window_size: 131072
+      description: Local multimodal lane.
+      capabilities:
+        - chat
+        - image_understanding
+        - multimodal
+      modality: omni
+    - name: cloud/frontier-reasoning
+      context_window_size: 262144
+      description: Cloud frontier lane for hard coding and deep reasoning.
+      capabilities:
+        - frontier_reasoning
+        - deep_synthesis
+        - coding
+      modality: text
+  signals:
+    decision:
+      - name: domain
+        description: The field the request belongs to.
+        question:
+          type: choice
+          instructions: Which field does this request belong to?
+          choices:
+            - key: code
+              description: 'Software: writing, debugging, refactoring or designing code and software systems'
+            - key: general
+              description: 'Anything else: general knowledge, everyday questions, writing or personal topics'
+        predicate:
+          gte: 0.4
+      - name: difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 1.0
+  decisions:
+    - name: domain_code_complex
+      description: Hard software work goes to the frontier model.
+      priority: 250
+      tier: 3
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: code
+          - type: decision
+            name: difficulty
+            predicate:
+              gte: 2.5
+      modelRefs:
+        - model: cloud/frontier-reasoning
+          use_reasoning: false
+      plugins:
+        - configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 8192
+            max_records: 1000
+            max_tool_trace_steps: 100
+          type: router_replay
+    - name: simple_general
+      description: Everything else stays on the local model.
+      priority: 80
+      tier: 6
+      modelRefs:
+        - model: local/private-qwen
+          use_reasoning: false
+      plugins:
+        - configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 8192
+            max_records: 1000
+            max_tool_trace_steps: 100
+          type: router_replay
+
+entrypoints:
+  - model_names: ["vllm-sr/auto"]
+    recipe: default

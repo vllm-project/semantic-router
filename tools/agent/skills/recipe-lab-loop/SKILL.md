@@ -55,5 +55,22 @@ Drive the closed loop with `tools/recipe-lab/recipe_lab/cli.py` (installed as
    report.md`; stop when the objective is met, the budget is exhausted, or
    evidence is repeatedly incomplete.
 
+## Agentic traffic
+
+Multi-turn sessions and tool calls follow the same loop with agentic
+evidence units. Read session evidence with `recipe-lab attribute-session`
+(lane_flap / tool_loop_interrupted / selection_failed over conversation ×
+turn), rebuild replay cases with `recipe-lab cases from-replays` (session
+granularity by default), and rank routing-only candidates with `recipe-lab
+run --tier route-replay` (RANKED or gate-violated records - the recorded
+history cannot change quality, so these records never claim a metric). For
+cold start without a recipe, `profile-agentic` + `bootstrap-agentic`
+generate one from the agent recipe template; `run-agentic` + `judge-agentic`
+drive a real coding agent and bind the official harness grade to the run.
+Read `references/command-reference.md`'s agentic sections and
+`references/red-lines.md` before proposing session-policy candidates
+(`propose-session-policy` - one variable per candidate, causes that must not
+become knobs come back as handoffs).
+
 Run `make check` after changing recipe-lab code; skill changes follow the
 `tools/agent` structure checks and public-skill sync tests.

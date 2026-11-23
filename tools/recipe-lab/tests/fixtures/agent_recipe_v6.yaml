@@ -1,0 +1,206 @@
+# V6 (Z15) bootstrap template: the agent recipe's decision shape narrowed to
+# the two-model acceptance fixture. Two models only - MODEL_A
+# (google/gemini-2.5-flash-lite, cheap, abandons complex tasks) and MODEL_B
+# (google/gemini-3.1-pro, expensive, completes everything).
+#
+# The lane split rides the template structure, not the profile: the agentic
+# profile measures models, not lanes, so bootstrap-agentic's shared
+# unmeasured-lane selection gives every ranked lane the same model (Z10).
+# The code lanes are LANE_DECISIONS-ranked (bootstrap rewrites them; at
+# lambda 0 the accuracy winner MODEL_B takes both), while simple_general_local
+# is deliberately NOT a lane decision - bootstrap preserves it verbatim, so
+# general requests stay on the cheap model. That yields the V6 cold-start
+# behavior: complex tasks route to MODEL_B, simple tasks to MODEL_A.
+#
+# backend endpoints are placeholders; the test rewrites them to the mock
+# backend's port before any router boots. The router_replay plugin rides
+# every decision so the real stack records the replay evidence.
+version: v0.3
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    timeout: "1200s"
+global:
+  router:
+    learning:
+      # the shipped recipe carries this; without it the protection below is
+      # dead configuration (the preflight sees learning disabled and never
+      # engages - the V6 route-replay caught exactly that)
+      enabled: true
+      adaptation:
+        enabled: false
+      protection:
+        enabled: false
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+  model_catalog:
+    deployments:
+      primary:
+        provider: model_runtime
+        # the AG8 real-stack decision model; the d3 family's CPU golden check
+        # is not ready to gate readiness here (see Z7)
+        artifact: vllm-sr/Vela-2.0-0.8B
+    system:
+      decision_model:
+        deployment: primary
+providers:
+  defaults:
+    model: google/gemini-2.5-flash-lite
+  models:
+    - name: google/gemini-2.5-flash-lite
+      provider_model_id: google/gemini-2.5-flash-lite
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:1
+          protocol: http
+          provider: vllm
+          weight: 1
+    - name: google/gemini-3.1-pro
+      provider_model_id: google/gemini-3.1-pro
+      api_format: openai
+      backend_refs:
+        - name: mock-backend
+          endpoint: 127.0.0.1:1
+          protocol: http
+          provider: vllm
+          weight: 1
+routing:
+  modelCards:
+    - name: google/gemini-2.5-flash-lite
+      context_window_size: 131072
+      description: cheap generalist; abandons complex tasks (the V6 weak lane)
+      capabilities:
+        - chat
+        - text
+        - tools
+      modality: text
+    - name: google/gemini-3.1-pro
+      context_window_size: 131072
+      description: strong reasoning generalist (the V6 strong lane)
+      capabilities:
+        - chat
+        - text
+        - tools
+      modality: text
+  signals:
+    decision:
+      - name: domain
+        description: Which field does this request belong to?
+        question:
+          type: choice
+          instructions: Which field does this request belong to?
+          choices:
+            - key: code
+              description: Software work
+            - key: math_science
+              description: Math and science
+            - key: general
+              description: Anything else
+        predicate:
+          gte: 0.4
+      - name: difficulty
+        description: How much reasoning a strong expert needs, from 0 (none) to 4 (research level).
+        question:
+          type: score
+          instructions: How much reasoning does a strong expert need to answer this request well?
+          levels:
+            - Answer immediately, with no thinking
+            - A little thought, one or two simple steps
+            - Multi-step reasoning or a careful check
+            - Deep expert reasoning on a hard problem
+            - Research-level work on an open or frontier problem
+        predicate:
+          gte: 1.0
+  decisions:
+    - name: simple_general_local
+      description: General requests stay on the cheap model (not a lane decision - bootstrap keeps it verbatim).
+      priority: 400
+      tier: 6
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: general
+      modelRefs:
+        - model: google/gemini-2.5-flash-lite
+          use_reasoning: false
+      plugins:
+        - type: router_replay
+          configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 8192
+            max_records: 1000
+            max_tool_trace_steps: 100
+    - name: domain_code_complex
+      description: Hard software work goes to the strongest technical model (lane-ranked).
+      priority: 255
+      tier: 3
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: code
+          - type: decision
+            name: difficulty
+            predicate:
+              gte: 2.5
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: false
+      plugins:
+        - type: router_replay
+          configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 8192
+            max_records: 1000
+            max_tool_trace_steps: 100
+    - name: domain_code
+      description: Other software work goes to the code model (lane-ranked).
+      priority: 250
+      tier: 3
+      rules:
+        operator: AND
+        on_unknown: no_match
+        conditions:
+          - type: decision
+            name: domain
+            label: code
+          - type: decision
+            name: difficulty
+          - operator: NOT
+            conditions:
+              - type: decision
+                name: difficulty
+                predicate:
+                  gte: 2.5
+      modelRefs:
+        - model: google/gemini-3.1-pro
+          use_reasoning: false
+      plugins:
+        - type: router_replay
+          configuration:
+            capture_request_body: true
+            capture_response_body: true
+            enabled: true
+            max_body_bytes: 8192
+            max_records: 1000
+            max_tool_trace_steps: 100
+entrypoints:
+  - model_names:
+      - vllm-sr/auto
+    recipe: default

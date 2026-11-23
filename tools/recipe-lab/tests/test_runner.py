@@ -203,6 +203,177 @@ def test_evaluate_candidate_trial_timeout(tmp_path):
 # ---- per-trial port allocation ----
 
 
+def test_rejected_case_records_exact_evidence_and_no_partial_score(
+    tmp_path, monkeypatch
+):
+    import io
+    import json
+    import urllib.error
+    import urllib.request
+    from recipe_lab import runner
+
+    cfg = tmp_path / "candidate.yaml"
+    cfg.write_text("routing: {}")
+    cases = [{"case_id": i, "prompt": "same", "truth": "test"} for i in ("good", "bad")]
+    code = "no_eligible_model"
+    cause = "no assigned model satisfies the effective request capabilities and budget"
+
+    def fake_post(request, timeout):
+        body = json.dumps(
+            {"error": {"code": code, "message": "no model is eligible"}}
+        ).encode()
+        raise urllib.error.HTTPError(
+            request.full_url, 503, "unavailable", {}, io.BytesIO(body)
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_post)
+
+    def probe(env, config, cases, *, request_id_prefix, http_errors, **kwargs):
+        good, bad = [request_id_prefix + c["case_id"] for c in cases]
+        status = runner._send_prompt(
+            "http://localhost", "auto", "same", 1, bad, http_errors
+        )
+        (tmp_path / "router.log").write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "event": "selection_rejected",
+                        "request_id": rid,
+                        "code": code,
+                        "error": message,
+                    }
+                )
+                for rid, message in [(bad, cause), ("another-request", "unrelated")]
+            )
+        )
+        return (
+            [
+                {
+                    "request_id": bad,
+                    "decision": "hard",
+                    "response_status": 503,
+                    "terminal_reason": "selection_rejected",
+                    "lifecycle_state": "failed",
+                },
+                {"request_id": good, "decision": "fast", "selected_model": "model-a"},
+            ],
+            {"bad": status, "good": 200},
+            {},
+        )
+
+    monkeypatch.setattr(runner, "probe_records", probe)
+    env = RunnerEnv(
+        router_bin="unused",
+        mock_backend_script="unused",
+        python_bin="unused",
+        work_dir=tmp_path,
+    )
+    result = evaluate_candidate(
+        candidate_config=cfg,
+        env=env,
+        cases=cases,
+        oracle_policy=OraclePolicy.from_dict({"test": "model-a"}),
+        bank={},
+    )
+    assert result["incomplete"] and "summary" not in result
+    [failure] = result["replay_failures"]
+    assert result["candidate_tag"] == runner.candidate_tag(cfg.read_text())
+    rid = runner.request_id_for_case(result["request_tag"], "bad")
+    assert failure["case_id"] == "bad" and failure["request_id"] == rid
+    assert failure["http_status"] == 503 and failure["http_error"]["code"] == code
+    assert failure["replays"][0]["terminal_reason"] == "selection_rejected"
+    assert failure["router_rejections"] == [
+        {"request_id": rid, "code": code, "error": cause}
+    ]
+
+
+@pytest.mark.parametrize(
+    "backend,rid,eligible",
+    [
+        ("memory", "rl-foreign-c1", False),
+        ("redis", "755aaf97-a582-408d-87ff-b897a6c4d43b", False),
+        ("memory", "755aaf97-a582-408d-87ff-b897a6c4d43b", True),
+    ],
+)
+def test_restart_prompt_fallback_only_accepts_legacy_dedicated_records(
+    tmp_path, monkeypatch, backend, rid, eligible
+):
+    from recipe_lab import runner
+
+    cfg = tmp_path / "candidate.yaml"
+    cfg.write_text(
+        f"global: {{services: {{router_replay: {{store_backend: {backend}}}}}}}"
+    )
+    case = {"case_id": "c1", "prompt": "same", "truth": "test"}
+    record = {
+        "request_id": rid,
+        "prompt": "same",
+        "decision": "test",
+        "selected_model": "a",
+    }
+    monkeypatch.setattr(
+        runner, "probe_records", lambda *a, **kw: ([record], {"c1": 200}, {})
+    )
+    result = evaluate_candidate(
+        candidate_config=cfg,
+        env=RunnerEnv(
+            router_bin="x", mock_backend_script="x", python_bin="x", work_dir=tmp_path
+        ),
+        cases=[case],
+        oracle_policy=OraclePolicy.from_dict({"test": "a"}),
+        bank={},
+    )
+    if eligible:
+        assert "summary" in result
+    else:
+        assert result["incomplete"]
+        assert result["replay_failures"][0]["replay_count"] == 0
+
+
+@pytest.mark.parametrize("backend", ["redis", None])
+def test_restart_shared_and_unknown_stores_isolate_repeated_trials(
+    tmp_path, monkeypatch, backend
+):
+    from recipe_lab import runner
+
+    cfg = tmp_path / "candidate.yaml"
+    cfg.write_text(
+        "routing: {}"
+        if backend is None
+        else "global: {services: {router_replay: {store_backend: redis}}}"
+    )
+    previous = []
+
+    def probe(*a, request_id_prefix, **kw):
+        record = {
+            "request_id": request_id_prefix + "id",
+            "prompt": "p",
+            "decision": "test",
+            "selected_model": "a",
+        }
+        if not previous:
+            previous.append(record)
+        # On retry only the previous trial's record is visible.
+        return list(previous), {"id": 200}, {}
+
+    monkeypatch.setattr(runner, "probe_records", probe)
+    args = dict(
+        candidate_config=cfg,
+        env=RunnerEnv(
+            router_bin="x", mock_backend_script="x", python_bin="x", work_dir=tmp_path
+        ),
+        cases=[{"case_id": "id", "prompt": "p", "truth": "test"}],
+        oracle_policy=OraclePolicy.from_dict({"test": "a"}),
+        bank={},
+    )
+    first = evaluate_candidate(**args)
+    stale = evaluate_candidate(**args)
+    assert "summary" in first and stale["incomplete"]
+    assert first["candidate_tag"] == stale["candidate_tag"]
+    assert first["request_tag"] != stale["request_tag"]
+    assert stale["replay_failures"][0]["replay_count"] == 0
+
+
 def test_patch_ports_assigns_per_trial_ports(tmp_path):
     """Gateway + management ports are re-assigned per trial; the original
     candidate file stays untouched."""
@@ -221,6 +392,29 @@ def test_patch_ports_assigns_per_trial_ports(tmp_path):
     assert (
         yaml.safe_load(cfg.read_text(encoding="utf-8"))["listeners"][0]["port"] == 8899
     )
+
+
+@pytest.mark.parametrize(
+    "connection", [{}, {"database": "lab", "user": "router"}, None]
+)
+def test_patch_ports_preserves_authored_postgres(tmp_path, connection):
+    replay = {"store_backend": "postgres"}
+    if connection is not None:
+        replay["postgres"] = connection
+    cfg = tmp_path / "candidate.yaml"
+    original = yaml.safe_dump(
+        {
+            "listeners": [{"port": 8899}],
+            "global": {"services": {"router_replay": replay}},
+        }
+    )
+    cfg.write_text(original, encoding="utf-8")
+    patched, _, _ = _patch_ports(cfg, tmp_path / "work")
+    actual = yaml.safe_load(patched.read_text(encoding="utf-8"))["global"]["services"][
+        "router_replay"
+    ]
+    assert actual == replay
+    assert cfg.read_text(encoding="utf-8") == original
 
 
 def test_patch_ports_rejects_config_without_listeners(tmp_path):

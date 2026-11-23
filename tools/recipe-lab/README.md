@@ -29,6 +29,7 @@ pip install -e '.[dev]'
 | `split` | deterministic group-wise calib / dev / frozen_test split (B) |
 | `collect-replays` | pull `router_replay` records from the router management API and join them against the labeled case list (`--unlabeled` emits raw diagnostic rows) |
 | `attribute` | run the E1 / decision_mismatch / E2 / E3 misroute attribution over labeled records |
+| `attribute-session` | session-aware agentic attribution: lane_flap / tool_loop_interrupted / selection_failed (sub-issue 6 P2) |
 | `bank` | build / apply the per-case, per-model answer bank |
 | `propose-thresholds` | bounded single-signal threshold perturbations over a base config |
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
@@ -37,6 +38,11 @@ pip install -e '.[dev]'
 | `cases` | case-file utilities; `to-srbench` renders the labeled case list as an sr-bench dataset, and the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
 | `verify` | drive sr-bench end to end for one candidate: Preview routing, `--repetitions` AB/BA pairs, per-pair compare and the shared three-state verdict (I) |
 | `live-verdict` | compare two already-recorded sr-bench runs -> PASS / FAIL / INCONCLUSIVE with guard floors from `spec.gates` (A3) |
+| `profile-agentic` | AG5: aggregate per-model single-target sr-bench run reports into the agentic profile (recipe-lab-agentic-profile-v1) |
+| `bootstrap-agentic` | AG5: generate an agentic candidate from the agent recipe template, the profile and the client identity contract, with per-lane evidence in a sidecar |
+| `propose-session-policy` | AG6: cause-keyed one-variable session-protection candidates from a diagnosis or route-replay summary; drift releases and rejected selections come back as handoffs, not knobs |
+| `run-agentic` | AG2: drive a real agent client (headless Claude Code) over a task file through one target, one session per task |
+| `judge-agentic` | AG2: judge a run-agentic directory with the SWE-bench official harness -> sr-bench-shaped per-task results |
 
 Worked examples with a runnable spec and records live in
 [`examples/`](examples/):

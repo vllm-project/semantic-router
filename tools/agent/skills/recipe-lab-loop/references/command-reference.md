@@ -48,6 +48,16 @@ stderr.
   (the summarize() result, read by `next`, G3) and `report.md`.
   The split manifest is re-hashed (A4); optional `--cases` verifies the
   attribution input against the split identity. `frozen_test` is refused.
+- `recipe-lab attribute-session --records R --output-dir D`
+  Session-aware agentic attribution over graded records that carry session
+  evidence (`conversation_id` / `turn_index` / `session_action` /
+  `selection_reasoning`, plus the record timeline and lifecycle fields).
+  Writes `session-report.md` and `session-events.json`; evidence classes are
+  `lane_flap` (adjacent model-bearing requests of one conversation on
+  different models), `tool_loop_interrupted` (a failed selection after a
+  lane switch inside a conversation) and `selection_failed` (a rejected
+  selection, the P1 consumption of `lifecycle_state=failed` records, which
+  are never deduped away).
 - `recipe-lab collect-replays --url http://127.0.0.1:8080 --cases C
   --output R --family d3`
   Pulls router_replay records from the management API and joins them with
@@ -91,6 +101,14 @@ stderr.
   all-rejected exits 2. `--candidates` accepts a directory, a comma-separated
   list, or a single config path — the agent's own proposal entry: pass one
   config plus `--proposer agent:<id>` so the ledger records who proposed it.
+
+- `recipe-lab cases from-replays --records R --output O [--granularity
+  session|prompt|request] [--provenance P] [--duplicate-warn-pct N]`
+  AG3: build route-replay cases from router replay records. The default
+  granularity is `session` when the records carry conversation identities,
+  else `prompt` (the J3 convention). Dedup rules and their effects are
+  written into the provenance JSON; a duplicate share above the warning
+  threshold (default 50 percent) warns toward a coarser granularity.
 
 ## Insight references (stage 2)
 
@@ -170,6 +188,31 @@ stderr.
 - `recipe-lab provenance --ledger L --output M` - recipe-lab-run-v1 manifest.
 - `recipe-lab record-draft --ledger L --output D` - promotion draft from the
   latest PASS live record (human checklist included).
+
+## Agentic tier (sub-issue 6)
+
+- `recipe-lab profile-agentic --reports R [--reports R2 ...] --output P`
+  AG5: aggregate per-model single-target sr-bench run reports into the
+  agentic profile (per-model task success / cost / turns / truncation).
+- `recipe-lab bootstrap-agentic --spec S --profile P [--template T] --client C
+  [--lambda X] [--local-model M] --out D [--validate]`
+  AG5: generate the agentic candidate from the agent recipe template, the
+  profile and the client identity contract; every lane's choice rides a
+  sidecar with its rule and evidence (unmeasured-lane default rule when the
+  profile has no lane data).
+- `recipe-lab propose-session-policy --config C [--diagnosis D]
+  [--replay-summary S] --output-dir D`
+  AG6: cause-keyed one-variable session-protection candidates (identity
+  headers, stability weight, switch margin, agent identity header); drift
+  releases and rejected selections come back as handoffs, not knobs.
+- `recipe-lab run-agentic --tasks T --target U --out D [--only ID]
+  [--retry-policy P] [--max-turns N] [--timeout-s S] [--env K=V]`
+  AG2: drive a real agent client (headless Claude Code) over a task file
+  through one target - one working directory and session per task; the
+  local proxy journals identity headers and per-request ids.
+- `recipe-lab judge-agentic --run-dir D [--judge-command C] [--dataset-name N]`
+  AG2: judge a run-agentic directory with the SWE-bench official harness ->
+  sr-bench-shaped per-task rows the paired machinery and AG7 gates consume.
 
 ## Notes
 
