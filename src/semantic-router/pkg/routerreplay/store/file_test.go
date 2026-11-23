@@ -138,8 +138,8 @@ func TestFileStorePreservesRecordJSONLines(t *testing.T) {
 	var want bytes.Buffer
 	for _, record := range records {
 		require.NoError(t, json.NewEncoder(&want).Encode(record))
-		_, err := store.Add(context.Background(), record)
-		require.NoError(t, err)
+		_, addErr := store.Add(context.Background(), record)
+		require.NoError(t, addErr)
 	}
 
 	// Compare the appended lines and the final checkpoint to the public record encoding.
