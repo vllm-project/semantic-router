@@ -77,7 +77,14 @@ const business: DecisionConfig = {
     },
     {
       type: 'router_replay',
-      configuration: { enabled: true, shadow: { model: 'qwen3-32b', sample_rate: 0.05 } },
+      configuration: {
+        enabled: true,
+        shadow: {
+          models: ['qwen3-32b'],
+          sample_rate: 0.05,
+          budget: { max_estimated_cost: 0.01 },
+        },
+      },
     },
   ],
   retention: { drop: false, ttl_turns: 4 },
