@@ -213,8 +213,8 @@ func newFailoverTestClassifier(t *testing.T, primary, spare, cpu string) *Classi
 	t.Cleanup(func() { _ = lease.Close() })
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	if _, err := lease.Card(ctx, "cpu-backup"); err != nil {
-		t.Fatalf("backup not in the runtime plan or not ready: %v", err)
+	if _, cardErr := lease.Card(ctx, "cpu-backup"); cardErr != nil {
+		t.Fatalf("backup not in the runtime plan or not ready: %v", cardErr)
 	}
 	remote, err := modelservice.NewRemoteSystemOne(cfg)
 	if err != nil {
