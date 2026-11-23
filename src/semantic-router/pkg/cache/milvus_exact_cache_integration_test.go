@@ -19,18 +19,7 @@ import (
 
 // StorageIntegration: milvus
 func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T) {
-	storagetest.Require(t, "milvus")
-	host := os.Getenv("MILVUS_HOST")
-	if host == "" {
-		host = "localhost"
-	}
-	port := 19530
-	if configured := os.Getenv("MILVUS_PORT"); configured != "" {
-		parsed, err := strconv.Atoi(configured)
-		require.NoError(t, err)
-		port = parsed
-	}
-	milvusConfig := milvusExactTestConfig(host, port)
+	milvusConfig := milvusExactIntegrationConfig(t)
 
 	cache, err := NewMilvusCache(MilvusCacheOptions{
 		EmbeddingProvider:   cacheTestEmbeddingProvider(),
@@ -62,6 +51,50 @@ func TestMilvusExactCacheIntegrationRoundTripAndPartitionIsolation(t *testing.T)
 	assert.False(t, miss.Found)
 }
 
+// StorageIntegration: milvus
+func TestMilvusCacheIntegrationRejectsMismatchedDimensions(t *testing.T) {
+	cfg := milvusExactIntegrationConfig(t)
+	cfg.Collection.VectorField.Dimension = 128
+	cache, err := NewMilvusCache(MilvusCacheOptions{Enabled: true, Config: cfg})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = cache.client.DropCollection(context.Background(), cache.collectionName)
+		_ = cache.Close()
+	})
+
+	// Reopen using the prepared model's native width, with no explicit override.
+	cfg.Collection.VectorField.Dimension = 0
+	mismatched, err := NewMilvusCache(MilvusCacheOptions{
+		Enabled:           true,
+		Config:            cfg,
+		EmbeddingProvider: cacheTestEmbeddingProvider(),
+	})
+	if mismatched != nil {
+		t.Cleanup(func() { _ = mismatched.Close() })
+	}
+	assert.Nil(t, mismatched)
+	assert.ErrorContains(t, err, "has dimension 128, expected 384")
+	collection, err := cache.client.DescribeCollection(context.Background(), cache.collectionName)
+	require.NoError(t, err, "a rejected startup must leave the existing collection intact")
+	require.NotNil(t, collection)
+}
+
+func milvusExactIntegrationConfig(t *testing.T) *config.MilvusConfig {
+	t.Helper()
+	storagetest.Require(t, "milvus")
+	host := os.Getenv("MILVUS_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+	port := 19530
+	if configured := os.Getenv("MILVUS_PORT"); configured != "" {
+		parsed, err := strconv.Atoi(configured)
+		require.NoError(t, err)
+		port = parsed
+	}
+	return milvusExactTestConfig(host, port)
+}
+
 func milvusExactTestConfig(host string, port int) *config.MilvusConfig {
 	milvusConfig := &config.MilvusConfig{}
 	milvusConfig.Connection.Host = host
@@ -85,18 +118,7 @@ func milvusExactTestConfig(host string, port int) *config.MilvusConfig {
 
 // StorageIntegration: milvus
 func TestHybridExactCacheIntegrationDelegatesToMilvus(t *testing.T) {
-	storagetest.Require(t, "milvus")
-	host := os.Getenv("MILVUS_HOST")
-	if host == "" {
-		host = "localhost"
-	}
-	port := 19530
-	if configured := os.Getenv("MILVUS_PORT"); configured != "" {
-		parsed, err := strconv.Atoi(configured)
-		require.NoError(t, err)
-		port = parsed
-	}
-	milvusConfig := milvusExactTestConfig(host, port)
+	milvusConfig := milvusExactIntegrationConfig(t)
 	cache, err := NewHybridCache(HybridCacheOptions{
 		EmbeddingProvider:       cacheTestEmbeddingProvider(),
 		Enabled:                 true,
