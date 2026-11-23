@@ -111,7 +111,7 @@ def _restart_required(
             "change; restart it with the new configuration (on Kubernetes, roll "
             "it out with `helm upgrade`)."
         )
-    runtime_config = save_pending_restart(
+    staged = save_pending_restart(
         stack, config_path, reason, expected_source=source_revision
     )
     message = "Restart required: run `vllm-sr serve` to apply."
@@ -122,7 +122,7 @@ def _restart_required(
             "status": "restart_required",
             "message": message,
             "reason": reason,
-            "saved": str(runtime_config),
+            "saved": str(staged),
             "plan": plan,
         }
     )
@@ -254,7 +254,8 @@ def config_apply(
     """Plan, compare-and-swap, persist, and hot-reload a configuration.
 
     A change the running Router can't take without a restart is saved for the
-    next `vllm-sr serve` of a local stack, as the Dashboard saves one.
+    next `vllm-sr serve` of a local stack; until then the Router serves the
+    active config.
     """
 
     client = _client(endpoint, timeout, token_env)

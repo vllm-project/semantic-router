@@ -752,7 +752,8 @@ Usage: vllm-sr config apply [OPTIONS]
 Plan, compare-and-swap, persist, and hot-reload a configuration.
 
 A change the running Router can't take without a restart is saved for the
-next `vllm-sr serve` of a local stack, as the Dashboard saves one.
+next `vllm-sr serve` of a local stack; until then the Router serves the
+active config.
 
 | Parameter | Description |
 | --- | --- |

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -12,6 +13,7 @@ import pytest
 import yaml
 from cli import local_stack_config, runtime_service_status
 from cli.commands import config_management
+from cli.commands.runtime_paths import pending_restart_path
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
 from cli.pending_activation import ORIGIN_CLI, read_pending_activation
@@ -79,6 +81,12 @@ def _set_management_port(config_path: Path, port: int) -> None:
         "port": port,
     }
     config_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+
+def _staged_document(staged: Path) -> dict:
+    """The config a refused apply staged for the next serve."""
+
+    return yaml.safe_load(json.loads(staged.read_text(encoding="utf-8"))["config"])
 
 
 class FakeClient:
@@ -213,8 +221,9 @@ def test_custom_endpoint_stages_each_pending_change_at_the_running_port(
         assert "run `vllm-sr serve`" in result.stderr
         pending = read_pending_activation(stack.runtime_config())
         assert pending is not None and pending.origin == ORIGIN_CLI
-        saved = yaml.safe_load(stack.runtime_config().read_text(encoding="utf-8"))
+        saved = _staged_document(pending_restart_path(stack.runtime_config()))
         assert saved["global"]["services"]["management_api"]["port"] == 8082
+        assert not stack.runtime_config().exists()
 
     assert len(client.sent) == 2
 
@@ -342,7 +351,7 @@ def test_apply_of_a_file_outside_the_stack_says_how_to_serve_it(
     assert "--replace-active-config" in result.output
 
 
-# #4699: a change the Router can't take is saved like the Dashboard saves one.
+# #4699: a change the Router can't take is saved for the next serve.
 def test_restart_required_is_saved_for_the_next_serve(monkeypatch, stack, tmp_path):
     def refuse():
         raise RouterManagementError(
@@ -444,6 +453,7 @@ def test_restart_required_rejects_a_source_change(
     assert runtime.read_bytes() == previous_config
     assert read_pending_activation(runtime) is None
     assert not runtime.with_suffix(".provenance.json").exists()
+    assert not pending_restart_path(runtime).exists()
 
 
 def test_a_timed_out_apply_says_the_change_may_still_activate(
@@ -475,22 +485,40 @@ def test_apply_waits_for_model_warmup_by_default():
 
 
 def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):
-    runtime_config = save_pending_restart(
-        stack, tmp_path / "config.yaml", "listeners changed"
-    )
+    active = stack.runtime_config()
+    served = SOURCE.replace(f"port: {MOVED_PORT}", "port: 8899").encode()
+    active.write_bytes(served)
 
-    assert runtime_config == stack.runtime_config()
-    active = yaml.safe_load(runtime_config.read_text(encoding="utf-8"))
-    assert active["listeners"][0]["port"] == MOVED_PORT
-    assert active["global"]["services"]["management_api"]["bind_address"] == "0.0.0.0"
-    pending = read_pending_activation(runtime_config)
+    staged = save_pending_restart(stack, tmp_path / "config.yaml", "listeners changed")
+
+    # #7222: the Router reloads its runtime config whenever it changes, so the
+    # change waits beside it and the Router keeps serving what it served.
+    assert staged == active.with_name("runtime-config.pending-restart.json")
+    assert active.read_bytes() == served
+    assert not active.with_suffix(".provenance.json").exists()
+    config = json.loads(staged.read_text(encoding="utf-8"))["config"]
+    document = yaml.safe_load(config)
+    assert document["listeners"][0]["port"] == MOVED_PORT
+    assert document["global"]["services"]["management_api"]["bind_address"] == "0.0.0.0"
+    assert staged.stat().st_mode & 0o777 == 0o600
+    pending = read_pending_activation(active)
     assert pending is not None and pending.reason == "restart"
     assert pending.origin == ORIGIN_CLI
     assert pending.saved_by() == "with `vllm-sr config apply`"
     assert pending.detail == "listeners changed"
-    # serve of the same file finds the document it would write, so it applies it.
-    receipt = runtime_config.with_suffix(".provenance.json")
-    assert receipt.is_file()
+    assert pending.config_sha256 == hashlib.sha256(config.encode()).hexdigest()
+
+
+def test_a_recipe_package_stack_does_not_save_a_restart(monkeypatch, stack, tmp_path):
+    monkeypatch.setattr(
+        local_stack_config, "active_recipe_package_for_stack", lambda **_: True
+    )
+
+    # serve runs the package's config, so a saved change would never apply.
+    with pytest.raises(ValueError, match="Recipe package"):
+        save_pending_restart(stack, tmp_path / "config.yaml", "listeners changed")
+    assert not pending_restart_path(stack.runtime_config()).exists()
+    assert read_pending_activation(stack.runtime_config()) is None
 
 
 @pytest.mark.parametrize("running_port", [8080, 9095])
@@ -498,6 +526,7 @@ def test_status_keeps_the_bound_port_after_a_restart_required_save(
     monkeypatch, stack, tmp_path, running_port
 ):
     source = tmp_path / "config.yaml"
+    stack.runtime_config().write_text(SOURCE, encoding="utf-8")
     candidate = yaml.safe_load(source.read_text(encoding="utf-8"))
     candidate["global"] = {
         "services": {"management_api": {"bind_address": "0.0.0.0", "port": 9096}}
@@ -520,10 +549,10 @@ def test_status_keeps_the_bound_port_after_a_restart_required_save(
         )
 
     monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
-    runtime_config = save_pending_restart(stack, source, "listeners changed")
-    saved = yaml.safe_load(runtime_config.read_text(encoding="utf-8"))
+    staged = save_pending_restart(stack, source, "listeners changed")
+    saved = _staged_document(staged)
     assert saved["global"]["services"]["management_api"]["port"] == 9096
-    pending = read_pending_activation(runtime_config)
+    pending = read_pending_activation(stack.runtime_config())
     assert pending is not None and pending.reason == "restart"
 
     assert runtime_service_status._check_router_status(

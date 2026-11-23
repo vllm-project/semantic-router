@@ -75,9 +75,12 @@ doesn't cancel the change: `vllm-sr config versions` shows whether it
 activated.
 
 A change that needs a restart, such as a listener's new port, is saved instead,
-as the Dashboard saves one: `config apply` answers "Restart required: run
+beside the active document: `config apply` answers "Restart required: run
 `vllm-sr serve` to apply.", `vllm-sr status` reports the saved change, and the
-next `vllm-sr serve` applies it.
+next `vllm-sr serve` applies it. Until then the Router keeps serving the active
+document, and `vllm-sr config get` shows it. That serve replaces the active
+document, edits made to it in the meantime included. If you edit `config.yaml`
+again first, it serves the edited file instead.
 
 To serve `config.yaml` instead of the active document, Dashboard edits
 included, restart with:

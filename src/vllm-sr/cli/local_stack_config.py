@@ -8,9 +8,9 @@ paths -- and the algorithm override the stack was started with.
 they talk to a local stack, so the Router keeps every connection `serve` made,
 and a later `serve` of the same file finds the document it would have written.
 
-A change the running Router can't take (it answers `RESTART_REQUIRED`) is
-saved the way the Dashboard saves one: the stack's runtime config holds it and
-a pending activation says that the next `vllm-sr serve` applies it.
+A change the running Router can't take (it answers `RESTART_REQUIRED`) waits
+beside the stack's runtime config, which the Router keeps serving, and a
+pending activation says that the next `vllm-sr serve` applies it.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from pathlib import Path
 from cli.bootstrap import is_setup_mode_config
 from cli.commands.runtime_paths import (
     _runtime_config_filename,
-    materialize_runtime_config,
     read_config_source,
     resolve_state_root_dir,
+    stage_pending_restart,
 )
 from cli.commands.runtime_support import (
     RUNTIME_ALGORITHM_OVERRIDE_ENV,
@@ -42,6 +42,7 @@ from cli.pending_activation import (
     REASON_RESTART,
     record_pending_activation,
 )
+from cli.recipe_activation_recovery import active_recipe_package_for_stack
 from cli.runtime_config_lock import acquire_runtime_config_lock
 from cli.runtime_service_status import _router_management_port
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
@@ -141,9 +142,9 @@ def save_pending_restart(
 ) -> Path:
     """Save a change that needs a restart for the next `vllm-sr serve`.
 
-    The runtime config holds the document `serve` would materialize from
-    config_path, with the receipt `serve` writes, so `serve` of the same file
-    applies it as its own.
+    The document `serve` would materialize from config_path is staged beside
+    the runtime config, which stays as the Router serves it. Returns the path
+    of the staged file, a JSON envelope around the document.
     """
 
     state_root = Path(resolve_state_root_dir(str(config_path)))
@@ -157,17 +158,25 @@ def save_pending_restart(
     try:
         if expected_source is not None:
             read_config_source(config_path, expected_source)
+        if active_recipe_package_for_stack(
+            state_root_dir=state_root, stack_name=stack.layout.stack_name
+        ):
+            # `serve` runs the package's config, not this file.
+            raise ValueError(
+                "Restart required, but an active Recipe package owns this "
+                "stack's config, so `vllm-sr serve` would not apply this file. "
+                "Change or deactivate that package through the Recipe workflow."
+            )
         document = build_effective_config_bytes(
             config_path,
             stack.algorithm,
             is_setup_mode_config(config_path),
         )
-        materialize_runtime_config(
+        staged = stage_pending_restart(
             config_path,
             document,
             state_root_dir=state_root,
             stack_name=stack.layout.stack_name,
-            replace_active=True,
             expected_source=expected_source,
         )
         record_pending_activation(
@@ -175,7 +184,7 @@ def save_pending_restart(
         )
     finally:
         lock.close()
-    return runtime_config
+    return staged
 
 
 def _container_env(container_name: str) -> dict[str, str]:

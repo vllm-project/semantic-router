@@ -10,7 +10,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli import container_images, router_validation, runtime_lifecycle
+from cli import (
+    container_images,
+    pending_activation,
+    router_validation,
+    runtime_lifecycle,
+)
 from cli.commands import runtime_paths, runtime_serve_config
 from cli.parser import ConfigParseError
 from cli.runtime_stack import resolve_runtime_stack
@@ -28,16 +33,32 @@ def prepare_replacement(tmp_path, monkeypatch):
     candidate = yaml.safe_dump(changed).encode()
     source.write_bytes(candidate)
     monkeypatch.setattr(
-        runtime_serve_config, "build_effective_config_bytes", lambda *args: candidate
+        runtime_serve_config,
+        "build_effective_config_bytes",
+        lambda *args: source.read_bytes(),
     )
     return source, active, old, candidate
 
 
-@pytest.mark.parametrize("replace_active", [False, True])
+# #7222: a change `config apply` staged waits outside the watched file until
+# serve stops the Router, then serve makes exactly that document active, even
+# over an API apply in between.
+@pytest.mark.parametrize("stack_name", ["", "team-a"])
+@pytest.mark.parametrize(
+    ("replace_active", "staged"),
+    [(False, None), (True, None), (False, "staged"), (False, "after an API apply")],
+)
 def test_serve_stops_old_runtime_before_watched_config_changes(
-    tmp_path, monkeypatch, replace_active
+    tmp_path, monkeypatch, replace_active, staged, stack_name
 ):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", stack_name)
     source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    if staged:
+        stage_restart(source, candidate)
+        assert active.read_bytes() == old
+    if staged == "after an API apply":
+        active.write_bytes(old + b"# applied through the management API\n")
+    before = active.read_bytes()
     stack = resolve_runtime_stack()
     running = set(stack.runtime_container_names)
     events = []
@@ -48,7 +69,7 @@ def test_serve_stops_old_runtime_before_watched_config_changes(
     )
 
     def stop(name):
-        assert active.read_bytes() == old
+        assert active.read_bytes() == before
         events.append(("stop", name))
         running.remove(name)
         return True
@@ -69,14 +90,12 @@ def test_serve_stops_old_runtime_before_watched_config_changes(
         return real_replace(source_path, target)
 
     monkeypatch.setattr(runtime_paths.os, "replace", replace)
-    _path, _setup, lock = runtime_serve_config._prepare_docker_runtime_config(
-        source, None, False, None, (), replace_active
-    )
-    lock.close()
+    serve(source, replace_active)
     assert active.read_bytes() == candidate
     assert events == [("stop", name) for name in stack.runtime_container_names] + [
         ("publish", active)
     ]
+    assert not runtime_paths.pending_restart_path(active).exists()
 
 
 @pytest.mark.parametrize("failure", ["stop", "still_running", "inspect"])
@@ -205,6 +224,159 @@ def test_preserved_document_does_not_stop_during_preparation(
     lock.close()
     assert active.read_bytes() == expected
     assert stopped == []
+
+
+def stage_restart(source, document):
+    """What `config apply` leaves when the Router answers RESTART_REQUIRED."""
+
+    staged = runtime_paths.stage_pending_restart(source, document)
+    active = runtime_paths._runtime_config_output_path(source)
+    pending_activation.record_pending_activation(active, document, "restart")
+    return staged
+
+
+def record_replacements(monkeypatch):
+    """The documents serve checks, and stops the runtime for, before publishing."""
+
+    checked = []
+    monkeypatch.setattr(
+        runtime_serve_config,
+        "_prepare_runtime_config_replacement",
+        lambda data, *args, **kwargs: checked.append(data),
+    )
+    return checked
+
+
+def serve(source, replace_active=False):
+    _path, _setup, lock = runtime_serve_config._prepare_docker_runtime_config(
+        source, None, False, None, (), replace_active
+    )
+    lock.close()
+
+
+# A staged file no restart waits for, or of another shape, is dropped before
+# it can promote a document or write a receipt, so the edited source serves.
+@pytest.mark.parametrize(
+    "case",
+    [
+        "no record",
+        "dashboard record",
+        "record for another config",
+        "replace active",
+        "torn",
+        "extra key",
+        "config not text",
+        "bad digest",
+        "symlink",
+    ],
+)
+def test_serve_drops_a_staged_change_it_cannot_trust(tmp_path, monkeypatch, case):
+    source, active, _old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    newer = candidate.replace(b"8899", b"8877")
+    source.write_bytes(newer)
+    checked = record_replacements(monkeypatch)
+    staged = runtime_paths.pending_restart_path(active)
+    stage = {
+        "source_digest": runtime_paths._digest_bytes(newer),
+        "config": candidate.decode(),
+    }
+    if case == "extra key":
+        stage["origin"] = "cli"
+    elif case == "config not text":
+        stage["config"] = 5
+    elif case == "bad digest":
+        stage["source_digest"] = "sha256:not-a-digest"
+    text = '{"schema_version": ' if case == "torn" else json.dumps(stage)
+    if case == "symlink":
+        (tmp_path / "elsewhere.json").write_text(text, encoding="utf-8")
+        staged.symlink_to(tmp_path / "elsewhere.json")
+    else:
+        staged.write_text(text, encoding="utf-8")
+    if case != "no record":
+        pending_activation.record_pending_activation(
+            active,
+            _old if case == "record for another config" else candidate,
+            "restart",
+            origin="dashboard" if case == "dashboard record" else "cli",
+        )
+
+    serve(source, replace_active=case == "replace active")
+
+    assert active.read_bytes() == newer
+    assert checked == [newer]
+    assert not staged.exists() and not staged.is_symlink()
+
+
+# An edit to the source after the apply supersedes the staged change: serve
+# checks and publishes only the source, even after an API apply in between.
+@pytest.mark.parametrize("applied_in_between", [False, True])
+def test_a_source_edit_after_the_apply_supersedes_the_staged_change(
+    tmp_path, monkeypatch, applied_in_between
+):
+    source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    staged = stage_restart(source, candidate)
+    if applied_in_between:
+        active.write_bytes(old + b"# applied through the management API\n")
+    newer = candidate.replace(b"8899", b"8877")
+    source.write_bytes(newer)
+    checked = record_replacements(monkeypatch)
+
+    serve(source)
+
+    assert active.read_bytes() == newer
+    assert checked == [newer]
+    assert not staged.exists()
+
+
+def test_a_staged_change_serve_refuses_leaves_a_way_out(tmp_path, monkeypatch):
+    source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    staged = stage_restart(source, candidate)
+
+    def refuse_the_staged_change(data, *args, **kwargs):
+        if data == candidate:
+            raise ValueError("Invalid runtime config: refused")
+
+    monkeypatch.setattr(
+        runtime_serve_config,
+        "_prepare_runtime_config_replacement",
+        refuse_the_staged_change,
+    )
+    with pytest.raises(ValueError, match="refused"):
+        serve(source)
+    assert active.read_bytes() == old
+    assert staged.exists()
+
+    newer = candidate.replace(b"8899", b"8877")
+    source.write_bytes(newer)
+    serve(source)
+
+    assert active.read_bytes() == newer
+    assert not staged.exists()
+
+
+def test_an_interrupted_promotion_promotes_again(tmp_path, monkeypatch):
+    source, active, _old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    staged = stage_restart(source, candidate)
+    record_replacements(monkeypatch)
+    write = runtime_paths._atomic_write_private_bytes
+
+    def fail_before_the_document(path, data):
+        if path == active:
+            raise OSError("No space left on device")
+        write(path, data)
+
+    monkeypatch.setattr(
+        runtime_paths, "_atomic_write_private_bytes", fail_before_the_document
+    )
+    with pytest.raises(OSError):
+        serve(source)
+    assert staged.exists()
+    monkeypatch.setattr(runtime_paths, "_atomic_write_private_bytes", write)
+
+    serve(source)
+
+    assert active.read_bytes() == candidate
+    assert not staged.exists()
 
 
 def test_restart_does_not_remove_container_after_failed_stop(monkeypatch):

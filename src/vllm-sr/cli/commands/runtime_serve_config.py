@@ -30,6 +30,8 @@ from cli.commands.runtime_paths import (
     _runtime_config_output_path,
     _same_document,
     materialize_runtime_config,
+    pending_restart_path,
+    promote_pending_restart,
     recover_pending_runtime_config_projection,
     resolve_state_root_dir,
     write_journaled_runtime_config_projection,
@@ -50,6 +52,7 @@ from cli.decision_model import (
 )
 from cli.gateway_mode import GATEWAY_ENV, resolve_gateway
 from cli.parser import parse_user_config
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
     active_recipe_package_for_stack,
@@ -174,6 +177,17 @@ def _prepare_docker_runtime_config(
         state_root_dir=state_root_dir,
         stack_name=stack_layout.stack_name,
     )
+
+    def prepare_replacement(data: bytes) -> None:
+        _prepare_runtime_config_replacement(
+            data,
+            stack_layout,
+            minimal=minimal,
+            readonly=readonly,
+            served_image=served_image,
+            models_dir=state_root_dir / "models",
+        )
+
     runtime_lock = acquire_runtime_config_lock(
         runtime_config_path=effective_config_path,
         state_root_dir=state_root_dir,
@@ -221,6 +235,20 @@ def _prepare_docker_runtime_config(
             )
         else:
             recover_runtime_tracing_projection(effective_config_path)
+            superseded = False
+            if not replace_active_config:
+                pending = read_pending_activation(effective_config_path)
+                superseded = promote_pending_restart(
+                    config_path,
+                    (
+                        pending.config_sha256
+                        if pending is not None and pending.origin == ORIGIN_CLI
+                        else None
+                    ),
+                    state_root_dir=state_root_dir,
+                    stack_name=stack_layout.stack_name,
+                    before_replace=prepare_replacement,
+                )
             effective_config_bytes = build_effective_config_bytes(
                 config_path, algorithm, source_setup_mode
             )
@@ -229,17 +257,12 @@ def _prepare_docker_runtime_config(
                 effective_config_bytes,
                 state_root_dir=state_root_dir,
                 stack_name=stack_layout.stack_name,
-                replace_active=replace_active_config,
+                replace_active=replace_active_config or superseded,
                 preserve_unchanged_source=algorithm is None,
-                before_replace=lambda: _prepare_runtime_config_replacement(
-                    effective_config_bytes,
-                    stack_layout,
-                    minimal=minimal,
-                    readonly=readonly,
-                    served_image=served_image,
-                    models_dir=state_root_dir / "models",
-                ),
+                before_replace=lambda: prepare_replacement(effective_config_bytes),
             )
+            # Whatever `config apply` saved for this restart is now spent.
+            pending_restart_path(effective_config_path).unlink(missing_ok=True)
             active_bytes = effective_config_path.read_bytes()
             source_candidate_selected = active_bytes == effective_config_bytes or (
                 _same_document(active_bytes, effective_config_bytes)
@@ -253,14 +276,7 @@ def _prepare_docker_runtime_config(
             model_options=model_options,
         ):
             candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
-            _prepare_runtime_config_replacement(
-                candidate_bytes,
-                stack_layout,
-                minimal=minimal,
-                readonly=readonly,
-                served_image=served_image,
-                models_dir=state_root_dir / "models",
-            )
+            prepare_replacement(candidate_bytes)
             write_journaled_runtime_config_projection(
                 effective_config_path, candidate_bytes
             )
@@ -277,14 +293,7 @@ def _prepare_docker_runtime_config(
                 stack_layout,
                 enable_observability=observability,
                 reset_projection=source_candidate_selected,
-                before_replace=lambda data: _prepare_runtime_config_replacement(
-                    data,
-                    stack_layout,
-                    minimal=minimal,
-                    readonly=readonly,
-                    served_image=served_image,
-                    models_dir=state_root_dir / "models",
-                ),
+                before_replace=prepare_replacement,
             )
         return effective_config_path, setup_mode, runtime_lock
     except Exception:
