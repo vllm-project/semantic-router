@@ -34,6 +34,11 @@ import (
 // option out. unknown-model-error asks for the model "no-such-model" (HTTP
 // 404), and malformed-request-error sends "messages":"hi" (HTTP 400).
 //
+// Ollama parses a tool call out of each model's own output format, so the two
+// chat-llama3.2-tool-call captures hold a second model family to the same
+// checks. They repeat the tool-call request with "model":"llama3.2:1b" on the
+// same server. That model sends no reasoning.
+//
 // Ollama names reasoning "reasoning", sends "content":"" beside every
 // reasoning delta and beside tool calls, numbers buffered tool calls with
 // "index", and adds a "timings" object to the usage chunk that ends a stream.
@@ -49,6 +54,8 @@ var ollamaCaptureBytes = map[string]int{
 	"chat-reasoning-stream.sse":             23051,
 	"chat-tool-call-out.json":               889,
 	"chat-tool-call-stream.sse":             21276,
+	"chat-llama3.2-tool-call-out.json":      474,
+	"chat-llama3.2-tool-call-stream.sse":    1075,
 	"chat-stop-string-out.json":             407,
 	"chat-stop-string-stream.sse":           4269,
 	"chat-length-out.json":                  339,
@@ -60,6 +67,7 @@ var ollamaCaptureBytes = map[string]int{
 
 const (
 	ollamaServedModel  = "qwen3:0.6b"
+	ollamaSecondModel  = "llama3.2:1b"
 	ollamaSeaSentence  = "The sea is a vast, ever-changing body of water that shapes the world around us"
 	ollamaToolCallArgs = `{"city":"Paris"}`
 	ollamaTimingsField = "stream.timings"
@@ -102,8 +110,18 @@ func ollamaInOrder(out string, wants []string) string {
 	return ""
 }
 
+// ollamaReplyModel is the model a reply reports: the served one, unless the
+// capture came from another.
+func ollamaReplyModel(other string) string {
+	if other != "" {
+		return other
+	}
+	return ollamaServedModel
+}
+
 var ollamaReplies = []struct {
 	name        string
+	model       string
 	stop        llmprotocol.StopReason
 	kinds       string
 	text        string
@@ -113,6 +131,11 @@ var ollamaReplies = []struct {
 	{name: "chat-reasoning-out.json", stop: llmprotocol.StopEndTurn, kinds: "reasoning,text", text: "5"},
 	{
 		name: "chat-tool-call-out.json", stop: llmprotocol.StopToolCall, kinds: "reasoning,tool_call",
+		diagnostics: []string{"choices.message.tool_calls.index"},
+	},
+	{
+		name: "chat-llama3.2-tool-call-out.json", model: ollamaSecondModel,
+		stop: llmprotocol.StopToolCall, kinds: "tool_call",
 		diagnostics: []string{"choices.message.tool_calls.index"},
 	},
 	{name: "chat-stop-string-out.json", stop: llmprotocol.StopEndTurn, kinds: "text", text: ollamaSeaSentence},
@@ -135,7 +158,7 @@ func TestOllamaRepliesDecode(t *testing.T) {
 				if got := ollamaDiagnosticFields(diagnostics); !reflect.DeepEqual(got, reply.diagnostics) {
 					t.Fatalf("diagnostics = %+v, want only %v", diagnostics, reply.diagnostics)
 				}
-				if response.Model != ollamaServedModel || response.StopReason != reply.stop {
+				if response.Model != ollamaReplyModel(reply.model) || response.StopReason != reply.stop {
 					t.Fatalf("model = %q, stop reason = %q, want %q", response.Model, response.StopReason, reply.stop)
 				}
 				if response.Usage.State != llmprotocol.UsageAvailable || response.Usage.InputCacheRead.Value == nil {
@@ -197,6 +220,12 @@ var ollamaStreams = []struct {
 		chat:      []string{`"reasoning_content":"Okay"`, `"name":"get_weather"`, `"finish_reason":"tool_calls"`},
 		responses: []string{`"type":"response.reasoning_text.delta"`, `"name":"get_weather"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
 		messages:  []string{`"type":"thinking_delta","thinking":"Okay"`, `"name":"get_weather","type":"tool_use"`, `"partial_json":"{\"city\":\"Paris\"}"`, `"stop_reason":"tool_use"`},
+	},
+	{
+		name: "chat-llama3.2-tool-call-stream.sse", timings: true, blocks: 1,
+		chat:      []string{`"name":"get_weather"`, `"finish_reason":"tool_calls"`},
+		responses: []string{`"name":"get_weather"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
+		messages:  []string{`"name":"get_weather","type":"tool_use"`, `"partial_json":"{\"city\":\"Paris\"}"`, `"stop_reason":"tool_use"`},
 	},
 	{
 		name: "chat-stop-string-stream.sse", timings: true, blocks: 1,
