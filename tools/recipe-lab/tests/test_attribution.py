@@ -23,7 +23,6 @@ from recipe_lab.attribution import (
     write_jsonl,
 )
 from recipe_lab.contract import ContractError, OraclePolicy
-
 from tests.fixtures import (
     ATTRIBUTION_CASES,
     POLICY,

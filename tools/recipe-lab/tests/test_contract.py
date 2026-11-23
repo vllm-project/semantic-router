@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import json
 
 import pytest
 import yaml
@@ -15,7 +14,6 @@ from recipe_lab.contract import (
     dataset_content_hash,
     matches_condition,
 )
-
 from tests.fixtures import POLICY, RULES_POLICY, VALID_SPEC, VALID_SPLITS_SPEC
 
 

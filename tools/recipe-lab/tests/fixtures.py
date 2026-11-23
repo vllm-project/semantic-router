@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from recipe_lab.contract import OraclePolicy
 
 POLICY = OraclePolicy.from_dict(
@@ -161,8 +163,6 @@ def pilot_rows() -> list[dict]:
 
 
 def pilot_rows_jsonl() -> str:
-    import json
-
     return "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in pilot_rows())
 
 

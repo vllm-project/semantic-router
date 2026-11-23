@@ -44,6 +44,7 @@ ignore = [
 ]
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/recipe-lab/tests/*.py" = ["PLR2004"]
 "tools/calibration/systemone_auto/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 # vSR's thresholds and probe scores are the calibrated values themselves; they read

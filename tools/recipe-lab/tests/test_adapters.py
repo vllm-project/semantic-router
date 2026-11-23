@@ -7,6 +7,7 @@ import urllib.error
 from unittest import mock
 
 import pytest
+from recipe_lab import cli
 from recipe_lab.adapters.router_replay import (
     fetch_replays,
     load_cases,
@@ -227,8 +228,6 @@ def test_load_cases_rejects_missing_truth(tmp_path):
 
 def test_collect_replays_unlabeled_cli(tmp_path, monkeypatch):
     # --unlabeled skips the join and writes one raw row per record
-    from recipe_lab import cli
-
     out = tmp_path / "rows.jsonl"
     monkeypatch.setattr(
         cli, "fetch_replays", lambda *a, **k: [evidence_record("r1", "p1", "d", "m")]
@@ -251,8 +250,6 @@ def test_collect_replays_unlabeled_cli(tmp_path, monkeypatch):
 
 
 def test_collect_replays_flag_rules():
-    from recipe_lab import cli
-
     with pytest.raises(SystemExit, match="mutually exclusive"):
         cli.main(
             [
