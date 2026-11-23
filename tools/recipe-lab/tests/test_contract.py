@@ -16,7 +16,6 @@ from recipe_lab.contract import (
     dataset_content_hash,
     matches_condition,
 )
-
 from tests.fixtures import (
     POLICY,
     RULES_POLICY,

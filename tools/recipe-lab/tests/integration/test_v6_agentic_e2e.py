@@ -85,9 +85,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-
-from recipe_lab.agentic import session_random_mix_stats
 from recipe_lab.adapters.router_replay import fetch_replays, records_to_rows
+from recipe_lab.agentic import session_random_mix_stats
 from recipe_lab.contract import ExperimentSpec
 from recipe_lab.live import verify_live
 

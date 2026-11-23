@@ -210,6 +210,7 @@ def test_rejected_case_records_exact_evidence_and_no_partial_score(
     import json
     import urllib.error
     import urllib.request
+
     from recipe_lab import runner
 
     cfg = tmp_path / "candidate.yaml"

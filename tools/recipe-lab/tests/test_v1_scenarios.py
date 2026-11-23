@@ -288,7 +288,6 @@ def test_same_contract_feeds_replay_then_live(monkeypatch, tmp_path, capsys):
     from recipe_lab import cli as cli_module
     from recipe_lab.contract import ContractError, ExperimentSpec
     from recipe_lab.live import live_verdict_from_runs
-
     from tests.fixtures import VALID_SPLITS_SPEC
 
     cases = tmp_path / "dev.jsonl"

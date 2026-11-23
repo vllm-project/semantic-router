@@ -29,7 +29,6 @@ from recipe_lab.live import (
     verify_live,
 )
 from recipe_lab.verdict import PairedStats, evaluate_verdict
-
 from tests.fixtures import VALID_SPEC, VALID_SPLITS_SPEC
 from tests.test_contract import _write_splits_dataset
 
