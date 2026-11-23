@@ -192,4 +192,5 @@ of a BF16 forward, 24% to 46% across these sizes.
 - Zen 4 (EPYC 9654, 9454) at model level. zentorch runs on Turin onwards (CPU
   family 1Ah) only; its BF16 linear matches Zen 5's kernel checks above.
 - zentorch's SDPA at BF16: Decision 3.0 consents to the linear only.
-- The Vela 3.0 d3 sizes: they have no BF16 references and stay FP32.
+- The Vela 3.0 d3 sizes: they have no BF16 references and stay FP32 with
+  zentorch's linear.
