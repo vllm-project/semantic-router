@@ -37157,7 +37157,10 @@ evaluations:
     source_column: Beam (BF16)
     sampling_temperature: 0.7
     sampling_top_p: 0.99
-    effort_source: evaluation_guide_recommended_max
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
   metrics:
     resolved: 0.433
   status: available
@@ -37180,7 +37183,10 @@ evaluations:
     source_column: Beam (BF16)
     sampling_temperature: 0.7
     sampling_top_p: 0.99
-    effort_source: evaluation_guide_recommended_max
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
   metrics:
     resolved: 0.661
   status: available
@@ -37203,7 +37209,10 @@ evaluations:
     source_column: Beam (BF16)
     sampling_temperature: 0.7
     sampling_top_p: 0.99
-    effort_source: evaluation_guide_recommended_max
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
   metrics:
     resolved: 0.801
   status: available
@@ -37226,7 +37235,10 @@ evaluations:
     source_column: Beam (BF16)
     sampling_temperature: 0.7
     sampling_top_p: 0.99
-    effort_source: evaluation_guide_recommended_max
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
   metrics:
     resolved: 0.816
   status: available
@@ -37249,7 +37261,10 @@ evaluations:
     source_column: Beam (BF16)
     sampling_temperature: 0.7
     sampling_top_p: 0.99
-    effort_source: evaluation_guide_recommended_max
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
   metrics:
     accuracy: 0.906
   status: available
