@@ -152,6 +152,14 @@ line not on a deprecation path, since Palmyra X5 and Palmyra X4 are both
 scheduled for deprecation on 2026-12-14 with migration to X6. The Palmyra X5
 card stays in the catalog with `lifecycle: deprecated` so its mapping and
 evidence remain visible until Writer removes the model, but it is not a
+representative. Meituan / LongCat holds a two-representative exception: its
+lineup, reviewed on 2026-11-23, has two chat lines that are separately
+deployable and meet the evidence rules, LongCat-2.5 and LongCat-2.0. A third
+would be a LongCat-Flash model or LongCat-Next. Meituan retired the
+LongCat-Flash models from its API as legacy on 2026-05-29. LongCat-Next is a
+native any-to-any model that also generates images and speech; its documented
+serving path is Meituan's own SGLang adaptation, and its published results are
+a chart of eight multimodal benchmarks without stated settings, so it is not a
 representative.
 
 ## User configuration boundary
