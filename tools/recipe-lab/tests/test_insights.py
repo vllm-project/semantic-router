@@ -14,7 +14,6 @@ from recipe_lab.insights import (
     resolve_insight_refs,
 )
 from recipe_lab.ledger import Ledger, LedgerRecord
-
 from tests.test_cli import _replay_record, _write_frozen_spec
 
 

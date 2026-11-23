@@ -47,9 +47,13 @@ def load_cases(path: str | Path) -> list[dict[str, Any]]:
     return cases
 
 
+EXPECTED_RATIO_COUNT = 3
+RATIO_SUM_TOLERANCE = 1e-6
+
+
 def parse_ratios(raw: str) -> tuple[float, float, float]:
     parts = [p.strip() for p in raw.split(",")]
-    if len(parts) != 3:
+    if len(parts) != EXPECTED_RATIO_COUNT:
         raise ContractError(
             f"--ratios must be three comma-separated numbers, got {raw!r}"
         )
@@ -57,7 +61,7 @@ def parse_ratios(raw: str) -> tuple[float, float, float]:
         values = tuple(float(p) for p in parts)
     except ValueError as exc:
         raise ContractError(f"--ratios must be numbers: {exc}") from exc
-    if any(v <= 0 for v in values) or abs(sum(values) - 1.0) > 1e-6:
+    if any(v <= 0 for v in values) or abs(sum(values) - 1.0) > RATIO_SUM_TOLERANCE:
         raise ContractError(f"--ratios must be positive and sum to 1.0, got {raw!r}")
     return values
 

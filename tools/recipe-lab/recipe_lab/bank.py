@@ -55,7 +55,9 @@ def _load_mcq_letter() -> Any:
     global _MCQ_LETTER
     if _MCQ_LETTER is None:
         try:
-            from training.model_eval.mcq_judge import extract_letter  # type: ignore
+            from training.model_eval.mcq_judge import (
+                extract_letter,  # type: ignore
+            )
         except ImportError as exc:
             raise ContractError(
                 "the mcq grader needs src/ on sys.path to import "

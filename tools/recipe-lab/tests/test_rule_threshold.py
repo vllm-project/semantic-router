@@ -15,7 +15,6 @@ import yaml
 from recipe_lab.cli import main
 from recipe_lab.contract import ContractError
 from recipe_lab.proposers import rule_threshold
-
 from tests.test_cli import _write_frozen_spec
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "agent_recipe_min.yaml"

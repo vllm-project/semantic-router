@@ -18,20 +18,20 @@ class LedgerTest(unittest.TestCase):
         self.ledger = loop.Ledger(self.workspace)
 
     def measurement(self, arm, seconds):
-        return dict(
-            kind="measurement",
-            split="dev",
-            arm=arm,
-            recipe="main",
-            public_model="public",
-            strong_model="A",
-            config=f"{arm}/config.yaml",
-            config_sha256=digest(f"{arm}".encode()),
-            agent_seconds=seconds,
-            hypothesis="Probe tool use",
-            evidence={},
-            cases={},
-        )
+        return {
+            "kind": "measurement",
+            "split": "dev",
+            "arm": arm,
+            "recipe": "main",
+            "public_model": "public",
+            "strong_model": "A",
+            "config": f"{arm}/config.yaml",
+            "config_sha256": digest(f"{arm}".encode()),
+            "agent_seconds": seconds,
+            "hypothesis": "Probe tool use",
+            "evidence": {},
+            "cases": {},
+        }
 
     def test_round_trip(self):
         first = self.ledger.append(self.measurement("fixed", 12.5))
@@ -67,11 +67,13 @@ class LedgerTest(unittest.TestCase):
         before = self.ledger.path.read_bytes()
         # A killed writer must leave the previous JSONL intact, including its
         # last line: publish the unchanged prefix and the new line atomically.
-        with patch.object(
-            loop.os, "replace", side_effect=OSError("interrupted publish")
+        with (
+            patch.object(
+                loop.os, "replace", side_effect=OSError("interrupted publish")
+            ),
+            self.assertRaises(OSError),
         ):
-            with self.assertRaises(OSError):
-                self.ledger.append(self.measurement("draft", 10))
+            self.ledger.append(self.measurement("draft", 10))
         self.assertEqual(before, self.ledger.path.read_bytes())
         leftovers = [
             p.name

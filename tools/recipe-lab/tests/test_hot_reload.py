@@ -54,14 +54,14 @@ BANK = {
 }
 
 FAKE_ROUTER_SCRIPT = """#!/usr/bin/env python3
-import json, os, sys, threading
+import json, os, re, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import yaml
-
 config_path = sys.argv[sys.argv.index("-config") + 1]
-cfg = yaml.safe_load(open(config_path, encoding="utf-8"))
-GATE = int(cfg["listeners"][0]["port"])
+# The stub runs on the environment's stock python3, which may not have
+# PyYAML; the only field it needs from the config is the listener port.
+text = open(config_path, encoding="utf-8").read()
+GATE = int(re.search(r"^\\s*port:\\s*(\\d+)", text, re.M).group(1))
 API = int(sys.argv[sys.argv.index("-api-port") + 1])
 STATE = os.environ["FAKE_STATE"]
 lock = threading.Lock()

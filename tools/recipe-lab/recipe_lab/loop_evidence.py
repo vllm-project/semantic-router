@@ -9,6 +9,12 @@ from pathlib import Path
 
 import yaml
 
+# The replay receipts' HTTP convention and the near-stream-cutoff timing
+# window (seconds) the evidence reader reports as incomplete-at-cutoff.
+HTTP_OK = 200
+NEAR_CUTOFF_LOW_S = 295
+NEAR_CUTOFF_HIGH_S = 305
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -19,15 +25,15 @@ def check(condition, message):
         raise ValueError(message)
 
 
-class InvalidExecution(ValueError):
+class InvalidExecutionError(ValueError):
     """An infrastructure failure cannot establish task quality."""
 
 
-class ModelEndpointFailure(InvalidExecution):
+class ModelEndpointError(InvalidExecutionError):
     """The agent could not finish because its model endpoint stopped serving."""
 
 
-class FrozenSplitMismatch(ValueError):
+class FrozenSplitMismatchError(ValueError):
     """The measurement cannot be shared in the requested dataset split."""
 
 
@@ -37,15 +43,17 @@ def packet_split(packet, requested):
         return requested or "dev"
     declared = packet["split"]
     if declared not in ("dev", "holdout"):
-        raise FrozenSplitMismatch("unrecognized split in frozen task packet")
+        raise FrozenSplitMismatchError("unrecognized split in frozen task packet")
     if requested is not None and requested != declared:
-        raise FrozenSplitMismatch("requested split conflicts with frozen task packet")
+        raise FrozenSplitMismatchError(
+            "requested split conflicts with frozen task packet"
+        )
     return declared
 
 
 def check_termination(termination, case):
     if termination == "model_endpoint_error":
-        raise ModelEndpointFailure(
+        raise ModelEndpointError(
             f"{case}: model_endpoint_error invalidates the measurement"
         )
     if termination in {
@@ -54,13 +62,17 @@ def check_termination(termination, case):
         "judge_error",
         "official_verifier_timeout",
     }:
-        raise InvalidExecution(f"{case}: {termination} invalidates the measurement")
+        raise InvalidExecutionError(
+            f"{case}: {termination} invalidates the measurement"
+        )
 
 
 def check_runtime_result(result, case):
     check_termination(result["termination"], case)
     if result.get("runner_error") or result.get("judge_error"):
-        raise InvalidExecution(f"{case}: runner or grader reported an execution error")
+        raise InvalidExecutionError(
+            f"{case}: runner or grader reported an execution error"
+        )
 
 
 def sha(value):
@@ -158,7 +170,7 @@ def traffic(raw, result, public, cards, strong):
         reply = responses[call]
         check(request["model"] == public, "public request model mismatch")
         model, upstream = reply.get("selected_model"), reply.get("returned_model")
-        if reply.get("http") == 200 and reply.get("done") is True:
+        if reply.get("http") == HTTP_OK and reply.get("done") is True:
             check(
                 model in cards and upstream,
                 "complete stream lacks selected or returned model",
@@ -175,16 +187,19 @@ def traffic(raw, result, public, cards, strong):
             strong_tools += model == strong
         if reply.get("done") is not True:
             incomplete += 1
-            if reply.get("http") == 200 and 295 <= reply["elapsed_s"] <= 305:
+            if (
+                reply.get("http") == HTTP_OK
+                and NEAR_CUTOFF_LOW_S <= reply["elapsed_s"] <= NEAR_CUTOFF_HIGH_S
+            ):
                 near_cutoff += 1
-    return dict(
-        selected_models=dict(selected),
-        returned_models=dict(returned),
-        tool_results=tools,
-        strong_tool_results=strong_tools,
-        near_300s_incomplete=near_cutoff,
-        incomplete_responses=incomplete,
-    )
+    return {
+        "selected_models": dict(selected),
+        "returned_models": dict(returned),
+        "tool_results": tools,
+        "strong_tool_results": strong_tools,
+        "near_300s_incomplete": near_cutoff,
+        "incomplete_responses": incomplete,
+    }
 
 
 def check_client(folder, public, window):
@@ -338,17 +353,17 @@ def read_run(args):
         len({x["active_sha256"] for x in cases.values()}) == 1,
         "active configuration changed between tasks",
     )
-    return dict(
-        kind="measurement",
-        arm=arm,
-        split=split,
-        hypothesis=args.hypothesis,
-        based_on=args.based_on,
-        public_model=args.public_model,
-        strong_model=args.strong,
-        recipe=recipe["name"],
-        config=str(config),
-        config_sha256=config_hash,
-        cases=cases,
-        evidence=files.refs,
-    )
+    return {
+        "kind": "measurement",
+        "arm": arm,
+        "split": split,
+        "hypothesis": args.hypothesis,
+        "based_on": args.based_on,
+        "public_model": args.public_model,
+        "strong_model": args.strong,
+        "recipe": recipe["name"],
+        "config": str(config),
+        "config_sha256": config_hash,
+        "cases": cases,
+        "evidence": files.refs,
+    }

@@ -39,7 +39,7 @@ def load_rows(data_dir: Path) -> list[dict]:
     if parquet_files:
         rows: list[dict] = []
         try:
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: PLC0415 - optional reader
 
             for path in parquet_files:
                 rows.extend(pq.read_table(path).to_pylist())
@@ -47,7 +47,7 @@ def load_rows(data_dir: Path) -> list[dict]:
         except ImportError:
             pass  # fall through to pandas
         try:
-            import pandas as pd
+            import pandas as pd  # noqa: PLC0415 - optional reader
 
             for path in parquet_files:
                 rows.extend(pd.read_parquet(path).to_dict(orient="records"))

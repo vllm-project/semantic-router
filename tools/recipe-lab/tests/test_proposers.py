@@ -8,7 +8,6 @@ import pytest
 import yaml
 from recipe_lab.contract import ContractError
 from recipe_lab.proposers.threshold_search import propose_thresholds, write_candidates
-
 from tests.fixtures import VALID_SPEC  # noqa: F401  (keeps import sanity)
 
 BASE_CONFIG = {

@@ -9,6 +9,7 @@ from pathlib import Path
 import yaml
 
 from .loop_evidence import (
+    HTTP_OK,
     check,
     check_client,
     check_runtime_result,
@@ -30,12 +31,12 @@ def record_id(row):
 def writer_lock(path):
     with path.open("a+b") as lock:
         if os.name == "nt":
-            import msvcrt
+            import msvcrt  # noqa: PLC0415 - Windows-only lock primitive
 
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
         else:
-            import fcntl
+            import fcntl  # noqa: PLC0415 - POSIX-only lock primitive
 
             fcntl.flock(lock, fcntl.LOCK_EX)
         yield  # closing the file releases this writer's lock
@@ -99,8 +100,8 @@ def verify(row):
     # Legacy measurements already retained DSH's terminal reason in each case.
     for case, outcome in row["cases"].items():
         check_termination(outcome["termination"], case)
-    for path, expected in row["evidence"].items():
-        path = Path(path)
+    for name, expected in row["evidence"].items():
+        path = Path(name)
         if path.name == "frozen.json":
             continue
         raw = path.read_bytes()
@@ -119,7 +120,7 @@ def verify(row):
                 reply = json.loads(line)
                 if (
                     reply["event"] == "response"
-                    and reply.get("http") == 200
+                    and reply.get("http") == HTTP_OK
                     and reply.get("done") is True
                 ):
                     check(
