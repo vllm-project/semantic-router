@@ -1047,7 +1047,10 @@ class Runtime:
         loader = self._thread
         if loader is not None and loader is not threading.current_thread():
             loader.join(max(0.0, deadline - time.monotonic()))
-        loading = self._loading if loader is not None and loader.is_alive() else None
+        with self._lifecycle_lock:
+            loading = (
+                self._loading if loader is not None and loader.is_alive() else None
+            )
         abandoned = (
             [] if loading is None else [f"{loading.label}: its load has not finished"]
         )
@@ -1109,11 +1112,29 @@ class Runtime:
         for attempt in range(1, attempts + 1):
             retry = []
             for served in pending:
-                if self._stopping.is_set():
-                    return
-                self._loading = served
+                with self._lifecycle_lock:
+                    if self._stopping.is_set():
+                        return
+                    self._loading = served
                 try:
                     served.load()
+
+                    # Atomically decide whether the loader or Runtime.stop()
+                    # owns cleanup.
+                    with self._lifecycle_lock:
+                        stopping = self._stopping.is_set()
+                        if not stopping:
+                            self._loading = None
+
+                    if stopping:
+                        # Loading completed after shutdown began. Runtime.stop()
+                        # may have abandoned this model after its join timeout,
+                        # so the loader must release it.
+                        running = served.stop()
+                        if running is None:
+                            served.scheduler = None
+                            served.model = None
+                        return
                 except _RuntimeStoppingError:
                     return
                 except (PackageError, UnsupportedDeviceError, VerificationError) as exc:
@@ -1134,7 +1155,9 @@ class Runtime:
                         )
                         retry.append(served)
                 finally:
-                    self._loading = None
+                    with self._lifecycle_lock:
+                        if self._loading is served:
+                            self._loading = None
                 self._ready_gauge()
             freeze_heap()
             if not retry:
