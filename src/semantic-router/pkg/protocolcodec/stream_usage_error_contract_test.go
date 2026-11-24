@@ -393,6 +393,49 @@ func TestStreamStateRejectsMalformedAndNonObjectToolArguments(t *testing.T) {
 	}
 }
 
+// The rejection's cause names the arguments' length and shape so the Router log
+// can tell a model-generation anomaly from a codec splice one, while the
+// arguments themselves — file contents, commands, user data — stay out of the
+// log, and the client frame keeps the same code and message.
+func TestNonObjectToolArgumentsErrorNamesOnlyTheShape(t *testing.T) {
+	arguments := `{"command":"echo hi","args":` + strings.Repeat("x", 1024)
+	err := nonObjectToolArgumentsErrorWithShape([]byte(arguments))
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "invalid_stream_tool_arguments" {
+		t.Fatalf("non-object arguments = %v, want invalid_stream_tool_arguments", err)
+	}
+	if protocolError.Cause == nil {
+		t.Fatal("the rejection carried no diagnostic cause")
+	}
+	cause := protocolError.Cause.Error()
+	if !strings.Contains(cause, "arguments length 1052, shape object fragment") {
+		t.Fatalf("the cause lost the length or shape: %s", cause)
+	}
+	if strings.Contains(cause, "echo hi") || strings.Contains(cause, "xxx") {
+		t.Fatalf("the cause retained the payload: %s", cause)
+	}
+	if len(cause) > 100 {
+		t.Fatalf("the cause is unbounded: %d bytes", len(cause))
+	}
+}
+
+func TestToolArgumentsShapeNamesTheFirstStructuralByte(t *testing.T) {
+	cases := map[string]string{
+		``:                    "empty",
+		"  \n\t":              "empty",
+		`{"command":"ls"`:     "object fragment",
+		`[1,2`:                "array fragment",
+		`"double encoded"`:    "quoted text",
+		"<tool_call>x":        "markup",
+		"run the command now": "plain text",
+	}
+	for arguments, want := range cases {
+		if got := toolArgumentsShape([]byte(arguments)); got != want {
+			t.Fatalf("shape of %q = %q, want %q", arguments, got, want)
+		}
+	}
+}
+
 func TestStreamStateAcceptsExplicitUnknownTerminalUsage(t *testing.T) {
 	state := newTestStreamState()
 	startTestStream(t, state)
