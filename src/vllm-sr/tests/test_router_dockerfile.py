@@ -16,6 +16,7 @@ MODEL_RUNTIME = REPO_ROOT / "src" / "model-runtime"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)\s+AS\s+(\S+)\s*$", re.M)
 STAGES = (
     "router-build",
+    "websearch-mcp-build",
     "python-base",
     "torch-cpu",
     "torch-rocm-base",
@@ -65,6 +66,8 @@ def test_every_router_image_comes_from_one_stage_graph() -> None:
     assert graph["rocm-lib-slim"][0] == "rocm-torch-release"
     assert graph["torch-rocm"][0] == "python-base"
     assert graph["vllm-sr"][0] == "runtime"
+    # The web search MCP server builds on the Router stage's source tree.
+    assert graph["websearch-mcp-build"][0] == "router-build"
     assert "ARG ACCELERATOR=cpu" in router_dockerfile()
 
 

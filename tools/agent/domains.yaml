@@ -314,6 +314,7 @@ domains:
       - bench/grounded_fusion/fusioneval/**
       - bench/memory_coldstart/**
       - tools/make/go-tools.mk
+      - tools/mcp/websearch/**
     checks: [make go-tools-test]
     verifications: [core]
 
@@ -931,6 +932,7 @@ images:
       - .github/workflows/build-artifacts.yml
     publish_paths:
       - src/semantic-router/**
+      - tools/mcp/websearch/**
       - src/model-runtime/**
       - config/**
       - tools/docker/Dockerfile.extproc
@@ -940,6 +942,7 @@ images:
     pr_paths: [tools/docker/Dockerfile.extproc]
     publish_paths:
       - src/semantic-router/**
+      - tools/mcp/websearch/**
       - src/model-runtime/**
       - config/**
       - tools/docker/Dockerfile.extproc
@@ -949,6 +952,7 @@ images:
     pr_paths: [tools/docker/Dockerfile.extproc]
     publish_paths:
       - src/semantic-router/**
+      - tools/mcp/websearch/**
       - src/model-runtime/**
       - config/**
       - tools/docker/Dockerfile.extproc

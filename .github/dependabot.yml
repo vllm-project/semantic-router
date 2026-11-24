@@ -48,6 +48,16 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: gomod
+    directory: /tools/mcp/websearch
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      websearch-mcp-go-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
     directory: /e2e
     schedule:
       interval: weekly
