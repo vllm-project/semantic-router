@@ -15,6 +15,7 @@ Router behavior. Choose one by the task below. The development harness
 | Change an existing Router configuration | [Operations: configure](vllm-sr-agent-operations/references/configuration-loop.md) | Read the current canonical configuration and discover the installed schema. |
 | Explain a selected route, fallback, or delivery failure | [Diagnose routing](vllm-sr-diagnose-routing/SKILL.md) | Pin the request and active config, then compare preview with a bounded probe. |
 | Verify a known route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
+| Evaluate quality, latency, and cost | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Freeze the workload and choose preview, live, or replay scope. |
 | Plan and run a bounded Router benchmark | [Benchmark](vllm-sr-benchmark/SKILL.md) | Freeze cases, targets, settings, prices and limits before dispatch. |
 | Compare two Router benchmark runs | [Compare configurations](vllm-sr-compare-configurations/SKILL.md) | Check paired cases and compatible settings before comparing. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
@@ -51,13 +52,7 @@ reviewed handoff. The configuration-planning research in
 [#4972](https://github.com/vllm-project/semantic-router/issues/4972) covers
 agent discovery of the read-and-plan API path.
 
-## Proposed additions
-
-These are planned under [the skills epic](https://github.com/vllm-project/semantic-router/issues/6386)
-and do not yet have standalone skill files:
-
-| Proposed skill | Bounded workflow | Current entry |
-| --- | --- | --- |
+## Future work
 
 The recipe-lab agent loop is already tracked in [#5497](https://github.com/vllm-project/semantic-router/issues/5497).
 Link to that skill when it lands; do not create a competing tuning workflow.

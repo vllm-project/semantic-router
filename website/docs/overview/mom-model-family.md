@@ -250,13 +250,15 @@ Vault's decisions only to backends that meet your privacy requirements.
    vllm-sr serve
    ```
 
-2. In the Dashboard, open **Models** and connect your inference endpoints.
-3. Open **Build → Mixture-of-Models → Recipes**, and choose **Create model** on
-   a built-in recipe.
+2. In the Dashboard, open **Models → Backend models** and connect your
+   inference endpoints.
+3. Open **Routing → Recipes**, select the **Recipes** tab, and choose
+   **Create model** on a built-in recipe.
 4. Name its entrypoint, and assign models to each decision. Vault's `guard`
    needs none.
-5. Use **Preview** to see the signals, the decision and the selected
-   candidate. Then send a real request to check execution and latency.
+5. Open **Routing → Topology** and use **Test a prompt** to see the signals,
+   the decision and the selected candidate. Then send a real request to check
+   execution and latency.
 
 Each model needs its capabilities, context window and output limit declared.
 `multi_factor` decisions also compare the model's quality index at the

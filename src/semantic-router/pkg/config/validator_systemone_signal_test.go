@@ -362,7 +362,8 @@ func TestSystemOneAnswererLoadChecks(t *testing.T) {
 		{video, "d3", ""},
 		{video, "remote", "input_modality_unsupported"},
 		{audio, "d3", "input_modality_unsupported"},
-		{audio, "attached", ""},
+		{audio, "remote", "input_modality_unsupported"},
+		{audio, "attached", "input_modality_unsupported"},
 	}
 	for _, test := range cases {
 		cfg := &RouterConfig{}
@@ -530,5 +531,16 @@ func TestSystemOneRuleDefaults(t *testing.T) {
 	}
 	if media := (SystemOneInput{Image: true, Video: true}).Media(); !slices.Equal(media, []string{"image", "video"}) {
 		t.Fatalf("media = %v", media)
+	}
+}
+
+// No System One decisions request carries an audio part, so an input.audio
+// rule is refused on every deployment, even one whose card lists audio.
+func TestSystemOneRuleRefusesInputAudio(t *testing.T) {
+	rule := SystemOneRule{Name: "q", Question: SystemOneQuestion{Type: SystemOneQuestionChoice, Instructions: "Which kind?", Choices: []SystemOneOption{{Key: "yes"}, {Key: "no"}}}, Input: SystemOneInput{Audio: true}}
+	err := CheckSystemOneAnswerer("recipes[default].signals.systemone[q]", "attached", rule, []string{"choice"}, []string{"audio"})
+	want := `recipes[default].signals.systemone[q]: input_modality_unsupported: input.audio resolves to deployment "attached", which does not read audio input; no System One decisions request carries an audio part (rule deployment)`
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v, want %q", err, want)
 	}
 }

@@ -263,7 +263,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		nativeRouter, rules = lease.Router, lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules)),
+		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules, systemone.ClientAuth{Served: lease.Snapshot.ClientAuth(), Active: lease.ActiveClientAuth})),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		IdentityHeaders: []string{
@@ -307,6 +307,7 @@ func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name 
 		serving.ListsLLM = servesAnyLLM(listener)
 		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
 		serving.Gate = listenerGate(listener)
+		serving.UnservedRoute = listenerUnservedRoute(listener)
 		return
 	}
 }
@@ -345,6 +346,23 @@ func listenerGate(listener config.Listener) func(string) ([]string, string, bool
 			return refuse(path)
 		}
 		return entry.Models, "", true
+	}
+}
+
+// listenerUnservedRoute is the model a request on a path is routed as when
+// it names a model the path's API does not serve, from the API's
+// unserved_models; empty for a path whose API refuses such requests.
+func listenerUnservedRoute(listener config.Listener) func(string) string {
+	return func(path string) string {
+		api, isAPI := apiregistry.ForPath(path)
+		if !isAPI {
+			return ""
+		}
+		entry, served := listener.API(api.Name)
+		if !served {
+			return ""
+		}
+		return entry.UnservedRoute()
 	}
 }
 

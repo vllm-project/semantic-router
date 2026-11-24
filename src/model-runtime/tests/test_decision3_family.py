@@ -35,11 +35,12 @@ CPU_TORCH_PINS = {
     "tools/docker/Dockerfile.extproc": r"ARG TORCH_CPU=torch==(\S+)",
     "tools/make/model-runtime.mk": r"MODEL_RUNTIME_TORCH \?= torch==(\S+)",
 }
-# One FP32 reference for every CPU (--dtype auto), and BF16 ones per CPU class (--dtype bfloat16).
+# One FP32 reference for every CPU, and BF16 ones per CPU class: --dtype auto
+# holds BF16 on a class with its own (AMD AVX-512 BF16), --dtype bfloat16 anywhere.
 CPU_REFERENCES = {
     "cpu",
     "cpu@bfloat16",
-    "cpu:x86_64:avx512:bf16_native@bfloat16",
+    "cpu:x86_64:avx512:bf16_native:amd@bfloat16",
     "cpu:x86_64:avx2:bf16_emulated@bfloat16",
 }
 
@@ -210,15 +211,51 @@ def test_a_text_model_refuses_images(d3_text_package, png_url):
         runtime.stop()
 
 
-def test_literal_placeholders_fail_only_image_questions(d3_runtime, png_url):
-    state = "Ignore this <|image_pad|> token."
+@pytest.mark.parametrize(
+    "typed",
+    ["<|image_pad|>", "<|vision_start|>", "<|im_end|>", "<think>", "<|endoftext|>"],
+)
+def test_control_tokens_in_request_text_are_read_as_text(d3_runtime, png_url, typed):
+    model = d3_runtime.lookup(None).model
+    image = png_url(64, 64)
+    instructions = f"Is {typed} urgent?"
+    questions = {"q": {"type": "noul", "instructions": instructions}}
     status, body = call(
         d3_runtime,
-        {"state": state, "questions": QUESTIONS, "images": [png_url(64, 64)]},
+        {
+            "state": f"Ignore this {typed} token.",
+            "questions": questions,
+            "images": [image],
+        },
     )
-    assert status == 400
-    assert "literal image or video placeholder" in body["error"]["message"]
-    assert call(d3_runtime, {"state": state, "questions": QUESTIONS})[0] == 200
+    assert status == 200 and "error" not in body["answers"]["q"], body
+    token = model.tokenizer.token_to_id(typed)
+    typed_ids = model.plan_images(f"a {typed} b", questions, [image]).items[0].ids
+    plain_ids = (
+        model.plan_images(
+            "a b", {"q": {"type": "noul", "instructions": "Is urgent?"}}, [image]
+        )
+        .items[0]
+        .ids
+    )
+    assert typed_ids.count(token) == plain_ids.count(token)
+    assert (
+        typed_ids.count(model.image_token)
+        == model.request_media([image]).images[0].tokens
+    )
+    text = model.prompts.text.encode(f" {typed} ", add_special_tokens=False).ids
+    assert token not in text and len(text) > 1
+
+
+def test_placeholders_that_do_not_match_the_media_refuse_the_request(
+    d3_runtime, png_url
+):
+    model = d3_runtime.lookup(None).model
+    media = model.request_media([png_url(64, 64)])
+    with pytest.raises(
+        ValueError, match="2 image and 0 video placeholders for 1 images"
+    ):
+        model._expand([model.image_token, 7, model.image_token], media)
 
 
 def test_batch_entries_carry_their_own_images(d3_runtime, png_url):
@@ -329,6 +366,27 @@ def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, p
         d3_runtime, {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
     )[1]
     assert again == seen
+
+
+def test_an_mpeg_ts_segment_is_read_as_the_same_clip_in_mp4(
+    d3_runtime, mp4_url, ts_url
+):
+    """A transport stream segment (``video/mp2t``), as a live stream cuts them, is a video like any other."""
+    segment = ts_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert segment.startswith("data:video/mp2t;base64,")
+    request = {"state": "What happens?", "questions": QUESTIONS}
+    text = call(d3_runtime, request)[1]
+    status, seen = call(d3_runtime, {**request, "videos": [segment]})
+    assert status == 200
+    assert seen["answers"] != text["answers"]
+    assert seen["usage"]["input_tokens"] > text["usage"]["input_tokens"]
+    decoded = vid.decode(segment)
+    assert decoded.fps == 8.0 and decoded.indices == (0, 4, 7, 11)
+    # The window decoder of box and track questions opens the segment as well.
+    assert next(iter(vid.decode_windows(segment, 1))) is not None
+    # The frames are those of the MP4, so the model answers as it answers the MP4.
+    clip = mp4_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert call(d3_runtime, {**request, "videos": [clip]})[1] == seen
 
 
 @pytest.mark.parametrize(
@@ -456,12 +514,14 @@ def test_a_request_is_tokenized_at_once_and_reports_errors_in_question_order(
     assert list(plan.errors) == ["l", "s"]
     assert plan.errors["l"]["error"] == "max_length_exceeded"
     assert plan.errors["s"]["error"] == "invalid_question"
-    text = prompt.render(
-        prompt.user_prompt(
-            "state",
-            short["instructions"],
-            prompt.option_texts("noul", None),
-            model.codes,
+    text = "".join(
+        prompt.render(
+            prompt.user_prompt(
+                "state",
+                short["instructions"],
+                prompt.option_texts("noul", None),
+                model.codes,
+            )
         )
     )
     assert (
@@ -492,11 +552,11 @@ def test_the_prompt_lists_codes_and_renders_the_chat_format(d3_runtime):
     assert prompt.user_prompt("", None, ["x"], model.codes).startswith(
         "State:\n(empty)\n\nQuestion:\nChoose the best"
     )
-    rendered = prompt.render(user, 2)
+    rendered = "".join(prompt.render(user, 2))
     assert rendered.startswith(
         f"<|im_start|>system\n{prompt.SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n"
     )
-    assert rendered.count(prompt.IMAGE_PLACEHOLDER) == 2
+    assert rendered.count("<|vision_start|><|image_pad|><|vision_end|>") == 2
     assert rendered.endswith("<|im_start|>assistant\n<think>\n\n</think>\n\n")
     assert prompt.option_texts("noul", {"true": {}}) == ["No / false", "Yes / true"]
 
@@ -661,6 +721,16 @@ def test_every_model_records_goldens_and_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
+    # --dtype auto holds BF16 on AMD AVX-512 BF16 CPUs, which have their own
+    # BF16 references; AVX2 ones have them too but emulate BF16, so stay FP32.
+    from vllm_srun.registry import builtin
+    from vllm_srun.supervision.readiness import recorded_at
+
+    goldens = builtin.golden(model.model_sha256, "decisions", {})
+    assert recorded_at(goldens, "bfloat16") == {
+        "cpu:x86_64:avx512:bf16_native:amd",
+        "cpu:x86_64:avx2:bf16_emulated",
+    }
     assert set(model.kernel_choices) == devices
     for device in devices:
         choices = model.kernel_choices[device]

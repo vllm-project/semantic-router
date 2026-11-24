@@ -14,6 +14,9 @@ type Response struct {
 	// Body streams the rest of the response. The caller must close it; doing
 	// so ends the call.
 	Body io.ReadCloser
+	// Deadline is the effective total deadline of the served call. Zero means
+	// the call has no deadline.
+	Deadline time.Time
 	// Trailer holds the response trailers once Body has reached EOF.
 	Trailer http.Header
 	// Cluster names the cluster that served. DefaultRoute reports that the

@@ -260,9 +260,47 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	return cfg, nil
 }
 
+// ValidateRawFields runs the checks the loader applies to a document before it
+// decodes it: the removed forms fail and renamed forms are rewritten, then the
+// fields the Router rejects by their presence, such as entrypoints[].client_auth,
+// even when they are null. Decoding into the canonical types drops a null field,
+// so a component that decodes a document itself and writes it back runs this
+// check on the original bytes.
+func ValidateRawFields(data []byte) error {
+	_, err := parseValidatedRawFields(data)
+	return err
+}
+
+// ValidateRawCanonicalFields checks field names and presence constraints before
+// a caller decodes a canonical Router document into typed structs. It uses the
+// Router loader's unknown-field diagnostics without resolving runtime settings.
+func ValidateRawCanonicalFields(data []byte) error {
+	raw, err := parseValidatedRawFields(data)
+	if err != nil {
+		return err
+	}
+	return validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+}
+
+func parseValidatedRawFields(data []byte) (map[string]interface{}, error) {
+	data, err := CanonicalConfigBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAndNormalizeRawConfig(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		rejectDeprecatedUserConfigFields,
+		checkRawClientAuth,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,

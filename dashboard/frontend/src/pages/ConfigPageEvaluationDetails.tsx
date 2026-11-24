@@ -1,120 +1,165 @@
 import { useMemo, useState } from 'react'
+import { ArrowUpRight, ChartNoAxesColumn, Search, TriangleAlert } from 'lucide-react'
 
-import { DataTable, type Column } from '../components/DataTable'
-import TableHeader from '../components/TableHeader'
-import type {
-  EffectiveEvaluationGroup,
-  EffectiveEvaluationRecord,
+import { Badge, Collapsible, CollapsibleContent, CollapsibleTrigger, EmptyState, cn } from '../ui'
+import {
+  evaluationSourceLabel,
+  filterEvaluationDetails,
+  type EffectiveEvaluationGroup,
+  type EffectiveEvaluationRecord,
 } from './configPageEffectiveEvaluations'
-import styles from './ConfigPageEvaluationDetails.module.css'
+import {
+  modelHubBenchmarkRawValueLabel,
+  modelHubBenchmarkValueLabel,
+} from './modelHubBenchmarkNormalization'
 
-const sourceLabel = (record: EffectiveEvaluationRecord): string =>
-  record.origin === 'built_in' ? 'Built-in catalog' : 'Configured record'
+const readable = (value: string) => value.split('_').join(' ')
 
-function SourceReference({ value }: { value: string }) {
+const statusTone = {
+  available: 'success',
+  missing: 'neutral',
+  failed: 'danger',
+  not_applicable: 'neutral',
+  withheld: 'warning',
+} as const
+
+function SourceReference({ value, label }: { value: string; label?: string }) {
   return /^https?:\/\//i.test(value) ? (
-    <a href={value} target="_blank" rel="noreferrer">
-      {value}
+    <a
+      href={value}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex min-w-0 items-center gap-0.5 font-medium text-primary hover:underline"
+    >
+      <span className="truncate">{label ?? value}</span>
+      <ArrowUpRight className="size-3 shrink-0" />
     </a>
   ) : (
-    <span>{value}</span>
+    <span className="min-w-0 truncate font-mono">{value}</span>
   )
 }
 
-function EvaluationResult({ record }: { record: EffectiveEvaluationRecord }) {
+function MetricValue({
+  name,
+  value,
+  record,
+}: {
+  name: string
+  value: number
+  record: EffectiveEvaluationRecord
+}) {
+  const definition = record.benchmark?.metrics.find((metric) => metric.id === name)
+  const label = definition
+    ? modelHubBenchmarkValueLabel(value, definition)
+    : Number.isInteger(value)
+      ? value.toLocaleString()
+      : String(value)
+  const raw = definition ? modelHubBenchmarkRawValueLabel(value, definition) : undefined
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="truncate text-[11px] text-subtle-foreground">{readable(name)}</dt>
+      <dd
+        className="font-mono text-[13px] font-medium tabular"
+        title={raw ? `Raw: ${raw}` : undefined}
+      >
+        {label}
+      </dd>
+      <dd className="text-[11px] text-subtle-foreground">
+        {definition
+          ? `${definition.unit} · ${definition.range[0]}–${definition.range[1]}`
+          : 'unit not defined'}
+      </dd>
+    </div>
+  )
+}
+
+export function EvaluationEvidenceCard({ record }: { record: EffectiveEvaluationRecord }) {
   const { evaluation, benchmark, issues } = record
+  const metrics = Object.entries(evaluation.metrics)
+  const subject = Object.keys(evaluation.subject).length > 0 ? evaluation.subject : null
   return (
-    <div className={styles.cell}>
-      <strong>{benchmark?.display_name || evaluation.benchmark}</strong>
-      {benchmark?.display_name ? (
-        <span className={styles.secondary}>{evaluation.benchmark}</span>
-      ) : null}
-      <span>Effort: {evaluation.reasoning_effort}</span>
-      <span>Profile: {evaluation.benchmark_profile || 'Not resolved'}</span>
-      <span>Status: {evaluation.status.replace(/_/g, ' ')}</span>
-      {Object.entries(evaluation.metrics).map(([name, value]) => {
-        const metric = benchmark?.metrics.find((definition) => definition.id === name)
-        return (
-          <span key={name}>
-            {name}: <strong>{value}</strong>
-            {metric
-              ? ` · ${metric.unit} (${metric.range[0]}–${metric.range[1]})`
-              : ' · unit not defined'}
+    <article className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3.5">
+      <header className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-[13px] font-medium">
+            {benchmark?.display_name || evaluation.benchmark}
           </span>
-        )
-      })}
-      {Object.keys(evaluation.metrics).length === 0 ? <span>No metric values recorded</span> : null}
-      {issues.map((issue) => (
-        <span className={styles.issue} key={issue}>
-          {issue}
+          <span className="truncate font-mono text-[11.5px] text-subtle-foreground">
+            {evaluation.benchmark}
+          </span>
+        </div>
+        <span className="flex shrink-0 flex-wrap items-center gap-1.5">
+          <Badge size="sm" tone={record.origin === 'built_in' ? 'outline' : 'brand'}>
+            {evaluationSourceLabel(record)}
+          </Badge>
+          <Badge size="sm" tone={statusTone[evaluation.status]} dot className="capitalize">
+            {readable(evaluation.status)}
+          </Badge>
         </span>
-      ))}
-    </div>
-  )
-}
-
-function EvaluationSource({ record }: { record: EffectiveEvaluationRecord }) {
-  const { evaluation } = record
-  const { evidence } = evaluation
-  return (
-    <div className={styles.cell}>
-      <strong>{sourceLabel(record)}</strong>
-      <span>Provenance: {evidence.provenance.replace(/_/g, ' ')}</span>
-      <span>Verification: {evidence.verification}</span>
-      {evidence.source ? (
-        <SourceReference value={evidence.source} />
-      ) : (
-        <span>Source not recorded</span>
-      )}
-      {evidence.artifact ? (
+      </header>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
-          Artifact: <SourceReference value={evidence.artifact} />
+          Profile{' '}
+          <span className="text-foreground/85">
+            {evaluation.benchmark_profile || 'not resolved'}
+          </span>
         </span>
+        <span>
+          Effort <span className="text-foreground/85">{evaluation.reasoning_effort}</span>
+        </span>
+      </div>
+      {metrics.length ? (
+        <dl className="grid grid-cols-2 gap-3 rounded-md bg-surface-subtle/70 p-2.5 sm:grid-cols-3">
+          {metrics.map(([name, value]) => (
+            <MetricValue key={name} name={name} value={value} record={record} />
+          ))}
+        </dl>
+      ) : (
+        <p className="text-xs text-muted-foreground">No metric values recorded</p>
+      )}
+      {issues.map((issue) => (
+        <p
+          key={issue}
+          className="flex items-start gap-1.5 rounded-md bg-warning-soft px-2.5 py-1.5 text-xs text-warning-foreground"
+        >
+          <TriangleAlert className="mt-px size-3.5 shrink-0" />
+          {issue}
+        </p>
+      ))}
+      <footer className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-2.5 text-xs text-muted-foreground">
+        <span>
+          {readable(evaluation.evidence.provenance)} · {evaluation.evidence.verification}
+          {evaluation.measured_at ? ` · measured ${evaluation.measured_at}` : ''}
+          {evaluation.observed_at ? ` · observed ${evaluation.observed_at}` : ''}
+        </span>
+        {evaluation.evidence.source ? (
+          <SourceReference value={evaluation.evidence.source} label="Source" />
+        ) : (
+          <span className="text-subtle-foreground">Source not recorded</span>
+        )}
+      </footer>
+      {evaluation.evidence.artifact ? (
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          Artifact <SourceReference value={evaluation.evidence.artifact} />
+        </div>
       ) : null}
-      {evaluation.measured_at ? <span>Measured: {evaluation.measured_at}</span> : null}
-      {evaluation.observed_at ? <span>Observed: {evaluation.observed_at}</span> : null}
-      {Object.keys(evaluation.subject).length > 0 ? (
-        <details>
-          <summary>Measurement details</summary>
-          <pre className={styles.metadata}>{JSON.stringify(evaluation.subject, null, 2)}</pre>
-        </details>
+      {subject ? (
+        <Collapsible>
+          <CollapsibleTrigger className="text-xs font-medium text-muted-foreground hover:text-foreground">
+            Measurement details
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-surface-sunken p-2.5 font-mono text-[11.5px] text-foreground/85">
+              {JSON.stringify(subject, null, 2)}
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
-    </div>
+    </article>
   )
 }
 
-export function filterEvaluationDetails(records: EffectiveEvaluationRecord[], query: string) {
-  const search = query.trim().toLowerCase()
-  if (!search) return records
-  return records.filter((record) =>
-    [
-      record.evaluation.benchmark,
-      record.benchmark?.display_name,
-      record.evaluation.benchmark_profile,
-      record.evaluation.reasoning_effort,
-      record.evaluation.status,
-      record.evaluation.evidence.source,
-      record.evaluation.evidence.provenance,
-      record.evaluation.evidence.verification,
-      sourceLabel(record),
-      ...Object.keys(record.evaluation.metrics),
-    ].some((value) => value?.toLowerCase().includes(search)),
-  )
-}
-
-const columns: Column<EffectiveEvaluationRecord>[] = [
-  {
-    key: 'result',
-    header: 'Benchmark result',
-    render: (record) => <EvaluationResult record={record} />,
-  },
-  {
-    key: 'evidence',
-    header: 'Evidence source',
-    render: (record) => <EvaluationSource record={record} />,
-  },
-]
-
+/** A model's benchmark evidence: catalog results and configured records, never ranked. */
 export default function ConfigPageEvaluationDetails({
   group,
 }: {
@@ -125,33 +170,44 @@ export default function ConfigPageEvaluationDetails({
     () => filterEvaluationDetails(group.records, search),
     [group.records, search],
   )
+  if (group.records.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border-strong">
+        <EmptyState
+          compact
+          icon={ChartNoAxesColumn}
+          tone="orange"
+          title="No published evidence for this model"
+          description="No built-in or configured evaluation evidence is available for this model."
+        />
+      </div>
+    )
+  }
   return (
-    <div>
-      <TableHeader
-        title="Evidence"
-        count={records.length}
-        searchPlaceholder="Search benchmark, effort, status, or source..."
-        searchValue={search}
-        onSearchChange={setSearch}
-        variant="embedded"
-      />
-      <DataTable
-        columns={columns}
-        data={records}
-        keyExtractor={(record) => record.key}
-        readonly
-        emptyMessage={
-          search
-            ? 'No evidence matches this search.'
-            : 'No built-in or configured evaluation evidence is available for this model.'
-        }
-        pagination={{
-          pageSize: 5,
-          pageSizeOptions: [5, 10, 25, 50],
-          itemLabel: 'records',
-          resetKey: search,
-        }}
-      />
+    <div className="flex flex-col gap-3">
+      {group.records.length > 3 ? (
+        <label className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-subtle-foreground" />
+          <span className="sr-only">Search evidence</span>
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search benchmark, effort, status or source…"
+            className={cn(
+              'h-8 w-full rounded-md border border-input bg-surface pl-8 pr-3 text-[13px] shadow-xs outline-none placeholder:text-subtle-foreground',
+              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40',
+            )}
+          />
+        </label>
+      ) : null}
+      {records.map((record) => (
+        <EvaluationEvidenceCard key={record.key} record={record} />
+      ))}
+      {records.length === 0 ? (
+        <p className="py-6 text-center text-[13px] text-muted-foreground">
+          No evidence matches this search.
+        </p>
+      ) : null}
     </div>
   )
 }

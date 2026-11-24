@@ -112,44 +112,103 @@ def validate_status_publisher(
         errors.append("missing trusted PR CI status publisher")
         return
     trigger = publisher.events.get("workflow_run", {})
-    if trigger.get("workflows") != ["Pull Request"] or set(
+    if trigger.get("workflows") != ["Pull Request", "Community"] or set(
         trigger.get("types", [])
     ) != {"in_progress", "completed"}:
-        errors.append("ci-status.yml must observe PR starts, reruns and completions")
-    job = publisher.jobs.get("publish", {})
-    condition = " ".join(job.get("if", "").split())
-    if condition != (
-        "github.event_name == 'workflow_run' || (github.event_name == "
-        "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+        errors.append(
+            "ci-status.yml must observe PR reruns and completions and Community"
+        )
+    workflow_run = "github.event_name == 'workflow_run'"
+    trusted_dispatch = (
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    )
+    community_filter = (
+        "(github.event.workflow_run.path != '.github/workflows/community.yml' "
+        "|| (github.event.action == 'completed' "
+        "&& github.event.workflow_run.conclusion == 'success' "
+        "&& (github.event.workflow_run.event == 'pull_request' "
+        "|| github.event.workflow_run.event == 'pull_request_review')))"
+    )
+    expected_conditions = {
+        "resolve": f"({workflow_run} && {community_filter}) || {trusted_dispatch}",
+        "publish": f"needs.resolve.outputs.run_id != '' && ({workflow_run} || {trusted_dispatch})",
+    }
+    commands = {
+        "resolve": 'python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"',
+        "publish": 'python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"',
+    }
+    permissions = {
+        "resolve": {"contents": "read", "actions": "read", "pull-requests": "read"},
+        "publish": {
+            "contents": "read",
+            "actions": "read",
+            "checks": "write",
+            "statuses": "write",
+            "issues": "write",
+            "pull-requests": "write",
+        },
+    }
+    for name in ("resolve", "publish"):
+        job = publisher.jobs.get(name, {})
+        if " ".join(job.get("if", "").split()) != expected_conditions[name]:
+            errors.append(
+                f"ci-status.yml {name} must enforce its event filter to execute only trusted main code"
+            )
+        if job.get("permissions") != permissions[name]:
+            errors.append(
+                "ci-status.yml must limit resolver and publisher token permissions"
+            )
+        steps = job.get("steps", [])
+        checkouts = [
+            step
+            for step in steps
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        if len(checkouts) != 1 or checkouts[0].get("with") != {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": False,
+        }:
+            errors.append("ci-status.yml must never check out or execute PR contents")
+        if [step.get("run") for step in steps if "run" in step] != [commands[name]]:
+            errors.append(
+                "ci-status.yml must use only the trusted publisher entrypoint"
+            )
+        if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
+            errors.append(
+                "ci-status.yml must finish without occupying a waiting runner"
+            )
+    resolve = publisher.jobs.get("resolve", {})
+    if resolve.get("outputs") != {
+        "run_id": "${{ steps.qualification.outputs.run_id }}",
+        "mode": "${{ steps.qualification.outputs.mode }}",
+    } or not any(
+        step.get("id") == "qualification" for step in resolve.get("steps", [])
     ):
-        errors.append("ci-status.yml dispatch must execute only trusted main code")
-    if job.get("permissions") != {
-        "contents": "read",
-        "actions": "read",
-        "checks": "write",
-        "issues": "write",
-        "pull-requests": "write",
-    }:
-        errors.append("ci-status.yml must limit its publisher token permissions")
-    steps = job.get("steps", [])
-    checkouts = [
-        step for step in steps if step.get("uses", "").startswith("actions/checkout@")
-    ]
-    if len(checkouts) != 1 or checkouts[0].get("with") != {
-        "ref": "${{ github.sha }}",
-        "persist-credentials": False,
-    }:
-        errors.append("ci-status.yml must never check out or execute PR contents")
-    commands = [step.get("run") for step in steps if "run" in step]
-    if commands != ['python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH"']:
-        errors.append("ci-status.yml must use only the trusted publisher entrypoint")
-    if publisher.data.get("concurrency") != {
-        "group": "ci-status-${{ github.event.workflow_run.id || inputs.run_id }}",
-        "cancel-in-progress": False,
-    }:
-        errors.append("ci-status.yml must serialize observations of the same PR run")
-    if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
-        errors.append("ci-status.yml must finish without occupying a waiting runner")
+        errors.append("ci-status.yml resolver must expose typed qualification outputs")
+    job = publisher.jobs.get("publish", {})
+    if (
+        job.get("needs") != "resolve"
+        or job.get("concurrency")
+        != {
+            "group": "ci-status-${{ needs.resolve.outputs.run_id }}",
+            "cancel-in-progress": False,
+            "queue": "max",
+        }
+        or publisher.data.get("concurrency")
+    ):
+        errors.append(
+            "ci-status.yml must serialize observations and keep queued jobs "
+            "for the same qualification run"
+        )
+    executions = [step for step in job.get("steps", []) if "run" in step]
+    env = executions[0].get("env", {}) if len(executions) == 1 else {}
+    if (
+        env.get("QUALIFICATION_RUN_ID") != "${{ needs.resolve.outputs.run_id }}"
+        or env.get("STATUS_MODE") != "${{ needs.resolve.outputs.mode }}"
+    ):
+        errors.append(
+            "ci-status.yml publisher must consume the resolver identity and mode"
+        )
 
 
 def validate_publisher_bootstrap(

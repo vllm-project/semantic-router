@@ -14,6 +14,7 @@ import json
 import random
 import shutil
 import time
+from dataclasses import replace
 
 import pytest
 import torch
@@ -169,6 +170,7 @@ def test_the_card_reports_branching_on(runtimes):
 )
 def test_the_state_block_ends_where_the_question_begins(packages, state):
     backend, _ = prompt.load_tokenizer(packages["prefix_bidir"])
+    encoder = prompt.PromptEncoder(backend)
     codes = json.loads((packages["prefix_bidir"] / "decision_config.json").read_text())[
         "codes"
     ]
@@ -182,13 +184,17 @@ def test_the_state_block_ends_where_the_question_begins(packages, state):
             whole = prompt.render(
                 prompt.user_prompt(state, instructions, options, codes), images
             )
-            assert head + block == whole
-            split = backend.encode_batch([head, block], add_special_tokens=False)
-            joined = backend.encode(whole, add_special_tokens=False)
+            assert "".join(head + block) == "".join(whole)
+            split = encoder.encode_batch([head, block])
+            joined = encoder.encode(whole)
             assert split[0].ids + split[1].ids == joined.ids
             assert prompt.state_tokens(split[0].offsets, head) == reference_split(
-                whole, state, joined.offsets
+                "".join(whole), state, joined.offsets
             )
+            if "<|" not in prompt.describe(state):
+                released = backend.encode("".join(whole), add_special_tokens=False)
+                assert joined.ids == released.ids
+                assert joined.offsets == [tuple(span) for span in released.offsets]
 
 
 def reference_split(text, state, offsets) -> int:
@@ -202,7 +208,7 @@ def test_question_blocks_open_with_the_blank_line_after_the_state(runtimes):
     model = model_of(runtimes, "prefix_bidir")
     for state in ("ends with a word", "ends with a stop.", "trailing spaces  ", ""):
         plan = model.plan(state, QUESTIONS)
-        whole = model.tokenizer.encode(
+        text = "".join(
             prompt.render(
                 prompt.user_prompt(
                     state,
@@ -210,23 +216,12 @@ def test_question_blocks_open_with_the_blank_line_after_the_state(runtimes):
                     prompt.option_texts("noul", None),
                     model.codes,
                 )
-            ),
-            add_special_tokens=False,
+            )
         )
+        whole = model.tokenizer.encode(text, add_special_tokens=False)
         item = plan.items[1]
         assert item.ids == whole.ids
-        assert len(item.state.ids) == reference_split(
-            prompt.render(
-                prompt.user_prompt(
-                    state,
-                    QUESTIONS["reasoning"]["instructions"],
-                    prompt.option_texts("noul", None),
-                    model.codes,
-                )
-            ),
-            state,
-            whole.offsets,
-        )
+        assert len(item.state.ids) == reference_split(text, state, whole.offsets)
         # Every question of the request shares the state block and the opening of its block.
         assert all(other.state is item.state for other in plan.items)
 
@@ -237,8 +232,8 @@ def test_random_states_split_cleanly(packages):
     alphabet = "ab Q\n\t.,!?:;-_()[]{}\"'0123456789éü漢🙂\u0301\r"
     for _ in range(300):
         state = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 40)))
-        head = prompt.state_block(state)
-        block = prompt.question_block("Q?", ["A", "B"], ["A", "B"])
+        head = "".join(prompt.state_block(state))
+        block = "".join(prompt.question_block("Q?", ["A", "B"], ["A", "B"]))
         split = backend.encode_batch([head, block], add_special_tokens=False)
         joined = backend.encode(head + block, add_special_tokens=False).ids
         assert split[0].ids + split[1].ids == joined, repr(state)
@@ -482,6 +477,38 @@ def test_requests_share_a_branched_forward(runtimes, layout, png_url, monkeypatc
     assert max_gap([alone[id(item)] for item in items], together) < FP32_TOLERANCE
 
 
+@pytest.mark.parametrize("layout", LAYOUTS)
+def test_distinct_requests_with_one_state_encode_it_once(runtimes, layout, monkeypatch):
+    """Concurrent requests that arrive as separate calls and share a state text encode it once.
+
+    Each ``plan`` renders its own ``RequestState`` object, so grouping by
+    identity would encode the equal state twice (once per request).
+    """
+    model = model_of(runtimes, layout, "float32")
+    plans = [model.plan(STATE, QUESTIONS), model.plan(STATE, QUESTIONS)]
+    assert plans[0].items[0].state is not plans[1].items[0].state
+    alone = {}
+    for plan in plans:
+        for item, value in zip(plan.items, model.run(list(plan.items)), strict=True):
+            alone[id(item)] = value
+    items = [
+        item
+        for group in zip(*(plan.items for plan in plans), strict=True)
+        for item in group
+    ]
+    calls = []
+    branch = model.engine_model.branch
+
+    def counted(batch):
+        calls.append(len(batch.states))
+        return branch(batch)
+
+    monkeypatch.setattr(model.engine_model, "branch", counted)
+    together = model.run(items)
+    assert calls == [1]
+    assert max_gap([alone[id(item)] for item in items], together) < FP32_TOLERANCE
+
+
 def test_a_lone_question_runs_as_its_row(runtimes, png_url, monkeypatch):
     model = model_of(runtimes, "prefix_bidir", "float32")
     calls = []
@@ -541,6 +568,48 @@ def test_bf16_decisions_agree_on_many_requests(runtimes):
 
 
 # ------------------------------------------------------------------- requests
+
+
+def test_a_question_with_block_images_never_packs(runtimes, png_url):
+    """A composed question reads its state per row, so its packing key is None.
+
+    Its own images send it through ``_composed_rows``, which cannot share a
+    state encode however equal the text states: packing 3 such requests into
+    one batch made all three wait for the whole batch (review round 3), so
+    ``packing_key`` returns None whenever ``block_images`` is set.
+    """
+    model = model_of(runtimes, "prefix_bidir", "float32")
+    from vllm_srun.families.decision3 import images as img
+
+    text_plan = model.plan(STATE, QUESTIONS)
+    item = text_plan.items[0]
+    assert model.packing_key(item) == model._state_key(item.state)
+    # the same question carrying its own block images: composed, never packed
+    composed = replace(
+        item,
+        block_images=(
+            img.ProcessedImage(
+                pixel_values=torch.zeros(1), grid=(1, 1, 1), tokens=1, digest="t"
+            ),
+        ),
+    )
+    assert model.packing_key(composed) is None
+
+
+def test_calibration_states_are_content_distinct_at_every_size(runtimes):
+    """The burst calibration must time the no-sharing case for every row.
+
+    Content-keyed state grouping collapses equal states, so calibration rows
+    have to differ in content — including across sizes where a periodic
+    filler would repeat (a rotation of an 11-token filler cycle repeats every
+    11 rows).
+    """
+    model = model_of(runtimes, "prefix_bidir")
+    for rows, row_tokens in ((4, 256), (16, 1024), (32, 2048), (64, 4096)):
+        items = model.calibration_items(rows, row_tokens)
+        assert items is not None and len(items) == rows
+        keys = {model._state_key(item.state) for item in items}
+        assert len(keys) == rows, f"{rows} rows at {row_tokens} tokens"
 
 
 def test_the_state_counts_once_in_the_input_tokens(runtimes):
@@ -707,14 +776,20 @@ def test_question_errors_stay_per_question(runtimes, png_url, monkeypatch):
         "state": "x",
         "questions": {
             "ok": QUESTIONS["reasoning"],
-            "literal": {"type": "noul", "instructions": "Has <|image_pad|>?"},
+            "typed": {"type": "noul", "instructions": "Has <|image_pad|>?"},
+            "broken": {
+                "type": "score",
+                "instructions": "How hard?",
+                "criteria": ["Easy", "Easy"],
+            },
         },
         "images": [png_url(64, 64, 1)],
     }
     status, answer = call(runtime, body)
     assert status == 200
-    assert answer["answers"]["literal"]["error"] == "invalid_question"
+    assert answer["answers"]["broken"]["error"] == "invalid_question"
     assert "error" not in answer["answers"]["ok"]
+    assert "error" not in answer["answers"]["typed"]
     short = {"type": "noul", "instructions": "Is it short?"}
     long = {"type": "noul", "instructions": "word " * 400}
     alone = model.plan("state", {"a": short})

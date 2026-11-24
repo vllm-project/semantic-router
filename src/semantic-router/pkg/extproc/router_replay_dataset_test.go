@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -69,7 +70,7 @@ func newDatasetExportRouter(t *testing.T, records ...routerreplay.RoutingRecord)
 }
 
 func exportDataset(router *OpenAIRouter, query string) *ext_proc.ProcessingResponse {
-	return router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/dataset"+query)
+	return router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/dataset"+query)
 }
 
 func assertDatasetStatus(t *testing.T, response *ext_proc.ProcessingResponse, want typev3.StatusCode) {
@@ -173,7 +174,7 @@ func TestRouterReplayDatasetExportRejectsAnIncompletePolicy(t *testing.T) {
 func TestRouterReplayDatasetExportRejectsANonReadMethod(t *testing.T) {
 	router := newDatasetExportRouter(t, comparedReplayRecord(t, "replay-1", "vault"))
 
-	response := router.handleRouterReplayAPI("POST", "/api/v1/observability/replays/dataset"+datasetExportQuery)
+	response := router.handleRouterReplayAPI(context.Background(), "POST", "/api/v1/observability/replays/dataset"+datasetExportQuery)
 	assertDatasetStatus(t, response, typev3.StatusCode_MethodNotAllowed)
 }
 
