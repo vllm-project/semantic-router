@@ -254,9 +254,10 @@ def _start_vllm_sr_locked(
             f"Applying the change saved {pending.saved_by()} that needed a restart"
             + (f": {pending.detail}" if pending.detail else "")
         )
-    # This start serves whatever the Dashboard saved, so a pending activation
-    # is spent.
-    clear_pending_activation(runtime_config_file)
+    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
+    if setup_mode:
+        # A bootstrap config must wait for a fresh Dashboard activation.
+        clear_pending_activation(runtime_config_file)
     management_port = _configured_management_port(user_config)
     stack_layout.host_port(management_port, name="management API host port")
     for listener in listeners:
@@ -298,7 +299,6 @@ def _start_vllm_sr_locked(
         routing=_routing_enabled(user_config) or not dashboard_disabled,
     )
 
-    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     # The Dashboard reads the heartbeat to tell a Router this command is
     # starting from a stopped one; it has no container runtime to ask.
     with serve_heartbeat(runtime_config_file) as heartbeat:
@@ -377,6 +377,8 @@ def _start_vllm_sr_locked(
             startup_timeout=startup_timeout,
             envoy=runs_envoy(gateway),
         )
+        if not setup_mode:
+            clear_pending_activation(runtime_config_file)
     log_runtime_summary(
         listeners,
         stack_layout,
