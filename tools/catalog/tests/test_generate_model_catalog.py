@@ -875,9 +875,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             providers["anthropic"]["reasoning_transport"], "output_config_effort"
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
-        self.assertEqual(
-            providers["gemini"]["reasoning_transport"], "top_level_effort"
-        )
+        self.assertEqual(providers["gemini"]["reasoning_transport"], "top_level_effort")
         gemini_bindings = {
             binding["catalog"]: binding for binding in providers["gemini"]["models"]
         }
