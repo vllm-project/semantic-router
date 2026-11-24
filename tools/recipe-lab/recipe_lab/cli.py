@@ -13,6 +13,8 @@ Subcommands:
   propose-calibrated      rule threshold candidates at observed quantiles (D)
   suggest-depth           propose a Speed depth threshold from development evidence
   draft                   create a two-backend Speed recipe from declared cards (starter path)
+  loop                    development ledger: record/compare/next, plan-space/plan-dev,
+                          propose, signature, schedule and decision-summary
   run                     evaluate candidate configs in the replay tier -> ledger
   ledger                  inspect or append to the evidence ledger (append/show/top)
   live-verdict            compare two sr-bench runs -> PASS/FAIL/INCONCLUSIVE
@@ -3575,6 +3577,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="create a two-backend Speed recipe from declared cards (starter path)",
     )
 
+    sub.add_parser(
+        "loop",
+        help="development ledger: record/compare/next, plan-space/plan-dev, propose, signature, schedule and decision-summary",
+    )
+
     p_spp = sub.add_parser(
         "propose-session-policy",
         help="AG6: cause-keyed one-variable session-protection candidates "
@@ -4422,6 +4429,11 @@ def main(argv: list[str] | None = None) -> int:
         from .speed_draft import main as draft  # noqa: PLC0415
 
         return draft(argv[1:], prog="recipe-lab draft")
+    if argv and argv[0] == "loop":
+        # the development ledger owns its own argparse surface and receipt policy
+        from .loop import main as dev_loop  # noqa: PLC0415
+
+        return dev_loop(argv[1:], prog="recipe-lab loop")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

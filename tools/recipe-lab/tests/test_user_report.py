@@ -146,6 +146,64 @@ def test_depth_keep_parent_and_inconclusive_outcomes():
     assert "The depth proposal is inconclusive." in report
 
 
+@pytest.mark.parametrize(
+    "status,kind,word",
+    [
+        ("fixture_pass", "fixture", "passed with fixture backends"),
+        ("real_pass", "real", "passed with real backends"),
+        ("failed", "real", "public probe failed"),
+        ("incomplete", "real", "incomplete evidence"),
+    ],
+)
+def test_gateway_probe_distinguishes_operator_evidence(status, kind, word):
+    plan = {
+        "schema": "recipe-lab-development-plan-v1",
+        "next": {
+            "action": "inspect_backend_limits",
+            "candidate_sha256": CONFIG,
+            "public_probe": {
+                "kind": kind,
+                "status": status,
+                "issues": [],
+                "receipt_sha256": CONFIG,
+                "tool_roundtrip_verified": status.endswith("pass"),
+            },
+        },
+    }
+    report = render_report([plan])
+    assert word in report and CONFIG in report
+    assert "inspect_backend_limits" in report
+    assert "Task quality and latency require graded cases" in report
+
+
+def test_development_comparison_and_decision_do_not_expose_case_inputs():
+    comparison = {
+        "kind": "comparison",
+        "split": "dev",
+        "baseline": "rec-base",
+        "candidate": "rec-candidate",
+        "wins": ["held-name"],
+        "losses": [],
+        "jointly_correct": {
+            "held-name-2": {"baseline_seconds": 12, "candidate_seconds": 9}
+        },
+        "disposition": "advance-to-holdout",
+        "reason": "raw task body",
+    }
+    decision = {
+        "schema": "recipe-lab-decision-summary-v1",
+        "split": "dev",
+        "decision": "advance",
+        "candidate_sha256": CONFIG,
+        "cost": {"spent_episodes": 2, "budget_episodes": 4, "invalid_attempts": 0},
+    }
+    report = render_report([comparison, decision])
+    for value in ("advance-to-holdout", "2 of 4 episodes", "invalid attempts"):
+        assert value in report
+    for private in ("held-name", "raw task body"):
+        assert private not in report
+
+
 def test_inconclusive_error_does_not_export_private_fields_or_errors():
     attempt = {
         **RUN,

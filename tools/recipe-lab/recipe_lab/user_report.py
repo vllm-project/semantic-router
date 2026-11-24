@@ -89,6 +89,105 @@ def _label(value):
     return f"`{value}`"
 
 
+def _probe(row):
+    step = _object(row["next"])
+    action = _label(step["action"])
+    details = _hashes(step, (("candidate_sha256", "Planned candidate"),))
+    if "public_probe" not in step:
+        return Finding(
+            "Plan a development check",
+            "Choose the next routing check using recorded development traffic and the candidate configurations.",
+            "A development action was planned.",
+            details,
+            f"Follow the planned action {action}.",
+        )
+    probe = _object(step["public_probe"])
+    meanings = {
+        "fixture_pass": "The public probe passed with fixture backends.",
+        "real_pass": "The public probe passed with real backends.",
+        "failed": "The public probe failed.",
+        "incomplete": "The public probe has incomplete evidence.",
+    }
+    status = _choice(probe["status"], meanings)
+    if status.endswith("_pass") and probe["kind"] != status.split("_")[0]:
+        raise ValueError("probe mode disagrees with its status")
+    details += _hashes(probe, (("receipt_sha256", "Probe receipt"),))
+    details.append(f"The probe recorded {len(_items(probe['issues']))} issues.")
+    for key, label in (
+        ("deployment_config_verified", "Deployment configuration identity"),
+        ("tool_roundtrip_verified", "Tool round trip"),
+        ("context_fallback_observed", "Context fallback"),
+    ):
+        if key in probe:
+            details.append(
+                f"{label} was "
+                + ("confirmed." if probe[key] is True else "unconfirmed.")
+            )
+    details.append(
+        "These checks cover gateway routing and capability handling. Task quality and latency require graded cases."
+    )
+    return Finding(
+        "Validate gateway behavior",
+        "Check the candidate's routing boundary and capability handling against a public-gateway probe.",
+        meanings[status],
+        details,
+        f"Follow the planner action {action}.",
+    )
+
+
+def _decision(row):
+    status = _choice(
+        row["decision"], ("advance", "drop", "revise", "defer", "run", "not_enrolled")
+    )
+    _choice(row["split"], ("dev",))
+    actions = {
+        "advance": "Freeze this candidate for an independent evaluation.",
+        "drop": "Keep the parent and review the regressed development control.",
+        "revise": "Review the observed routing changes and paired times before another edit.",
+        "defer": "Resolve the outstanding evidence requirement before funding another trial.",
+        "run": "Finish the scheduled development comparison.",
+        "not_enrolled": "Enroll the experiment card before dispatch.",
+    }
+    details = _hashes(
+        row,
+        (
+            ("parent_config_sha256", "Parent configuration"),
+            ("candidate_sha256", "Candidate configuration"),
+            ("card_sha256", "Experiment card"),
+        ),
+    )
+    if "cost" in row:
+        cost = row["cost"]
+        details.append(
+            f"The study spent {_count(cost['spent_episodes'])} of {_count(cost['budget_episodes'])} episodes, "
+            f"including {_count(cost['invalid_attempts'])} invalid attempts."
+        )
+    reason = row.get("reason")
+    if reason in (
+        "no observed target predicate change",
+        "episode budget exhausted before complete pairs",
+        "the fresh guard baseline did not reproduce",
+        "opposite paired quality outcomes at equal pass counts",
+        "paired development comparison",
+    ):
+        details.append(f"The recorded reason was “{reason}”.")
+    for key, label in (("guard_task", "Guard"), ("target_task", "Target")):
+        pair = row.get("by_task", {}).get(row.get(key), {}).get("paired")
+        if pair:
+            details.append(
+                f"{label} strict passes were {_count(pair['baseline_passes'])} for the parent and "
+                f"{_count(pair['candidate_passes'])} for the candidate. There were {_count(pair['joint_successes'])} "
+                f"joint successes with {_fmt(pair['joint_seconds_saved'])} s saved."
+            )
+    return Finding(
+        "Review a scheduled development experiment",
+        "Decide whether to advance a candidate using matched parent and candidate episodes on a target and a guard task.",
+        f"The recorded development decision is `{status}`.",
+        details,
+        actions[status],
+    )
+
+
 def _bench(row):
     verdict = _choice(row["verdict"], ("PASS", "FAIL", "INCONCLUSIVE"))
     details = [
@@ -288,6 +387,8 @@ def _depth(row):
 
 _RENDER = {
     "recipe-lab-v05-speed-draft-v1": _draft,
+    "recipe-lab-development-plan-v1": _probe,
+    "recipe-lab-decision-summary-v1": _decision,
     "recipe-lab-sr-bench-run-v1": _bench,
     "recipe-lab-sr-bench-depth-v1": _depth,
 }

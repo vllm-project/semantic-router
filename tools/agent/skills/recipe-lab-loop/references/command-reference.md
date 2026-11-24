@@ -353,6 +353,71 @@ whole flow from environment variables only.
   classification projection must match the sidecar's Y2 hash; any mismatch,
   failed validate or private-content match exits 2 without writing.
 
+## Development loop (sub-issue 9)
+
+`recipe-lab loop --workspace W <command>` drives the development ledger over
+independently graded v0.5 gateway runs (same surface as
+`python tools/recipe-lab/recipe_lab/loop.py`). All commands print one JSON
+document; report delivery goes to stderr.
+
+- `recipe-lab loop record --run RUN --arm A --config C --public-model M
+  --strong S --hypothesis H [--split dev|holdout] [--based-on ID]
+  [--schedule-card CARD]`
+  Import one complete independently graded arm behind its fingerprint
+  (`RUN/dsh/frozen.json`, per-task run receipts, bindings). The frozen
+  packet's split allocation binds; `--split holdout` seals evaluation data
+  away from proposals. `--based-on` checks the parent deployment and, on
+  dev, comparability of the frozen task/judge/window controls.
+- `recipe-lab loop next [--symptom S] [--schedule-card CARD]`
+  Export development attribution: measurements (with per-case terminal
+  details), comparisons, symptoms, excluded measurements and casebook
+  references. Assignment-bound dev measurements stay withheld until their
+  completed `--schedule-card` releases them.
+- `recipe-lab loop plan-space --config C --public-model M --strong S
+  --fast F [--anchor A] [--reference R] [--edit-space FILE]`
+  Inventory the deployed recipe, provider limits, active routing and the
+  supported bounded edits (tool-result window, first-tool model, SystemOne
+  depth), with candidate/reproducible-reference handoffs.
+- `recipe-lab loop plan-dev --base ID --fast F [--anchor A] [--prefixes ID]
+  [--comparison ID] [--depth-evidence FILE] [--out-candidate C]
+  [--probe-receipt R] [--probe-config C]`
+  Rank candidate probes over verified development prefixes: per-call
+  matching, exposure seconds, token fit and the next check (collect more
+  prefixes, probe the public gateway, verify a guard, plan the paired run).
+  `--probe-receipt` verifies fixture/real gateway evidence for the emitted
+  candidate; the passing report can enter a `recipe-lab-schedule-v2` card.
+- `recipe-lab loop propose --base ID (--recipe R | --space S
+  [--upper N | --first-tool-model M]) --out C`
+  Materialize one scoped edit: replace only the target recipe, or apply a
+  pinned edit-space action (window bound or first-tool destination).
+  Sibling recipes, providers and entrypoints are preserved.
+- `recipe-lab loop signature --base ID --prefixes ID --space S --upper N
+  --candidate C`
+  Measure a window edit on the observed request prefixes of exactly one dev
+  measurement: old/new predicate hits and changed calls per task, with both
+  config identities pinned.
+- `recipe-lab loop schedule --card CARD [--attempt ATTEMPT]`
+  Run and resume the paired whole-task study: verify the card's signature
+  report, enroll with a prospective `assignment_id`, import each graded
+  attempt (idempotent re-delivery; invalid runs consume a slot) and return
+  the next slot or the terminal decision.
+- `recipe-lab loop decision-summary --card CARD`
+  Read the verified decision without dispatching work: per-task strict
+  passes, joint-success seconds, invalid-attempt cost and the parent/candidate
+  evidence hashes.
+- `recipe-lab loop headroom --scope dev|retired-holdout --manifest M
+  [--mde-pair BASE OTHER]`
+  Offline fixed-policy comparison over a frozen development matrix: oracle
+  gains/losses, paired joint-success time, per-task dispersion and the
+  predeclared paired-pilot MDE.
+- `recipe-lab loop screen-dev --manifest M [--max-seconds S]`
+  Screen existing runs for routing candidates, quick controls and audited
+  fixed-cost exclusions before reserving whole episodes.
+- `recipe-lab loop compare --baseline ID --candidate ID
+  [--disposition keep-baseline|advance-to-holdout] [--reason R]
+  [--schedule-card CARD]`
+  Record the paired strict/task-timing comparison (as in the paired slice).
+
 ## Notes
 
 - Replay tier needs no LLM backend: the router and signal model run on CPU.

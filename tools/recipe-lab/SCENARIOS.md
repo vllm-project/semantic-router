@@ -114,12 +114,12 @@ Start with the strict grades on the guard and target. If the guard loses a previ
 
 ## Run the examples with synthetic receipts
 
-With Python, PyYAML and pytest available, these tests exercise the planner, paired scheduling and a frozen three-method comparison in temporary workspaces. They require no serving endpoints or benchmark downloads.
+With Python, PyYAML and pytest available, these tests exercise the planner, paired scheduling and the decision readout in temporary workspaces. They require no serving endpoints or benchmark downloads.
 
 ```bash
 python -m pytest -q \
   tools/recipe-lab/tests/test_planner.py::PlannerTest::test_plan_publish_anchor_and_duplicate_predicate \
   tools/recipe-lab/tests/test_planner.py::PlannerTest::test_ready_plan_enrolls_separately_measured_guard_and_freezes_feedback \
   tools/recipe-lab/tests/test_schedule.py::ScheduleTest::test_opposite_quality_pairs_require_repeat_before_latency_promotion \
-  tools/recipe-lab/tests/test_improver_eval.py
+  tools/recipe-lab/tests/test_decision_summary.py
 ```

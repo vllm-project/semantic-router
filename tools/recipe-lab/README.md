@@ -224,6 +224,39 @@ Markdown delivery fails. A slower or unsuccessful fast case protects its
 score - no proposal without separating evidence, and the returned candidate
 is a development proposal that still has to earn a live verdict.
 
+## Development loop
+
+Already have a deployed recipe and independently graded development runs?
+`recipe-lab loop` drives the planning and scheduling workflow over one
+append-only development ledger:
+
+```bash
+recipe-lab loop --workspace "$WORK" record --run "$RUN" --arm speed \
+  --config "$CONFIG" --public-model "$PUBLIC" --strong "$STRONG" \
+  --hypothesis "Measure tool-result traffic on the strong model"
+recipe-lab loop --workspace "$WORK" next > "$WORK/next.json"
+recipe-lab loop --workspace "$WORK" plan-space --config "$CONFIG" \
+  --public-model "$PUBLIC" --strong "$STRONG" --fast "$FAST" --anchor "$HAND_TUNED"
+recipe-lab loop --workspace "$WORK" plan-dev --base "$PARENT" --fast "$FAST" \
+  --anchor "$HAND_TUNED" --out-candidate "$WORK/candidate.yaml"
+recipe-lab loop --workspace "$WORK" propose --base "$PARENT" \
+  --space space.yaml --upper 8 --out candidate.yaml
+recipe-lab loop --workspace "$WORK" schedule --card card.json
+recipe-lab loop --workspace "$WORK" decision-summary --card card.json
+```
+
+`record` imports one independently graded arm behind its fingerprint; `next`
+exports development attribution with related casebook references;
+`plan-space` inventories the deployed recipe and its supported edits;
+`plan-dev` ranks candidate probes on verified request prefixes; `propose`
+materializes a bounded edit (typed `--space` values or a recipe replacement);
+`signature` measures a window edit on observed prefixes; `schedule` and
+`decision-summary` run and read back the paired whole-task experiment. The
+commands preserve sibling recipes and frozen fields, refuse assigned
+measurements without a completed schedule card, and keep report delivery on
+stderr. The workflow and its receipts are documented in
+[SCENARIOS.md](SCENARIOS.md) and [REFERENCE.md](REFERENCE.md#optimize-a-deployed-v05-recipe).
+
 ## Cold start
 
 No existing config to tune? Two starter paths exist before any dataset is

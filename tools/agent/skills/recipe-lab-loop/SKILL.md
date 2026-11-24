@@ -95,5 +95,23 @@ answer-bank import (`bank import`) are chained by
 `tools/recipe-lab/examples/cold-start/cold-start.sh`. Read
 `references/command-reference.md`'s cold-start section before driving it.
 
+## Development loop
+
+A deployed recipe plus independently graded development runs drive the
+planning workflow through `recipe-lab loop --workspace W`: import arms
+(`record`, fingerprints and split allocation enforced), read the evidence
+(`next` - with casebook references for the symptoms it reports), inventory
+supported edits (`plan-space`), rank probes on verified request prefixes
+(`plan-dev`, including the depth-evidence bridge and `--probe-receipt`
+gateway readback), materialize one scoped edit (`propose --space`), measure
+a window edit on recorded prefixes (`signature`), then run and read back the
+paired whole-task study (`schedule` / `decision-summary`). Assigned dev
+measurements stay invisible until a completed `--schedule-card` releases
+them; invalid attempts consume budget slots; a guard regression drops the
+candidate. Offline sizing comes from `headroom` (frozen objective matrix)
+and `screen-dev`. Read `references/command-reference.md`'s development-loop
+section and the red-lines before proposing anything; the live acceptance
+walkthroughs live in `tools/recipe-lab/SCENARIOS.md`.
+
 Run `make check` after changing recipe-lab code; skill changes follow the
 `tools/agent` structure checks and public-skill sync tests.
