@@ -34,15 +34,15 @@ def pair(call, roles, start, end, model="strong"):
 
 
 def replay(rows, feature="tool_results", **kwargs):
-    args = dict(
-        public_model="public",
-        fast="fast",
-        strong="strong",
-        candidate={"id": "late", "feature": feature, "lower": 2, "upper": None},
-        fast_context=100,
-        fast_max_output=64,
-        task_seconds=20,
-    )
+    args = {
+        "public_model": "public",
+        "fast": "fast",
+        "strong": "strong",
+        "candidate": {"id": "late", "feature": feature, "lower": 2, "upper": None},
+        "fast_context": 100,
+        "fast_max_output": 64,
+        "task_seconds": 20,
+    }
     return replay_task(
         "\n".join(map(json.dumps, rows)).encode("utf-8"), **(args | kwargs)
     )
@@ -91,7 +91,7 @@ class PlannerReplayTest(unittest.TestCase):
 
     def test_incomplete_and_ambiguous_model_ids_keep_separate_receipts(self):
         roles = ["user", "tool", "tool"]
-        rows = sum((pair(i, roles, i, i + 1) for i in range(1, 5)), [])
+        rows = [row for i in range(1, 5) for row in pair(i, roles, i, i + 1)]
         rows[1]["http"], rows[1]["done"] = 429, False
         rows[3]["done"] = False
         rows[5]["returned_model"] = "strong-service"

@@ -4,11 +4,9 @@ import argparse
 import json
 import unittest
 
-import yaml
 import test_loop as fixtures
-
-import recipe_lab.loop as loop
-import recipe_lab.signature as signature
+import yaml
+from recipe_lab import loop, signature
 from recipe_lab.loop_evidence import digest
 from recipe_lab.window_action import apply_window
 

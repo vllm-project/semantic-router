@@ -76,7 +76,9 @@ class PlanningSpaceTest(unittest.TestCase):
             "lower": 2,
             "required_overrides": [],
         }
-        for card, model_id in zip(doc["providers"]["models"], ["writer", "editor"]):
+        for card, model_id in zip(
+            doc["providers"]["models"], ["writer", "editor"], strict=True
+        ):
             card["provider_model_id"] = model_id
         with patch(
             "recipe_lab.planning_space.load_cases",
@@ -309,17 +311,17 @@ class PlanningSpaceTest(unittest.TestCase):
             "conditions": [{"type": "conversation", "name": "end"}],
         }
         r["decisions"][0]["rules"]["conditions"].append(rule)
-        space = dict(
-            schema="recipe-lab-window-space-v1",
-            action="tool_result_window_upper",
-            base_config_sha256="b" * 64,
-            public_model="public",
-            recipe="work",
-            decision="lab_late_fast",
-            lower_signal=sig["name"],
-            upper_signal="end",
-            allowed_upper=[2, 3, 8],
-        )
+        space = {
+            "schema": "recipe-lab-window-space-v1",
+            "action": "tool_result_window_upper",
+            "base_config_sha256": "b" * 64,
+            "public_model": "public",
+            "recipe": "work",
+            "decision": "lab_late_fast",
+            "lower_signal": sig["name"],
+            "upper_signal": "end",
+            "allowed_upper": [2, 3, 8],
+        }
         raw = json.dumps(space).encode()
         pair = native_edits(doc, raw, base_sha="b" * 64, **ARGS)
         self.assertEqual(len(pair), 2)

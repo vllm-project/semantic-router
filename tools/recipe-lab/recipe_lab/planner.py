@@ -1,32 +1,32 @@
 """Plan the next development probe on one deployed recipe and its recorded traffic."""
 
+import json
 from collections import defaultdict
 from pathlib import Path
 from types import SimpleNamespace
-import json
 
 import yaml
 
 if __package__:
     from .loop_evidence import check, digest, fit_status, require_isolated, target
+    from .planning_replay import replay_task
     from .planning_space import (
         build_space,
         extract_candidate,
         extract_reference,
         render_handoff,
     )
-    from .planning_replay import replay_task
     from .semantic_depth import add_candidate
     from .signature import prefix_receipts
 else:
     from loop_evidence import check, digest, fit_status, require_isolated, target
+    from planning_replay import replay_task
     from planning_space import (
         build_space,
         extract_candidate,
         extract_reference,
         render_handoff,
     )
-    from planning_replay import replay_task
     from semantic_depth import add_candidate
     from signature import prefix_receipts
 
@@ -207,7 +207,7 @@ def reference_candidate(
         }
     mapping = {}
     if source_models:
-        mapping = dict(zip((strong, fast), source_models))
+        mapping = dict(zip((strong, fast), source_models, strict=True))
     for model in (strong, fast):
         if model in mapping:
             continue

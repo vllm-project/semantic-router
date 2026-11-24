@@ -1,7 +1,7 @@
 """Fresh development decisions are visible only after both evidence and state agree."""
 
-import unittest
 import json
+import unittest
 from pathlib import Path
 from unittest.mock import patch
 

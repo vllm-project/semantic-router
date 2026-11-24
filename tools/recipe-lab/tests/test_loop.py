@@ -10,7 +10,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yaml
-
 from recipe_lab import loop
 from recipe_lab.loop_evidence import digest
 
@@ -193,25 +192,28 @@ class LoopTest(unittest.TestCase):
             },
         }
         put(run / "config.yaml", config)
-        spec = dict(
-            expected_criteria=["delivered"],
-            instruction_sha256="a" * 64,
-            judge=["python", "judge.py"],
-            pinned_files={"judge.py": "c" * 64},
-            image="pinned-image",
-            author_agent_timeout_s=99,
-            author_verifier_timeout_s=10,
-        )
+        spec = {
+            "expected_criteria": ["delivered"],
+            "instruction_sha256": "a" * 64,
+            "judge": ["python", "judge.py"],
+            "pinned_files": {"judge.py": "c" * 64},
+            "image": "pinned-image",
+            "author_agent_timeout_s": 99,
+            "author_verifier_timeout_s": 10,
+        }
         frozen = run / "dsh/frozen.json"
-        put(frozen, dict(replicates=1, cases={"task": spec}, runner_sha256="d" * 64))
-        folder = run / "dsh/runs/task" / arm / "main"
-        observed = dict(
-            model="public",
-            arm=arm,
-            prompt_sha256="a" * 64,
-            official_agent_timeout_s=99,
-            official_verifier_timeout_s=10,
+        put(
+            frozen,
+            {"replicates": 1, "cases": {"task": spec}, "runner_sha256": "d" * 64},
         )
+        folder = run / "dsh/runs/task" / arm / "main"
+        observed = {
+            "model": "public",
+            "arm": arm,
+            "prompt_sha256": "a" * 64,
+            "official_agent_timeout_s": 99,
+            "official_verifier_timeout_s": 10,
+        }
         put(
             folder / "protocol.json",
             dict(
@@ -267,28 +269,28 @@ class LoopTest(unittest.TestCase):
             ),
         )
         requests = [
-            dict(event="dispatch", call=1, model="public", last_role="tool"),
-            dict(
-                event="response",
-                call=1,
-                http=200,
-                done=True,
-                selected_model=model,
-                returned_model="B-upstream" if model == "B" else "A",
-                elapsed_s=1.23,
-            ),
+            {"event": "dispatch", "call": 1, "model": "public", "last_role": "tool"},
+            {
+                "event": "response",
+                "call": 1,
+                "http": 200,
+                "done": True,
+                "selected_model": model,
+                "returned_model": "B-upstream" if model == "B" else "A",
+                "elapsed_s": 1.23,
+            },
         ]
         (folder / "requests.jsonl").write_text(
             "\n".join(map(json.dumps, requests)) + "\n", encoding="utf-8"
         )
         put(
             run / f"dsh/bindings/task/{arm}.json",
-            dict(
-                model="public",
-                client_window=131072,
-                active_runtime_hash="e" * 64,
-                source_sha256=digest((run / "config.yaml").read_bytes()),
-            ),
+            {
+                "model": "public",
+                "client_window": 131072,
+                "active_runtime_hash": "e" * 64,
+                "source_sha256": digest((run / "config.yaml").read_bytes()),
+            },
         )
 
     def cli(self, *args):
@@ -333,7 +335,7 @@ class LoopTest(unittest.TestCase):
         )
         self.assertEqual(
             comparison["jointly_correct"]["task"],
-            dict(baseline_seconds=12.5, candidate_seconds=10),
+            {"baseline_seconds": 12.5, "candidate_seconds": 10},
         )
         self.assertEqual(len(loop.Ledger(self.workspace).rows()), 3)
         context = self.cli("next")
@@ -461,7 +463,7 @@ class LoopTest(unittest.TestCase):
         stale = ledger.append({**sealed, "split": "dev"})["record_id"]
         base = self.record("fixed")
         ledger.append(
-            dict(kind="comparison", split="dev", baseline=base, candidate=stale)
+            {"kind": "comparison", "split": "dev", "baseline": base, "candidate": stale}
         )
         original = ledger.path.read_bytes()
         context = self.cli("next")
@@ -539,17 +541,17 @@ class LoopTest(unittest.TestCase):
             stale = self.record("draft")
         ledger = loop.Ledger(self.workspace)
         ledger.append(
-            dict(
-                kind="comparison",
-                split="dev",
-                baseline=base,
-                candidate=stale,
-                wins=["task"],
-                losses=[],
-                jointly_correct={},
-                disposition=None,
-                reason=None,
-            )
+            {
+                "kind": "comparison",
+                "split": "dev",
+                "baseline": base,
+                "candidate": stale,
+                "wins": ["task"],
+                "losses": [],
+                "jointly_correct": {},
+                "disposition": None,
+                "reason": None,
+            }
         )
         before = ledger.path.read_bytes()
         context = self.cli("next")
@@ -587,7 +589,7 @@ class LoopTest(unittest.TestCase):
                     json.dumps,
                     [
                         first,
-                        dict(event="response", call=1, http=429, done=False),
+                        {"event": "response", "call": 1, "http": 429, "done": False},
                         {**first, "call": 2},
                         {**reply, "call": 2},
                     ],
@@ -646,9 +648,8 @@ class LoopTest(unittest.TestCase):
         before = (self.workspace / "ledger.jsonl").read_bytes()
         with patch.object(
             loop.os, "replace", side_effect=OSError("interrupted publish")
-        ):
-            with self.assertRaises(SystemExit):
-                self.record("draft")
+        ), self.assertRaises(SystemExit):
+            self.record("draft")
         self.assertEqual(before, (self.workspace / "ledger.jsonl").read_bytes())
 
 

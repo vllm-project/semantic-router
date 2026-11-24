@@ -85,26 +85,26 @@ class ScheduleTest(unittest.TestCase):
         )
         report = self.root / "signature.json"
         fixtures.put(report, self.report)
-        self.protocol = dict(
-            schema="recipe-lab-schedule-v1",
-            study="pilot",
-            based_on=self.base,
-            signature=report.name,
-            signature_sha256=digest(report.read_bytes()),
-            space=self.space.name,
-            candidate="draft/config.yaml",
-            hypotheses=["more handoffs help", "more handoffs add work"],
-            prediction="guard stays solved and target finishes quicker",
-            target_task="task",
-            guard_task="guard",
-            decisions={
+        self.protocol = {
+            "schema": "recipe-lab-schedule-v1",
+            "study": "pilot",
+            "based_on": self.base,
+            "signature": report.name,
+            "signature_sha256": digest(report.read_bytes()),
+            "space": self.space.name,
+            "candidate": "draft/config.yaml",
+            "hypotheses": ["more handoffs help", "more handoffs add work"],
+            "prediction": "guard stays solved and target finishes quicker",
+            "target_task": "task",
+            "guard_task": "guard",
+            "decisions": {
                 "advance": "confirm on more dev cases",
                 "revise": "check elapsed spans",
                 "drop": "keep baseline",
             },
-            budget_episodes=4,
-            repeats=1,
-        )
+            "budget_episodes": 4,
+            "repeats": 1,
+        }
         fixtures.put(self.card, self.protocol)
 
     def poll(self, attempt=None):
@@ -175,9 +175,11 @@ class ScheduleTest(unittest.TestCase):
             )["record_id"]
             return dict(slot, measurement=measurement)
         controls = self.ledger.measure(self.base)["cases"][task]["controls"]
-        common = dict(
-            assignment_id=assignment, clock="CLOCK_BOOTTIME", boot_id="test-boot"
-        )
+        common = {
+            "assignment_id": assignment,
+            "clock": "CLOCK_BOOTTIME",
+            "boot_id": "test-boot",
+        }
         fixtures.put(
             folder / "execution-start.json",
             dict(
@@ -365,7 +367,14 @@ class ScheduleTest(unittest.TestCase):
 
     def test_guard_loss_and_uninformative_signature(self):
         pair = [
-            dict(task="guard", role=role, repeat=1, valid=True, strict=ok, seconds=7)
+            {
+                "task": "guard",
+                "role": role,
+                "repeat": 1,
+                "valid": True,
+                "strict": ok,
+                "seconds": 7,
+            }
             for role, ok in (("baseline", True), ("candidate", False))
         ]
         self.assertEqual(decision(self.protocol, self.report, pair)["status"], "drop")

@@ -73,7 +73,9 @@ def assess_probe(
     issues = []
 
     def issue(case, field, reason, severity="failed"):
-        issues.append(dict(case=case, field=field, reason=reason, severity=severity))
+        issues.append(
+            {"case": case, "field": field, "reason": reason, "severity": severity}
+        )
 
     def expect(case, row, field, value):
         if field not in row or row[field] is None:

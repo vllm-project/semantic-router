@@ -71,13 +71,13 @@ def sample(kind):
 
 class PlanningProbeTest(unittest.TestCase):
     def evaluate(self, receipt, *, require_context_fallback=False, **extras):
-        predicate = dict(
-            feature="tool_results",
-            lower=2,
-            upper=None,
-            decision="late",
-            fallback_decision="fallback",
-        )
+        predicate = {
+            "feature": "tool_results",
+            "lower": 2,
+            "upper": None,
+            "decision": "late",
+            "fallback_decision": "fallback",
+        }
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "probe.json"
             path.write_text(json.dumps(receipt), encoding="utf-8")

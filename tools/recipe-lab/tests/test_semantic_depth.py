@@ -14,15 +14,14 @@ from contextlib import redirect_stderr
 from unittest.mock import patch
 
 import pytest
+import test_loop as fixtures
+import test_planner
 import yaml
 from recipe_lab.loop_evidence import digest
 from recipe_lab.semantic_depth import propose_threshold, score_value, threshold_sites
-from tests.fixtures import DEPTH_FAST, DEPTH_PUBLIC, DEPTH_STRONG, depth_doc
-
-import test_loop as fixtures
-import test_planner
 from test_planning_probe import sample
 from test_speed_draft import compiled
+from tests.fixtures import DEPTH_FAST, DEPTH_PUBLIC, DEPTH_STRONG, depth_doc
 
 
 @pytest.fixture
@@ -139,7 +138,7 @@ def measurement(env, observations, arm, task, scores):
 
     def with_decisions(counts):
         rows = make_rows(counts)
-        for reply, score in zip(rows[1::2], scores):
+        for reply, score in zip(rows[1::2], scores, strict=True):
             strong = score is None or score >= 0.60
             model = "A" if strong else "B"
             reply.update(
@@ -155,15 +154,15 @@ def measurement(env, observations, arm, task, scores):
     trace = env.root / arm / "dsh/runs" / task / arm / "main/requests.jsonl"
     for call, score in enumerate(scores, 1):
         observations.append(
-            dict(
-                measurement=ident,
-                task=task,
-                trace_sha256=digest(trace.read_bytes()),
-                call=call,
-                score=score,
-                matched_other_decisions=[],
-                fast_eligible=True,
-            )
+            {
+                "measurement": ident,
+                "task": task,
+                "trace_sha256": digest(trace.read_bytes()),
+                "call": call,
+                "score": score,
+                "matched_other_decisions": [],
+                "fast_eligible": True,
+            }
         )
     return ident
 
@@ -178,13 +177,13 @@ def inputs(lab):
     evidence = lab.root / "scores.json"
     fixtures.put(
         evidence,
-        dict(
-            schema="recipe-lab-depth-evidence-v1",
-            signal="depth",
-            public_model="public",
-            base_config_sha256=digest(lab.config.read_bytes()),
-            observations=obs,
-        ),
+        {
+            "schema": "recipe-lab-depth-evidence-v1",
+            "signal": "depth",
+            "public_model": "public",
+            "base_config_sha256": digest(lab.config.read_bytes()),
+            "observations": obs,
+        },
     )
     return (
         base,
@@ -221,14 +220,14 @@ def gateway(parent, candidate):
         ("tool-call", 0.15, ["tools"], "tools", "tools"),
         ("tool-result", 0.18, ["tools"], "tools", "tools"),
     ]:
-        meta = dict(
-            request_sha256=digest(case.encode()),
-            score=score,
-            matched_other_decisions=other,
-            fast_eligible=True,
-            http=200,
-            done=True,
-        )
+        meta = {
+            "request_sha256": digest(case.encode()),
+            "score": score,
+            "matched_other_decisions": other,
+            "fast_eligible": True,
+            "http": 200,
+            "done": True,
+        }
         row = dict(
             **meta,
             case=case,
@@ -276,21 +275,21 @@ def test_observed_speed_threshold_enrolls_in_native_schedule(lab):
     card = lab.root / "card.json"
     fixtures.put(
         card,
-        dict(
-            schema="recipe-lab-schedule-v2",
-            study="threshold",
-            based_on=base,
-            signature=saved.name,
-            signature_sha256=digest(saved.read_bytes()),
-            candidate=candidate.name,
-            target_task="task",
-            guard_task="guard",
-            budget_episodes=4,
-            repeats=1,
-            hypotheses=["midrange fast saves time", "fast adds extra turns"],
-            prediction="retain guard",
-            decisions={"advance": "confirm", "revise": "measure", "drop": "retain"},
-        ),
+        {
+            "schema": "recipe-lab-schedule-v2",
+            "study": "threshold",
+            "based_on": base,
+            "signature": saved.name,
+            "signature_sha256": digest(saved.read_bytes()),
+            "candidate": candidate.name,
+            "target_task": "task",
+            "guard_task": "guard",
+            "budget_episodes": 4,
+            "repeats": 1,
+            "hypotheses": ["midrange fast saves time", "fast adds extra turns"],
+            "prediction": "retain guard",
+            "decisions": {"advance": "confirm", "revise": "measure", "drop": "retain"},
+        },
     )
     assert lab.cli("schedule", "--card", card)["next"]["task"] == "guard"
     packet = fixtures.get(evidence)

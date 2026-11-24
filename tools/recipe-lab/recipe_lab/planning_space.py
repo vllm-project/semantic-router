@@ -4,9 +4,9 @@ import re
 
 if __package__:
     from .casebook import load_cases
-    from .semantic_depth import threshold_sites
     from .first_tool_action import first_tool_edit, verify_guards
     from .loop_evidence import check, digest, require_isolated, target
+    from .semantic_depth import threshold_sites
     from .window_action import (
         apply_window,
         load_space,
@@ -16,9 +16,9 @@ if __package__:
     )
 else:
     from casebook import load_cases
-    from semantic_depth import threshold_sites
     from first_tool_action import first_tool_edit, verify_guards
     from loop_evidence import check, digest, require_isolated, target
+    from semantic_depth import threshold_sites
     from window_action import (
         apply_window,
         load_space,
@@ -66,10 +66,12 @@ def _count_predicate(recipe, lane):
         if negated:
             if set(leaf) != {"operator", "conditions"} or len(leaf["conditions"]) != 1:
                 return None
-            leaf = leaf["conditions"][0]
-        if set(leaf) != {"type", "name"} or leaf["type"] != "conversation":
+            condition = leaf["conditions"][0]
+        else:
+            condition = leaf
+        if set(condition) != {"type", "name"} or condition["type"] != "conversation":
             return None
-        matches = [s for s in signals if s.get("name") == leaf["name"]]
+        matches = [s for s in signals if s.get("name") == condition["name"]]
         if len(matches) != 1:
             return None
         signal = matches[0]
@@ -96,11 +98,13 @@ def _count_predicate(recipe, lane):
             ):
                 return None
             if negated:
-                op = {"gt": "lte", "gte": "lt", "lt": "gte", "lte": "gt"}[op]
-            if op in ("gt", "gte"):
-                lower = max(lower, n + (op == "gt"))
+                flipped = {"gt": "lte", "gte": "lt", "lt": "gte", "lte": "gt"}[op]
             else:
-                limit = n - (op == "lt")
+                flipped = op
+            if flipped in ("gt", "gte"):
+                lower = max(lower, n + (flipped == "gt"))
+            else:
+                limit = n - (flipped == "lt")
                 upper = limit if upper is None else min(upper, limit)
     if upper is not None and upper < lower:
         return None
@@ -108,9 +112,13 @@ def _count_predicate(recipe, lane):
 
 
 def _descriptor(kind, reason, predicate=None):
-    return dict(
-        id="parent", source="config", kind=kind, predicate=predicate, reason=reason
-    )
+    return {
+        "id": "parent",
+        "source": "config",
+        "kind": kind,
+        "predicate": predicate,
+        "reason": reason,
+    }
 
 
 def _routing_shape(recipe, strong, fast, *, historical):
@@ -253,11 +261,11 @@ def render_handoff(doc, *, public_model, strong, fast, threshold):
     blocker = _render_blocker(recipe, _model_cards(doc, strong, fast))
     check(blocker is None, blocker or "")
     base = recipe["decisions"][0]
-    signal = dict(
-        name="lab_late_tool_results",
-        feature={"type": "count", "source": {"type": "assistant_tool_cycle"}},
-        predicate={"gte": threshold},
-    )
+    signal = {
+        "name": "lab_late_tool_results",
+        "feature": {"type": "count", "source": {"type": "assistant_tool_cycle"}},
+        "predicate": {"gte": threshold},
+    }
     branch = {
         **base,
         "name": "lab_late_fast",
@@ -531,7 +539,7 @@ def build_space(doc, *, public_model, strong, fast):
     """Enumerate the project's active configuration and applicable recorded handoffs."""
     recipe = require_isolated(doc, public_model)
     cards = _model_cards(doc, strong, fast)
-    args = dict(public_model=public_model, strong=strong, fast=fast)
+    args = {"public_model": public_model, "strong": strong, "fast": fast}
     candidates = [extract_candidate(doc, **args)]
     historical = []
     references = (

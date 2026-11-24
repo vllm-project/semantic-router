@@ -10,7 +10,7 @@ from itertools import product
 from pathlib import Path
 from statistics import stdev
 
-import recipe_lab.loop as loop
+from recipe_lab import loop
 from recipe_lab.loop_evidence import digest
 
 
@@ -20,14 +20,14 @@ class HeadroomTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
         self.work = self.root / "ledger"
-        self.manifest = dict(
-            study="pilot",
-            split="dev",
-            tasks=["A", "B"],
-            arms=["speed", "glm"],
-            repeats=[1, 2],
-            scores="scores.json",
-        )
+        self.manifest = {
+            "study": "pilot",
+            "split": "dev",
+            "tasks": ["A", "B"],
+            "arms": ["speed", "glm"],
+            "repeats": [1, 2],
+            "scores": "scores.json",
+        }
 
     def rows(self, outcomes=None):
         rows = []
@@ -36,19 +36,19 @@ class HeadroomTest(unittest.TestCase):
         ):
             strict, seconds = (outcomes or {}).get((task, arm, repeat), (True, 10))
             rows.append(
-                dict(
-                    study="pilot",
-                    split=self.manifest["split"],
-                    task=task,
-                    arm=arm,
-                    repeat=repeat,
-                    controls_sha256=digest(task.encode()),
-                    policy_sha256=digest(arm.encode()),
-                    episode_sha256=digest(str((task, arm, repeat)).encode()),
-                    strict=strict,
-                    seconds=seconds,
-                    assessment="valid",
-                )
+                {
+                    "study": "pilot",
+                    "split": self.manifest["split"],
+                    "task": task,
+                    "arm": arm,
+                    "repeat": repeat,
+                    "controls_sha256": digest(task.encode()),
+                    "policy_sha256": digest(arm.encode()),
+                    "episode_sha256": digest(str((task, arm, repeat)).encode()),
+                    "strict": strict,
+                    "seconds": seconds,
+                    "assessment": "valid",
+                }
             )
         return rows
 
@@ -291,7 +291,7 @@ class HeadroomTest(unittest.TestCase):
             self.cli()
         rows = self.rows()
         for invalid in (
-            rows + [rows[0]],
+            [*rows, rows[0]],
             rows[:-1],
             [dict(rows[0], episode_sha256=rows[1]["episode_sha256"]), *rows[1:]],
         ):

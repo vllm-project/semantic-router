@@ -5,9 +5,8 @@ import io
 import unittest
 from contextlib import redirect_stderr
 
-import yaml
-
 import test_loop
+import yaml
 from recipe_lab.loop_evidence import digest
 from recipe_lab.window_action import apply_window, load_space, window_bounds
 

@@ -4,9 +4,8 @@ import contextlib
 import io
 import unittest
 
-import yaml
-
 import test_loop
+import yaml
 from recipe_lab.first_tool_action import first_tool_edit
 from recipe_lab.loop_evidence import digest
 

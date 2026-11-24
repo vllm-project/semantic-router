@@ -6,9 +6,8 @@ import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 
-import yaml
-
 import test_loop as fixtures
+import yaml
 from recipe_lab.loop_evidence import digest
 from recipe_lab.planning_space import render_handoff
 from test_planning_probe import sample as probe_sample
@@ -32,7 +31,9 @@ class PlannerTest(unittest.TestCase):
         }
         recipe["decisions"][0].update(algorithm={"type": "static"}, priority=1)
         for card, name in zip(
-            self.doc["providers"]["models"], ["GLM-5.3", "Qwen3.5-35B-A3B"]
+            self.doc["providers"]["models"],
+            ["GLM-5.3", "Qwen3.5-35B-A3B"],
+            strict=True,
         ):
             card.update(
                 provider_model_id=name,
@@ -67,7 +68,7 @@ class PlannerTest(unittest.TestCase):
             binding["assignment_id"] = assignment
         fixtures.put(binding_path, binding)
         rows = receipts(counts)
-        for index, (req, reply) in enumerate(zip(rows[::2], rows[1::2])):
+        for index, (req, reply) in enumerate(zip(rows[::2], rows[1::2], strict=True)):
             req.update(params={"max_completion_tokens": output}, start=10 + index)
             reply.update(end=12 + index, usage={"prompt_tokens": 42})
         (folder / "requests.jsonl").write_bytes(encode_rows(rows))
@@ -237,7 +238,7 @@ class PlannerTest(unittest.TestCase):
         source = self.root / "old.yaml"
         fixtures.put(source, reference)
         for card, name in zip(
-            self.doc["providers"]["models"], ["slow-writer", "fast-editor"]
+            self.doc["providers"]["models"], ["slow-writer", "fast-editor"], strict=True
         ):
             card.update(provider_model_id=name)
         fixtures.put(self.config, self.doc)
@@ -286,9 +287,9 @@ class PlannerTest(unittest.TestCase):
 
     def test_status_without_parent_success_exposure_or_capacity(self):
         for args, expected in [
-            (dict(correct=False), "reproduce_passing_parent"),
-            (dict(counts=(1, 2)), "collect_discriminating_prefix"),
-            (dict(output=65), "inspect_backend_limits"),
+            ({"correct": False}, "reproduce_passing_parent"),
+            ({"counts": (1, 2)}, "collect_discriminating_prefix"),
+            ({"output": 65}, "inspect_backend_limits"),
         ]:
             with self.subTest(expected=expected):
                 record = self.measured(**args)
@@ -501,25 +502,25 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(plan["next"]["action"], "plan_paired_development")
         saved = self.root / "plan.json"
         fixtures.put(saved, plan)
-        card = dict(
-            schema="recipe-lab-schedule-v2",
-            study="handoff",
-            based_on=base,
-            signature=saved.name,
-            signature_sha256=digest(saved.read_bytes()),
-            candidate=candidate.name,
-            target_task="task",
-            guard_task="guard",
-            budget_episodes=4,
-            repeats=1,
-            hypotheses=["handoff saves time", "handoff adds rounds"],
-            prediction="guard remains solved",
-            decisions={
+        card = {
+            "schema": "recipe-lab-schedule-v2",
+            "study": "handoff",
+            "based_on": base,
+            "signature": saved.name,
+            "signature_sha256": digest(saved.read_bytes()),
+            "candidate": candidate.name,
+            "target_task": "task",
+            "guard_task": "guard",
+            "budget_episodes": 4,
+            "repeats": 1,
+            "hypotheses": ["handoff saves time", "handoff adds rounds"],
+            "prediction": "guard remains solved",
+            "decisions": {
                 "advance": "confirm",
                 "revise": "measure",
                 "drop": "keep parent",
             },
-        )
+        }
         card_path = self.root / "study.json"
         fixtures.put(card_path, card)
         first = self.cli("schedule", "--card", card_path)
