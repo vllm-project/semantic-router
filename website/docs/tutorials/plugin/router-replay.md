@@ -543,6 +543,7 @@ plugins:
           timeout: 30s
         budget:
           max_response_bytes: 2097152
+          # max_estimated_tokens: 16384
           # max_estimated_cost: 0.01
         capture:
           enabled: false
@@ -559,14 +560,15 @@ Here `N` is the number of configured models. All integer bounds must be positive
 | `execution.max_queue_size` | `8` | Pending request groups for the same recipe and decision, shared across requests. Counts groups, not candidates. |
 | `execution.timeout` | `30s` | Shared group deadline, including queue wait and all candidate calls. Positive duration, at most `5m`. |
 | `budget.max_response_bytes` | `N × 1048576` | Aggregate response byte budget, divided before dispatch among effective candidates. Minimum `2 × N`: each candidate reserves one byte to detect an oversized response. |
+| `budget.max_estimated_tokens` | — | Optional. Maximum total estimated input and reserved output tokens for the sampled Shadow group. |
 | `budget.max_estimated_cost` | — | Optional. Maximum estimated spend for the sampled Shadow group, in `global.services.budgets.currency` (USD by default). |
 | `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
 | `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
 | `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
 
-When `budget.max_estimated_cost` is set, the Router prices each Shadow call using its estimated input tokens and the output limit sent to the backend. If the outgoing request omits the limit, the Router estimates output using the model's `max_output_tokens` or, if unset, `global.services.budgets.output_reserve_tokens` (default 4096).
+For either limit, the Router estimates input tokens and reserves output tokens from the limit sent to the backend. If the outgoing request omits the output limit, the Router uses the model's `max_output_tokens` or, if unset, `global.services.budgets.output_reserve_tokens` (default 4096). The token limit sums both quantities across candidates. The cost limit prices them using each model's rates. A token limit alone requires no pricing.
 
-The Router skips the group if the sum exceeds the limit, a candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. For attempted calls, it records the estimate and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
+The Router skips the group if either configured limit is exceeded, a cost-limited candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. When a cost limit is configured, Replay records the estimated cost for attempted calls and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
 
 The old flat shadow fields are rejected; use the nested structure above.
 

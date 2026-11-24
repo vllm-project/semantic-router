@@ -275,6 +275,7 @@ plugins:
           timeout: 30s
         budget:
           max_response_bytes: 2097152
+          # max_estimated_tokens: 16384
           # max_estimated_cost: 0.01
         capture:
           enabled: false
@@ -291,14 +292,15 @@ plugins:
 | `execution.max_queue_size` | `8` | 同一配方和决策等待执行的请求组数，由所有请求共享。按组计数，不按候选模型计数。 |
 | `execution.timeout` | `30s` | 整组共享的截止时间，包括排队等待和所有候选调用。必须为正时长，最多 `5m`。 |
 | `budget.max_response_bytes` | `N × 1048576` | 整组的响应字节预算，在派发前分配给有效候选。最小值为 `2 × N`：每个候选预留一个字节，用于检测超大响应。 |
+| `budget.max_estimated_tokens` | — | 可选。单次抽样的 Shadow 候选组的预估输入与预留输出 token 总量上限。 |
 | `budget.max_estimated_cost` | — | 可选。单次抽样的 Shadow 候选组最高预估费用，币种使用 `global.services.budgets.currency`（默认 USD）。 |
 | `capture.enabled` | `false` | 仅在 `prompt_capture: raw` 下保存候选文本的有上限摘录。关闭时只保留大小、token 用量和 SHA-256。 |
 | `forward_headers` | `[]` | 允许复制的决策请求头，不区分大小写。凭据头不会转发。 |
 | `capture.max_bytes` | `N × 4096` | 整组的摘录字节上限，分配给有效候选。 |
 
-设置 `budget.max_estimated_cost` 后，Router 根据各候选的输入 token 估算值和发往后端的输出上限估价。如果出站请求未指定输出上限，依次使用模型的 `max_output_tokens`、`global.services.budgets.output_reserve_tokens`（默认 4096）。
+配置任一上限后，Router 会估算各候选的输入 token，并按发往后端的输出上限预留输出 token。如果出站请求未指定输出上限，依次使用模型的 `max_output_tokens`、`global.services.budgets.output_reserve_tokens`（默认 4096）。Token 上限比较所有候选的预估输入与预留输出之和。费用上限按各模型费率估价。只配置 token 上限时无需费率。
 
-预估总额超限、有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。对于已尝试派发的调用，Replay 记录预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
+预估 token 或费用超限、启用费用上限且有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。配置费用上限后，Replay 会记录已尝试派发的调用的预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
 
 旧的扁平影子字段会被拒绝，请使用上面的嵌套结构。
 
