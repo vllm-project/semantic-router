@@ -181,9 +181,16 @@ def _write_state(path: Path, routes: dict[str, dict]) -> None:
     path.write_text(json.dumps({"records": [], "routes": routes}), encoding="utf-8")
 
 
+# The runner's default python3 may lack PyYAML (a CI runner does); pin the
+# shebang to this test process's interpreter, like the route-replay router.
+FAKE_ROUTER_TEXT = (
+    f"#!{sys.executable}\n" + OBSERVE_FAKE_ROUTER_SCRIPT.split("\n", 1)[1]
+)
+
+
 def _observe_env(tmp_path: Path, work_dir: str) -> RunnerEnv:
     router = tmp_path / "fake_router.py"
-    router.write_text(OBSERVE_FAKE_ROUTER_SCRIPT)
+    router.write_text(FAKE_ROUTER_TEXT)
     router.chmod(0o755)
     mock = tmp_path / "mock_backend.py"
     mock.write_text("import time\ntime.sleep(300)\n")
@@ -466,7 +473,7 @@ def _write_observe_spec(tmp_path: Path, split_cases: dict[str, str]) -> str:
 
 def _write_cli_stack(tmp_path: Path, state_path: Path) -> tuple[str, str]:
     router = tmp_path / "fake_router.py"
-    router.write_text(OBSERVE_FAKE_ROUTER_SCRIPT)
+    router.write_text(FAKE_ROUTER_TEXT)
     router.chmod(0o755)
     mock = tmp_path / "mock_backend.py"
     mock.write_text("import time\ntime.sleep(300)\n")

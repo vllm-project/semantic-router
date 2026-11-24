@@ -33,7 +33,7 @@ from recipe_lab.contract import API_VERSION, ContractError, ExperimentSpec
 from recipe_lab.profile import PROFILE_SCHEMA, results_dirname
 from recipe_lab.runner import RunnerEnv
 from tests.test_observe_labels import (
-    OBSERVE_FAKE_ROUTER_SCRIPT,
+    FAKE_ROUTER_TEXT,
     _free_port,
     _write_state,
 )
@@ -89,7 +89,7 @@ def _dev_cases() -> list[dict]:
 
 def _write_fake_stack(tmp_path: Path) -> tuple[str, str]:
     router = tmp_path / "fake_router.py"
-    router.write_text(OBSERVE_FAKE_ROUTER_SCRIPT)
+    router.write_text(FAKE_ROUTER_TEXT)
     router.chmod(0o755)
     mock = tmp_path / "mock_backend.py"
     mock.write_text("import time\ntime.sleep(300)\n")

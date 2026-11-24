@@ -198,7 +198,9 @@ def _tool(executable):
 
 def _run(argv):
     # Keep native diagnostics on stderr; do not write them into the shareable manifest.
-    cmd = subprocess.run([str(x) for x in argv], stdout=subprocess.PIPE, text=True)
+    cmd = subprocess.run(
+        [str(x) for x in argv], stdout=subprocess.PIPE, text=True, check=False
+    )
     if cmd.returncode:
         raise ValueError(
             f"{Path(argv[0]).name} failed ({cmd.returncode}): {cmd.stdout.strip()}"

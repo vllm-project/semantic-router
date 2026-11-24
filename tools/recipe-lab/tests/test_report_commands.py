@@ -7,11 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+import test_speed_draft as speed
 import yaml
 from recipe_lab import cli, loop, report_delivery, speed_draft, srbench
 from recipe_lab.loop_evidence import digest
-
-import test_speed_draft as speed
 
 CONFIG = "4" * 64
 

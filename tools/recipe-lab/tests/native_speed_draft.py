@@ -8,7 +8,6 @@ import sys
 
 import pytest
 import yaml
-
 from test_speed_draft import FAST, LAB, PUBLIC, STRONG, providers
 
 
@@ -77,6 +76,7 @@ def test_compile_two_backends_with_real_offline_cli_and_router(
         capture_output=True,
         text=True,
         timeout=120,
+        check=False,
     )
     assert cp.returncode == 0, cp.stdout + cp.stderr
     assert yaml.safe_load(provider_input.read_text("utf-8")) == doc

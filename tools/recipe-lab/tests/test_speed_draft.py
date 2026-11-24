@@ -117,7 +117,9 @@ def test_fast_tool_backend_can_serve_hard_requests_without_changing_rules(
     tools["modelRefs"] = [{"model": FAST}]
     result = speed_draft.specialize(doc, PUBLIC, STRONG, FAST, FAST)
     for old, lane in zip(
-        doc["recipes"][1]["decisions"], result["recipes"][1]["decisions"]
+        doc["recipes"][1]["decisions"],
+        result["recipes"][1]["decisions"],
+        strict=True,
     ):
         assert (old.get("rules"), old["priority"]) == (
             lane.get("rules"),
@@ -154,7 +156,9 @@ def test_agent_streaming_removes_only_the_selected_decisions_total_timeout():
     )
     assert doc == original
     for before, after in zip(
-        original["recipes"][1]["decisions"], standard["recipes"][1]["decisions"]
+        original["recipes"][1]["decisions"],
+        standard["recipes"][1]["decisions"],
+        strict=True,
     ):
         assert after.get("reliability") == before.get("reliability")
     expected = copy.deepcopy(standard)
