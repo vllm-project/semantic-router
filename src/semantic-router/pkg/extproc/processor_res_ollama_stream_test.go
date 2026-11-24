@@ -67,7 +67,7 @@ func TestOllamaReasoningStreamReachesMessagesClient(t *testing.T) {
 	if strings.Contains(received, "event: error") {
 		t.Fatalf("Messages stream failed:\n%s", received)
 	}
-	thinking := strings.Index(received, `"content_block":{"thinking"`)
+	thinking := strings.Index(received, `"content_block":{"signature":"","thinking"`)
 	text := strings.Index(received, `"text_delta","text":"OK"`)
 	if thinking < 0 || text < thinking {
 		t.Fatalf("want a thinking block followed by the OK text:\n%s", received)

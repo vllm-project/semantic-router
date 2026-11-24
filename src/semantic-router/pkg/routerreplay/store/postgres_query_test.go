@@ -25,6 +25,37 @@ func TestPostgresReplayWhereParameters(t *testing.T) {
 	}
 }
 
+// has_session keeps the records with a session id, with no parameter.
+func TestPostgresReplayWhereHasSession(t *testing.T) {
+	where, args := postgresReplayWhere(QueryFilters{HasSession: true})
+	if where != " WHERE COALESCE(session_id, '') <> ''" || len(args) != 0 {
+		t.Fatalf("where = %q args = %v", where, args)
+	}
+}
+
+// The run projection keeps every column of a full record, in order, but
+// reads the bodies, prompt and tool definitions as empty and each tool step
+// without its payload.
+func TestPostgresRunColumnsLeaveTheBodiesOut(t *testing.T) {
+	run := postgresRunSelectColumns()
+	if got := strings.Count(run, "''"); got != 4 {
+		t.Fatalf("run projection blanks %d text columns, want 4", got)
+	}
+	for _, key := range []string{"'type'", "'source'", "'tool_name'", "'tool_call_id'", "'status'", "WITH ORDINALITY"} {
+		if !strings.Contains(run, key) {
+			t.Fatalf("run projection keeps no %s of the tool steps", key)
+		}
+	}
+	for _, payload := range []string{"'arguments'", "'output'", "'text'", "'raw_output'"} {
+		if strings.Contains(run, payload) {
+			t.Fatalf("run projection keeps the steps' %s", payload)
+		}
+	}
+	if strings.Contains(postgresSummarySelectColumns(), "tool_call_id") {
+		t.Fatal("the list projection changed: it keeps tool names only")
+	}
+}
+
 // A harness filter matches the harness in a record's routing metadata, each
 // harness a parameter, and an API client as a record without one.
 func TestPostgresReplayWhereHarness(t *testing.T) {

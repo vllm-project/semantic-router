@@ -29,6 +29,7 @@ func TestTheLLMAPIsKeepTheirCodecs(t *testing.T) {
 		Responses:       llmprotocol.OpenAIResponsesV1,
 		Messages:        llmprotocol.AnthropicMessagesV1,
 		Images:          llmprotocol.OpenAIImagesV1,
+		Speech:          llmprotocol.OpenAISpeechV1,
 	}
 	for name, format := range want {
 		api, err := Resolve(string(name))
@@ -77,7 +78,7 @@ func TestTheVendorNamesAreAliases(t *testing.T) {
 	if Canonical("responses") != "responses" {
 		t.Fatal("a canonical name is its own canonical name")
 	}
-	if _, err := Resolve("realtime"); err == nil || !strings.Contains(err.Error(), "chat_completions, responses, messages, images, systemone") {
+	if _, err := Resolve("realtime"); err == nil || !strings.Contains(err.Error(), "chat_completions, responses, messages, images, speech, systemone") {
 		t.Fatalf("an unknown api: %v", err)
 	}
 }
@@ -88,6 +89,7 @@ func TestPathsBelongToOneAPI(t *testing.T) {
 		"/v1/responses/resp_1":      Responses,
 		"/v1/messages/count_tokens": Messages,
 		"/v1/images/generations":    Images,
+		"/v1/audio/speech":          Speech,
 		"/v1/systemone/batch":       SystemOne,
 		"/v1/decisions":             SystemOne,
 	} {
@@ -107,6 +109,7 @@ func TestPathsIncludeTheAzureForms(t *testing.T) {
 		"/openai/v1/responses":                              Responses,
 		"/v1/messages/count_tokens":                         Messages,
 		"/v1/images/generations/":                           Images,
+		"/v1/audio/speech/":                                 Speech,
 		"/v1/systemone/batch":                               SystemOne,
 		"/v1/decisions":                                     SystemOne,
 	} {

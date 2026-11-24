@@ -333,6 +333,6 @@ shows that external 4.0 traffic is gone.
 - **Follow-up:** the runtime still requires two options for a choice or a
   score, and instructions or described criteria for a noul, where the standard
   allows one option and a bare noul.
-- **Follow-up:** `vllm-sr/auto` routes `box` questions by capability; `set`,
-  `span` and `track` answers are family-specific (`sets`, `spans`), so auto
-  validates and routes them in a later change.
+- **Follow-up:** `vllm-sr/auto` routes `box` and `set` questions by
+  capability; `span` and `track` answers are family-specific (`spans`), so
+  auto validates and routes them in a later change.

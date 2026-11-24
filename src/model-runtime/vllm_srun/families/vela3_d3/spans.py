@@ -6,8 +6,9 @@ windows of d3's own prompt (``span_render.py``), and the reader runs and
 answers it (``span_read.py``). The questions follow the runtime's contract:
 ``over`` names the target part (by default the answer part, else the user
 part, else the only one; a state of several parts with neither needs
-``over``), ``threshold`` overrides the package's,
-``preset`` asks a trained label set, and answers are ``spans`` with each
+``over``), ``threshold`` overrides the package's (one above it keeps the
+package's spans that reach it, whole), ``preset`` asks a trained label set,
+and answers are ``spans`` with each
 span's mean word probability. The windows read the whole target, so
 ``overflow`` is ``window`` and a question that sets ``require_full_input``
 reads its input completely.
@@ -112,24 +113,27 @@ def labels_of(question: dict[str, Any]) -> list[tuple[str, str]]:
     if listed is not None:
         criteria = listed_options(listed, "labels")
     elif isinstance(criteria, list):
-        names = [str(name) for name in criteria]
-        if len(set(names)) != len(names):
+        if not all(isinstance(name, str) for name in criteria):
+            raise invalid("criteria must list span labels as strings")
+        if len(set(criteria)) != len(criteria):
             raise invalid("span labels must be distinct")
-        criteria = dict.fromkeys(names)
+        criteria = dict.fromkeys(criteria)
     options = named_options(criteria, minimum=1)
     return [
         (name, "" if value is None else text(value)) for name, value in options.items()
     ]
 
 
-def over_budget(tokens: int) -> QuestionError | None:
-    """Why a span target of ``tokens`` tokens is refused (over ``SPAN_TARGET_TOKENS``), or None."""
-    if tokens <= SPAN_TARGET_TOKENS:
-        return None
+def over_budget() -> QuestionError:
+    """Why a span target of more than ``SPAN_TARGET_TOKENS`` tokens is refused.
+
+    The message names no token count: such a target is not tokenized to its
+    end, so its count is not known.
+    """
     return QuestionError(
         SCAN_BUDGET_EXCEEDED,
-        f"the span target has {tokens} tokens, over this model's span budget of "
-        f"{SPAN_TARGET_TOKENS} tokens; nothing was read",
+        f"the span target has more than {SPAN_TARGET_TOKENS} tokens, this model's "
+        "span budget; nothing was read",
         "scan_budget",
     )
 
@@ -152,8 +156,9 @@ class Spans:
         """One span question's item, as the released ``span_answer`` prepares it; ``QuestionError`` if invalid.
 
         The target may hold at most ``SPAN_TARGET_TOKENS`` tokens
-        (``scan_budget_exceeded``, checked before it is laid out). Every window, whose other parts are not
-        windowed, must pass the base's ``length_error``.
+        (``scan_budget_exceeded``, checked before it is laid out). A longer one
+        is tokenized only as far as that check needs. Every window, whose other
+        parts are not windowed, must pass the base's ``length_error``.
         """
         if "preset" in question:
             question = expand_preset(question, self.policy.config.schemas)
@@ -179,23 +184,23 @@ class Spans:
             raise invalid("span instructions must be a string")
         override = threshold_of(question)
         routed = self.policy.resolve(labels, instructions)
-        windows, count = self.renderer.windows(
+        planned = self.renderer.windows(
             parts,
             target,
             routed.question,
             routed.labels,
-            over_budget,
+            SPAN_TARGET_TOKENS,
         )
+        if planned is None:
+            raise over_budget()
+        windows, count = planned
         refused = length_error(max(len(window.ids) for window in windows))
         if refused is not None:
             raise refused
-        threshold = (
-            override
-            if override is not None
-            else self.policy.threshold(
-                routed.route, routed.label_set, routed.labels, count
-            )
+        own = self.policy.threshold(
+            routed.route, routed.label_set, routed.labels, count
         )
+        threshold = own if override is None else override
         return SpanItem(
             question_id=question_id,
             task_type="span",
@@ -207,6 +212,7 @@ class Spans:
             names=tuple(names),
             label_set=routed.label_set,
             threshold=threshold,
+            decode_threshold=own if threshold > own else None,
             evidence=routed.evidence,
             text=dict(parts)[target],
             windows=tuple(windows),

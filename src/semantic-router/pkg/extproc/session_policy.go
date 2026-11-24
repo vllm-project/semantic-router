@@ -57,7 +57,7 @@ func commitAgenticSessionDecision(ctx *RequestContext) error {
 	if ctx != nil && ctx.pendingSessionDecision != nil {
 		ctx.pendingSessionDecision.Timestamp = time.Now()
 		sessiontelemetry.RecordSessionDecision(*ctx.pendingSessionDecision)
-		ctx.pendingSessionDecision = nil
+		ctx.committedSessionDecision, ctx.pendingSessionDecision = ctx.pendingSessionDecision, nil
 	}
 	return nil
 }

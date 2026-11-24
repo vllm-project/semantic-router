@@ -60,8 +60,8 @@ describe('Insights configured-rate estimates', () => {
     expect(formatInsightsCost(-0.000001, 'USD')).toBe('>-$0.0001')
     expect(formatInsightsCost(0.000001, 'EUR')).toBe('<€0.0001')
     expect(formatInsightsCost(0, 'USD')).toBe('$0.0000')
-    expect(formatInsightsCost(undefined, 'USD')).toBe('N/A')
-    expect(formatInsightsCost(Number.NaN, 'USD')).toBe('N/A')
+    expect(formatInsightsCost(undefined, 'USD')).toBe('—')
+    expect(formatInsightsCost(Number.NaN, 'USD')).toBe('—')
   })
 
   it('rounds totals to cents, names no currency for XXX, and leaves a named column bare', () => {

@@ -1,275 +1,118 @@
-import type { ReactNode } from 'react'
+import { Bot, Cpu, Route } from 'lucide-react'
 
-import type {
-  InsightsAggregateResponse,
-  InsightsAggregateSummary,
-  InsightsAggregateCurrencySummary,
-} from '../pages/insightsPageTypes'
-import { modelText, useModelLabels } from '../pages/insightsModelLabelSupport'
-import InsightsCostCoverage from './InsightsCostCoverage'
-import InsightsProviderCacheSummary from './InsightsProviderCacheSummary'
-import InsightsRankedBars, { InsightsTokenRows } from './InsightsRankedBars'
-import {
-  INSIGHTS_DETAILS,
-  InsightsStatGrid,
-  InsightsUnitsBadge,
-  type InsightsStat,
-} from './InsightsStats'
-import {
-  formatInsightsCompactCount,
-  formatInsightsCost,
-  formatInsightsCount,
-  formatInsightsShare,
-  insightsCurrencyLabel,
-} from '../utils/insightsCost'
+import type { InsightsAggregateResponse } from '../pages/insightsPageTypes'
+import { modelProviderId, useInsightsConfig } from '../pages/insightsConfigFacts'
+import { DecisionIcon } from '../pages/InsightsDecisionBadge'
+import { HarnessLogo } from '../pages/InsightsHarness'
+import { API_CLIENT_LABEL, harnessInfo, sortHarnessIds } from '../pages/insightsHarness'
+import { modelLabel, useModelLabels } from '../pages/insightsModelLabelSupport'
+import { formatInsightsDecisionName } from '../pages/insightsPageSupport'
+import { ProviderLogo } from '../ui'
+import InsightsRankedBars, { type InsightsRankedEntry } from './InsightsRankedBars'
 
 interface InsightsChartsProps {
   aggregate: InsightsAggregateResponse
+  /** Requests by harness under the page's other filters, from the records list. */
+  harnessCounts?: Record<string, number> | null
 }
 
-type CostSummary = InsightsAggregateSummary | InsightsAggregateCurrencySummary
-
-const total = (value: number | undefined, currency?: string) =>
-  formatInsightsCost(value, currency, { total: true })
-
-// Router calls (a Looper's model calls and the questions the Router asks to
-// route) are a separate cost, and the total adds them and the priced requests
-// without a baseline, failed ones included; each card shows only where it
-// differs from the model cost.
-const spendStats = (summary: CostSummary): InsightsStat[] => [
-  ...((summary.router_call_spend ?? 0) !== 0
-    ? [
-        {
-          label: 'Estimated Router Calls',
-          value: total(summary.router_call_spend, summary.currency),
-          tone: 'muted' as const,
-        },
-      ]
-    : []),
-  ...(summary.total_spend !== undefined && summary.total_spend !== summary.actual_spend
-    ? [
-        {
-          label: 'Estimated Total Cost',
-          value: total(summary.total_spend, summary.currency),
-          tone: 'muted' as const,
-        },
-      ]
-    : []),
-]
-
-// A currency can have priced costs but no request compared with a baseline;
-// its savings are then unknown, not zero.
-const comparedCost = (summary: CostSummary, value: number) =>
-  summary.cost_record_count > 0 ? total(value, summary.currency) : 'N/A'
-
-// Savings are net of the compared requests' Router calls; where those cost
-// anything, the gross figure and what was netted show beside it.
-const netStats = (summary: CostSummary): InsightsStat[] =>
-  summary.cost_record_count > 0 && (summary.netted_router_call_spend ?? 0) !== 0
-    ? [
-        {
-          label: 'Estimated Gross Savings',
-          value: total(summary.gross_saved, summary.currency),
-          tone: 'muted',
-        },
-        {
-          label: 'Router Calls Netted',
-          value: total(summary.netted_router_call_spend, summary.currency),
-          tone: 'muted',
-        },
-      ]
-    : []
-
-const summaryStats = (summary: CostSummary): InsightsStat[] => [
-  {
-    label: 'Estimated Savings',
-    value: comparedCost(summary, summary.total_saved),
-    lead: true,
-    tone: summary.total_saved < 0 ? 'negative' : undefined,
-  },
-  {
-    label: 'Estimated Saved %',
-    value:
-      summary.cost_record_count > 0 && summary.baseline_spend > 0
-        ? formatInsightsShare(summary.total_saved, summary.baseline_spend)
-        : 'N/A',
-  },
-  { label: 'Estimated Baseline', value: comparedCost(summary, summary.baseline_spend) },
-  { label: 'Estimated Model Cost', value: comparedCost(summary, summary.actual_spend) },
-  ...netStats(summary),
-  ...spendStats(summary),
-]
+const API_CLIENT = 'api_client'
 
 const plural = (count: number, word: string) =>
-  `${formatInsightsCount(count)} ${word}${count === 1 ? '' : 's'}`
+  `${count.toLocaleString('en-US')} ${word}${count === 1 ? '' : 's'}`
 
-// The estimate caveat and, closed by default, how the amounts are reached.
-function InsightsEstimateNotes() {
-  return (
-    <div className="flex flex-col gap-1.5 text-xs leading-relaxed text-muted-foreground">
-      <p>
-        Estimates from recorded tokens and configured rates, not GPU bills or provider invoices.
-      </p>
-      <details className={INSIGHTS_DETAILS}>
-        <summary>How estimates work</summary>
-        <p>
-          New records use the highest estimate in the recipe’s complete model pool across all
-          decisions, in the same currency, as baseline using the same recorded tokens, unless the
-          route’s router_replay plugin sets cost_baseline_model: that model is then the baseline,
-          and a request sent to a dearer model shows a negative saving. Direct requests use the
-          selected model as baseline when no baseline model is set. Older records retain their
-          captured baseline.
-        </p>
-        <p>
-          Decision-model, System One, embedding and Looper calls are costed apart from the selected
-          model and added to the total; a call without a price is counted as unpriced, never as
-          free. Savings are net of the calls the Router made for the compared requests; the gross
-          figure is before them. Recorded router spend includes failed requests. A generation model
-          without configured pricing uses the built-in catalog’s list price when its provider lists
-          one, marked as an estimate. On a client’s own login a cost is the API-price equivalent,
-          not what the plan charges.
-        </p>
-        <p>
-          Infrastructure charges and invoice adjustments are excluded. Currencies are shown
-          separately; no exchange-rate conversion is applied. Savings leave out requests that are
-          not completed or lack token usage, model pricing, or baseline data, and requests whose
-          Router calls lack a price rather than netting them at zero. The total still counts the
-          priced calls of a request that failed. Missing data is shown as an explicit reason in each
-          record. Historical requests without captured prices remain “Price not recorded”; current
-          model rates do not backfill them.
-        </p>
-      </details>
-    </div>
+const byValue = (a: InsightsRankedEntry, b: InsightsRankedEntry) =>
+  b.value - a.value || a.label.localeCompare(b.label)
+
+/** The harnesses by their requests, the plain API client last. */
+function harnessEntries(counts: Record<string, number>): InsightsRankedEntry[] {
+  const harnesses = sortHarnessIds(
+    Object.keys(counts).filter((id) => id !== API_CLIENT && counts[id] > 0),
   )
+    .map((id) => ({
+      id,
+      label: harnessInfo(id)?.label ?? id,
+      value: counts[id],
+      mark: <HarnessLogo harness={id} size={16} />,
+    }))
+    .sort(byValue)
+  if (counts[API_CLIENT] > 0) {
+    harnesses.push({
+      id: API_CLIENT,
+      label: API_CLIENT_LABEL,
+      value: counts[API_CLIENT],
+      mark: <HarnessLogo size={16} />,
+    })
+  }
+  return harnesses
 }
 
-function Block({
-  title,
-  label,
-  action,
-  children,
-}: {
-  title: string
-  label: string
-  action?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <section
-      className="flex flex-col gap-3 rounded-xl border border-border bg-card px-4 py-4 shadow-xs"
-      aria-label={label}
-    >
-      <header className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold tracking-[-0.01em]">{title}</h3>
-        {action}
-      </header>
-      {children}
-    </section>
-  )
-}
-
-export default function InsightsCharts({ aggregate }: InsightsChartsProps) {
+// The Breakdown: the requests by agent harness, model and decision, as three
+// cards of one family. The summary row above holds the headline figures.
+export default function InsightsCharts({ aggregate, harnessCounts }: InsightsChartsProps) {
   const labels = useModelLabels()
+  const { modelProviders } = useInsightsConfig()
   if (aggregate.record_count === 0) {
     return null
   }
-  const summary = aggregate.summary
-  const costGroups = summary.by_currency?.length ? summary.by_currency : [summary]
-  const tokenVolume = aggregate.token_volume
-  const named = <T extends { name: string }>(entries: T[]) =>
-    entries.map((entry) => ({ ...entry, name: modelText(labels, entry.name) }))
-  const tokenStat = (label: string, value: number): InsightsStat => ({
-    label,
-    value: formatInsightsCompactCount(value),
-    caption: `${formatInsightsCount(value)} tokens`,
-  })
-
+  const agents = harnessCounts ? harnessEntries(harnessCounts) : null
+  const models = aggregate.model_selection
+    .map((entry) => {
+      const provider = modelProviderId(entry.name, modelProviders)
+      const label = entry.name ? modelLabel(labels, entry.name) : 'No model call'
+      return {
+        id: entry.name || 'none',
+        label,
+        title: label === entry.name ? entry.name : `${label} · configured as ${entry.name}`,
+        value: entry.value,
+        mark: provider ? (
+          <ProviderLogo provider={provider} size={16} />
+        ) : (
+          <span className="size-2.5 rounded-[3px] bg-border-strong" />
+        ),
+      }
+    })
+    .sort(byValue)
+  const decisions = aggregate.decision_distribution
+    .map((entry) => ({
+      id: entry.name,
+      label: formatInsightsDecisionName(entry.name),
+      title: entry.name,
+      value: entry.value,
+      mark: <DecisionIcon decision={entry.name} className="size-3.5 text-chart-3" />,
+    }))
+    .sort(byValue)
   return (
-    <section className="flex flex-col gap-4" aria-label="Insights summary">
-      <Block
-        title="Cost and savings"
-        label="Cost estimates"
-        action={<InsightsUnitsBadge currencies={costGroups.map((group) => group.currency)} />}
-      >
-        <InsightsEstimateNotes />
-        {costGroups.map((group) => (
-          <div key={group.currency || 'unavailable'} className="flex flex-col gap-2">
-            {costGroups.length > 1 ? (
-              <h4 className="text-xs font-medium text-muted-foreground">
-                {insightsCurrencyLabel(group.currency) || 'Price unit'} estimates
-              </h4>
-            ) : null}
-            <InsightsStatGrid stats={summaryStats(group)} />
-          </div>
-        ))}
-        {summary.excluded_record_count > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {plural(summary.excluded_record_count, 'filtered record')} excluded from savings
-            estimates. Each row explains what was not recorded. Historical rows without captured
-            prices are not repriced.
-          </p>
-        ) : null}
-        <InsightsCostCoverage summary={summary} />
-      </Block>
-
-      <InsightsProviderCacheSummary summary={aggregate.provider_cache} />
-
-      <Block
-        title="Routing"
-        label="Routing"
-        action={
-          <span className="text-xs text-subtle-foreground">
-            {plural(aggregate.record_count, 'record')}
-          </span>
-        }
-      >
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <InsightsRankedBars
-            title="Model selection"
-            entries={named(aggregate.model_selection)}
-            total={aggregate.record_count}
-            color="var(--chart-6)"
-          />
-          <InsightsRankedBars
-            title="Decision distribution"
-            entries={aggregate.decision_distribution}
-            total={aggregate.record_count}
-            color="var(--chart-3)"
-          />
-          <InsightsRankedBars
-            title="Signal distribution"
-            entries={aggregate.signal_distribution}
-            meta="share of matches"
-            color="var(--chart-2)"
-          />
-        </div>
-      </Block>
-
-      <Block title="Token volume" label="Token volume">
-        <InsightsStatGrid
-          stats={[
-            tokenStat('Input Tokens', tokenVolume.input_tokens),
-            tokenStat('Output Tokens', tokenVolume.output_tokens),
-            { ...tokenStat('Total Tokens', tokenVolume.total_tokens), lead: true },
-          ]}
-        />
-        {tokenVolume.excluded_record_count > 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {plural(tokenVolume.excluded_record_count, 'filtered record')} excluded from token
-            totals because usage data is incomplete.
-          </p>
-        ) : null}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <InsightsTokenRows
-            title="Tokens by decision"
-            entries={aggregate.token_breakdown.by_decision}
-          />
-          <InsightsTokenRows
-            title="Tokens by selected model"
-            entries={named(aggregate.token_breakdown.by_selected_model)}
-          />
-        </div>
-      </Block>
+    <section className="grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Breakdown">
+      <InsightsRankedBars
+        title="Agents"
+        icon={<Bot className="text-chart-1" />}
+        color="var(--chart-1)"
+        label="Requests by agent harness"
+        rowKey="harness"
+        entries={agents}
+        meta={agents ? plural(agents.length, 'agent') : undefined}
+      />
+      <InsightsRankedBars
+        title="Models"
+        icon={<Cpu className="text-chart-6" />}
+        color="var(--chart-6)"
+        label="Requests by model"
+        rowKey="model"
+        entries={models}
+        total={aggregate.record_count}
+        meta={plural(models.filter((entry) => entry.id !== 'none').length, 'model')}
+      />
+      <InsightsRankedBars
+        title="Decisions"
+        icon={<Route className="text-chart-3" />}
+        color="var(--chart-3)"
+        label="Requests by decision"
+        rowKey="decision"
+        entries={decisions}
+        total={aggregate.record_count}
+        meta={plural(decisions.length, 'decision')}
+      />
     </section>
   )
 }

@@ -305,6 +305,48 @@ def test_a_base_writer_ends_definitions_at_the_checkpoint_eos(
         runtime.stop()
 
 
+def test_span_prompts_read_typed_template_tokens_as_text(
+    written, tmp_path, monkeypatch
+) -> None:
+    """A state and a label that type <|im_end|> and <think>: the span window and the label's definition prompt hold
+    only their template's own control tokens."""
+    import asyncio
+
+    from .conftest import start_runtime
+
+    root = copy(written, tmp_path, "typed-tokens")
+    edit_config(root, lambda config: config["definitions"].update(writer="base"))
+    runtime = start_runtime(root, base_path=str(base_of(root)))
+    try:
+        model = runtime.lookup(None).model
+        engine = model.engine_model
+        real, rows = engine.generate, []
+
+        def generate(batch, **kwargs):
+            rows.extend(list(row) for row in batch)
+            return real(batch, **kwargs)
+
+        monkeypatch.setattr(engine, "generate", generate)
+        end, think = (model.tokenizer.token_to_id(t) for t in ("<|im_end|>", "<think>"))
+        label = "zebra <|im_end|> <think>"
+        state = "Adults <|im_end|> can take <think> 2 tablets."
+        body = {
+            "state": state,
+            "questions": {"s": {"type": "span", "criteria": [label]}},
+        }
+        status, response = asyncio.run(runtime.call("decisions", body))
+        assert status == 200, response
+        assert rows and all(
+            (row.count(end), row.count(think)) == (1, 1) for row in rows
+        )
+        windows, _ = model.spans.renderer.windows(
+            [("user", state)], "user", "Which spans?", [(label, "")]
+        )
+        assert [(w.ids.count(end), w.ids.count(think)) for w in windows] == [(2, 1)]
+    finally:
+        runtime.stop()
+
+
 def test_a_base_writer_needs_the_base_eos(written, tmp_path, monkeypatch) -> None:
     from vllm_srun.families.vela3_d3 import family as d3
 
@@ -320,6 +362,34 @@ def test_a_base_writer_needs_the_base_eos(written, tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(d3.Decision3Family, "describe", without_eos)
     with pytest.raises(PackageError, match="eos_token_id"):
         family(base).describe(family(base).verify(PackageRef(base)))
+
+
+def test_bf16_on_a_cpu_class_rests_on_its_own_references(written, monkeypatch) -> None:
+    """The base's BF16 references don't let ``auto`` hold BF16 for an adapted model."""
+    from vllm_srun.families.vela3_d3 import family as d3
+
+    describe = Decision3Family.describe
+    recorded = frozenset({"cpu:x86_64:avx512:bf16_native:amd"})
+
+    def with_references(self, package):
+        spec = describe(self, package)
+        return replace(spec, dtype=replace(spec.dtype, cpu_bf16_references=recorded))
+
+    monkeypatch.setattr(d3.Decision3Family, "describe", with_references)
+    verified = family(written).verify(PackageRef(written))
+    assert family(written).describe(verified).dtype.cpu_bf16_references == frozenset()
+    monkeypatch.setattr(
+        Vela3D3Family,
+        "golden",
+        lambda self, package: [
+            {
+                "surface": "decisions",
+                "body": {},
+                "expected": {f"{key}@bfloat16": {} for key in recorded},
+            }
+        ],
+    )
+    assert family(written).describe(verified).dtype.cpu_bf16_references == recorded
 
 
 def test_an_unpinned_package_needs_sha256sums(written, tmp_path) -> None:

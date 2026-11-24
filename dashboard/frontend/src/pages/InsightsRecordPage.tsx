@@ -46,6 +46,7 @@ import { formatInsightsCost } from '../utils/insightsCost'
 import { compactIdentifier, displaySessionId } from './insightsAgentIdentity'
 import InsightsAgentContext from './InsightsAgentContext'
 import { useInsightsConfig } from './insightsConfigFacts'
+import { savingVersus } from './insightsCostAccounting'
 import { formatLatency, formatTokenCount } from './insightsDisplayFormat'
 import {
   InsightsLoadError,
@@ -333,7 +334,7 @@ function RecordInsight() {
                 <Link
                   to={getRunPath(record.session_id, record.id)}
                   className="font-mono hover:text-primary hover:underline"
-                  title={record.session_id}
+                  title={displaySessionId(record.session_id)}
                 >
                   {compactIdentifier(displaySessionId(record.session_id), 10, 6)}
                 </Link>
@@ -427,11 +428,7 @@ function RecordInsight() {
         <MiniStat
           label="Saved"
           value={saved ? formatInsightsCost(record.cost_savings, record.currency) : '—'}
-          hint={
-            record.baseline_model
-              ? `vs. ${modelLabel(modelLabels, record.baseline_model)}`
-              : 'No baseline recorded'
-          }
+          hint={savingVersus(record, modelLabels)}
         />
         <MiniStat
           label="Turn"

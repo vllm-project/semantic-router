@@ -108,7 +108,7 @@ recipes:
 
 effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。该默认值适用于家族列出它的每个 Model，因此这些 Model 的 Provider 绑定也必须允许它；家族未列出它的 Model 继续使用家族默认值。
 
-在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。透传模型的路由日志、指标和追踪不报告推理强度，其 `routing_decision` 日志行为 `reasoning_projected: false`。
+在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。透传模型的路由日志、指标和追踪不报告推理强度，其 `routing_decision` 日志行为 `reasoning_projected: false`。其 Router Replay 记录没有 `reasoning_mode`，只在客户端发送了推理强度时才保留推理强度。
 
 ## 为较小的输出上限关闭推理 {#turn-reasoning-off-for-small-output-limits}
 
@@ -125,3 +125,13 @@ providers:
 - **通过模型自己的控制关闭。** 后端收到模型推理家族的关闭控制，与 `use_reasoning: false` 相同。家族没有关闭控制的模型（例如始终开启的家族）保持推理。回退候选遵循同一规则。
 - **其他情况不变。** 没有输出上限、或上限不低于阈值的请求保持决策的推理，thinking 照常返回。不设置或设为 `0`（默认值）时该规则关闭。
 - **会报告。** `x-vsr-trace` 的 `reasoning` 成员为 `off;reason=output_budget`，Router Replay 记录的推理模式为 `off`。
+
+## 为带停止序列的请求关闭推理 {#turn-reasoning-off-for-requests-with-stop-sequences}
+
+vLLM 等后端会用停止序列匹配模型生成的全部文本，包括推理。决策为未请求推理的客户端开启推理时，推理中写出的停止序列会在任何回答之前结束请求：Messages 响应只有 thinking 块，停止原因为 `stop_sequence`；Chat 响应的 `content` 为 `null`。因此 Router 会在模型推理关闭的情况下运行这类请求，无需任何配置。
+
+- **设置了停止序列且未表明偏好：关闭推理。** 设置了停止序列（Chat 的 `stop` 或 Messages 的 `stop_sequences`）且未表明推理偏好的请求，会在模型推理关闭的情况下运行，并保留其停止序列。Responses 没有停止序列。
+- **表明了偏好的请求照常路由。** 哪些算作偏好见[较小的输出上限](#turn-reasoning-off-for-small-output-limits)一节。表明了偏好的请求保持其决策选择的推理。
+- **通过模型自己的控制关闭。** 与较小的输出上限相同：后端收到模型推理家族的关闭控制，家族没有关闭控制的模型保持推理，回退候选遵循同一规则。`request_params` 插件屏蔽 `stop` 的决策不会向后端发送停止序列，因此保持推理。
+- **会报告。** `x-vsr-trace` 的 `reasoning` 成员为 `off;reason=stop_sequences`，Router Replay 记录的推理模式为 `off`。如果请求的输出上限同时低于 `providers.defaults.reasoning_min_output_tokens`，原因为 `output_budget`。
+- **未覆盖的情况。** 表明了推理偏好且设置了停止序列的请求，在决策开启推理时会把两者都发往后端；在这类后端上，推理中写出的停止序列仍会在推理中结束请求。Router 只转发停止序列，自身不应用它们。

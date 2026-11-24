@@ -93,7 +93,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8214131946282642,
      "legend": {
@@ -236,7 +236,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -334,7 +334,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.7140624038875103,
      "legend": {
@@ -523,7 +523,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -621,7 +621,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8108517727937418,
      "legend": {
@@ -764,7 +764,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -862,7 +862,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.53260061735962,
      "legend": {
@@ -1005,7 +1005,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1103,7 +1103,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.681414109650585,
      "legend": {
@@ -1338,7 +1338,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1436,7 +1436,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.3446695427906742,
      "legend": {
@@ -1579,7 +1579,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1677,7 +1677,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8453487249107529,
      "legend": {
@@ -1820,7 +1820,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1918,7 +1918,7 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.9838519193276162,
      "legend": {
@@ -2107,7 +2107,7 @@
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  }

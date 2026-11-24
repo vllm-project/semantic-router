@@ -64,6 +64,13 @@ const (
 	// instruction, the way OpenAI reads it. Models only declare it
 	// unsupported; no request requires it.
 	CapabilityDeveloperRole
+	// CapabilityServerTools covers tools the provider runs or defines itself
+	// and the blocks they leave in a reply, such as Anthropic's web search.
+	CapabilityServerTools
+	// CapabilitySpeechGeneration covers the Speech API text-to-speech
+	// operation (POST /v1/audio/speech). It is not interchangeable with
+	// audio input or audio output.
+	CapabilitySpeechGeneration
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -93,7 +100,7 @@ func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 // (tools/streaming/reasoning/caching) is protocol concern rather than a task
 // modality, so model capability declarations are compared against this mask.
 var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
-	CapabilityAudioInput | CapabilityAudioOutput |
+	CapabilityAudioInput | CapabilityAudioOutput | CapabilitySpeechGeneration |
 	CapabilityVideoInput | CapabilityVideoOutput |
 	CapabilityFileInput | CapabilityFileOutput
 
@@ -154,6 +161,8 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
 		{CapabilityDeveloperRole, "developer_role"},
+		{CapabilityServerTools, "server_tools"},
+		{CapabilitySpeechGeneration, "speech_generation"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -172,6 +181,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
 		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
+	}
+	if request.SpeechGeneration != nil {
+		required.bits |= CapabilitySpeechGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
@@ -293,6 +305,9 @@ func toolCapabilities(tools []Tool) Capability {
 		if tool.Kind == ToolKindCustom {
 			required |= CapabilityCustomTools
 		}
+		if tool.Kind == ToolKindServer {
+			required |= CapabilityServerTools
+		}
 	}
 	return required
 }
@@ -358,10 +373,26 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
 		required.bits |= CapabilityCustomTools
 	}
+	if event.Content != nil {
+		required.bits |= serverToolContentCapability(*event.Content)
+	}
 	return required
 }
 
+// serverToolContentCapability is what a server tool's block, or the
+// citations it attached to text, asks of a wire format.
+func serverToolContentCapability(content Content) Capability {
+	if content.Kind == ContentServerTool || len(content.Raw) > 0 {
+		return CapabilityServerTools
+	}
+	return 0
+}
+
 func capabilityForRequestContent(content Content) Capability {
+	return requestContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func requestContentCapabilities(content Content) Capability {
 	var cache Capability
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
@@ -391,6 +422,10 @@ func capabilityForRequestContent(content Content) Capability {
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	return responseContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func responseContentCapabilities(content Content) Capability {
 	if isCustomToolCall(content) {
 		return CapabilityTools | CapabilityCustomTools
 	}
@@ -510,10 +545,12 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
+		"speech_generation":     CapabilitySpeechGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,
 		"developer_role":        CapabilityDeveloperRole,
+		"server_tools":          CapabilityServerTools,
 	}
 	var set CapabilitySet
 	for _, name := range names {
