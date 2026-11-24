@@ -80,10 +80,10 @@ inventory:
           - ibm/granite-4.2-8b
           - ibm/granite-4.2-3b
       - publisher: Meituan / LongCat
-        min_representatives: 2
         representative_models:
           - meituan/longcat-2.5
           - meituan/longcat-2.0
+          - meituan/longcat-flash-lite-sparse
       - publisher: Meta
         representative_models:
           - meta/muse-spark-1.3

@@ -302,7 +302,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 				return nil, err
 			}
 		}
-		return adaptOllamaOutputLimit(body, target.format, target.profile)
+		return adaptMaxTokensOutputLimit(body, target.format, target.profile)
 	}
 }
 

@@ -22,6 +22,8 @@ import (
 const (
 	longCat25CatalogID = "meituan/longcat-2.5"
 	longCat20CatalogID = "meituan/longcat-2.0"
+
+	longCatFlashLiteSparseCatalogID = "meituan/longcat-flash-lite-sparse"
 )
 
 // The LongCat API turns LongCat-2.5 thinking on or off with a thinking object
@@ -74,6 +76,19 @@ func TestLongCat20SGLangReasoningWireContracts(t *testing.T) {
 	})
 }
 
+// LongCat-Flash-Lite-Sparse is a non-thinking model with no reasoning family,
+// so its SGLang backend receives no thinking switch.
+func TestLongCatFlashLiteSparseSendsNoReasoningControl(t *testing.T) {
+	for _, enabled := range []bool{false, true} {
+		runCatalogReasoningWireCases(t, []catalogReasoningWireCase{{
+			name: fmt.Sprintf("use_reasoning %t", enabled), catalog: longCatFlashLiteSparseCatalogID,
+			provider: "sglang", enabled: enabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls:  map[string]interface{}{},
+		}})
+	}
+}
+
 func TestLongCat25RejectsUnsupportedReasoning(t *testing.T) {
 	for _, test := range []struct {
 		name    string
@@ -90,9 +105,22 @@ func TestLongCat25RejectsUnsupportedReasoning(t *testing.T) {
 	}
 }
 
+// A client's output limit reaches the LongCat API as max_tokens whichever
+// protocol the client spoke, since the Chat codec renders it as
+// max_completion_tokens.
+func TestLongCatDispatchCarriesOutputLimitAsMaxTokens(t *testing.T) {
+	for _, client := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1} {
+		t.Run(string(client), func(t *testing.T) {
+			fields := dispatchBody(t, "longcat", client)
+			assert.Equal(t, "8", string(fields["max_tokens"]))
+			assert.NotContains(t, fields, "max_completion_tokens")
+		})
+	}
+}
+
 // Exercise the catalog-backed alias through routing and the final HTTP hop:
-// the LongCat-native model ID, bearer auth, the /openai/v1 base path, and the
-// thinking object.
+// the LongCat-native model ID, bearer auth, the /openai/v1 base path, the
+// thinking object, and the output limit as max_tokens.
 func TestLongCat25ProviderDispatch(t *testing.T) {
 	type observation struct {
 		path          string
@@ -120,7 +148,7 @@ func TestLongCat25ProviderDispatch(t *testing.T) {
 	}
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, nil)
 	ctx.VSRSelectedDecision = decision
-	input := []byte(`{"model":"longcat","messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Hello!"}]}`)
+	input := []byte(`{"model":"longcat","messages":[{"role":"system","content":"You are a helpful assistant."},{"role":"user","content":"Hello!"}],"max_tokens":32}`)
 	request, immediate := router.prepareProtocolRequest(input, ctx)
 	require.Nil(t, immediate)
 	response, err := router.handleEntrypointModelRouting(request, "longcat", decision.Name,
@@ -154,9 +182,16 @@ func TestLongCat25ProviderDispatch(t *testing.T) {
 		"thinking": map[string]interface{}{"type": "enabled"},
 	}, providerReasoningControls(wire))
 	assert.Equal(t, unmarshalReasoningRequest(t, input)["messages"], wire["messages"])
+	// The LongCat API documents max_tokens as its only output limit.
+	assert.EqualValues(t, 32, wire["max_tokens"])
+	assert.NotContains(t, wire, "max_completion_tokens")
 }
 
 func longCat25Config(endpoint, control string) []byte {
+	return longCatConfig(longCat25CatalogID, "longcat", endpoint, control)
+}
+
+func longCatConfig(catalogID, provider, endpoint, control string) []byte {
 	return []byte(fmt.Sprintf(`version: v0.5
 providers:
   models:
@@ -164,7 +199,7 @@ providers:
       catalog: %s
       backend_refs:
         - name: primary
-          provider: longcat
+          provider: %s
           endpoint: %s
           api_key: longcat-fixture-key
 recipes:
@@ -178,5 +213,5 @@ recipes:
         modelRefs:
           - model: longcat
             %s
-`, longCat25CatalogID, endpoint, control))
+`, catalogID, provider, endpoint, control))
 }
