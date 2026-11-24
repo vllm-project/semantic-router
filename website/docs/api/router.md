@@ -22,6 +22,7 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
 | `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
+| `POST` | `/v1/audio/speech` | OpenAI Speech | Routed on the input text to a model with `api_format: speech`. The audio response is forwarded unchanged. See [Speech API](#speech-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -356,6 +357,44 @@ with `400` `unsupported_capability` before any model is called, unless its
 [`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
 or its `blocked_params` removes `n`.
 
+### Speech API
+
+```bash
+curl -sS http://localhost:8899/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "tts",
+    "input": "Hello from the Speech API.",
+    "voice": "alloy"
+  }' \
+  --output speech.wav
+```
+
+The Router routes a Speech API request on its `input` text, the same way it
+routes any other request on the user's text. The selected model must serve
+`api_format: speech` (catalog protocol `openai/audio-speech@1`). A chat,
+Responses, Messages or Images model fails closed with `unsupported_capability`
+before the backend is called.
+
+The response is the backend's audio bytes and response headers, forwarded
+unchanged. It is not a JSON completion. Response-side policy, the response
+cache, token limits and cost estimates do not apply, and the request completes
+with zero token usage. A non-2xx JSON error keeps the existing error path,
+including the backend's message.
+
+Request-text checks, such as PII detection and masking, still run, on `input`
+only. `input` is the text the Router decodes into the request and encodes back,
+so a masking rewrite reaches the backend. `instructions`, `ref_text` and the
+other fields are forwarded as sent and are not checked.
+
+`stream: true` and any `stream_format` are rejected. An unknown top-level field
+is a `400`. Named fields, including the vLLM-Omni extension object
+`extra_params`, are forwarded as sent. The Router rewrites only `model`.
+
+Built-in virtual models do not advertise this protocol. Point `model` at a
+concrete speech model. Plain vLLM does not serve `POST /v1/audio/speech`; the
+built-in catalog lists the protocol on the `vllm-omni` provider.
+
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
@@ -469,8 +508,8 @@ decision, or request content:
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
-| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget, its limit, what it has left and the estimate, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do. A user budget's refusal carries `Retry-After` until its window starts again. |
-| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. |
+| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget and its limit, what it has left for the call now, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do, then what the budget spent and what calls in flight hold, and the call's estimate. When what the budget spent leaves no room, the message starts `out of budget` and the reply carries `x-should-retry: false`, with `Retry-After` until a user budget's window starts again; on the Responses API `error.type` is then `usage_limit_reached`, with `resets_at`, and on the Messages API the reply carries `anthropic-ratelimit-unified-overage-disabled-reason: budget_exceeded`. When only calls in flight hold the room, the reply asks for a retry with `Retry-After: 5` and `x-should-retry: true`. |
+| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. The reply carries `x-should-retry: false`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -726,7 +765,7 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
 | `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
-| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls (a Looper request's with every call of its run, a hop's with its own), and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -736,7 +775,10 @@ when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
 (`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
 Every Looper algorithm traces its calls, so each one is priced at its own
-model's rates. An unpriced call is never counted as free.
+model's rates. An unpriced call is never counted as free. An attempt a
+[spend budget](../tutorials/global/api-and-observability.md#spend-budgets)
+refused reached no model: its trace reason is `budget_exceeded` or
+`budget_unpriced`, and it is not counted in `calls`.
 
 Request-scoped runtime calls also appear here: `decision_model` for native
 questions and selections, `systemone` for remote System One exchanges, and

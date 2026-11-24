@@ -9,6 +9,7 @@
   <a href="https://app.vllm-sr.ai/">System Duo</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
+  <a href="https://vllm-sr.ai/community/contributor-guide">Contributor Guide</a> |
   <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
   <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
@@ -112,7 +113,9 @@ We host two monthly community meetings across APAC and the Americas:
 
 ## Contributing
 
-If you want to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+New to the project? The **[Contributor Guide](https://vllm-sr.ai/community/contributor-guide)** explains how vLLM Semantic Router works, where you can help, and how to grow from your first pull request to maintainer.
+
+When you are ready to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[tools/agent/docs/README.md](tools/agent/docs/README.md)** as the canonical index.
 

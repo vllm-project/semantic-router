@@ -15,8 +15,8 @@ Router behavior. Choose one by the task below. The development harness
 | Change an existing Router configuration | [Operations: configure](vllm-sr-agent-operations/references/configuration-loop.md) | Read the current canonical configuration and discover the installed schema. |
 | Explain a selected route, fallback, or delivery failure | [Diagnose routing](vllm-sr-diagnose-routing/SKILL.md) | Pin the request and active config, then compare preview with a bounded probe. |
 | Verify a known route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
+| Evaluate quality, latency, and cost | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Freeze the workload and choose preview, live, or replay scope. |
 | Plan and run a bounded Router benchmark | [Benchmark](vllm-sr-benchmark/SKILL.md) | Freeze cases, targets, settings, prices and limits before dispatch. |
-| Compare two Router benchmark runs | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Check paired cases and compatible settings before comparing. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
 | Change a request-visible Router contract | [Router contract change](router-contract-change/SKILL.md) | Read the affected change surfaces and nearest `AGENTS.md`. |
 | Review issues, PRs, or releases | [Maintainer operations](maintainer-ops/SKILL.md) | Resolve the exact target and current revision. |

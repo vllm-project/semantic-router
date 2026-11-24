@@ -73,3 +73,8 @@ func effectiveCacheWriteRate(pricing config.ModelPricing) float64 {
 func effectiveCacheWrite1hRate(pricing config.ModelPricing) float64 {
 	return modelPricingRates(pricing).EffectiveCacheWrite1hPer1M()
 }
+
+func estimateDispatchCost(input int, output int64, pricing config.ModelPricing) float64 {
+	inputRate := max(pricing.PromptPer1M, effectiveCacheWriteRate(pricing), effectiveCacheWrite1hRate(pricing))
+	return (float64(input)*inputRate + float64(output)*max(pricing.CompletionPer1M, 0)) / 1e6
+}
