@@ -658,7 +658,12 @@ def _build_route_stack(tmp_path):
     other test modules - fixtures must not be called directly, which newer
     pytest turns into an error)."""
     router = tmp_path / "fake_router.py"
-    router.write_text(FAKE_ROUTE_REPLAY_ROUTER)
+    # Pin the shebang to the interpreter running the tests: `#!/usr/bin/env
+    # python3` resolves to the runner's system python, which may lack PyYAML
+    # (the fake router parses the patched config with it).
+    router.write_text(
+        f"#!{sys.executable}\n" + FAKE_ROUTE_REPLAY_ROUTER.split("\n", 1)[1]
+    )
     router.chmod(0o755)
     mock = tmp_path / "mock_backend.py"
     mock.write_text("import time\ntime.sleep(300)\n")
