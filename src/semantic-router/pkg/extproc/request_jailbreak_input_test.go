@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -277,7 +278,8 @@ func TestGuardProvenanceCompletedAssistantAnswerStillDelimits(t *testing.T) {
 }
 
 // Several tool calls in one user-guided cycle stay one current turn, including
-// their sibling results and an instruction message inserted mid-cycle.
+// a sibling result and an instruction message inserted mid-cycle, but only the
+// trailing step's results are current: the earlier result is history.
 func TestGuardProvenanceMultipleContinuationsStayInTheToolCycle(t *testing.T) {
 	instruction := llmprotocol.Message{Role: llmprotocol.RoleSystem, Content: guardProvenanceText("file-changed-reminder")}
 	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
@@ -288,11 +290,13 @@ func TestGuardProvenanceMultipleContinuationsStayInTheToolCycle(t *testing.T) {
 		assistantToolCall("call-2", "Narrowing the search."),
 		toolResultText("second-result"),
 	}}
-	want := &classification.JailbreakInput{Current: []classification.JailbreakContent{
-		{Role: "user", Text: "current-user"},
-		{Role: "tool", Text: "first-result"},
-		{Role: "tool", Text: "second-result"},
-	}}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-user"},
+			{Role: "tool", Text: "second-result"},
+		},
+		History: []classification.JailbreakContent{{Role: "tool", Text: "first-result"}},
+	}
 	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
 		t.Fatalf("multi-call tool cycle projection = %#v, want %#v", got, want)
 	}
@@ -428,5 +432,177 @@ func TestGuardProvenanceToolCycleAfterCompletedTurn(t *testing.T) {
 	}
 	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tool cycle crossed a completed turn: %#v", got)
+	}
+}
+
+// One instruction, one call and one result: the whole cycle is current, and
+// there is nothing earlier to keep in history.
+func TestGuardProvenanceSingleStepCycleStaysCurrent(t *testing.T) {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: guardProvenanceText("current-question")},
+		assistantToolCall("call-1", "I will look."),
+		toolResultText("only-result"),
+	}}
+	want := &classification.JailbreakInput{Current: []classification.JailbreakContent{
+		{Role: "user", Text: "current-question"},
+		{Role: "tool", Text: "only-result"},
+	}}
+	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
+		t.Fatalf("single-step cycle projection = %#v, want %#v", got, want)
+	}
+}
+
+// A long cycle keeps the initiating instruction and the trailing step's result
+// current, and the earlier results in history, in conversation order.
+func TestGuardProvenanceLongToolCycleKeepsOnlyTrailingResults(t *testing.T) {
+	const steps = 6
+	messages := []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: guardProvenanceText("current-question")}}
+	var history []classification.JailbreakContent
+	for step := 1; step <= steps; step++ {
+		result := fmt.Sprintf("result-%d", step)
+		messages = append(messages, assistantToolCall(fmt.Sprintf("call-%d", step), ""), toolResultText(result))
+		if step < steps {
+			history = append(history, classification.JailbreakContent{Role: "tool", Text: result})
+		}
+	}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: fmt.Sprintf("result-%d", steps)},
+		},
+		History: history,
+	}
+	if got := extractJailbreakInput(&llmprotocol.Request{Messages: messages}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("long cycle projection = %#v, want %#v", got, want)
+	}
+}
+
+// Two sibling calls of the trailing step return two results, and both stay
+// current while the result of the earlier step is history.
+func TestGuardProvenanceSiblingResultsStayInTheTrailingStep(t *testing.T) {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: guardProvenanceText("current-question")},
+		assistantToolCall("call-1", ""),
+		toolResultText("first-result"),
+		assistantToolCall("call-2", "Searching twice."),
+		assistantToolCall("call-3", ""),
+		toolResultText("second-result"),
+		toolResultText("third-result"),
+	}}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: "second-result"},
+			{Role: "tool", Text: "third-result"},
+		},
+		History: []classification.JailbreakContent{{Role: "tool", Text: "first-result"}},
+	}
+	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
+		t.Fatalf("sibling results of the trailing step were split: %#v", got)
+	}
+}
+
+// A tool result of an earlier user turn never becomes current evidence, however
+// long the cycle of the current turn grows.
+func TestGuardProvenanceToolResultsNeverCrossAUserBoundary(t *testing.T) {
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: guardProvenanceText("earlier-question")},
+		{Role: llmprotocol.RoleAssistant, Content: guardProvenanceText("completed-answer")},
+		{Role: llmprotocol.RoleUser, Content: guardProvenanceText("current-question")},
+		assistantToolCall("call-1", ""),
+		toolResultText("first-result"),
+		assistantToolCall("call-2", ""),
+		toolResultText("second-result"),
+	}}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: "second-result"},
+		},
+		History: []classification.JailbreakContent{
+			{Role: "user", Text: "earlier-question"},
+			{Role: "tool", Text: "first-result"},
+		},
+	}
+	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
+		t.Fatalf("a tool result crossed a user turn boundary: %#v", got)
+	}
+}
+
+// A decoded Responses cycle whose reasoning and narration arrive as separate
+// assistant items keeps those items with their step, so only the trailing
+// step's result is current.
+func TestGuardProvenanceResponsesMultiStepCycleKeepsOnlyTrailingResults(t *testing.T) {
+	request := decodeResponsesInputItems(t, `[
+		{"role":"user","content":"current-question"},
+		{"type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"think about the first search"}]},
+		{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will search."}]},
+		{"type":"function_call","call_id":"a","name":"lookup","arguments":"{}"},
+		{"type":"function_call_output","call_id":"a","output":"first-result"},
+		{"type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"narrow the search"}]},
+		{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Narrowing the search."}]},
+		{"type":"function_call","call_id":"b","name":"lookup","arguments":"{}"},
+		{"type":"function_call_output","call_id":"b","output":"second-result"}
+	]`)
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: "second-result"},
+		},
+		History: []classification.JailbreakContent{{Role: "tool", Text: "first-result"}},
+	}
+	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Responses multi-step cycle projection = %#v, want %#v", got, want)
+	}
+}
+
+// Chat Completions decodes each step's call and result as separate messages;
+// the trailing result stays current and the earlier one becomes history.
+func TestGuardProvenanceDecodedChatCompletionsToolCycle(t *testing.T) {
+	body := []byte(`{"model":"test-model","messages":[` +
+		`{"role":"user","content":"current-question"},` +
+		`{"role":"assistant","content":null,"tool_calls":[{"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{}"}}]},` +
+		`{"role":"tool","tool_call_id":"call-1","content":"first-result"},` +
+		`{"role":"assistant","content":"Narrowing.","tool_calls":[{"id":"call-2","type":"function","function":{"name":"lookup","arguments":"{}"}}]},` +
+		`{"role":"tool","tool_call_id":"call-2","content":"second-result"}]}`)
+	request, _, _, err := (protocolcodec.OpenAIChatCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: "second-result"},
+		},
+		History: []classification.JailbreakContent{{Role: "tool", Text: "first-result"}},
+	}
+	if got := extractSemanticRequestSignals(&request).JailbreakInput; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Chat Completions tool-cycle projection = %#v, want %#v", got, want)
+	}
+}
+
+// Anthropic packs steps into user messages whose text and tool results the
+// decoder splits; only the trailing result is current and the earlier result
+// keeps its own message in history.
+func TestGuardProvenanceDecodedAnthropicToolCycle(t *testing.T) {
+	body := []byte(`{"model":"test-model","max_tokens":32,"messages":[` +
+		`{"role":"user","content":"current-question"},` +
+		`{"role":"assistant","content":[{"type":"text","text":"I will search."},{"type":"tool_use","id":"call-1","name":"lookup","input":{}}]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-1","content":"first-result"}]},` +
+		`{"role":"assistant","content":[{"type":"text","text":"Narrowing."},{"type":"tool_use","id":"call-2","name":"lookup","input":{}}]},` +
+		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"call-2","content":"second-result"}]}]}`)
+	request, _, _, err := (protocolcodec.AnthropicMessagesCodec{}).DecodeRequest(body, llmprotocol.DefaultPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{
+			{Role: "user", Text: "current-question"},
+			{Role: "tool", Text: "second-result"},
+		},
+		History: []classification.JailbreakContent{{Role: "tool", Text: "first-result"}},
+	}
+	if got := extractSemanticRequestSignals(&request).JailbreakInput; !reflect.DeepEqual(got, want) {
+		t.Fatalf("Anthropic tool-cycle projection = %#v, want %#v", got, want)
 	}
 }

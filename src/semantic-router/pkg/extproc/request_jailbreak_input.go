@@ -9,27 +9,69 @@ import (
 // and assistant context. It neither rewrites the provider request nor changes
 // other signals' history. Tool results remain untrusted even when their wire
 // protocol represents them inside a user message.
+//
+// A tool cycle is the user turn a tool call continues. Its initiating user
+// message stays current, but only the results the trailing step reads stay
+// current with it: the earlier results of a long cycle are history, so a task
+// with one instruction and a hundred tool calls does not rescan every output
+// on each request. History keeps those earlier results in conversation order,
+// and a user message still separates one cycle from the next.
 func extractJailbreakInput(request *llmprotocol.Request) *classification.JailbreakInput {
 	input := &classification.JailbreakInput{}
 	currentStart := currentTurnStart(request.Messages)
+	trailingStart := currentStepStart(request.Messages, currentStart)
 	for index, message := range request.Messages {
-		contents := jailbreakMessageContents(message)
-		if index >= currentStart {
-			input.Current = append(input.Current, contents...)
-		} else {
-			input.History = append(input.History, contents...)
+		switch {
+		case index < currentStart:
+			input.History = append(input.History, jailbreakMessageContents(message)...)
+		case index < trailingStart:
+			// An earlier step of the same cycle: its tool results belong to
+			// history, while the user text it carries keeps stating the
+			// instruction the cycle follows.
+			current, history := cycleStepContents(jailbreakMessageContents(message))
+			input.Current = append(input.Current, current...)
+			input.History = append(input.History, history...)
+		default:
+			input.Current = append(input.Current, jailbreakMessageContents(message)...)
 		}
 	}
 	return input
 }
 
+// currentStepStart is where the trailing step of the current turn begins: the
+// last assistant message of the turn that carries a tool call, whose results
+// the next model step reads. A turn that calls no tool, or whose only step is
+// already the trailing one, keeps every message of the turn current.
+func currentStepStart(messages []llmprotocol.Message, start int) int {
+	for index := len(messages) - 1; index >= start; index-- {
+		if messages[index].Role == llmprotocol.RoleAssistant && isToolCallContinuation(messages[index]) {
+			return index
+		}
+	}
+	return start
+}
+
+// cycleStepContents splits one message of an earlier step of the current tool
+// cycle. Tool results are history; the user text the message carries, such as
+// an instruction stated between two calls, stays current evidence.
+func cycleStepContents(contents []classification.JailbreakContent) (current, history []classification.JailbreakContent) {
+	for _, content := range contents {
+		if content.Role == string(llmprotocol.RoleTool) {
+			history = append(history, content)
+			continue
+		}
+		current = append(current, content)
+	}
+	return current, history
+}
+
 // currentTurnStart is where the request's current turn starts: the user and
 // tool messages after the last completed assistant turn. A codec may split one
-// wire message into user text and several tool-result messages, so the trailing
-// untrusted group stays together and a sibling tool result cannot disappear
-// merely because include_history is disabled. A system or developer message
-// inside the conversation, which Claude Code inserts where it applies, after
-// the user's message or a tool result, does not end the turn. An assistant
+// wire message into user text and several tool-result messages, so a sibling
+// tool result cannot disappear merely because include_history is disabled. A
+// system or developer message inside the conversation, which Claude Code
+// inserts where it applies, after the user's message or a tool result, does
+// not end the turn. An assistant
 // message carrying a tool call is not a completed assistant turn either: it
 // continues the user's tool cycle, so the user message that initiated the
 // cycle stays in the current turn instead of falling into history. A codec may
