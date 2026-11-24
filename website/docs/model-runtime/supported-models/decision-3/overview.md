@@ -117,7 +117,8 @@ hardware each needs and how to serve one.
 
 - d3 runs in BF16 on a GPU, its published precision, and in FP32 on a CPU,
   where its BF16 answers depend on the CPU's kernels and its FP32 answers do
-  not. FP32 holds twice the bytes of BF16; on a CPU that computes BF16
+  not, except on an AMD CPU with AVX-512 BF16: that class has its own BF16
+  references, so it runs BF16 there too. FP32 holds twice the bytes of BF16; on a CPU that computes BF16
   natively it takes 1.2 to 3.5 times the time per request, and on an AVX2 CPU,
   which emulates BF16, it is the faster one. `--dtype bfloat16` runs BF16 on a
   CPU, checked against the BF16 reference of its CPU class
