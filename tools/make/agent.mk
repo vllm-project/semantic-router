@@ -132,11 +132,12 @@ agent-vscode-test: harness-node-bootstrap ## Run the VS Code extension's tests a
 		PATH="$$NODE_PATH" npm ci --no-audit --no-fund --loglevel=error && \
 		PATH="$$NODE_PATH" npm test
 
-agent-plugins-test: harness-node-bootstrap agent-vscode-test ## Run the agent plugins' tests: Claude Code's engine tests, both vSR plugins' Python tests and the VS Code extension's tests
+agent-plugins-test: harness-node-bootstrap agent-vscode-test ## Run the agent plugins' tests: Claude Code's engine tests, all three vSR plugins' Python tests and the VS Code extension's tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/codex/hooks
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/copilot-cli/hooks
 	@NODE_PATH="$$PATH"; \
 	if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
 	pinned() { [ "$$(PATH="$$NODE_PATH" "$(AGENT_CLAUDE)" --version 2>/dev/null | cut -d' ' -f1)" = "$(AGENT_CLAUDE_CODE_VERSION)" ]; }; \

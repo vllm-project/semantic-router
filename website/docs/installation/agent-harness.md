@@ -1629,6 +1629,46 @@ Semantic Router: Set Gateway API Key** when the listener has `api_keys`, and
 set `vllm-sr.maxInputTokens` as the next section describes. Each VS Code window
 sends one `x-session-id`, and no `x-conversation-id`.
 
+## Copilot CLI
+
+Copilot CLI reaches the gateway as an OpenAI-compatible provider: add it to `providers.json` in
+the Copilot home (`$COPILOT_HOME`, by default `~/.copilot`):
+
+```json
+{
+  "providers": [
+    {
+      "name": "vllm-sr",
+      "type": "openai",
+      "baseUrl": "http://localhost:8899",
+      "apiKey": "VLLM_SR_API_KEY"
+    }
+  ],
+  "models": [{ "id": "vllm-sr/auto", "provider": "vllm-sr" }]
+}
+```
+
+Omit `apiKey` when the listener has none. Restart Copilot CLI, then run
+`copilot --model vllm-sr/auto` or switch with `/model`. There is no `vllm-sr connect` target for
+Copilot CLI yet; write `providers.json` by hand as above.
+
+The [vSR plugin](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/copilot-cli)
+adds guard, redact and shield to Copilot CLI without a gateway: before a shell command runs,
+guard asks a decision model whether a person should look first; before Copilot CLI reads a
+command's output, redact hides personal data in it and shield flags output that tries to give
+the agent instructions.
+
+```bash
+copilot plugin marketplace add vllm-project/semantic-router
+copilot plugin install vsr@vllm-sr
+```
+
+This was checked with Copilot CLI 1.0.114. Copilot CLI already installs the Claude Code plugin's
+`/vsr:setup` and `/vsr:calibrate` skills from this repository's marketplace; the Copilot CLI
+plugin ships hooks only, so install the Claude Code plugin alongside it for those skills. See
+the plugin's [README](https://github.com/vllm-project/semantic-router/blob/main/src/agent-harness/copilot-cli/README.md)
+for configuration and what each decision looks like from Copilot CLI.
+
 ## Set budgets before running a task
 
 `GET /v1/models` discovers virtual names and routing metadata; it does not

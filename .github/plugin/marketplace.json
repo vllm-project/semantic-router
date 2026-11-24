@@ -1,0 +1,11 @@
+{
+  "name": "vllm-sr",
+  "owner": { "name": "vLLM Semantic Router" },
+  "plugins": [
+    {
+      "name": "vsr",
+      "source": "./src/agent-harness/copilot-cli",
+      "description": "Routes a shell command through a vLLM Semantic Router decision model before it runs: guard denies an unsafe one, redact hides personal data in a command's output, and shield flags output that tries to give the agent instructions."
+    }
+  ]
+}
