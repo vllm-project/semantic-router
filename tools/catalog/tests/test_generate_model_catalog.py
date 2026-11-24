@@ -825,6 +825,13 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(families["mistral-none-high"]["levels"], ["high"])
         self.assertEqual(families["mistral-none-high"]["disabled"], "none")
+        self.assertEqual(
+            families["gemini-flash-four-level-minimal"]["levels"],
+            ["minimal", "low", "medium", "high"],
+        )
+        self.assertEqual(
+            families["gemini-flash-four-level-minimal"]["default"], "minimal"
+        )
 
     def test_core_reasoning_model_and_provider_bindings(self) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -855,6 +862,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
+            "google/gemini-3.5-flash-lite": "gemini-flash-four-level-minimal",
         }
         self.assertEqual(
             {
@@ -867,6 +875,16 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             providers["anthropic"]["reasoning_transport"], "output_config_effort"
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
+        self.assertEqual(
+            providers["gemini"]["reasoning_transport"], "top_level_effort"
+        )
+        gemini_bindings = {
+            binding["catalog"]: binding for binding in providers["gemini"]["models"]
+        }
+        self.assertEqual(
+            gemini_bindings["google/gemini-3.5-flash-lite"]["id"],
+            "gemini-3.5-flash-lite",
+        )
         zai_bindings = {
             binding["catalog"]: binding for binding in providers["zai"]["models"]
         }
