@@ -56,6 +56,7 @@ def test_every_api_is_served_under_its_prefix_and_nowhere_else():
         ],
         "messages": ["/v1/messages", "/v1/messages/count_tokens"],
         "images": ["/v1/images/generations"],
+        "speech": ["/v1/audio/speech"],
         "systemone": [
             "/v1/systemone",
             "/v1/systemone/batch",
