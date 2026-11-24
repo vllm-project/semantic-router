@@ -122,6 +122,24 @@ recipes:
             configuration:
               message: Blocked.
 `,
+		"fusion analysis models": `version: v0.5
+providers:
+  models:
+    - name: general
+      backend_refs:
+        - name: local
+          provider: openai-compatible
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+    decisions:
+      - name: chat
+        algorithm:
+          type: fusion
+          fusion:
+            model: general
+            analysis_models: [general]
+`,
 		"declared default": `version: v0.5
 providers:
   defaults:

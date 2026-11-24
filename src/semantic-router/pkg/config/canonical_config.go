@@ -492,11 +492,9 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 }
 
 // canonicalDecisionNamesAModel reports whether a decision answers with a model
-// of its own: a modelRef, or an answer that needs none. A fast_response refusal
-// answers with its message and a route answers with a declared destination, so
-// neither reaches the default-model fallback. A candidate iteration's models
-// are not one of these: the runtime resolves those turns through the default
-// model, so a decision that names only iterations still needs the fallback.
+// of its own or bypasses the default-model fallback. Fusion can execute its
+// own analysis models. Fast responses and explicit routes also bypass the
+// fallback. Candidate iterations still resolve their turns through it.
 func canonicalDecisionNamesAModel(decision Decision) bool {
 	if len(decision.ModelRefs) > 0 {
 		return true
@@ -504,7 +502,12 @@ func canonicalDecisionNamesAModel(decision Decision) bool {
 	if decision.GetFastResponseConfig() != nil {
 		return true
 	}
-	return decision.Action != nil && decision.Action.Type == DecisionActionRoute
+	if decision.Action != nil && decision.Action.Type == DecisionActionRoute {
+		return true
+	}
+	algorithm := decision.Algorithm
+	return algorithm != nil && algorithm.Type == DecisionAlgorithmFusion &&
+		algorithm.Fusion != nil && len(algorithm.Fusion.AnalysisModels) > 0
 }
 
 // validateCanonicalDecisionModelRefs checks the models a decision names: its
