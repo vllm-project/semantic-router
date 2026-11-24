@@ -22,8 +22,6 @@ import (
 const (
 	longCat25CatalogID = "meituan/longcat-2.5"
 	longCat20CatalogID = "meituan/longcat-2.0"
-
-	longCatFlashLiteSparseCatalogID = "meituan/longcat-flash-lite-sparse"
 )
 
 // The LongCat API turns LongCat-2.5 thinking on or off with a thinking object
@@ -74,19 +72,6 @@ func TestLongCat20SGLangReasoningWireContracts(t *testing.T) {
 			wantTransport: modelcatalog.ReasoningTransportChatTemplate, wantControls: templateSwitch(false),
 		},
 	})
-}
-
-// LongCat-Flash-Lite-Sparse is a non-thinking model with no reasoning family,
-// so its SGLang backend receives no thinking switch.
-func TestLongCatFlashLiteSparseSendsNoReasoningControl(t *testing.T) {
-	for _, enabled := range []bool{false, true} {
-		runCatalogReasoningWireCases(t, []catalogReasoningWireCase{{
-			name: fmt.Sprintf("use_reasoning %t", enabled), catalog: longCatFlashLiteSparseCatalogID,
-			provider: "sglang", enabled: enabled,
-			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
-			wantControls:  map[string]interface{}{},
-		}})
-	}
 }
 
 func TestLongCat25RejectsUnsupportedReasoning(t *testing.T) {
@@ -188,10 +173,6 @@ func TestLongCat25ProviderDispatch(t *testing.T) {
 }
 
 func longCat25Config(endpoint, control string) []byte {
-	return longCatConfig(longCat25CatalogID, "longcat", endpoint, control)
-}
-
-func longCatConfig(catalogID, provider, endpoint, control string) []byte {
 	return []byte(fmt.Sprintf(`version: v0.5
 providers:
   models:
@@ -199,7 +180,7 @@ providers:
       catalog: %s
       backend_refs:
         - name: primary
-          provider: %s
+          provider: longcat
           endpoint: %s
           api_key: longcat-fixture-key
 recipes:
@@ -213,5 +194,5 @@ recipes:
         modelRefs:
           - model: longcat
             %s
-`, catalogID, provider, endpoint, control))
+`, longCat25CatalogID, endpoint, control))
 }

@@ -152,13 +152,3 @@ models:
     status: claimed
     verified_at: 2026-11-23
     source: https://docs.sglang.io/cookbook/autoregressive/Meituan/LongCat-2.0
-- catalog: meituan/longcat-flash-lite-sparse
-  relationship: self_hosted
-  id: meituan-longcat/LongCat-Flash-Lite-Sparse
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: experimental
-  verification:
-    status: claimed
-    verified_at: 2026-11-25
-    source: https://huggingface.co/meituan-longcat/LongCat-Flash-Lite-Sparse/blob/35de83a18b5838ec1657edb3f885a59bbdd7888f/README.md
