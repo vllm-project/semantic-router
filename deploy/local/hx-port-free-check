@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# hx-port-free-check — ExecStartPre guard for hx-vllm-srun-cpu.service.
+# Fails the start if the requested TCP port is already bound, so a second
+# runtime instance (or a leftover process) surfaces as a clear unit failure
+# instead of a bind error mid-start. Read-only: it never kills anything.
+set -euo pipefail
+
+port="${1:?usage: hx-port-free-check PORT}"
+if ! [[ "$port" =~ ^[0-9]+$ ]]; then
+    echo "hx-port-free-check: port must be numeric, got '$port'" >&2
+    exit 2
+fi
+if ss -tln "( sport = :$port )" | grep -q ":$port "; then
+    echo "hx-port-free-check: TCP port $port is already bound; refusing to start" >&2
+    exit 1
+fi
+echo "hx-port-free-check: TCP port $port is free"

@@ -1,0 +1,42 @@
+# hx-vllm-srun-cpu.service — persistent CPU-mode classifier runtime for HX-2.
+#
+# Serves hx-classifier (Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2
+# f0cd764) on 0.0.0.0:8100 with --device cpu, so the classifier stays resident
+# while qwen-x keeps the GPU (7% CPU / 93% GPU placement, 131072 context).
+#
+# Differences from the retired GPU unit (hx-vllm-srun.service):
+#   - no After=/BindsTo=/PartOf=ollama.service: CPU mode does not depend on
+#     Ollama and must not stop or restart with it;
+#   - no qwenx-residency-check ExecStartPre and no residency watchdog: there
+#     is no GPU residency to guard;
+#   - no HX_SRUN_CUDA_MEMORY_FRACTION / CUDA_VISIBLE_DEVICES: no GPU allocator
+#     involvement;
+#   - --device cpu with --threads sized for the shared host.
+#
+# Install (root on the target host):
+#   install -m 0644 hx-vllm-srun-cpu.env  /srv/hx-semantic-router/units/
+#   install -m 0644 hx-vllm-srun-cpu.service /etc/systemd/system/
+#   systemctl daemon-reload && systemctl enable --now hx-vllm-srun-cpu.service
+# Verify before install: systemd-analyze verify hx-vllm-srun-cpu.service
+
+[Unit]
+Description=HX vllm-srun classifier runtime (hx-classifier: Decision-2.0-Kai-0.6B@cd49ea38, CPU, co-resident with qwen-x)
+Documentation=https://github.com/vllm-project/semantic-router
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=hxsa
+Group=hxsa
+EnvironmentFile=/srv/hx-semantic-router/units/hx-vllm-srun-cpu.env
+ExecStartPre=/srv/hx-semantic-router/bin/hx-port-free-check 8100
+ExecStart=/srv/hx-semantic-router/venv/bin/vllm-srun serve vllm-sr/Decision-2.0-Kai-0.6B@cd49ea3813fd8ba0928a9a23ef6c9a0f2f0cd764 --served-model-name hx-classifier --device cpu --threads 8 --host ${HX_SRUN_HOST} --port 8100 --offline --cache-dir /srv/hx-semantic-router/models/hf/hub --max-num-seqs 2 --max-num-batched-tokens 2048 --result-cache-entries 0 --log-level info
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=960
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
