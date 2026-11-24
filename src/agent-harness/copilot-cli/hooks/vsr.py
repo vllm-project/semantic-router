@@ -57,12 +57,30 @@ MARK = "▚▞ vSR"
 # rules call holds (the listener's limit, in UTF-8 bytes).
 NO_RULES = {"revision": "", "guard": [], "redact": []}
 MAX_RULES_BYTES = 256 << 10
+# The line Copilot CLI ends a shell result with. Only this exact shape is set aside, so
+# output cannot pass its own text off as the footer to keep it from being read.
+FOOTER = re.compile(r"\n?<shellId: \d+ completed with exit code -?\d+>\s*\Z")
+
+
+def fits(value: object, default: object) -> bool:
+    if isinstance(default, bool):
+        return isinstance(value, bool)
+    if isinstance(default, float):
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    return isinstance(value, type(default))
+
+
+def profile_of(vsr: object) -> dict[str, bool]:
+    if not isinstance(vsr, dict):
+        return {}
+    return {app: vsr[app] for app in PROFILE_APPS if isinstance(vsr.get(app), bool)}
 
 
 def settings(listener: bool = True) -> dict:
-    """The defaults, then `vsr.json` in the Copilot home, then VSR_* variables. The listener's
-    profile sets the apps `vsr.json` leaves out, as the Claude Code plugin lets it; `listener`
-    False leaves the listener unasked."""
+    """The defaults, then `vsr.json` in the Copilot home (a value of the wrong type is
+    ignored), then VSR_* variables. The listener's profile sets the apps `vsr.json` leaves
+    out, as the Claude Code plugin lets it; `listener` False leaves the listener unasked.
+    """
     found = dict(DEFAULTS)
     home = Path(os.environ.get("COPILOT_HOME") or Path.home() / ".copilot")
     saved = {}
@@ -70,7 +88,7 @@ def settings(listener: bool = True) -> dict:
         saved = {
             k: v
             for k, v in json.loads((home / "vsr.json").read_text()).items()
-            if k in DEFAULTS
+            if k in DEFAULTS and fits(v, DEFAULTS[k])
         }
     found.update(saved)
     for name, env in (
@@ -154,7 +172,7 @@ def listener_profile(opts: dict, home: Path, timeout: float = 1.5) -> tuple[dict
     known = rules_of({"vsr": {"rules": slots[key]}}) if key in slots else None
     with contextlib.suppress(TypeError, KeyError):
         if held["url"] == key and time.time() - held["at"] < PROFILE_SECONDS:
-            return held["profile"], known or NO_RULES
+            return profile_of(held["profile"]), known or NO_RULES
     headers = (
         {"Authorization": f"Bearer {opts['runtimeToken']}"}
         if opts["runtimeToken"]
@@ -166,10 +184,7 @@ def listener_profile(opts: dict, home: Path, timeout: float = 1.5) -> tuple[dict
             urllib.request.Request(url, headers=headers), timeout=timeout
         ) as response:
             listing = json.loads(response.read())
-        vsr = listing.get("vsr") or {}
-        profile = {
-            app: vsr[app] for app in PROFILE_APPS if isinstance(vsr.get(app), bool)
-        }
+        profile = profile_of(listing.get("vsr"))
         known = rules_of(listing) or known
     except (OSError, ValueError, AttributeError):
         pass
@@ -513,8 +528,14 @@ def hide(
 def output(event: dict, opts: dict) -> dict:
     # Copilot CLI's PostToolUse carries a command's output as tool_result.text_result_for_llm,
     # not the top-level tool_response Codex sends.
-    response = (event.get("tool_result") or {}).get("text_result_for_llm")
-    text = response if isinstance(response, str) else json.dumps(response)
+    result = event.get("tool_result")
+    text = result.get("text_result_for_llm") if isinstance(result, dict) else None
+    if not isinstance(text, str):
+        return {}
+    # The shell's closing line is not the command's output: it stays last and unread, so the
+    # decision model cannot hide the shell id or the exit code.
+    tail = FOOTER.search(text)
+    text, footer = (text[: tail.start()], tail.group()) if tail else (text, "")
     command = (event.get("tool_input") or {}).get("command") or event.get(
         "tool_name", ""
     )
@@ -544,7 +565,8 @@ def output(event: dict, opts: dict) -> dict:
                         f"vSR redact withheld {source}: the listener's required rule "
                         f"{rule['name']} could not check it ({why}). The rule is set on the "
                         "Router listener; ask the person who runs it."
-                    ),
+                    )
+                    + footer,
                 },
                 "systemMessage": f"{MARK} withheld · required rule {rule['name']} not checked · {why} · {source}",
             }
@@ -629,7 +651,7 @@ def output(event: dict, opts: dict) -> dict:
         # own documented PostToolUse schema, not Claude Code's decision/reason block.
         reply["modifiedResult"] = {
             "resultType": "success",
-            "textResultForLlm": "\n\n".join([rewritten, *notes]),
+            "textResultForLlm": "\n\n".join([rewritten, *notes]) + footer,
         }
     elif notes:
         # A top-level additionalContext reaches the model. A copy nested under
@@ -654,14 +676,18 @@ NO_REDIRECTS = urllib.request.build_opener(RefuseRedirect)
 
 
 def main(argv: list[str]) -> int:
-    event = json.loads(sys.stdin.read() or "{}")
     mode = argv[1] if len(argv) > 1 else ""
-    if event.get("tool_name") != "Bash":
-        print("{}")
-        return 0
-    opts = settings()
-    handle = {"pre": guard, "post": output}.get(mode)
-    print(json.dumps(handle(event, opts) if handle else {}))
+    reply = "{}"
+    # Copilot CLI refuses the command when a PreToolUse hook crashes, so a bug here, or input
+    # this did not expect, must not stop every shell call: vSR fails open.
+    try:
+        event = json.loads(sys.stdin.read() or "{}")
+        handle = {"pre": guard, "post": output}.get(mode)
+        if handle and event.get("tool_name") == "Bash":
+            reply = json.dumps(handle(event, settings()))
+    except Exception as error:
+        print(f"vsr {mode}: skipped, {type(error).__name__}", file=sys.stderr)
+    print(reply)
     return 0
 
 

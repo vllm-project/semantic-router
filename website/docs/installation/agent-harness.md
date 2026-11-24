@@ -1631,8 +1631,16 @@ sends one `x-session-id`, and no `x-conversation-id`.
 
 ## Copilot CLI
 
-Copilot CLI reaches the gateway as an OpenAI-compatible provider: add it to `providers.json` in
-the Copilot home (`$COPILOT_HOME`, by default `~/.copilot`):
+Copilot CLI reaches the gateway as a bring-your-own-key provider. It sends
+Chat Completions requests and needs a model that supports tool calling and
+streaming. Its automatic model selection does not apply to a provider you add,
+so name the model with `--model`.
+
+Add the provider to `providers.json` in the Copilot home (`$COPILOT_HOME`, by
+default `~/.copilot`). Copilot CLI does not add `/v1` to `baseUrl`, and it
+reads `apiKey` as literal text, not as the name of a variable. Write the key
+itself and keep the file private, or leave `apiKey` out when the listener has
+no `api_keys`:
 
 ```json
 {
@@ -1640,34 +1648,86 @@ the Copilot home (`$COPILOT_HOME`, by default `~/.copilot`):
     {
       "name": "vllm-sr",
       "type": "openai",
-      "baseUrl": "http://localhost:8899",
-      "apiKey": "VLLM_SR_API_KEY"
+      "baseUrl": "http://localhost:8899/v1",
+      "apiKey": "<the listener's API key>"
     }
   ],
-  "models": [{ "id": "vllm-sr/auto", "provider": "vllm-sr" }]
+  "models": [
+    { "id": "auto", "provider": "vllm-sr", "wireModel": "vllm-sr/auto" }
+  ]
 }
 ```
 
-Omit `apiKey` when the listener has none. Restart Copilot CLI, then run
-`copilot --model vllm-sr/auto` or switch with `/model`. There is no `vllm-sr connect` target for
-Copilot CLI yet; write `providers.json` by hand as above.
+Restart Copilot CLI, then run `copilot --model vllm-sr/auto`. `--model` takes
+the provider name and the entry's `id`, so `id` is `auto` and `wireModel` is the
+public model ID that goes to the gateway.
 
-The [vSR plugin](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/copilot-cli)
-adds guard, redact and shield to Copilot CLI without a gateway: before a shell command runs,
-guard asks a decision model whether a person should look first; before Copilot CLI reads a
-command's output, redact hides personal data in it and shield flags output that tries to give
-the agent instructions.
+To keep the key out of the file, set the provider in the environment for one
+run; Copilot CLI then reads the key from your shell:
+
+```bash
+COPILOT_PROVIDER_BASE_URL=http://localhost:8899/v1 \
+COPILOT_PROVIDER_API_KEY="$VLLM_SR_API_KEY" \
+COPILOT_MODEL=vllm-sr/auto \
+copilot
+```
+
+For a model it does not know, Copilot CLI assumes 128,000 prompt tokens. Set
+`maxPromptTokens` and `maxOutputTokens` on the entry to the smallest limits
+across the recipe's models, as
+[Set budgets before running a task](#set-budgets-before-running-a-task)
+explains. There is no `vllm-sr connect` target for Copilot CLI yet.
+
+### The vSR plugin
+
+The [vSR plugin for Copilot CLI](https://github.com/vllm-project/semantic-router/tree/main/src/agent-harness/copilot-cli)
+puts the decision model beside Copilot CLI's shell tool: guard holds a command
+that looks destructive, redact hides personal data in a command's output before
+Copilot reads it, and shield tells Copilot to treat an output that tries to give
+it orders as data. It does not change which model Copilot CLI uses, and
+`vllm-sr connect` does not set it up, so install it and point it at a decision
+model by hand. It needs Copilot CLI 1.0.114 or later and Python 3:
 
 ```bash
 copilot plugin marketplace add vllm-project/semantic-router
-copilot plugin install vsr@vllm-sr
+copilot plugin install vsr-copilot@vllm-sr
 ```
 
-This was checked with Copilot CLI 1.0.114. Copilot CLI already installs the Claude Code plugin's
-`/vsr:setup` and `/vsr:calibrate` skills from this repository's marketplace; the Copilot CLI
-plugin ships hooks only, so install the Claude Code plugin alongside it for those skills. See
-the plugin's [README](https://github.com/vllm-project/semantic-router/blob/main/src/agent-harness/copilot-cli/README.md)
-for configuration and what each decision looks like from Copilot CLI.
+The marketplace also lists the Claude Code plugin as `vsr`. Copilot CLI installs
+that one as two skills and runs none of its hooks, so guard, redact and shield
+come from `vsr-copilot`.
+
+The plugin reads `vsr.json` in the Copilot home. Publish a System One model on
+the listener as [With the vSR plugin](#with-the-vsr-plugin) describes, then give
+the plugin its address:
+
+```json
+{
+  "runtimeUrl": "http://localhost:8899/v1/decisions",
+  "runtimeModel": "vela3-lite",
+  "runtimeTokenEnv": "VLLM_SR_API_KEY",
+  "timeoutSeconds": 12
+}
+```
+
+`runtimeTokenEnv` names the variable that holds the listener's API key; leave
+it out when the listener has no `api_keys`. The listener's `apis.systemone.vsr`
+settings and rules reach this plugin too, and the plugin's
+[README](https://github.com/vllm-project/semantic-router/blob/main/src/agent-harness/copilot-cli/README.md)
+lists every setting.
+
+- **Time to answer.** `timeoutSeconds` is how long the plugin waits for the
+  decision model before it lets a call through unchecked, 3 seconds by default.
+  A decision call takes about 4 seconds on a laptop CPU, so raise it, and keep
+  it under the 15 seconds the plugin gives its guard hook.
+- **Shell output only.** The plugin reads Copilot's shell tool, and the first
+  16,000 characters of an output. Copilot's own file viewer, `view`, reached the
+  model with personal data unhidden in the measured run, so a file read that
+  way is not covered.
+
+These settings were checked with Copilot CLI 1.0.114: the provider against a
+mocked Chat Completions server, the plugin against a `vllm-srun` decision
+model. The listener path was checked only against a mocked listener.
 
 ## Set budgets before running a task
 

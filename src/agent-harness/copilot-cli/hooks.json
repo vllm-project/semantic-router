@@ -7,8 +7,7 @@
           {
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" pre",
-            "timeout": 15,
-            "statusMessage": "vSR guard: is this command safe to run?"
+            "timeout": 15
           }
         ]
       }
@@ -20,8 +19,7 @@
           {
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/hooks/vsr.py\" post",
-            "timeout": 30,
-            "statusMessage": "vSR redact and shield: reading the output"
+            "timeout": 30
           }
         ]
       }
