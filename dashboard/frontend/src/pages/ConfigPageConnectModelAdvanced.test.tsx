@@ -1,9 +1,21 @@
+import type { ComponentProps } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { PROVIDER_LB_POLICIES } from '../generated/routerConfigContract'
 import ConfigPageConnectModelAdvanced from './ConfigPageConnectModelAdvanced'
 import { emptyConnectModelAdvancedValues } from './configPageConnectModelSupport'
+
+vi.mock('../ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ui')>()
+  return {
+    ...actual,
+    // Check the option inventory independently of the collapsed-by-default UI.
+    CollapsibleContent: (props: ComponentProps<typeof actual.CollapsibleContent>) => (
+      <actual.CollapsibleContent {...props} forceMount />
+    ),
+  }
+})
 
 describe('Quick Connect delivery options', () => {
   it('renders every generated policy rather than a parallel option list', () => {

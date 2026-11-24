@@ -30,6 +30,7 @@ describe('model form backend targets', () => {
       | 'responses'
       | 'messages'
       | 'images'
+      | 'speech'
       | 'systemone'
       | 'openai'
       | 'anthropic'

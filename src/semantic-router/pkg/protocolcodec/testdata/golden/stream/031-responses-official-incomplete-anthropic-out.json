@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "response_incomplete",
+          "id": "msg_befb8f658254b03afcc899a5",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,

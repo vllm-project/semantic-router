@@ -84,6 +84,7 @@ COPY src/semantic-router/pkg/admission/ /app/src/semantic-router/pkg/admission/
 COPY src/semantic-router/pkg/apiregistry/ /app/src/semantic-router/pkg/apiregistry/
 COPY src/semantic-router/pkg/backendtelemetry/ /app/src/semantic-router/pkg/backendtelemetry/
 COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
+COPY src/semantic-router/pkg/clientauth/ /app/src/semantic-router/pkg/clientauth/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/consts/ /app/src/semantic-router/pkg/consts/
@@ -113,6 +114,7 @@ COPY src/semantic-router/pkg/tokencount/tokenizerspec/ /app/src/semantic-router/
 COPY src/semantic-router/pkg/upstream/ /app/src/semantic-router/pkg/upstream/
 COPY src/semantic-router/pkg/utils/contentcoding/ /app/src/semantic-router/pkg/utils/contentcoding/
 COPY src/semantic-router/pkg/configsnapshot/historylock/ /app/src/semantic-router/pkg/configsnapshot/historylock/
+COPY src/semantic-router/pkg/websearch/ /app/src/semantic-router/pkg/websearch/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/

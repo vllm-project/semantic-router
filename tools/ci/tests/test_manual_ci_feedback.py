@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 import manual_ci  # noqa: E402
 import pr_ci_status  # noqa: E402
 from manual_ci_feedback import feedback_for_event, warning  # noqa: E402
-from test_manual_ci import REPO, TRUSTED, FakeGitHub  # noqa: E402
+from test_manual_ci import HEAD, REPO, TRUSTED, FakeGitHub  # noqa: E402
 
 
 class FeedbackGitHub(FakeGitHub):
@@ -33,6 +33,7 @@ class FeedbackGitHub(FakeGitHub):
         self.next_reaction_id = 1000
         self.deleted_reactions = []
         self.feedback_error = False
+        self.feedback_transport = None
         self.lookup_error = False
         self.trigger_error = None
         self.delete_error = False
@@ -60,6 +61,11 @@ class FeedbackGitHub(FakeGitHub):
         return super().request(endpoint, method=method)
 
     def write(self, endpoint, payload, *, method="POST"):
+        if endpoint == f"repos/{REPO}/statuses/{HEAD}":
+            self.timeline.append("qualification pending")
+            return super().write(endpoint, payload)
+        if self.feedback_transport is not None:
+            return self.feedback_transport(endpoint, payload, method=method)
         if self.feedback_error:
             raise manual_ci.ManualCIError("SECRET feedback error")
         self.writes.append((endpoint, copy.deepcopy(payload), method))
@@ -143,7 +149,9 @@ class ManualCIFeedbackTests(unittest.TestCase):
         self.assertEqual(self.client.reactions, {"eyes"})
         self.assertEqual(self.client.posts, [])
         manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.timeline, ["eyes", "rerun", "rocket"])
+        self.assertEqual(
+            self.client.timeline, ["eyes", "qualification pending", "rerun", "rocket"]
+        )
         self.assertEqual(self.client.comments, [])
 
     def test_permission_denial_explains_who_can_request_without_authorizing(self):
@@ -250,14 +258,17 @@ class ManualCIFeedbackTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             record = manual_ci.authorize_with_feedback(self.client, self.event)
             manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertEqual(
+            self.client.posts,
+            [f"repos/{REPO}/statuses/{HEAD}", f"repos/{REPO}/actions/runs/123/rerun"],
+        )
         self.assertIn("::warning::", output.getvalue())
         self.assertNotIn("SECRET", output.getvalue())
 
     def test_http_403_diagnostic_does_not_expose_api_content_or_change_authorization(
         self,
     ):
-        self.client.write = manual_ci.GitHubClient().write
+        self.client.feedback_transport = manual_ci.GitHubClient().write
         output = io.StringIO()
         result = subprocess.CompletedProcess(
             args=[],
@@ -271,13 +282,16 @@ class ManualCIFeedbackTests(unittest.TestCase):
         ):
             record = manual_ci.authorize_with_feedback(self.client, self.event)
             manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertEqual(
+            self.client.posts,
+            [f"repos/{REPO}/statuses/{HEAD}", f"repos/{REPO}/actions/runs/123/rerun"],
+        )
         self.assertIn("(reaction; HTTP 403)", output.getvalue())
         self.assertNotIn("SECRET", output.getvalue())
         self.assertNotIn(REPO, output.getvalue())
 
     def test_malformed_success_response_has_no_public_payload_or_invented_status(self):
-        self.client.write = manual_ci.GitHubClient().write
+        self.client.feedback_transport = manual_ci.GitHubClient().write
         result = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="SECRET malformed JSON", stderr=""
         )
@@ -452,7 +466,10 @@ class ManualCIFeedbackTests(unittest.TestCase):
                     ["manual_ci.py", "rerun", "--authorization", str(authorization)],
                 ):
                     self.assertEqual(manual_ci.main(), 0)
-                self.assertEqual(self.client.timeline, ["eyes", "rerun", "rocket"])
+                self.assertEqual(
+                    self.client.timeline,
+                    ["eyes", "qualification pending", "rerun", "rocket"],
+                )
 
     def test_feedback_never_edits_another_users_marker_or_another_command(self):
         original = [

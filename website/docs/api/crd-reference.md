@@ -924,7 +924,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
+| `type` _string_ | Type specifies the signal or projection type a leaf references: a type<br />the router accepts in decision rules. |  | Enum: [agent authz complexity context conversation domain fact_check input_modality jailbreak keyword language metadata modality pii projection safety systemone turn_relation user_feedback] <br />Optional: \{\} <br /> |
 | `name` _string_ | Name is the name of the rule a leaf references |  | Optional: \{\} <br /> |
 | `label` _string_ | Label matches one label of the referenced rule (systemone and<br />application signal conditions) |  | Optional: \{\} <br /> |
 | `predicate` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#json-v1-apiextensions-k8s-io)_ | Predicate bounds the referenced rule's score, as \{gt, gte, lt, lte\}.<br />The router checks it when it loads the configuration. |  | Type: object <br />Optional: \{\} <br /> |
@@ -1009,10 +1009,10 @@ _Appears in:_
 | `image` _[ImageSpec](#imagespec)_ | Image configuration |  | Optional: \{\} <br /> |
 | `replicas` _integer_ | Number of replicas | 1 | Minimum: 0 <br />Optional: \{\} <br /> |
 | `imagePullSecrets` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core) array_ | ImagePullSecrets for private registries |  | Optional: \{\} <br /> |
-| `serviceAccount` _[ServiceAccountSpec](#serviceaccountspec)_ | ServiceAccount configuration |  | Optional: \{\} <br /> |
+| `serviceAccount` _[ServiceAccountSpec](#serviceaccountspec)_ | ServiceAccount configuration. When omitted it defaults to an empty object,<br />so create still takes its default. | \{  \} | Optional: \{\} <br /> |
 | `service` _[ServiceSpec](#servicespec)_ | Service configuration |  | Optional: \{\} <br /> |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ | Resource requirements |  | Optional: \{\} <br /> |
-| `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configuration |  | Optional: \{\} <br /> |
+| `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configuration. When omitted it defaults to an empty object,<br />so enabled, storageClassName, accessMode and size still take their<br />defaults. | \{  \} | Optional: \{\} <br /> |
 | `config` _[ConfigSpec](#configspec)_ | Configuration overrides merged into the canonical v0.5 config.yaml.<br />Router-wide runtime overrides land under config.global.router/services/stores/<br />integrations/model_catalog, and the default plugins under<br />config.global.plugins. Provider defaults land under<br />config.providers.defaults. |  | Optional: \{\} <br /> |
 | `toolsDb` _[ToolEntry](#toolentry) array_ | Tools database configuration |  | Optional: \{\} <br /> |
 | `vllmEndpoints` _[VLLMEndpointSpec](#vllmendpointspec) array_ | VLLMEndpoints is a Kubernetes-native backend discovery adapter.<br />It generates canonical config.providers.models[].backend_refs<br />and the loras of those entries. |  | Optional: \{\} <br /> |
@@ -1104,7 +1104,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled accumulates request body chunks before routing at end-of-stream. |  | Optional: \{\} <br /> |
-| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. The Router refuses an enabled streamed body without a<br />ceiling, so an omitted value takes the default. | 10485760 | Minimum: 0 <br />Optional: \{\} <br /> |
 | `timeout_sec` _integer_ | TimeoutSec caps how long body accumulation may take. A slower body is<br />rejected and the ExtProc stream ends; the downstream response follows the<br />gateway's ExtProc failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### Tool

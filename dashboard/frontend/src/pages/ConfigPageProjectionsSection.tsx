@@ -1,841 +1,740 @@
-import { useEffect, useMemo, useState } from 'react'
-import styles from './ConfigPage.module.css'
-import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import * as React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import {
+  Blend,
+  ChevronDown,
+  CopyPlus,
+  FileDown,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Radar,
+  Split,
+  Trash2,
+} from 'lucide-react'
+
 import ConfirmDialog from '../components/ConfirmDialog'
 import RoutingScopeSelector from '../components/RoutingScopeSelector'
-import TableHeader from '../components/TableHeader'
-import { DataTable, type Column } from '../components/DataTable'
-import type { FieldConfig } from '../components/EditModal'
-import type { ViewField, ViewSection } from '../components/ViewModal'
+import { configCollectionItemYaml } from '../lib/configYaml'
+import {
+  Badge,
+  Button,
+  Card,
+  DataToolbar,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  EmptyState,
+  IconTile,
+  SectionLabel,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  Tooltip,
+  toast,
+  useCopy,
+} from '../ui'
+import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ConfigPageProjectionSheet, {
+  type ProjectionSheetTarget,
+  type ProjectionSheetView,
+} from './configPageProjectionSheet'
+import { SchemaFormHintsProvider } from './ConfigPageSchemaFieldsEditorSupport'
+import { getNormalizedModels } from './configPageModelNormalization'
+import {
+  newProjectionDraft,
+  removeProjection,
+  upsertProjection,
+  type ProjectionEntity,
+} from './configPageProjectionDraft'
+import { BandStrip, WeightBars } from './configPageProjectionStructuredEditors'
+import {
+  PROJECTION_COLLECTION,
+  PROJECTION_KIND_LABEL,
+  PROJECTION_SCHEMA_REF,
+  projectionDecisionConsumers,
+  scoreMappings,
+  type ProjectionKind,
+} from './configPageProjectionTableSupport'
+import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
+import { routingScopeFormHints, routingScopeInventory } from './configPageRoutingScopeHints'
+import {
+  routingScopeRecipeName,
+  useRoutingPageParams,
+  useRoutingScopeManager,
+} from './configPageRoutingScopeSupport'
+import { SignalChip } from './configPageRoutingScopeViews'
+import { copyName } from './configPageSignalForm'
 import type {
   ConfigData,
-  ConfigProjections,
   ProjectionMapping,
   ProjectionPartition,
   ProjectionScore,
 } from './configPageSupport'
-import { cloneConfigData } from './configPageCanonicalization'
-import {
-  assertProjectionCalibration,
-  assertProjectionInputs,
-  assertProjectionMappingOutputCount,
-  assertProjectionMembers,
-  assertProjectionOutputs,
-  assertProjectionPartitionSettings,
-  normalizeProjectionCalibration,
-  normalizeProjectionInputs,
-  normalizeProjectionMembers,
-  normalizeProjectionOutputs,
-} from './configPageProjectionFormSupport'
-import {
-  ProjectionCalibrationEditor,
-  ProjectionInputsEditor,
-  ProjectionMembersEditor,
-  ProjectionOutputsEditor,
-} from './configPageProjectionStructuredEditors'
-import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
-import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
-import { FieldEditor } from './builderPageFormPrimitives'
-import { projectionFieldsFromRouterSchema } from '../lib/routerConfigSchema'
-import {
-  cloneProjections,
-  EMPTY_MAPPINGS,
-  EMPTY_PARTITIONS,
-  EMPTY_PROJECTIONS,
-  EMPTY_SCORES,
-  ensureProjectionConfig,
-  projectionInputSource,
-  type ProjectionDeleteTarget,
-  type ProjectionMappingFormState,
-  type ProjectionPartitionFormState,
-  type ProjectionScoreFormState,
-} from './configPageProjectionTableSupport'
 
 interface ConfigPageProjectionsSectionProps {
   config: ConfigData | null
   isReadonly: boolean
   saveConfig: (config: ConfigData) => Promise<void>
-  openEditModal: OpenEditModal
-  openViewModal: OpenViewModal
+  /** Kept for ConfigPage; projections edit in their own drawer. */
+  openEditModal?: OpenEditModal
+  openViewModal?: OpenViewModal
 }
 
-function withGeneratedProjectionFields<TForm extends object>(
-  collection: string,
-  fields: FieldConfig<TForm>[],
-): FieldConfig<TForm>[] {
-  const known = new Set(fields.map((field) => field.name))
-  const generated = projectionFieldsFromRouterSchema(collection)
-    .filter((field) => !known.has(field.key))
-    .map<FieldConfig<TForm>>((field) => ({
-      name: field.key,
-      label: field.label,
-      section: 'Advanced',
-      fullWidth: true,
-      required: field.required,
-      description: field.description,
-      type: 'custom',
-      customRender: (value, onChange) => (
-        <FieldEditor schema={field} value={value} onChange={onChange} />
-      ),
-    }))
-  return [...fields, ...generated]
+type ProjectionTab = 'partitions' | 'scores' | 'mappings'
+const TAB_KIND: Record<ProjectionTab, ProjectionKind> = {
+  partitions: 'partition',
+  scores: 'score',
+  mappings: 'mapping',
+}
+const KIND_TAB: Record<ProjectionKind, ProjectionTab> = {
+  partition: 'partitions',
+  score: 'scores',
+  mapping: 'mappings',
+}
+const KIND_HINT: Record<ProjectionKind, string> = {
+  partition: 'Group domain rules so only the strongest one matches a request.',
+  score: 'Weigh several signals into one number that mappings turn into bands.',
+  mapping: 'Cut a score into named bands that decisions match.',
+}
+const ease = [0.16, 1, 0.3, 1] as const
+
+function parseKey(value: string | null): { kind: ProjectionKind; name: string } | null {
+  if (!value) return null
+  const index = value.indexOf(':')
+  const kind = value.slice(0, index) as ProjectionKind
+  return index > 0 && kind in PROJECTION_COLLECTION ? { kind, name: value.slice(index + 1) } : null
 }
 
-function generatedProjectionViewFields(
-  collection: string,
-  value: Record<string, unknown>,
-  knownFields: readonly string[],
-): ViewField[] {
-  const known = new Set(knownFields)
-  return projectionFieldsFromRouterSchema(collection)
-    .filter((field) => !known.has(field.key) && value[field.key] !== undefined)
-    .map((field) => {
-      const fieldValue = value[field.key]
-      const scalar =
-        typeof fieldValue === 'string' ||
-        typeof fieldValue === 'number' ||
-        typeof fieldValue === 'boolean'
-      return {
-        label: field.label,
-        value: scalar ? String(fieldValue) : <pre>{JSON.stringify(fieldValue, null, 2)}</pre>,
-        fullWidth: !scalar,
-      }
-    })
+function CardMenu({
+  kind,
+  entity,
+  readOnly,
+  onOpen,
+  onCopy,
+  onDuplicate,
+  onDelete,
+}: {
+  kind: ProjectionKind
+  entity: ProjectionEntity
+  readOnly: boolean
+  onOpen: (view?: ProjectionSheetView) => void
+  onCopy: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  return (
+    <span
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      role="presentation"
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Actions for ${entity.name}`}
+            className="-mr-1.5"
+          >
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem onSelect={() => onOpen()}>
+            <Pencil />
+            {readOnly ? 'View' : 'Edit'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onOpen('try')}>
+            <Radar />
+            Try it
+          </DropdownMenuItem>
+          {readOnly ? null : (
+            <DropdownMenuItem onSelect={onDuplicate}>
+              <CopyPlus />
+              Duplicate
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={onCopy}>
+            <FileDown />
+            Copy YAML
+          </DropdownMenuItem>
+          {readOnly ? null : (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+                <Trash2 />
+                Delete {PROJECTION_KIND_LABEL[kind].toLowerCase()}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </span>
+  )
+}
+
+function ReadByFooter({ names }: { names: string[] }) {
+  return (
+    <div className="mt-auto flex items-center gap-2 border-t border-border px-4 py-2.5">
+      <Split className="size-3.5 shrink-0 text-chart-3" />
+      <Tooltip content={names.length ? names.join(', ') : 'No decision reads it yet'}>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {names.length ? (
+            <>
+              Read by <span className="font-medium tabular text-foreground">{names.length}</span>{' '}
+              {names.length === 1 ? 'decision' : 'decisions'}:{' '}
+              <span className="font-mono">{names.join(', ')}</span>
+            </>
+          ) : (
+            'No decision reads it yet'
+          )}
+        </span>
+      </Tooltip>
+    </div>
+  )
+}
+
+function ProjectionCard({
+  kind,
+  entity,
+  index,
+  config,
+  readOnly,
+  onOpen,
+  onCopy,
+  onDuplicate,
+  onDelete,
+}: {
+  kind: ProjectionKind
+  entity: ProjectionEntity
+  index: number
+  config: ConfigData | null
+  readOnly: boolean
+  onOpen: (view?: ProjectionSheetView) => void
+  onCopy: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+}) {
+  const consumers = projectionDecisionConsumers(config, kind, entity).map(
+    (consumer) => consumer.decision.name,
+  )
+  let badges: React.ReactNode
+  let body: React.ReactNode
+  if (kind === 'partition') {
+    const partition = entity as ProjectionPartition
+    badges = (
+      <>
+        <Badge size="sm" tone="teal">
+          Partition · {partition.semantics?.replace(/_/g, ' ') || 'exclusive'}
+        </Badge>
+        {partition.temperature !== undefined ? (
+          <Badge size="sm" tone="outline" className="font-mono">
+            temperature {partition.temperature}
+          </Badge>
+        ) : null}
+      </>
+    )
+    body = (
+      <>
+        <SectionLabel>Members</SectionLabel>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(partition.members ?? []).map((member) => (
+            <SignalChip key={member} type="domain" name={member} />
+          ))}
+          <span className="ml-1 text-xs text-muted-foreground">
+            falls back to{' '}
+            <span className="font-mono text-foreground/85">{partition.default || '—'}</span>
+          </span>
+        </div>
+      </>
+    )
+  } else if (kind === 'score') {
+    const score = entity as ProjectionScore
+    const mappings = scoreMappings(config, score.name)
+    badges = (
+      <>
+        <Badge size="sm" tone="teal">
+          Score · {score.method?.replace(/_/g, ' ') || 'weighted sum'}
+        </Badge>
+        <Badge size="sm" tone="outline">
+          {score.inputs?.length ?? 0} inputs
+        </Badge>
+      </>
+    )
+    body = (
+      <>
+        <SectionLabel>Weights</SectionLabel>
+        <WeightBars inputs={score.inputs ?? []} compact />
+        {mappings.map((mapping) => (
+          <div key={mapping.name} className="mt-2 flex flex-col gap-1.5">
+            <SectionLabel>{mapping.name} · bands</SectionLabel>
+            <BandStrip outputs={mapping.outputs ?? []} method={mapping.method} />
+          </div>
+        ))}
+        {mappings.length === 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            No mapping turns this score into bands yet.
+          </p>
+        ) : null}
+      </>
+    )
+  } else {
+    const mapping = entity as ProjectionMapping
+    badges = (
+      <>
+        <Badge size="sm" tone="teal">
+          Mapping · {mapping.method?.replace(/_/g, ' ') || 'threshold bands'}
+        </Badge>
+        {mapping.calibration?.method ? (
+          <Badge size="sm" tone="outline" className="font-mono">
+            {mapping.calibration.method}
+          </Badge>
+        ) : null}
+      </>
+    )
+    body = (
+      <>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          from <SignalChip type="projection" name={mapping.source} />
+        </div>
+        <SectionLabel className="mt-1">Bands</SectionLabel>
+        <BandStrip outputs={mapping.outputs ?? []} method={mapping.method} />
+      </>
+    )
+  }
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.4, ease }}
+      className="h-full"
+    >
+      <Card
+        interactive
+        role="button"
+        tabIndex={0}
+        aria-label={`Open ${entity.name}`}
+        onClick={() => onOpen()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            onOpen()
+          }
+        }}
+        className="flex h-full flex-col overflow-hidden"
+      >
+        <div className="flex items-start gap-3 px-4 pt-4">
+          <IconTile icon={Blend} tone="teal" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <span className="truncate font-mono text-[13px] font-semibold">{entity.name}</span>
+            <div className="flex flex-wrap items-center gap-1.5">{badges}</div>
+          </div>
+          <CardMenu
+            kind={kind}
+            entity={entity}
+            readOnly={readOnly}
+            onOpen={onOpen}
+            onCopy={onCopy}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
+          />
+        </div>
+        <div className="flex flex-col gap-2 px-4 pb-4 pt-4">{body}</div>
+        <ReadByFooter names={consumers} />
+      </Card>
+    </motion.div>
+  )
+}
+
+function NewCard({
+  kind,
+  index,
+  onCreate,
+}: {
+  kind: ProjectionKind
+  index: number
+  onCreate: () => void
+}) {
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.04, duration: 0.4, ease }}
+      onClick={onCreate}
+      className="group flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border-strong p-6 text-center transition-colors hover:border-solid hover:bg-surface-subtle focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none"
+    >
+      <span className="grid size-10 place-items-center rounded-full border border-border bg-surface text-muted-foreground shadow-xs transition-colors group-hover:text-foreground">
+        <Plus className="size-4" />
+      </span>
+      <span className="flex flex-col gap-1">
+        <span className="text-[13px] font-medium">
+          New {PROJECTION_KIND_LABEL[kind].toLowerCase()}
+        </span>
+        <span className="max-w-xs text-xs text-muted-foreground">{KIND_HINT[kind]}</span>
+      </span>
+    </motion.button>
+  )
 }
 
 export default function ConfigPageProjectionsSection({
   config,
   isReadonly,
   saveConfig,
-  openEditModal,
-  openViewModal,
 }: ConfigPageProjectionsSectionProps) {
-  const [search, setSearch] = useState('')
-  const [projectionPendingDelete, setProjectionPendingDelete] =
-    useState<ProjectionDeleteTarget | null>(null)
-  const [projectionDeletePending, setProjectionDeletePending] = useState(false)
-  const [projectionDeleteError, setProjectionDeleteError] = useState<string | null>(null)
-  const { applyScopedConfig, routingScopes, scopedConfig, selectedScopeId, setSelectedScopeId } =
-    useRoutingScopeManager(config)
-  useEffect(() => {
-    setProjectionPendingDelete(null)
-    setProjectionDeleteError(null)
-  }, [selectedScopeId])
-  const projections = useMemo<ConfigProjections>(
-    () => scopedConfig?.projections || EMPTY_PROJECTIONS,
-    [scopedConfig?.projections],
+  const navigate = useNavigate()
+  const { copy } = useCopy()
+  const { params, update } = useRoutingPageParams()
+  const { applyScopedConfig, routingScopes, scopedConfig, selectedScope, selectedScopeId } =
+    useRoutingScopeManager(config, params.get('recipe') ?? '')
+  const [search, setSearch] = React.useState('')
+  const [pendingDelete, setPendingDelete] = React.useState<{
+    kind: ProjectionKind
+    name: string
+  } | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
+  const [deleteError, setDeleteError] = React.useState<string | null>(null)
+  const [draftOverride, setDraftOverride] = React.useState<{
+    kind: ProjectionKind
+    draft: ProjectionEntity
+  } | null>(null)
+
+  const scopeLabel = routingScopeRecipeName(
+    config,
+    selectedScopeId,
+    selectedScope?.isDefault ?? true,
   )
-  const partitions = projections.partitions || EMPTY_PARTITIONS
-  const scores = projections.scores || EMPTY_SCORES
-  const mappings = projections.mappings || EMPTY_MAPPINGS
-  const scoreOptions = scores.map((score) => score.name)
-
-  const filteredPartitions = useMemo(
-    () =>
-      partitions.filter((partition) =>
-        [partition.name, partition.semantics, partition.default || '', ...(partition.members || [])]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [partitions, search],
+  const models = React.useMemo(() => getNormalizedModels(config), [config])
+  const inventory = React.useMemo(
+    () => routingScopeInventory(scopedConfig, models),
+    [scopedConfig, models],
   )
-
-  const filteredScores = useMemo(
-    () =>
-      scores.filter((score) =>
-        [
-          score.name,
-          score.method,
-          ...(score.inputs || []).flatMap((input) => [
-            input.type,
-            input.name,
-            input.value_source || '',
-          ]),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [scores, search],
+  const hints = React.useMemo(() => routingScopeFormHints(inventory, 'teal'), [inventory])
+  const lists = React.useMemo<Record<ProjectionKind, ProjectionEntity[]>>(
+    () => ({
+      partition: scopedConfig?.projections?.partitions ?? [],
+      score: scopedConfig?.projections?.scores ?? [],
+      mapping: scopedConfig?.projections?.mappings ?? [],
+    }),
+    [scopedConfig],
   )
+  const total = lists.partition.length + lists.score.length + lists.mapping.length
 
-  const filteredMappings = useMemo(
-    () =>
-      mappings.filter((mapping) =>
-        [
-          mapping.name,
-          mapping.source,
-          mapping.method,
-          mapping.calibration?.method || '',
-          ...(mapping.outputs || []).map((output) => output.name),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
-    [mappings, search],
-  )
-
-  const partitionFields = withGeneratedProjectionFields<ProjectionPartitionFormState>(
-    'partitions',
-    [
-      { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
-      {
-        name: 'semantics',
-        label: 'Semantics',
-        section: 'Identity',
-        type: 'select',
-        required: true,
-        options: ['exclusive', 'softmax_exclusive'],
-      },
-      {
-        name: 'members',
-        label: 'Members',
-        section: 'Definition',
-        type: 'custom',
-        required: true,
-        description: 'Declared domain signals coordinated by this partition.',
-        customRender: (value, onChange) => (
-          <ProjectionMembersEditor value={value} onChange={onChange} />
-        ),
-      },
-      {
-        name: 'temperature',
-        label: 'Temperature',
-        section: 'Identity',
-        type: 'number',
-        step: 0.01,
-        shouldHide: (data) => data.semantics !== 'softmax_exclusive',
-      },
-      {
-        name: 'default',
-        label: 'Default',
-        section: 'Identity',
-        type: 'text',
-        description: 'Fallback member name used when no member wins.',
-      },
-    ],
-  )
-
-  const scoreFields = withGeneratedProjectionFields<ProjectionScoreFormState>('scores', [
-    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
-    {
-      name: 'method',
-      label: 'Method',
-      section: 'Identity',
-      type: 'select',
-      required: true,
-      options: ['weighted_sum'],
-    },
-    {
-      name: 'inputs',
-      label: 'Inputs',
-      section: 'Definition',
-      type: 'custom',
-      required: true,
-      description: 'Weighted signal, knowledge-base metric, or earlier projection contributions.',
-      customRender: (value, onChange) => (
-        <ProjectionInputsEditor value={value} onChange={onChange} />
-      ),
-    },
-  ])
-
-  const mappingFields = withGeneratedProjectionFields<ProjectionMappingFormState>('mappings', [
-    { name: 'name', label: 'Name', section: 'Identity', type: 'text', required: true },
-    {
-      name: 'source',
-      label: 'Source Score',
-      section: 'Identity',
-      type: 'select',
-      required: true,
-      options: scoreOptions.length > 0 ? scoreOptions : [''],
-      description: 'Projection score whose output will be mapped into named routing bands.',
-    },
-    {
-      name: 'method',
-      label: 'Method',
-      section: 'Identity',
-      type: 'select',
-      required: true,
-      options: ['threshold_bands', 'multi_emit'],
-    },
-    {
-      name: 'calibration',
-      label: 'Calibration',
-      section: 'Definition',
-      type: 'custom',
-      description: 'Optional confidence calibration applied to output bands.',
-      customRender: (value, onChange) => (
-        <ProjectionCalibrationEditor value={value} onChange={onChange} />
-      ),
-    },
-    {
-      name: 'outputs',
-      label: 'Outputs',
-      section: 'Definition',
-      type: 'custom',
-      required: true,
-      description: 'Named routing bands and their lower or upper threshold bounds.',
-      customRender: (value, onChange) => (
-        <ProjectionOutputsEditor value={value} onChange={onChange} />
-      ),
-    },
-  ])
-
-  const withClonedConfig = async (mutate: (next: ConfigData) => void) => {
-    if (!scopedConfig) return
-    const next = cloneConfigData(scopedConfig)
-    mutate(next)
-    await saveConfig(applyScopedConfig(next))
-  }
-
-  const handleAddPartition = () => {
-    openEditModal<ProjectionPartitionFormState>(
-      'Add Projection Partition',
-      {
-        name: '',
-        semantics: 'exclusive',
-        members: [],
-        temperature: undefined,
-        default: '',
-      },
-      partitionFields,
-      async (data) => {
-        const members = normalizeProjectionMembers(data.members)
-        const defaultMember = data.default?.trim() ?? ''
-        assertProjectionMembers(members, defaultMember)
-        assertProjectionPartitionSettings(data.semantics, data.temperature)
-        const nextPartition: ProjectionPartition = {
-          ...data,
-          name: data.name.trim(),
-          semantics: data.semantics,
-          members,
-          temperature: data.temperature,
-          default: defaultMember,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.partitions = [...projectionConfig.partitions!, nextPartition]
-        })
-      },
-      'add',
-    )
-  }
-
-  const handleEditPartition = (partition: ProjectionPartition) => {
-    openEditModal<ProjectionPartitionFormState>(
-      `Edit Partition: ${partition.name}`,
-      {
-        ...partition,
-        name: partition.name,
-        semantics: partition.semantics,
-        members: partition.members || [],
-        temperature: partition.temperature,
-        default: partition.default || '',
-      },
-      partitionFields,
-      async (data) => {
-        const members = normalizeProjectionMembers(data.members)
-        const defaultMember = data.default?.trim() ?? ''
-        assertProjectionMembers(members, defaultMember)
-        assertProjectionPartitionSettings(data.semantics, data.temperature)
-        const nextPartition: ProjectionPartition = {
-          ...partition,
-          ...data,
-          name: data.name.trim(),
-          semantics: data.semantics,
-          members,
-          temperature: data.temperature,
-          default: defaultMember,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.partitions = cloneProjections(next).partitions?.map((entry) =>
-            entry.name === partition.name ? nextPartition : entry,
-          )
-        })
-      },
-    )
-  }
-
-  const handleDeletePartition = (partition: ProjectionPartition) => {
-    setProjectionDeleteError(null)
-    setProjectionPendingDelete({ kind: 'partition', name: partition.name })
-  }
-
-  const handleViewPartition = (partition: ProjectionPartition) => {
-    const sections: ViewSection[] = [
-      {
-        title: 'Identity',
-        fields: [
-          { label: 'Name', value: partition.name },
-          { label: 'Semantics', value: partition.semantics },
-          { label: 'Temperature', value: partition.temperature ?? 'N/A' },
-          { label: 'Default', value: partition.default || 'N/A' },
-        ],
-      },
-      {
-        title: 'Definition',
-        fields: [
-          {
-            label: 'Members',
-            value: <ProjectionMembersEditor value={partition.members || []} readOnly />,
-            fullWidth: true,
-          },
-          ...generatedProjectionViewFields(
-            'partitions',
-            partition as unknown as Record<string, unknown>,
-            ['name', 'semantics', 'temperature', 'members', 'default'],
-          ),
-        ],
-      },
-    ]
-    openViewModal(`Projection Partition: ${partition.name}`, sections, () =>
-      handleEditPartition(partition),
-    )
-  }
-
-  const handleAddScore = () => {
-    openEditModal<ProjectionScoreFormState>(
-      'Add Projection Score',
-      {
-        name: '',
-        method: 'weighted_sum',
-        inputs: [],
-      },
-      scoreFields,
-      async (data) => {
-        const inputs = normalizeProjectionInputs(data.inputs)
-        assertProjectionInputs(inputs)
-        const nextScore: ProjectionScore = {
-          ...data,
-          name: data.name.trim(),
-          method: data.method,
-          inputs,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.scores = [...projectionConfig.scores!, nextScore]
-        })
-      },
-      'add',
-    )
-  }
-
-  const handleEditScore = (score: ProjectionScore) => {
-    openEditModal<ProjectionScoreFormState>(
-      `Edit Score: ${score.name}`,
-      {
-        ...score,
-        name: score.name,
-        method: score.method,
-        inputs: score.inputs || [],
-      },
-      scoreFields,
-      async (data) => {
-        const inputs = normalizeProjectionInputs(data.inputs)
-        assertProjectionInputs(inputs)
-        const nextScore: ProjectionScore = {
-          ...score,
-          ...data,
-          name: data.name.trim(),
-          method: data.method,
-          inputs,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.scores = cloneProjections(next).scores?.map((entry) =>
-            entry.name === score.name ? nextScore : entry,
-          )
-        })
-      },
-    )
-  }
-
-  const handleDeleteScore = (score: ProjectionScore) => {
-    setProjectionDeleteError(null)
-    setProjectionPendingDelete({ kind: 'score', name: score.name })
-  }
-
-  const handleViewScore = (score: ProjectionScore) => {
-    const sections: ViewSection[] = [
-      {
-        title: 'Identity',
-        fields: [
-          { label: 'Name', value: score.name },
-          { label: 'Method', value: score.method },
-        ],
-      },
-      {
-        title: 'Definition',
-        fields: [
-          {
-            label: 'Inputs',
-            value: <ProjectionInputsEditor value={score.inputs || []} readOnly />,
-            fullWidth: true,
-          },
-          ...generatedProjectionViewFields('scores', score as unknown as Record<string, unknown>, [
-            'name',
-            'method',
-            'inputs',
-          ]),
-        ],
-      },
-    ]
-    openViewModal(`Projection Score: ${score.name}`, sections, () => handleEditScore(score))
-  }
-
-  const handleAddMapping = () => {
-    openEditModal<ProjectionMappingFormState>(
-      'Add Projection Mapping',
-      {
-        name: '',
-        source: scoreOptions[0] || '',
-        method: 'threshold_bands',
-        calibration: undefined,
-        outputs: [],
-      },
-      mappingFields,
-      async (data) => {
-        const calibration = normalizeProjectionCalibration(data.calibration)
-        const outputs = normalizeProjectionOutputs(data.outputs)
-        assertProjectionCalibration(calibration)
-        assertProjectionOutputs(outputs)
-        assertProjectionMappingOutputCount(data.method, outputs)
-        const nextMapping: ProjectionMapping = {
-          ...data,
-          name: data.name.trim(),
-          source: data.source,
-          method: data.method,
-          calibration,
-          outputs,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.mappings = [...projectionConfig.mappings!, nextMapping]
-        })
-      },
-      'add',
-    )
-  }
-
-  const handleEditMapping = (mapping: ProjectionMapping) => {
-    openEditModal<ProjectionMappingFormState>(
-      `Edit Mapping: ${mapping.name}`,
-      {
-        ...mapping,
-        name: mapping.name,
-        source: mapping.source,
-        method: mapping.method,
-        calibration: mapping.calibration,
-        outputs: mapping.outputs || [],
-      },
-      mappingFields,
-      async (data) => {
-        const calibration = normalizeProjectionCalibration(data.calibration)
-        const outputs = normalizeProjectionOutputs(data.outputs)
-        assertProjectionCalibration(calibration)
-        assertProjectionOutputs(outputs)
-        assertProjectionMappingOutputCount(data.method, outputs)
-        const nextMapping: ProjectionMapping = {
-          ...mapping,
-          ...data,
-          name: data.name.trim(),
-          source: data.source,
-          method: data.method,
-          calibration,
-          outputs,
-        }
-        await withClonedConfig((next) => {
-          const projectionConfig = ensureProjectionConfig(next)
-          projectionConfig.mappings = cloneProjections(next).mappings?.map((entry) =>
-            entry.name === mapping.name ? nextMapping : entry,
-          )
-        })
-      },
-    )
-  }
-
-  const handleDeleteMapping = (mapping: ProjectionMapping) => {
-    setProjectionDeleteError(null)
-    setProjectionPendingDelete({ kind: 'mapping', name: mapping.name })
-  }
-
-  const confirmDeleteProjection = async () => {
-    if (!projectionPendingDelete) return
-    if (!config) {
-      setProjectionDeleteError('No active configuration is available.')
-      return
+  const activeKey = parseKey(params.get('id'))
+  const active = activeKey
+    ? lists[activeKey.kind].find((entity) => entity.name === activeKey.name)
+    : undefined
+  const newKind = params.get('new') as ProjectionKind | null
+  const creating = newKind && newKind in PROJECTION_COLLECTION && !isReadonly ? newKind : null
+  const tabParam = params.get('tab') as ProjectionTab | null
+  const firstFilled =
+    (['partitions', 'scores', 'mappings'] as const).find(
+      (candidate) => lists[TAB_KIND[candidate]].length > 0,
+    ) ?? 'partitions'
+  const tab: ProjectionTab =
+    tabParam && tabParam in TAB_KIND
+      ? tabParam
+      : activeKey
+        ? KIND_TAB[activeKey.kind]
+        : creating
+          ? KIND_TAB[creating]
+          : firstFilled
+  const tabKind = TAB_KIND[tab]
+  const viewParam = params.get('view') as ProjectionSheetView | null
+  const view: ProjectionSheetView =
+    viewParam === 'try' || viewParam === 'yaml' ? viewParam : 'overview'
+  const sheetTarget = React.useMemo<ProjectionSheetTarget | null>(() => {
+    if (active && activeKey)
+      return {
+        kind: activeKey.kind,
+        mode: 'edit',
+        original: active,
+        draft: JSON.parse(JSON.stringify(active)),
+      }
+    if (creating) {
+      const draft =
+        draftOverride?.kind === creating
+          ? draftOverride.draft
+          : newProjectionDraft(
+              creating,
+              lists.score.map((score) => score.name),
+            )
+      return { kind: creating, mode: 'create', draft }
     }
+    return null
+  }, [active, activeKey, creating, draftOverride, lists])
+  const shownTarget = React.useRef<ProjectionSheetTarget | null>(null)
+  if (sheetTarget) shownTarget.current = sheetTarget
 
-    setProjectionDeletePending(true)
-    setProjectionDeleteError(null)
+  const query = search.trim().toLowerCase()
+  const visible = lists[tabKind].filter(
+    (entity) => !query || JSON.stringify(entity).toLowerCase().includes(query),
+  )
+
+  const open = (kind: ProjectionKind, name: string, nextView?: ProjectionSheetView) =>
+    update({ id: `${kind}:${name}`, new: null, tab: KIND_TAB[kind], view: nextView ?? null })
+  const closeSheet = () => {
+    setDraftOverride(null)
+    update({ id: null, new: null, view: null })
+  }
+  const startCreate = (kind: ProjectionKind, draft?: ProjectionEntity) => {
+    setDraftOverride(draft ? { kind, draft } : null)
+    update({ new: kind, id: null, view: null, tab: KIND_TAB[kind] })
+  }
+  const copyYaml = (kind: ProjectionKind, entity: ProjectionEntity) => {
+    copy(
+      configCollectionItemYaml(
+        ['projections', PROJECTION_COLLECTION[kind]],
+        entity,
+        PROJECTION_SCHEMA_REF[kind],
+      ),
+    )
+    toast.success(`${entity.name} YAML copied`)
+  }
+  const duplicate = (kind: ProjectionKind, entity: ProjectionEntity) => {
+    const draft = JSON.parse(JSON.stringify(entity)) as ProjectionEntity
+    draft.name = copyName(
+      lists[kind].map((entry) => entry.name),
+      entity.name,
+    )
+    startCreate(kind, draft)
+  }
+  const save = async (kind: ProjectionKind, entity: ProjectionEntity, originalName?: string) => {
+    if (!scopedConfig) throw new Error('Routing profile not loaded yet.')
+    await saveConfig(applyScopedConfig(upsertProjection(scopedConfig, kind, entity, originalName)))
+    setDraftOverride(null)
+    update({ id: `${kind}:${entity.name}`, new: null }, { replace: true })
+  }
+  const confirmDelete = async () => {
+    if (!scopedConfig || !pendingDelete) return
+    setDeleting(true)
+    setDeleteError(null)
     try {
-      const target = projectionPendingDelete
-      await withClonedConfig((next) => {
-        const projectionConfig = ensureProjectionConfig(next)
-        const cloned = cloneProjections(next)
-        if (target.kind === 'partition') {
-          projectionConfig.partitions = cloned.partitions?.filter(
-            (entry) => entry.name !== target.name,
-          )
-        } else if (target.kind === 'score') {
-          projectionConfig.scores = cloned.scores?.filter((entry) => entry.name !== target.name)
-        } else {
-          projectionConfig.mappings = cloned.mappings?.filter((entry) => entry.name !== target.name)
-        }
-      })
-      setProjectionPendingDelete(null)
-    } catch (error) {
-      setProjectionDeleteError(
-        error instanceof Error ? error.message : 'Failed to delete projection.',
+      await saveConfig(
+        applyScopedConfig(removeProjection(scopedConfig, pendingDelete.kind, pendingDelete.name)),
+      )
+      toast.success(`${pendingDelete.name} deleted`)
+      if (
+        activeKey &&
+        activeKey.kind === pendingDelete.kind &&
+        activeKey.name === pendingDelete.name
+      )
+        closeSheet()
+      setPendingDelete(null)
+    } catch (failure) {
+      setDeleteError(
+        failure instanceof Error ? failure.message : 'The projection could not be deleted.',
       )
     } finally {
-      setProjectionDeletePending(false)
+      setDeleting(false)
     }
   }
+  const deleteConsumers = pendingDelete
+    ? (() => {
+        const entity = lists[pendingDelete.kind].find((entry) => entry.name === pendingDelete.name)
+        return entity
+          ? projectionDecisionConsumers(scopedConfig, pendingDelete.kind, entity).map(
+              (consumer) => consumer.decision.name,
+            )
+          : []
+      })()
+    : []
+  const dependentMappings =
+    pendingDelete?.kind === 'score'
+      ? scoreMappings(scopedConfig, pendingDelete.name).map((mapping) => mapping.name)
+      : []
 
-  const handleViewMapping = (mapping: ProjectionMapping) => {
-    const sections: ViewSection[] = [
-      {
-        title: 'Identity',
-        fields: [
-          { label: 'Name', value: mapping.name },
-          { label: 'Source', value: mapping.source },
-          { label: 'Method', value: mapping.method },
-        ],
-      },
-      {
-        title: 'Definition',
-        fields: [
-          {
-            label: 'Calibration',
-            value: mapping.calibration ? (
-              <ProjectionCalibrationEditor value={mapping.calibration} readOnly />
-            ) : (
-              'N/A'
-            ),
-            fullWidth: true,
-          },
-          {
-            label: 'Outputs',
-            value: <ProjectionOutputsEditor value={mapping.outputs || []} readOnly />,
-            fullWidth: true,
-          },
-          ...generatedProjectionViewFields(
-            'mappings',
-            mapping as unknown as Record<string, unknown>,
-            ['name', 'source', 'method', 'calibration', 'outputs'],
-          ),
-        ],
-      },
-    ]
-    openViewModal(`Projection Mapping: ${mapping.name}`, sections, () => handleEditMapping(mapping))
-  }
-
-  const partitionColumns: Column<ProjectionPartition>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'semantics',
-      header: 'Semantics',
-      width: '180px',
-      sortable: true,
-      render: (row) => <span className={styles.tableMetaBadge}>{row.semantics}</span>,
-    },
-    {
-      key: 'members',
-      header: 'Members',
-      width: '140px',
-      render: (row) => <span>{row.members?.length || 0} members</span>,
-    },
-    {
-      key: 'default',
-      header: 'Default',
-      width: '180px',
-      render: (row) => row.default || 'N/A',
-    },
-  ]
-
-  const scoreColumns: Column<ProjectionScore>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'method',
-      header: 'Method',
-      width: '180px',
-      sortable: true,
-      render: (row) => <span className={styles.tableMetaBadge}>{row.method}</span>,
-    },
-    {
-      key: 'inputs',
-      header: 'Inputs',
-      width: '140px',
-      render: (row) => <span>{row.inputs?.length || 0} inputs</span>,
-    },
-    {
-      key: 'sources',
-      header: 'Sources',
-      render: (row) => row.inputs?.map(projectionInputSource).slice(0, 3).join(', ') || 'N/A',
-    },
-  ]
-
-  const mappingColumns: Column<ProjectionMapping>[] = [
-    {
-      key: 'name',
-      header: 'Name',
-      sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'source',
-      header: 'Source',
-      width: '180px',
-      sortable: true,
-      render: (row) => <span className={styles.tableMetaBadge}>{row.source}</span>,
-    },
-    {
-      key: 'method',
-      header: 'Method',
-      width: '180px',
-      sortable: true,
-      render: (row) => row.method,
-    },
-    {
-      key: 'outputs',
-      header: 'Outputs',
-      render: (row) => row.outputs?.map((output) => output.name).join(', ') || 'N/A',
-    },
-  ]
+  const newMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button>
+          <Plus />
+          New projection
+          <ChevronDown className="-mr-1 opacity-70" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel>Projection type</DropdownMenuLabel>
+        {(['partition', 'score', 'mapping'] as const).map((kind) => (
+          <DropdownMenuItem key={kind} className="items-start" onSelect={() => startCreate(kind)}>
+            <Blend className="mt-0.5 text-chart-4" />
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">{PROJECTION_KIND_LABEL[kind]}</span>
+              <span className="text-xs leading-snug text-muted-foreground">{KIND_HINT[kind]}</span>
+            </span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
   return (
-    <ConfigPageManagerLayout
-      title="Projections"
-      description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <RoutingScopeSelector
-          scopes={routingScopes}
-          value={selectedScopeId}
-          onChange={setSelectedScopeId}
-        />
-        <TableHeader
-          title="Projection Surfaces"
-          count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
-          searchPlaceholder="Search partitions, scores, or mappings..."
-          searchValue={search}
-          onSearchChange={setSearch}
-          disabled={isReadonly}
-        />
+    <SchemaFormHintsProvider value={hints}>
+      <ConfigPageManagerLayout
+        title="Projections"
+        description="Combine several signals into one derived value, such as the winning domain or a difficulty band, that decisions can match."
+        icon={<IconTile icon={Blend} tone="teal" size="lg" />}
+        actions={
+          <>
+            <RoutingScopeSelector
+              label="Recipe"
+              scopes={routingScopes}
+              value={selectedScopeId}
+              onChange={(scopeId) => update({ recipe: scopeId, id: null, new: null, view: null })}
+            />
+            {isReadonly ? null : newMenu}
+          </>
+        }
+        tabs={
+          <Tabs
+            value={tab}
+            onValueChange={(value) => update({ tab: value }, { replace: true })}
+            variant="line"
+            className="gap-0"
+          >
+            <TabsList>
+              {(['partitions', 'scores', 'mappings'] as const).map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {PROJECTION_KIND_LABEL[TAB_KIND[value]]}s
+                  <span className="rounded-full bg-secondary px-1.5 font-mono text-[11px] tabular text-muted-foreground">
+                    {lists[TAB_KIND[value]].length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        }
+      >
+        {total === 0 ? (
+          <div className="rounded-xl border border-dashed border-border-strong">
+            <EmptyState
+              icon={Blend}
+              tone="teal"
+              title={`${scopeLabel} has no projections`}
+              description="Projections are optional. Add one when several signals should become one value a decision can match, like a difficulty band."
+              actions={isReadonly ? undefined : newMenu}
+            />
+          </div>
+        ) : (
+          <>
+            <DataToolbar
+              search={search}
+              onSearchChange={setSearch}
+              placeholder={`Search ${tab}…`}
+              actions={
+                <span className="text-xs text-muted-foreground">
+                  <span className="tabular">{visible.length}</span> of{' '}
+                  <span className="tabular">{lists[tabKind].length}</span> {tab}
+                </span>
+              }
+            />
+            {visible.length === 0 && lists[tabKind].length > 0 ? (
+              <EmptyState
+                compact
+                icon={Blend}
+                tone="teal"
+                title={`No ${tab} match`}
+                description="Try another search."
+                actions={
+                  <Button variant="outline" size="sm" onClick={() => setSearch('')}>
+                    Clear search
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {visible.map((entity, index) => (
+                  <ProjectionCard
+                    key={entity.name}
+                    kind={tabKind}
+                    entity={entity}
+                    index={index}
+                    config={scopedConfig}
+                    readOnly={isReadonly}
+                    onOpen={(nextView) => open(tabKind, entity.name, nextView)}
+                    onCopy={() => copyYaml(tabKind, entity)}
+                    onDuplicate={() => duplicate(tabKind, entity)}
+                    onDelete={() => {
+                      setDeleteError(null)
+                      setPendingDelete({ kind: tabKind, name: entity.name })
+                    }}
+                  />
+                ))}
+                {isReadonly || query ? null : (
+                  <NewCard
+                    kind={tabKind}
+                    index={visible.length}
+                    onCreate={() => startCreate(tabKind)}
+                  />
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </ConfigPageManagerLayout>
 
-        <section>
-          <TableHeader
-            title="Partitions"
-            count={filteredPartitions.length}
-            onAdd={handleAddPartition}
-            addButtonText="Add Partition"
-            disabled={isReadonly}
-            variant="embedded"
-          />
-          <DataTable
-            columns={partitionColumns}
-            data={filteredPartitions}
-            keyExtractor={(row) => row.name}
-            onView={handleViewPartition}
-            onEdit={handleEditPartition}
-            onDelete={handleDeletePartition}
-            emptyMessage="No projection partitions configured."
-            readonly={isReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'partitions',
-              resetKey: search,
-            }}
-          />
-        </section>
-
-        <section>
-          <TableHeader
-            title="Scores"
-            count={filteredScores.length}
-            onAdd={handleAddScore}
-            addButtonText="Add Score"
-            disabled={isReadonly}
-            variant="embedded"
-          />
-          <DataTable
-            columns={scoreColumns}
-            data={filteredScores}
-            keyExtractor={(row) => row.name}
-            onView={handleViewScore}
-            onEdit={handleEditScore}
-            onDelete={handleDeleteScore}
-            emptyMessage="No projection scores configured."
-            readonly={isReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'scores',
-              resetKey: search,
-            }}
-          />
-        </section>
-
-        <section>
-          <TableHeader
-            title="Mappings"
-            count={filteredMappings.length}
-            onAdd={handleAddMapping}
-            addButtonText="Add Mapping"
-            disabled={isReadonly}
-            variant="embedded"
-          />
-          <DataTable
-            columns={mappingColumns}
-            data={filteredMappings}
-            keyExtractor={(row) => row.name}
-            onView={handleViewMapping}
-            onEdit={handleEditMapping}
-            onDelete={handleDeleteMapping}
-            emptyMessage="No projection mappings configured."
-            readonly={isReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'mappings',
-              resetKey: search,
-            }}
-          />
-        </section>
-      </div>
+      <ConfigPageProjectionSheet
+        target={sheetTarget ?? shownTarget.current}
+        open={Boolean(sheetTarget)}
+        view={view}
+        onViewChange={(next) =>
+          update({ view: next === 'overview' ? null : next }, { replace: true })
+        }
+        onOpenChange={(isOpen) => (isOpen ? null : closeSheet())}
+        scopeLabel={scopeLabel}
+        scopedConfig={scopedConfig}
+        readOnly={isReadonly}
+        entrypointModel={selectedScope?.entrypointModelNames[0]}
+        onSave={save}
+        onDelete={(kind, name) => {
+          setDeleteError(null)
+          setPendingDelete({ kind, name })
+        }}
+        onDuplicate={duplicate}
+        onOpenDecision={(name) =>
+          navigate(
+            `/routing/decisions?${new URLSearchParams({ recipe: selectedScopeId, id: name })}`,
+          )
+        }
+        onOpenProjection={(kind, name) => open(kind, name)}
+        onCreateMapping={(source) =>
+          startCreate('mapping', { name: '', source, method: 'threshold_bands', outputs: [] })
+        }
+      />
 
       <ConfirmDialog
-        isOpen={projectionPendingDelete !== null}
-        title={`Delete projection ${projectionPendingDelete?.kind || ''} “${projectionPendingDelete?.name || ''}”?`}
-        description="Remove this projection surface from the active routing configuration. Any dependent projection or decision references must be updated separately."
-        eyebrow="Destructive configuration change"
-        confirmLabel={`Delete ${projectionPendingDelete?.kind || 'projection'}`}
-        pending={projectionDeletePending}
-        details={
-          projectionDeleteError ? <span role="alert">{projectionDeleteError}</span> : undefined
+        isOpen={pendingDelete !== null}
+        title={`Delete ${pendingDelete?.name ?? ''}?`}
+        description={
+          deleteConsumers.length || dependentMappings.length
+            ? `${[
+                deleteConsumers.length
+                  ? `${deleteConsumers.length} ${deleteConsumers.length === 1 ? 'decision reads' : 'decisions read'} it (${deleteConsumers.join(', ')})`
+                  : '',
+                dependentMappings.length
+                  ? `${dependentMappings.length} ${dependentMappings.length === 1 ? 'mapping uses' : 'mappings use'} it as a source (${dependentMappings.join(', ')})`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' and ')}. Update them, or the Router rejects the configuration.`
+            : `Nothing in ${scopeLabel} reads this ${pendingDelete ? PROJECTION_KIND_LABEL[pendingDelete.kind].toLowerCase() : 'projection'}. Deleting removes it from config.yaml.`
         }
+        confirmLabel={`Delete ${pendingDelete ? PROJECTION_KIND_LABEL[pendingDelete.kind].toLowerCase() : 'projection'}`}
+        pending={deleting}
+        errorMessage={deleteError ?? undefined}
         onCancel={() => {
-          if (projectionDeletePending) return
-          setProjectionPendingDelete(null)
-          setProjectionDeleteError(null)
+          if (!deleting) {
+            setPendingDelete(null)
+            setDeleteError(null)
+          }
         }}
-        onConfirm={confirmDeleteProjection}
+        onConfirm={confirmDelete}
       />
-    </ConfigPageManagerLayout>
+    </SchemaFormHintsProvider>
   )
 }

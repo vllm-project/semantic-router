@@ -445,7 +445,7 @@ export interface AgentSignal {
   name: string
   description?: string
   role?: 'main' | 'subagent'
-  harness?: 'claude_code' | 'codex'
+  harness?: 'claude_code' | 'codex' | 'opencode' | 'deepseek_harness' | 'cursor' | 'openclaw'
   types?: string[]
   request_classes?: Array<'main' | 'subagent' | 'workflow' | 'compaction' | 'auxiliary'>
 }

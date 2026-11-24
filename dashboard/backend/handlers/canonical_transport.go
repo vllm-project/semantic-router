@@ -39,10 +39,15 @@ func (config *setupConfigFile) canonicalTransport() canonicalConfigTransport {
 	return canonicalConfigTransport{CanonicalConfig: config.CanonicalConfig, globalOverrideRaw: config.globalOverrideRaw}
 }
 
+// decodeYAMLTaggedBody checks the original document before decoding, which
+// would discard unknown fields and explicit nulls the Router rejects.
 func decodeYAMLTaggedBody[T any](reader io.Reader) (T, error) {
 	var value T
 	data, err := io.ReadAll(reader)
 	if err != nil {
+		return value, err
+	}
+	if err := routerconfig.ValidateRawCanonicalFields(data); err != nil {
 		return value, err
 	}
 	return decodeConfigDocument[T](data)

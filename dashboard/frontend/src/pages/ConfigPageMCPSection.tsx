@@ -1,19 +1,22 @@
-import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import { Blocks } from 'lucide-react'
+
 import { MCPConfigPanel } from '../components/MCPConfigPanel'
-import styles from './ConfigPage.module.css'
+import { IconTile } from '../ui'
+import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 
 export default function ConfigPageMCPSection() {
   return (
-    <ConfigPageManagerLayout
-      eyebrow="Integrations"
-      title="MCP Servers"
-      description="Manage Model Context Protocol servers, inspect discovered tools, and keep the dashboard tool inventory aligned with router-side integrations."
-    >
-      <div className={styles.sectionPanel}>
-        <div className={styles.sectionTableBlock}>
-          <MCPConfigPanel embedded />
-        </div>
-      </div>
-    </ConfigPageManagerLayout>
+    <MCPConfigPanel
+      frame={(actions, content) => (
+        <ConfigPageManagerLayout
+          title="Integrations"
+          description="MCP servers and the tools that decisions can call while they handle a request."
+          icon={<IconTile icon={Blocks} tone="slate" size="lg" />}
+          actions={actions}
+        >
+          {content}
+        </ConfigPageManagerLayout>
+      )}
+    />
   )
 }

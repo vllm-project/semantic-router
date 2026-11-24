@@ -156,7 +156,7 @@ func TestForwardedNativeActionCannotEnterAnotherRoutingChain(t *testing.T) {
 			r.Header.Set(headers.VSRSystemOneBackend, "1")
 			r.Header.Set("Api-Key", tc.key)
 			w := httptest.NewRecorder()
-			Handler(cfg, listener, invoke)(w, r)
+			Handler(cfg, listener, invoke, ClientAuth{})(w, r)
 			if w.Code != tc.status || (calls != 0) != (tc.status == http.StatusOK) {
 				t.Fatalf("status=%d calls=%d body=%s", w.Code, calls, w.Body.String())
 			}
@@ -179,7 +179,7 @@ func TestPublicNativeEntrypointNeedsItsOwnListenerGrant(t *testing.T) {
 		r := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(singleRequest))
 		r.Header.Set("Authorization", "Bearer key")
 		w := httptest.NewRecorder()
-		Handler(cfg, listener, invoke)(w, r)
+		Handler(cfg, listener, invoke, ClientAuth{})(w, r)
 		return w.Code
 	}
 	if send() != http.StatusForbidden || calls != 0 {
@@ -192,7 +192,7 @@ func TestPublicNativeEntrypointNeedsItsOwnListenerGrant(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil)
 	r.Header.Set("Authorization", "Bearer key")
 	w := httptest.NewRecorder()
-	Handler(cfg, listener, invoke)(w, r)
+	Handler(cfg, listener, invoke, ClientAuth{})(w, r)
 	if !strings.Contains(w.Body.String(), `"routing":true`) {
 		t.Fatal("virtual discovery lost native routing identity")
 	}
@@ -215,7 +215,7 @@ func TestPublicAutoErrorsDistinguishUnresolvedFromDeadline(t *testing.T) {
 			}
 			request := httptest.NewRequest(http.MethodPost, "/v1/systemone", strings.NewReader(singleRequest))
 			response := httptest.NewRecorder()
-			Handler(cfg, listener, invoke)(response, request)
+			Handler(cfg, listener, invoke, ClientAuth{})(response, request)
 			if response.Code != tc.status || !strings.Contains(response.Body.String(), tc.code) || strings.Contains(response.Body.String(), "internal diagnostic") {
 				t.Fatalf("unexpected public error: %d %s", response.Code, response.Body.String())
 			}
@@ -235,7 +235,7 @@ func TestEngineModeDoesNotPublishPreservedRoutingRecipes(t *testing.T) {
 	handler := Handler(cfg, listener, func(context.Context, string, json.RawMessage) (int, []byte, error) {
 		invoked = true
 		return http.StatusOK, []byte(certainResponse), nil
-	})
+	}, ClientAuth{})
 	w := httptest.NewRecorder()
 	handler(w, httptest.NewRequest(http.MethodGet, "/v1/systemone/models", nil))
 	if w.Code != http.StatusOK || strings.Contains(w.Body.String(), `"auto"`) || !strings.Contains(w.Body.String(), "vllm-sr/test") {

@@ -21,9 +21,10 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 		Evaluation: cloneCanonicalEvaluation(cfg.Evaluation),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
-				DefaultModel:           cfg.DefaultModel,
-				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
-				TLS:                    cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
+				DefaultModel:             cfg.DefaultModel,
+				DefaultReasoningEffort:   cfg.DefaultReasoningEffort,
+				ReasoningMinOutputTokens: cfg.ReasoningMinOutputTokens,
+				TLS:                      cloneProviderDefaultsTLS(cfg.DefaultBackendTLS),
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
 		},
@@ -125,11 +126,12 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
 
-			AllowLossyTranslation: cfg.AllowLossyTranslation,
-			RoutingInput:          cfg.RoutingInput,
-			Headers:               cfg.Headers,
-			ContextWindow:         cfg.ContextWindow,
-			DrainTimeoutSeconds:   cfg.DrainTimeoutSeconds,
+			AllowLossyTranslation:       cfg.AllowLossyTranslation,
+			AllowRequestExtensionFields: cfg.AllowRequestExtensionFields,
+			RoutingInput:                cfg.RoutingInput,
+			Headers:                     cfg.Headers,
+			ContextWindow:               cfg.ContextWindow,
+			DrainTimeoutSeconds:         cfg.DrainTimeoutSeconds,
 		},
 		Services: CanonicalServiceGlobal{
 			API:             cfg.API,

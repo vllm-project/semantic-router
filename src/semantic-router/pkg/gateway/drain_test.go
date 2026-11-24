@@ -163,15 +163,15 @@ func TestDrainEndsAtItsDeadlineAndCountsTheRequestsLeft(t *testing.T) {
 				t.Fatalf("InFlight() = %d, want 2", inFlight)
 			}
 
-			const timeout = 400 * time.Millisecond
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			// The deadline counts from begun, which the wait is measured from.
+			const deadline = 400 * time.Millisecond
+			begun := time.Now()
+			ctx, cancel := context.WithDeadline(context.Background(), begun.Add(deadline))
 			defer cancel()
-			deadline, _ := ctx.Deadline()
 			_ = server.Shutdown(ctx)
 			left := handler.Drain(ctx)
-			ended := time.Now()
-			if ended.Before(deadline) || ended.After(deadline.Add(3*time.Second)) {
-				t.Fatalf("the drain ended %v from its context deadline, want between 0 and 3s", ended.Sub(deadline))
+			if waited := time.Since(begun); waited < deadline || waited > deadline+3*time.Second {
+				t.Fatalf("the drain ended after %v, want its deadline of %v", waited, deadline)
 			}
 			if left != 2 {
 				t.Fatalf("the drain ended with %d requests in flight, want 2", left)

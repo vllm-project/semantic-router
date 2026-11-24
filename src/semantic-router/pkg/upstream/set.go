@@ -187,6 +187,7 @@ func (s *Set) Do(ctx context.Context, req *Request) (*Response, error) {
 	resp, failure := cl.run(callCtx)
 	if failure == nil {
 		cl.served.onEnd = done
+		resp.Deadline, _ = callCtx.Deadline()
 		metrics.RecordUpstreamRequest(c.spec.Name, statusClass(resp.StatusCode))
 		return resp, nil
 	}

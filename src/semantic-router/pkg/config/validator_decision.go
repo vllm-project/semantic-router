@@ -429,6 +429,9 @@ func validatePluginContracts(
 			err = validateMatch(cfg, path+".semantic.match", typed.SemanticMatch(), MatchResponseCache)
 		case *RouterReplayPluginConfig:
 			err = validateRouterReplayCostBaseline(cfg, path, typed)
+			if err == nil {
+				err = validateReplayShadowModels(cfg, owner, typed.Shadow)
+			}
 		}
 		if err != nil {
 			return err

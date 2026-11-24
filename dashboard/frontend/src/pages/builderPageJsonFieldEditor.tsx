@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { FieldSchema } from '@/lib/dslMutations'
 
-import styles from './BuilderPage.module.css'
+import styles from './builderPageFieldControls.module.css'
 
 interface JsonFieldEditorProps {
   schema: FieldSchema

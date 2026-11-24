@@ -131,7 +131,8 @@ type ModelParams struct {
 	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
 	Modalities           modelcatalog.Modalities                        `yaml:"modalities,omitempty"`
 	// UnsupportedCapabilities are the request capabilities the model's
-	// backends reject; the Router leaves their fields out for this model.
+	// backends lack; the Router leaves their fields out for this model, or
+	// sends its developer messages as system messages.
 	UnsupportedCapabilities []string `yaml:"unsupported_capabilities,omitempty"`
 	// Tokenizer counts the model's prompts for the context window check;
 	// empty counts them with the tokenizer of HubRepo, else with the proxy

@@ -49,7 +49,7 @@ OPENAI_LOSSY = ("tool_result.is_error", "messages[].role", "content.file")
 # the canonical name of each api_format alias, as the Router reads it
 API_FORMAT_ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
 OPENAI_FORMATS = {"chat_completions", "responses"}
-NOT_CHAT = {"images", "systemone"}
+NOT_CHAT = {"images", "speech", "systemone"}
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",
@@ -369,6 +369,30 @@ def _decision_models(decision: dict) -> list[str]:
         ),
     ]
     return [r.get("model") for r in refs if isinstance(r, dict) and r.get("model")]
+
+
+# The providers whose Messages backends the Router sends Anthropic server tools,
+# such as the web_search_20250305 Claude Code's WebSearch declares.
+SERVER_TOOL_PROVIDERS = ("anthropic", "anthropic-compatible")
+
+
+def web_search_served(doc: dict | None, entrypoint: str) -> bool | None:
+    """Whether a model a request for entrypoint can reach has a Messages backend
+    that runs Anthropic's server tools; without one the Router refuses every
+    WebSearch. None when the configuration is unknown or maps entrypoint
+    nowhere."""
+    reachable = entrypoint_models(doc, entrypoint) if doc else None
+    if not reachable:
+        return None
+    formats = _model_formats(doc)
+    return any(
+        formats.get(model["name"]) in ("messages", "")
+        and str(ref.get("provider") or "").lower() in SERVER_TOOL_PROVIDERS
+        for model in _get(doc, "providers", "models") or []
+        if isinstance(model, dict) and model.get("name") in reachable
+        for ref in model.get("backend_refs") or []
+        if isinstance(ref, dict)
+    )
 
 
 def recipe_known_limits(doc: dict, model: str) -> bool:

@@ -76,12 +76,12 @@ Model Card 能力元数据接受 `image_input` 和 `image_generation` 等协议�
 
 ## 在控制面板中配置模型
 
-打开 **Build → Routing → Models → Add Model**。然后你可以：
+打开 **Models → Backend models**，选择 **Connect model**。然后你可以：
 
 1. 选择 Provider，连接它，并选择已发现或内置的模型 ID。
 2. 当 Provider 无法列出模型时，输入模型 ID。
 3. 使用 **Advanced settings** 设置名称前缀、内置推理家族、路由元数据、定价和交付设置。
-4. 从 Provider 选择器使用 **Manual setup**，以完全控制 `catalog`、内联推理字段、`provider_model_id`、`api_format` 和后端引用。
+4. 从 Provider 选择器使用 **Add manually**，以完全控制 `catalog`、内联推理字段、`provider_model_id`、`api_format` 和后端引用。
 
 控制面板以 YAML 形式编辑同一份配置文档。为部署使用一个编写所有者，并在 serve 之前复核导出的 YAML。参见[配置工作流](configuration-workflows)。
 

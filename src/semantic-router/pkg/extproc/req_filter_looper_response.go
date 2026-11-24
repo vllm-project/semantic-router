@@ -70,7 +70,7 @@ func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, re
 		codecBody = looper.StreamWithUsage(codecBody, resp.Model, resp.Usage)
 		streamContext := llmprotocol.StreamContext{
 			Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
-			ResponseID: responseObjectPublicID(reqCtx), PreviousResponseID: responseObjectPreviousID(reqCtx),
+			ResponseID: responseObjectPublicID(reqCtx), ResponseRender: responseObjectRender(reqCtx),
 		}
 		var mutation protocolcodec.StreamEventMutation
 		namespaces := requestToolNamespaces(reqCtx)

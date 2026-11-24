@@ -70,6 +70,10 @@ type Status struct {
 	Scope     string
 	Limit     float64
 	Remaining float64
+	// Spent is what the budget's calls cost.
+	Spent float64
+	// Reserved is what the calls in flight hold, already out of Remaining.
+	Reserved float64
 	// ResetAt is when the budget's window starts again; zero without one.
 	ResetAt time.Time
 }
@@ -78,14 +82,36 @@ type Status struct {
 type Refusal struct {
 	Status
 	Estimate float64
+	// InFlight is a refusal only the calls in flight cause: what the budget
+	// spent leaves room for the call, which may fit once they settle.
+	InFlight bool
 }
 
+// Error says what the budget has left for a call now, then what it spent
+// and what calls in flight hold, so its limit less what is left is not read
+// as its spend.
 func (r *Refusal) Error() string {
-	if r.Remaining <= 0 {
-		return fmt.Sprintf("the %s spend budget of %s has nothing left", r.Scope, formatAmount(r.Limit))
+	split := formatAmount(r.Spent) + " spent"
+	if r.Reserved > 0 {
+		split += ", " + formatAmount(r.Reserved) + " held by calls in flight"
 	}
-	return fmt.Sprintf("the %s spend budget of %s has %s left, and this call is estimated at %s",
-		r.Scope, formatAmount(r.Limit), formatAmount(r.Remaining), formatAmount(r.Estimate))
+	if r.InFlight {
+		message := fmt.Sprintf("the %s spend budget of %s has %s left (%s)",
+			r.Scope, formatAmount(r.Limit), formatAmount(r.Remaining), split)
+		if r.Estimate > 0 {
+			message += ", and this call is estimated at " + formatAmount(r.Estimate)
+		}
+		return message + ": retry once they finish"
+	}
+	prefix := "out of budget"
+	if !r.ResetAt.IsZero() {
+		prefix += " until " + r.ResetAt.UTC().Format(time.RFC3339)
+	}
+	if r.Remaining <= 0 {
+		return fmt.Sprintf("%s: the %s spend budget of %s has nothing left (%s)", prefix, r.Scope, formatAmount(r.Limit), split)
+	}
+	return fmt.Sprintf("%s: the %s spend budget of %s has %s left (%s), and this call is estimated at %s",
+		prefix, r.Scope, formatAmount(r.Limit), formatAmount(r.Remaining), split, formatAmount(r.Estimate))
 }
 
 func formatAmount(amount float64) string {
@@ -154,13 +180,26 @@ func (l *Ledger) Check(limits []Limit) *Refusal {
 	return l.admit(limits, 0)
 }
 
+// Recheck refuses a call of estimate as the ledger stands now, without
+// reserving it, so a refusal made while other calls were in flight can be
+// read again once they settle.
+func (l *Ledger) Recheck(limits []Limit, estimate float64) *Refusal {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.admit(limits, estimate)
+}
+
+// admit refuses with the budget that has least room once the calls in
+// flight settle, so a refusal any wait cannot clear is never reported as one
+// a short wait may.
 func (l *Ledger) admit(limits []Limit, estimate float64) *Refusal {
 	var refusal *Refusal
 	for _, limit := range limits {
 		status := l.status(limit)
+		room := Round(status.Remaining + status.Reserved)
 		if (status.Remaining <= 0 || estimate > status.Remaining) &&
-			(refusal == nil || status.Remaining < refusal.Remaining) {
-			refusal = &Refusal{Status: status, Estimate: estimate}
+			(refusal == nil || room < Round(refusal.Remaining+refusal.Reserved)) {
+			refusal = &Refusal{Status: status, Estimate: estimate, InFlight: room > 0 && estimate <= room}
 		}
 	}
 	return refusal
@@ -217,17 +256,18 @@ func (h *Hold) finish(actual float64) {
 func (l *Ledger) status(limit Limit) Status {
 	acct := l.account(limit)
 	remaining := Round(limit.Amount - acct.spent - acct.reserved)
-	return Status{Scope: limit.Scope, Limit: limit.Amount, Remaining: remaining, ResetAt: acct.end}
+	return Status{Scope: limit.Scope, Limit: limit.Amount, Remaining: remaining, Spent: Round(acct.spent), Reserved: Round(acct.reserved), ResetAt: acct.end}
 }
 
 // account returns limit's account, opened or rolled into the current
 // window. A reservation in flight across a window boundary stays reserved
-// and settles into the new window.
+// and settles into the new window. An account idle past its timeout starts
+// again at the call that finds it so, whenever the prune last ran.
 func (l *Ledger) account(limit Limit) *account {
 	now := l.now()
 	l.prune(now)
 	acct, ok := l.accounts[limit.Key]
-	if !ok {
+	if !ok || acct.expired(now) {
 		acct = &account{}
 		l.accounts[limit.Key] = acct
 	}
@@ -240,20 +280,30 @@ func (l *Ledger) account(limit Limit) *account {
 	return acct
 }
 
-// prune drops, at most once a minute, the accounts nothing holds a
-// reservation on whose window has ended or that have been idle too long.
+// prune drops, at most once a minute, the expired accounts no call has
+// found since, so they do not pile up.
 func (l *Ledger) prune(now time.Time) {
 	if now.Sub(l.lastPrune) < pruneEvery {
 		return
 	}
 	l.lastPrune = now
 	for key, acct := range l.accounts {
-		expired := !acct.end.IsZero() && !now.Before(acct.end) ||
-			acct.end.IsZero() && acct.idle > 0 && now.Sub(acct.used) >= acct.idle
-		if acct.reserved == 0 && expired {
+		if acct.expired(now) {
 			delete(l.accounts, key)
 		}
 	}
+}
+
+// expired reports an account nothing holds a reservation on whose window
+// has ended, or that has been idle too long.
+func (a *account) expired(now time.Time) bool {
+	if a.reserved != 0 {
+		return false
+	}
+	if !a.end.IsZero() {
+		return !now.Before(a.end)
+	}
+	return a.idle > 0 && now.Sub(a.used) >= a.idle
 }
 
 // Round keeps amounts free of float noise: a billionth of a currency unit

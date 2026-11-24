@@ -23,6 +23,7 @@ import (
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 func candidateCount(candidates *ComplexityCandidates) int {
@@ -167,7 +168,7 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 			name: "config with a response cache embedding",
 			config: ConfigSpec{
 				ResponseCache: &SemanticCacheConfig{
-					Enabled:     true,
+					Enabled:     ptr.To(true),
 					BackendType: "memory",
 					Embedding:   &EmbeddingBinding{Deployment: "qwen3-embedding", Dimension: 1024},
 				},
@@ -194,7 +195,7 @@ func TestConfigSpecWithNewFields(t *testing.T) {
 			name: "config with both a response cache and complexity_rules",
 			config: ConfigSpec{
 				ResponseCache: &SemanticCacheConfig{
-					Enabled:     true,
+					Enabled:     ptr.To(true),
 					BackendType: "memory",
 				},
 				ComplexityRules: []ComplexityRulesConfig{
@@ -322,7 +323,7 @@ func TestSemanticRouterWithNewFeatures(t *testing.T) {
 					Replicas: func() *int32 { i := int32(1); return &i }(),
 					Config: ConfigSpec{
 						ResponseCache: &SemanticCacheConfig{
-							Enabled:     true,
+							Enabled:     ptr.To(true),
 							BackendType: "memory",
 						},
 					},
