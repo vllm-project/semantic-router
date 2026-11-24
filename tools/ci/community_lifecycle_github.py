@@ -15,6 +15,7 @@ from urllib.parse import quote, urlparse
 from community_lifecycle_policy import (
     ACCEPTED,
     API_PAGE_SIZE,
+    ASSIGNMENT_COMMAND_EVENT,
     ISSUE_DELIVERY_STATE_LABELS,
     MAINTAINER_PERMISSIONS,
     NEEDS_ACCEPTANCE,
@@ -23,6 +24,7 @@ from community_lifecycle_policy import (
     WORKGROUP_LABELS,
     WORKGROUP_OPTIONS,
     PullRequestEvaluation,
+    assignment_command,
     evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
@@ -206,20 +208,18 @@ def comment_once(
     )
 
 
-def sync_issue(
+def apply_issue_plan(
     client: GitHubClient,
     repo: str,
     number: int,
+    issue: dict[str, Any],
     *,
     event_action: str = "",
     event_label: str | None = None,
     actor_can_manage: bool = False,
 ) -> None:
-    """Fetch one issue and apply its current label plan."""
+    """Apply the lifecycle plan for one freshly read issue."""
 
-    issue = client.request(f"repos/{repo}/issues/{number}", ignore_not_found=True)
-    if not issue:
-        return
     plan = plan_issue(
         issue,
         event_action=event_action,
@@ -245,6 +245,31 @@ def sync_issue(
         comment_once(client, repo, number, code, message)
 
 
+def sync_issue(
+    client: GitHubClient,
+    repo: str,
+    number: int,
+    *,
+    event_action: str = "",
+    event_label: str | None = None,
+    actor_can_manage: bool = False,
+) -> None:
+    """Fetch one issue and apply its current label plan."""
+
+    issue = client.request(f"repos/{repo}/issues/{number}", ignore_not_found=True)
+    if not issue:
+        return
+    apply_issue_plan(
+        client,
+        repo,
+        number,
+        issue,
+        event_action=event_action,
+        event_label=event_label,
+        actor_can_manage=actor_can_manage,
+    )
+
+
 def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
     repo = repository_name(event)
     number = int(event["issue"]["number"])
@@ -257,6 +282,38 @@ def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         event_action=event.get("action", ""),
         event_label=event_label,
         actor_can_manage=actor_can_manage(client, repo, sender),
+    )
+
+
+def sync_issue_assignment_event(client: GitHubClient, event: dict[str, Any]) -> None:
+    """Reconcile delivery state after ``/assign`` or ``/unassign``.
+
+    GitHub suppresses the ``issues.assigned`` and ``issues.unassigned`` runs for
+    writes made with the workflow token, so the command job reads the issue back
+    instead of waiting for a lifecycle event.
+    """
+
+    body = (event.get("comment") or {}).get("body")
+    if assignment_command(body) is None:
+        print(
+            "::notice::Only `/assign` and `/unassign` comments reconcile "
+            "issue assignment state."
+        )
+        return
+    repo = repository_name(event)
+    issue_payload = event.get("issue") or {}
+    if issue_payload.get("pull_request") is not None:
+        return
+    number = int(issue_payload["number"])
+    issue = client.request(f"repos/{repo}/issues/{number}", ignore_not_found=True)
+    if not issue or issue.get("pull_request") is not None:
+        return
+    apply_issue_plan(
+        client,
+        repo,
+        number,
+        issue,
+        event_action=ASSIGNMENT_COMMAND_EVENT,
     )
 
 
