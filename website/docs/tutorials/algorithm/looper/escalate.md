@@ -447,7 +447,9 @@ policy never accepts it either.
 Auto needs a `span` question to name its labels in `criteria`, and needs to
 know the text the question reads: send a text state, or name a text part of an
 object state with `over`. Any other request leaves the part to the model, so
-auto refuses it with `400`.
+auto refuses it with `400`. It also refuses a text state that holds a JSON
+object, which some models read as that object: send the object as the state
+and name its part with `over`.
 
 A `span` answer counts as complete when the question's own answer is a valid
 `noul` and `spans` lists its spans. Each span names a declared label, a

@@ -31,20 +31,22 @@ func spanGate(field string, threshold float64) *config.EscalateAccept {
 
 // Auto admits a span question by the labels it names and the text it reads: a
 // text state, or the text part of an object state that its over names. It
-// refuses a request that leaves the part to the model, and needs a model that
-// answers spans.
+// refuses a request that leaves the part to the model, a text state that a
+// model may read as an object, and a label without a name, and needs a model
+// that answers spans.
 func TestAutoAdmitsASpanQuestionByItsLabelsAndTheTextItReads(t *testing.T) {
 	const (
 		parts = `{"request":"Who wrote it?","answer":"Tom did."}`
 		over  = `{"type":"span","over":"answer","criteria":{"NAME":"A person's name"}}`
 	)
 	for name, tc := range map[string]struct{ state, question, target string }{
-		"criteria":                 {spanState, spanQuestion, "café tom.b@ex.com"},
-		"labels list":              {spanState, `{"type":"span","labels":[{"key":"EMAIL","description":"An email address"},{"key":"NAME"}]}`, "café tom.b@ex.com"},
-		"a text state with over":   {spanState, strings.Replace(spanQuestion, `"type":"span"`, `"type":"span","over":"request"`, 1), "café tom.b@ex.com"},
-		"a part of an object":      {parts, over, "Tom did."},
-		"a part without a role":    {`{"note":"Ask Tom.","answer":"Tom did."}`, strings.Replace(over, `"over":"answer"`, `"over":"note"`, 1), "Ask Tom."},
-		"an object held in a text": {`"{\"answer\":\"Tom did.\"}"`, over, `{"answer":"Tom did."}`},
+		"criteria":                  {spanState, spanQuestion, "café tom.b@ex.com"},
+		"labels list":               {spanState, `{"type":"span","labels":[{"key":"EMAIL","description":"An email address"},{"key":"NAME"}]}`, "café tom.b@ex.com"},
+		"a text state with over":    {spanState, strings.Replace(spanQuestion, `"type":"span"`, `"type":"span","over":"request"`, 1), "café tom.b@ex.com"},
+		"a part of an object":       {parts, over, "Tom did."},
+		"a part without a role":     {`{"note":"Ask Tom.","answer":"Tom did."}`, strings.Replace(over, `"over":"answer"`, `"over":"note"`, 1), "Ask Tom."},
+		"a text that opens a brace": {`"{Tom} did."`, over, "{Tom} did."},
+		"a text that holds a list":  {`"[\"Tom did.\"]"`, over, `["Tom did."]`},
 	} {
 		request, err := ParseNativeRequest(json.RawMessage(`{"model":"vllm-sr/auto","state":` + tc.state + `,"questions":{"pii":` + tc.question + `}}`))
 		if err != nil {
@@ -68,6 +70,15 @@ func TestAutoAdmitsASpanQuestionByItsLabelsAndTheTextItReads(t *testing.T) {
 		"over naming a null part":   {`{"request":"Who wrote it?","answer":null}`, over},
 		"over naming an object":     {`{"request":"Who wrote it?","answer":{"text":"Tom did."}}`, over},
 		"an array state":            {`["Tom did."]`, over},
+		// Vela 2.0 reads these texts as the object they hold, and its spans
+		// are then ranges of the answer part.
+		"a text that holds an object":                {`"{\"answer\":\"Tom did.\"}"`, over},
+		"such a text without over":                   {`"{\"answer\":\"Tom did.\"}"`, `{"type":"span","criteria":{"NAME":"A person's name"}}`},
+		"such a text between white space":            {`" \n{\"answer\":\"Tom did.\"}\t"`, over},
+		"such a text after a separator Python trims": {`"\u001c{\"answer\":\"Tom did.\"}"`, over},
+		"a label without a name":                     {spanState, `{"type":"span","criteria":{"":"Anything","NAME":"A person's name"}}`},
+		"a label named by white space":               {spanState, `{"type":"span","criteria":{" ":"Anything","NAME":"A person's name"}}`},
+		"a listed label without a key":               {spanState, `{"type":"span","labels":[{"description":"Anything"},{"key":"NAME"}]}`},
 	} {
 		if _, err := ParseNativeRequest(json.RawMessage(`{"model":"vllm-sr/auto","state":` + tc.state + `,"questions":{"pii":` + tc.question + `}}`)); err == nil {
 			t.Fatalf("%s accepted: %s over %s", name, tc.question, tc.state)
@@ -100,6 +111,8 @@ func TestASpanAnswerNeedsItsNoulAndSpansOfTheTextItsQuestionRead(t *testing.T) {
 		{"a null span", found, `null`, false},
 		{"an undeclared label", `"label":"EMAIL"`, `"label":"PHONE"`, false},
 		{"no label", `"label":"EMAIL",`, ``, false},
+		{"a null label", `"label":"EMAIL"`, `"label":null`, false},
+		{"a blank label", `"label":"EMAIL"`, `"label":""`, false},
 		{"no probability", `,"probability":0.97}]`, `}]`, false},
 		{"a null probability", `"probability":0.97}]`, `"probability":null}]`, false},
 		{"a probability out of range", `"probability":0.97}]`, `"probability":1.97}]`, false},
@@ -130,6 +143,15 @@ func TestASpanAnswerNeedsItsNoulAndSpansOfTheTextItsQuestionRead(t *testing.T) {
 		if !tc.valid && (observation.Probability != nil || observation.Distribution != nil) {
 			t.Errorf("%s: an invalid span answer kept its statistics %+v", tc.name, observation)
 		}
+	}
+
+	// A span carries its label: one without it names no label, whatever the
+	// question declares.
+	unnamed := *request
+	unnamed.Questions = []Question{request.Questions[0]}
+	unnamed.Questions[0].Labels = map[string]bool{"": true, "EMAIL": true}
+	if unnamed.Observe(json.RawMessage(strings.Replace(spanResponse, `"label":"EMAIL",`, ``, 1)))[0].Valid {
+		t.Fatal("a span without a label was accepted")
 	}
 
 	// The spans of a part are ranges of that part, not of the whole state.

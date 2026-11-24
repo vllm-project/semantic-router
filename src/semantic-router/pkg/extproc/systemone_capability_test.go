@@ -81,6 +81,15 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 			body:       []string{"invalid_request", "name a text part of an object state with over"},
 		},
 		{
+			// Vela 2.0 reads this text as the object it holds and answers
+			// with a range of its answer part; other families read the text.
+			name:       "a span question over a text state that holds an object",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","span"]}`,
+			request:    `{"model":"vllm-sr/auto","state":"{\"answer\":\"Tom\"}","questions":{"pii":{"type":"span","over":"answer","instructions":"Find personal data.","criteria":{"NAME":"A person's name"}}}}`,
+			status:     http.StatusBadRequest,
+			body:       []string{"invalid_request", "a text state that holds a JSON object", "send the object as the state"},
+		},
+		{
 			name:       "a question type auto does not route",
 			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","track"]}`,
 			request:    `{"model":"vllm-sr/auto","state":"Where does the car go?","questions":{"path":{"type":"track","instructions":"Follow the car."}}}`,

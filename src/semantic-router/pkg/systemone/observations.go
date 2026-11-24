@@ -9,6 +9,8 @@ import (
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -196,9 +198,15 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 			if len(q.Labels) == 0 {
 				return errors.New("span requires at least one named label")
 			}
-			target, settled := spanTarget(trimmed, question.Over)
-			if !settled {
-				return errors.New("auto checks a span against the text its question reads: send a text state, or name a text part of an object state with over")
+			// A span that carries no label must not pass for a label named "".
+			for label := range q.Labels {
+				if strings.TrimSpace(label) == "" {
+					return errors.New("span label names must not be blank")
+				}
+			}
+			target, err := spanTarget(trimmed, question.Over)
+			if err != nil {
+				return err
 			}
 			q.Target = target
 		case "score":
@@ -245,17 +253,32 @@ func optionNames(listed []keyed, criteria json.RawMessage) map[string]bool {
 // spanTarget is the text a span question reads when its request settles it: a
 // text state, or the text part of an object state that over names. Elsewhere
 // the model that answers picks the part and joins its keys, each family in its
-// own way, so auto could not tell which text a span is a range of.
-func spanTarget(state, over json.RawMessage) (string, bool) {
+// own way, so auto could not tell which text a span is a range of. A text
+// state that holds a JSON object is as unsettled: Vela 2.0 reads it as that
+// object and counts into one of its parts, and other families read the text.
+func spanTarget(state, over json.RawMessage) (string, error) {
 	if target, isText := textOf(state); isText {
-		return target, true
+		if holdsObject(target) {
+			return "", errors.New("auto checks a span against the text its question reads, and a model may read a text state that holds a JSON object as that object: send the object as the state and name a text part of it with over")
+		}
+		return target, nil
 	}
 	var parts map[string]json.RawMessage
-	name, named := textOf(over)
-	if !named || json.Unmarshal(state, &parts) != nil {
-		return "", false
+	if name, named := textOf(over); named && json.Unmarshal(state, &parts) == nil {
+		if target, isText := textOf(parts[name]); isText {
+			return target, nil
+		}
 	}
-	return textOf(parts[name])
+	return "", errors.New("auto checks a span against the text its question reads: send a text state, or name a text part of an object state with over")
+}
+
+// holdsObject reports whether a text is a JSON object between white space, as
+// Vela 2.0 finds one: Python's strip also takes the separators U+001C to
+// U+001F.
+func holdsObject(text string) bool {
+	trimmed := strings.TrimFunc(text, func(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) })
+	var object map[string]json.RawMessage
+	return strings.HasPrefix(trimmed, "{") && json.Unmarshal([]byte(trimmed), &object) == nil
 }
 
 // textOf reads a JSON string. A null and an absent value are not text.
@@ -433,7 +456,7 @@ func observeSpan(q Question, state stateAnswers) Observation {
 	// A span answer has no confidence: its Noul is the surest word's probability.
 	out.Confidence = nil
 	var spans []struct {
-		Label       string   `json:"label"`
+		Label       *string  `json:"label"`
 		Start       *int     `json:"start"`
 		End         *int     `json:"end"`
 		Text        *string  `json:"text"`
@@ -447,7 +470,7 @@ func observeSpan(q Question, state stateAnswers) Observation {
 		target = []rune(q.Target)
 	}
 	for _, span := range spans {
-		if !q.Labels[span.Label] || !probability(span.Probability) || span.Start == nil || span.End == nil || span.Text == nil ||
+		if span.Label == nil || !q.Labels[*span.Label] || !probability(span.Probability) || span.Start == nil || span.End == nil || span.Text == nil ||
 			*span.Start < 0 || *span.Start >= *span.End || *span.End > len(target) ||
 			string(target[*span.Start:*span.End]) != *span.Text {
 			return Observation{Question: q}
