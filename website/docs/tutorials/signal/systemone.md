@@ -131,6 +131,10 @@ condition with a `label` matches when that option or label does:
 | `set` | a counted label matches | the label's probability meets `predicate`; without one, the model selected the label |
 | `span` | a counted label matches | a span with the label has a probability that meets `predicate`; without one, the model found a span with the label |
 
+A `span` rule says where in the text each label is, so the
+[masking plugin](../plugin/masking#masking-your-own-rules) can hide what it
+finds: name it in the plugin's `rules` as `{type: systemone, name: <rule>}`.
+
 A `set` or `span` rule counts `labels`, or every label of the question
 without them, less `ignore_labels`. A condition may add its own `predicate`;
 for a condition with a `label`, it reads that label's value. The
@@ -245,10 +249,17 @@ recipes:
   request. It needs `history` or `tool_results`, takes no `previous_turns`
   or media, and is not asked, so it does not match, while those hold no
   text.
-- `image` and `video`: the current turn's images and videos. The deployment
-  must read that input, or the configuration is refused with
-  `input_modality_unsupported`. No deployment reads audio yet, so
-  `input.audio` is always refused.
+- `image`: every image the request carries, the earlier turns', tool
+  results' and generated images' included, since the backend reads them all.
+  `video`: the current turn's videos. The deployment must read that input, or
+  the configuration is refused with `input_modality_unsupported`. No
+  deployment reads audio yet, so `input.audio` is always refused.
+  Images are read as inline PNG, JPEG or WebP data URLs. Any other image,
+  such as a remote URL or a GIF, is left out: a `coverage: full` rule
+  resolves it as `on_unscanned` says (see
+  [Read the whole input](#read-the-whole-input)), and any other rule reads
+  the images it can. The Router never fetches the image, and the backend
+  gets the request as sent.
 - `answer` and `context`: the model's answer and its grounding context, for
   a `stage: response` rule only.
 
@@ -265,7 +276,9 @@ or the input exceeds the model's length), `on_unscanned` decides what the
 rule reports: `match`, `no_match`, or `unknown` (default), which leaves the
 decision's failure policy to decide. A tool result the Router cannot read as
 text, such as an image or an unsupported block, is unread input of a rule that
-reads `input.tool_results`, which `on_unscanned` decides the same way:
+reads `input.tool_results`, and an image no decision model decodes is unread
+input of a rule that reads `input.image`. `on_unscanned` decides both the same
+way:
 
 ```yaml
 recipes:

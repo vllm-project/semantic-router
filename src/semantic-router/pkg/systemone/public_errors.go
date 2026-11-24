@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 // runtimeCodes are the model runtime's documented request-level error codes
@@ -32,7 +33,7 @@ var mediaReasons = map[api.ErrorBodyReason]string{
 	api.ImageAspectRatio: "image aspect ratio exceeds %s:1",
 	api.ImageMalformed:   "malformed image",
 	api.ImageUnsupported: "model does not read images",
-	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime or Matroska data URL",
+	api.VideoFormat:      "video must be a base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URL",
 	api.VideoTooLarge:    "video exceeds %s",
 	api.VideoTooLong:     "video longer than %s s",
 	api.VideoPixels:      "video frames exceed %s pixels",
@@ -47,8 +48,9 @@ var mediaReasons = map[api.ErrorBodyReason]string{
 var limitedReasons = map[string]bool{"request_tokens": true}
 
 // runtimeFailure is the public status, code, message, reason and limit for a
-// runtime's non-2xx answer: its documented code, for a rejected image or video
-// the reason in the words above, and the limit of a limitedReasons refusal.
+// runtime's non-2xx answer: its documented code (a media refusal's public code,
+// systemonecodec.PublicCode), for a rejected image or video the reason in the
+// words above, and the limit of a limitedReasons refusal.
 func runtimeFailure(status int, body []byte) (int, string, string, string, *int) {
 	var answer api.ErrorResponse
 	if json.Unmarshal(body, &answer) != nil {
@@ -65,7 +67,8 @@ func runtimeFailure(status int, body []byte) (int, string, string, string, *int)
 		if limitedReasons[reason] && answer.Error.Limit != nil && *answer.Error.Limit > 0 {
 			limit = answer.Error.Limit
 		}
-		return documented, string(code), mediaReason(answer.Error.Reason, answer.Error.Limit), reason, limit
+		public := systemonecodec.PublicCode(string(code), reason)
+		return documented, public, mediaReason(answer.Error.Reason, answer.Error.Limit), reason, limit
 	}
 	return documented, string(code), strings.ReplaceAll(string(code), "_", " "), "", nil
 }

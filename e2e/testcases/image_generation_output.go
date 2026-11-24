@@ -209,7 +209,7 @@ func assertChatWiredBackendRejectsImageGeneration(
 	}
 	if envelope.Error.Type != "invalid_request_error" ||
 		envelope.Error.Code != "unsupported_capability" ||
-		!strings.Contains(envelope.Error.Message, "openai.chat.v1") ||
+		!strings.Contains(envelope.Error.Message, "Chat Completions API") ||
 		!strings.Contains(envelope.Error.Message, "image_generation") {
 		return fmt.Errorf("chat-wire backend returned the wrong capability error: %s",
 			truncateString(string(response.Body), 500))

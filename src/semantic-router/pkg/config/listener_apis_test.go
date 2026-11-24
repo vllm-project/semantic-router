@@ -72,12 +72,15 @@ func TestAnAPINamedTwiceIsRefused(t *testing.T) {
 
 func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 	for apis, want := range map[string]string{
-		"      realtime: {}":                                `api "realtime" is not supported; the apis are chat_completions, responses, messages, images, systemone`,
+		"      realtime: {}":                                `api "realtime" is not supported; the apis are chat_completions, responses, messages, images, speech, systemone`,
 		"      chat_completions: {schema: openai/v1}":       "apis.chat_completions.schema: invalid_value: api chat_completions has one schema, openai/v1, so a listener names none",
 		"      chat_completions: {max_deadline_ms: 5}":      "apis.chat_completions.max_deadline_ms: invalid_value: the chat_completions API takes no max_deadline_ms setting",
 		"      systemone: {schema: systemone/0.2}":          "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
 		"      systemone: {schema: vllm-sr/6.0}":            "a listener serves api systemone in vllm-sr/5.0 or vllm-sr/4.0",
 		"      systemone: {max_deadline_ms: 0}":             "apis.systemone.max_deadline_ms: invalid_value: must be greater than zero",
+		"      chat_completions: {vsr: {redact: false}}":    "apis.chat_completions.vsr: invalid_value: the chat_completions API takes no vsr setting",
+		"      systemone: {vsr: {router_goal: cheap}}":      `apis.systemone.vsr.router_goal: invalid_value: "cheap" is not a router goal; use one of quality, balanced, save`,
+		"      systemone: {vsr: {pii: false}}":              `unknown field "pii"`,
 		"      chat_completions: {models: []}":              "apis.chat_completions.models: invalid_value: lists no model",
 		"      chat_completions: {models: [m, m]}":          `lists "m" twice`,
 		"      systemone: {models: [not-a-decision-model]}": `public System One model "not-a-decision-model" is not declared`,
@@ -92,9 +95,31 @@ func TestListenerAPIEntriesAreCheckedByTheRegistry(t *testing.T) {
 	}
 }
 
+func TestAVSRProfileSurvivesCanonicalExport(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      chat_completions: {}\n      systemone: {vsr: {redact: false, router_turns: true, router_goal: save}}", "chat_completions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := cfg.Listeners[0].APIs["systemone"].VSR
+	if profile == nil || *profile.Redact || !*profile.RouterTurns || profile.RouterGoal != "save" || profile.Guard != nil {
+		t.Fatalf("profile %+v", profile)
+	}
+	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, exported)
+	}
+	if again := reloaded.Listeners[0].APIs["systemone"].VSR; again == nil || *again.Redact || again.RouterGoal != "save" || again.Guard != nil {
+		t.Fatalf("exported profile %+v\n%s", again, exported)
+	}
+}
+
 func TestAListenerWithoutAPIsServesTheLLMAPIs(t *testing.T) {
 	listener := Listener{Name: "plain"}
-	if got := strings.Join(listener.ServedAPIs(), ","); got != "chat_completions,responses,messages,images" {
+	if got := strings.Join(listener.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,speech" {
 		t.Fatalf("served %s", got)
 	}
 	if models, restricted := listener.LLMModels(); models != nil || restricted {
@@ -157,10 +182,10 @@ recipes:
 		t.Fatalf("%v\n%s", err, migrated)
 	}
 	public := cfg.Listeners[0]
-	if got := strings.Join(public.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,systemone" {
+	if got := strings.Join(public.ServedAPIs(), ","); got != "chat_completions,responses,messages,images,speech,systemone" {
 		t.Fatalf("public serves %s\n%s", got, migrated)
 	}
-	for _, name := range []string{"chat_completions", "responses", "messages", "images"} {
+	for _, name := range []string{"chat_completions", "responses", "messages", "images", "speech"} {
 		if api := public.APIs[name]; strings.Join(api.Models, ",") != "m" {
 			t.Fatalf("%s models %v", name, api.Models)
 		}

@@ -56,11 +56,14 @@ decision, algorithm, plugin and global block.
 | Field | Meaning | Default |
 | --- | --- | --- |
 | `timeout` | The whole call, including its streamed response; it also bounds a stalled stream. `0s` lifts both limits. To lift only one model's call limit, set that model's `total_timeout: 0s`. | `300s` |
-| `api_keys` | Client API keys the listener requires. | none |
+| `api_keys` | Client API keys the listener requires. A `"${NAME}"` entry reads the key from that environment variable, with an uppercase `NAME` as every reference in the configuration. | none |
+| `api_key_files` | Absolute paths of owner-only files that each hold one more client key, read at every load. Standalone mode reads them; `--gateway extproc` refuses them. See [Keep credentials out of configuration](security-hardening.md#keep-credentials-out-of-configuration). | none |
 | `apis` | The APIs the listener serves, by API name: `chat_completions`, `responses`, `messages`, `images` and `systemone` (`openai` and `anthropic` are accepted as aliases of `chat_completions` and `messages`). Any other API path answers `404` with a `detail` naming the listener. Standalone mode serves `systemone`; `--gateway extproc` refuses a listener that serves it. | the four LLM APIs, no `systemone` |
 | `apis.<api>.models` | The only request models an API accepts. | every model of its kind |
+| `apis.<api>.unserved_models` | What `chat_completions`, `responses` and `messages` do with a request whose model they do not accept or the Router does not serve: `{policy: reject}` answers `403 model_not_allowed` or `404 model_not_found`; `{policy: route, route_to: <model>}` routes it as if it named `route_to`, one of the API's models that names an entrypoint. The Replay record keeps the name the client gave in `requested_model`, and `x-vsr-trace` in `requested_model`. Standalone mode applies it; `--gateway extproc` refuses it. See [Model names the harness picks itself](agent-harness.md#model-names-the-harness-picks-itself). | `reject` |
 | `apis.systemone.schema` | The System One schema the listener speaks to its clients: `vllm-sr/5.0`, or `vllm-sr/4.0`, which also accepts every request form of the earlier contract. See [System One schemas](../system-one/use/schemas.md). | `vllm-sr/5.0` |
 | `apis.systemone.max_deadline_ms` | The longest a System One request waits for a model. | 10 minutes |
+| `apis.systemone.vsr` | What the vSR agent plugins pointed at the listener do: `redact`, `shield`, `guard`, `check`, `escalate`, `router` and `router_turns` on or off, and `router_goal` (`quality`, `balanced` or `save`). The listing (`GET /v1/systemone/models`) hands it to the plugins, and each field set here wins over the plugin's own option. The Dashboard edits each field as Default (left out), On or Off under Settings › Router settings › vSR agent plugins. See [Agent harnesses](agent-harness.md). | the plugins' own options |
 | `tls.cert_file`, `tls.key_file` | One-way TLS. | off |
 | `identity.trust_headers`, `identity.trusted_peers` | The identity sources the listener trusts, in standalone mode. | none |
 
@@ -70,7 +73,11 @@ decision, algorithm, plugin and global block.
   `providers.models[]` entry.
 - **Pricing.** `providers.models[].pricing` takes an optional uppercase
   three-letter `currency`, plus non-negative `prompt_per_1m`,
-  `completion_per_1m`, `cached_input_per_1m` and `cache_write_per_1m` rates.
+  `completion_per_1m`, `cached_input_per_1m`, `cache_write_per_1m` and
+  `cache_write_1h_per_1m` rates. A model without it takes its provider's
+  [list price](catalog-backed-models#list-prices) when the catalog lists one.
+  A written block always wins and defaults `currency` to `USD`, so zero rates
+  mark a model free.
 - **Backend format.** [Protocol Compatibility](protocol-compatibility) helps
   you choose a backend's `api_format`. Check
   [Backend Target Compatibility](backend-target-compatibility) before moving
@@ -121,6 +128,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
+| `agent` — heuristic signal | `agent` matches the agent a request belongs to: the main agent or a subagent, the harness that sent it, the type the harness gives the subagent, and the request's class, such as a compaction. | [`config/fragments/signal/agent/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/agent/) | [Guide](../tutorials/signal/heuristic/agent) |
 | `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `recipes[].signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
 | `complexity` — application signal | `complexity` rates how difficult a request is to answer well: easy, medium or hard. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/application/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
@@ -167,14 +175,14 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | --- | --- | --- | --- |
 | `content-safety` — plugin bundle | Content Safety combines supported route-local safety plugins into one reusable policy. | [`config/fragments/plugin/content-safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/content-safety/) | [Guide](../tutorials/plugin/content-safety) |
 | `context` — route plugin | `context` is the plugin that assembles the request's context. | [`config/fragments/plugin/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context/) | [Guide](../tutorials/plugin/context) |
-| `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
+| `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately, or, with `block: true`, refuses the request with it. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
 | `header-mutation` — route plugin | `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers. | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [Guide](../tutorials/plugin/header-mutation) |
 | `masking` — route plugin | `masking` is a route-local plugin that detects personal data (emails, phone numbers, names, and other configured entity types) in the provider-bound request and replaces each occurrence with a deterministic placeholder, such as `[EMAIL_ADDRESS_0]`, immediately before the request is encoded and sent to the model provider. | [`config/fragments/plugin/masking/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/masking/) | [Guide](../tutorials/plugin/masking) |
 | `prompt-cache` — route plugin | `prompt_cache` is a route-local plugin that inserts Anthropic prompt-cache breakpoints on a matched route. | [`config/fragments/plugin/prompt-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/prompt-cache/) | [Guide](../tutorials/plugin/prompt-cache) |
 | `request-params` — route plugin | `request_params` is a route-local plugin that validates and trims OpenAI Chat Completions request bodies before they are forwarded to backends. | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [Guide](../tutorials/plugin/request-params) |
 | `response-cache` — route plugin | `response_cache` is the route-local plugin for reusing exact or semantically compatible prior responses. | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [Guide](../tutorials/plugin/response-cache) |
 | `response-guard` — route plugin | `response_guard` is a route-local plugin that blocks or annotates the model's answer on the signals it is checked with. | [`config/fragments/plugin/response-guard/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-guard/) | [Guide](../tutorials/plugin/response-guard) |
-| `router-replay` — route plugin | Use Router Replay to inspect requests in Dashboard Insights: the selected route, model, token usage, response, and tool trajectory. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
+| `router-replay` — route plugin | Use Router Replay to inspect requests in the Dashboard's **Requests** page: the selected route, model, token usage, response, and tool trajectory. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
 | `system-prompt` — route plugin | `system_prompt` is a route-local plugin for inserting or modifying the system prompt on matched traffic. | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [Guide](../tutorials/plugin/system-prompt) |
 | `tools` — route plugin | `tools` is the route-local plugin for the request's tools. | [`config/fragments/plugin/tools/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tools/) | [Guide](../tutorials/plugin/tools) |
 
@@ -333,6 +341,8 @@ entrypoints:
 | `entrypoints[].model_names` | The public model aliases. |
 | `entrypoints[].recipe` | The recipe those aliases enter. |
 | `entrypoints[].default` | Marks the default chat entrypoint. |
+| `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model` or `memory_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
+| `entrypoints[].memory_model` | Optional model name of another entrypoint in the same API namespace for agent memory extraction and consolidation. The target cannot have its own `review_model` or `memory_model`. See [Codex memories](agent-harness#codex-memories). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without
@@ -467,14 +477,20 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 
-- **Personal data.** `capture_personal_data: false` keeps routing evidence but
-  omits content when PII is detected or its status is unknown. Without a PII
-  detector, content is suppressed rather than blocking startup.
+- **Prompt text.** `prompt_capture` says what a record keeps besides routing
+  evidence. `none`, the default, keeps no request or response text and reads
+  nothing for personal data. `raw` keeps the text the capture switches allow,
+  unverified. `verified` keeps the prompt alone once the PII rules find it
+  clean, and omits it when PII is detected or its status is unknown; without a
+  PII detector the prompt is omitted rather than blocking startup.
+  `capture_personal_data` is the deprecated form: `false` loads as `verified`
+  and `true` as `raw`, with a warning.
 - **Tool results** stay redacted unless `capture_tool_results: true`, which
-  needs `capture_personal_data: true`.
+  stores them under `prompt_capture: raw` only.
 - **Rejected requests** without a selected decision use their recipe's
   capture defaults.
 

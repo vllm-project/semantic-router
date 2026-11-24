@@ -233,7 +233,9 @@ func TestHeldStreamReleasesAPassedAnswerAsTheStream(t *testing.T) {
 }
 
 // An answer the guard blocks never reaches the client: it receives the
-// refusal a buffered answer's 403 carries, in its protocol's streaming form.
+// refusal a buffered answer's 400 carries, in its protocol's streaming form,
+// an invalid request rather than a permission error, which Claude Code reads
+// as a failed login.
 func TestHeldStreamRefusesABlockedAnswerInStreamForm(t *testing.T) {
 	for _, format := range guardProtocols {
 		t.Run(string(format), func(t *testing.T) {
@@ -247,6 +249,9 @@ func TestHeldStreamRefusesABlockedAnswerInStreamForm(t *testing.T) {
 			client, replies := answerBody(t, router, ctx, whole(streamOf(format, unsafeAnswer)))
 
 			assertRefusedStream(t, format, client, "Response blocked: jailbreak content detected in LLM output", unsafeAnswer)
+			if strings.Contains(client, "permission") {
+				t.Fatalf("client stream = %s, want an invalid request error", client)
+			}
 			if trace := bodyPhaseHeader(replies[0], headers.VSRTrace); !strings.Contains(trace, "response_guard=blocked;buffered") {
 				t.Fatalf("%s = %q, want the blocked outcome of a buffered stream", headers.VSRTrace, trace)
 			}
@@ -261,7 +266,7 @@ func TestHeldStreamRefusesABlockedAnswerInStreamForm(t *testing.T) {
 	}
 }
 
-// The same guard on the same answers, not streamed: 403 for the blocked one,
+// The same guard on the same answers, not streamed: 400 for the blocked one,
 // the answer for the passed one.
 func TestBufferedAnswerIsBlockedOrPassedInEveryProtocol(t *testing.T) {
 	for _, format := range guardProtocols {
@@ -280,11 +285,11 @@ func TestBufferedAnswerIsBlockedOrPassedInEveryProtocol(t *testing.T) {
 				client, replies := answerBody(t, router, ctx, [][]byte{body})
 
 				immediate := replies[0].GetImmediateResponse()
-				if tc.blocked != (immediate != nil && immediate.GetStatus().GetCode() == 403) {
+				if tc.blocked != (immediate != nil && immediate.GetStatus().GetCode() == 400) {
 					t.Fatalf("reply = %v, blocked = %v", replies[0], tc.blocked)
 				}
 				if tc.blocked && (!strings.Contains(client, "jailbreak content detected") || strings.Contains(client, tc.answer)) {
-					t.Fatalf("403 body = %s, want the block message and none of the answer", client)
+					t.Fatalf("400 body = %s, want the block message and none of the answer", client)
 				}
 				if !tc.blocked && !strings.Contains(client, tc.answer) {
 					t.Fatalf("client body = %s, want the answer", client)

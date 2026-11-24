@@ -4,22 +4,26 @@ import copy
 import hashlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manual_ci import ManualCIError
+from manual_ci import MERGIFY_BOT_ID, ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
     MARKER,
     PREFIX,
+    diagnose,
     main,
     reconcile,
+    required_checks,
 )
 
 REPO = "example/router"
@@ -45,6 +49,7 @@ class Client:
         self.pull = {
             "number": 3,
             "state": "open",
+            "draft": False,
             "merge_commit_sha": MERGE,
             "head": {
                 "sha": HEAD,
@@ -55,6 +60,7 @@ class Client:
         }
         self.plan = {
             "schema_version": 1,
+            "draft": False,
             "source_sha": MERGE,
             "base_sha": BASE,
             "expected_verification_ids": ["quality"],
@@ -67,6 +73,8 @@ class Client:
             for name in ["CI / Gate", "CI Execution", "Quality"]
         ]
         self.checks, self.comments, self.writes = [], [], []
+        self.commit_statuses = []
+        self.status_writes = []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
@@ -91,7 +99,7 @@ class Client:
             ]
         }
         self.report.update(
-            run_id=101,
+            run_id=self.run["id"],
             run_attempt=self.run["run_attempt"],
             errors=[],
             status=(
@@ -105,6 +113,7 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        run_path = f"actions/runs/{self.run['id']}"
         if path == "git/ref/heads/main":
             return {
                 "ref": "refs/heads/main",
@@ -114,7 +123,7 @@ class Client:
             if self.compare_error is not None:
                 raise self.compare_error
             return {"merge_base_commit": {"sha": self.base_ancestor}}
-        if path == "actions/runs/101":
+        if path == run_path:
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
             return {"id": 2}
@@ -123,10 +132,23 @@ class Client:
             if self.newer_run:
                 runs.append({**self.run, "id": 102})
             return {"workflow_runs": runs}
-        if path.startswith("pulls?state=open&base=main&head=contributor%3Afeature"):
+        source_owner = self.run["head_repository"]["full_name"].split("/")[0]
+        pull_query = urlencode(
+            {
+                "state": "open",
+                "base": "main",
+                "head": f"{source_owner}:{self.run['head_branch']}",
+            }
+        )
+        if path.startswith(f"pulls?{pull_query}"):
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
+        if path.startswith(f"commits/{HEAD}/statuses?"):
+            return copy.deepcopy(self.commit_statuses)
+        if path.startswith("check-runs/"):
+            identity = int(path.rsplit("/", 1)[1])
+            return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
         if path.startswith(f"commits/{HEAD}/check-runs?"):
             checks = self.checks
             if "filter=latest" in path:
@@ -137,7 +159,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             return {"check_runs": copy.deepcopy(checks)}
-        if path.startswith("actions/runs/101/attempts/"):
+        if path.startswith(f"{run_path}/attempts/"):
             return {
                 "jobs": [
                     copy.deepcopy(item)
@@ -146,7 +168,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             }
-        if path.startswith("actions/runs/101/artifacts?"):
+        if path.startswith(f"{run_path}/artifacts?"):
             gate = "name=ci-gate" in path
             if gate and self.missing_report:
                 return {"artifacts": []}
@@ -190,6 +212,15 @@ class Client:
         return buffer.getvalue()
 
     def write(self, endpoint, payload, **kwargs):
+        if endpoint == f"repos/{REPO}/statuses/{HEAD}":
+            self.status_writes.append(payload)
+            status = {
+                **payload,
+                "id": 70 + len(self.commit_statuses),
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+            self.commit_statuses.insert(0, status)
+            return copy.deepcopy(status)
         self.writes.append((endpoint, payload, kwargs))
         if endpoint.endswith("/check-runs"):
             check = {
@@ -217,6 +248,188 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_commit_status_uses_the_current_qualification_verdict(self):
+        for case, expected in (
+            ("waiting", "pending"),
+            ("partial", "pending"),
+            ("failure", "failure"),
+            ("success", "success"),
+        ):
+            with self.subTest(case=case):
+                client = Client()
+                if case != "waiting":
+                    client.run["run_attempt"] = 2
+                if case == "partial":
+                    client.plan["expected_verification_ids"].append("local.cli")
+                    client.plan["required_verification_ids"].append("local.cli")
+                if case == "failure":
+                    client.run["conclusion"] = "failure"
+                if case == "success":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["check"]["name"], "PR Gate")
+                self.assertEqual(result["check"].get("conclusion", "pending"), expected)
+                self.assertEqual(len(client.status_writes), 1)
+                status = client.status_writes[0]
+                self.assertEqual(status["context"], "PR Qualification")
+                self.assertEqual(status["state"], expected)
+                self.assertEqual(
+                    status["target_url"],
+                    f"https://github.com/{REPO}/actions/runs/101/attempts/{client.run['run_attempt']}",
+                )
+
+    def test_reconciliation_preserves_legacy_checks_and_reuses_the_commit_status(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for _ in range(2):
+            reconcile(client, REPO, 101)
+        self.assertEqual(len(client.checks), 1)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.checks[0]["conclusion"], "success")
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.status_writes[0]["context"], "PR Qualification")
+
+    def test_commit_status_ignores_a_superseded_attempt_before_publishing(self):
+        class ConcurrentRerun(Client):
+            def request(self, endpoint, **kwargs):
+                if endpoint.startswith(f"repos/{REPO}/commits/{HEAD}/statuses?"):
+                    self.run["run_attempt"] = 2
+                return super().request(endpoint, **kwargs)
+
+        client = ConcurrentRerun()
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+    def test_commit_status_waits_for_the_attempt_named_in_the_pending_fence(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        client.commit_statuses = [
+            {
+                "context": "PR Qualification",
+                "state": "pending",
+                "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/2",
+                "description": "Waiting for authorized CI rerun",
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+        ]
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+        client.run["run_attempt"] = 2
+        client.refresh_report()
+        reconcile(client, REPO, 101)
+        statuses = [payload["state"] for payload in client.status_writes]
+        self.assertEqual(statuses, ["success"])
+
+    def test_commit_status_timeout_preserves_legacy_gate_and_guidance(self):
+        class StatusTimeout(Client):
+            def write(self, endpoint, payload, **kwargs):
+                if "/statuses/" in endpoint:
+                    raise subprocess.TimeoutExpired(["gh", "api"], 20)
+                return super().write(endpoint, payload, **kwargs)
+
+        client = StatusTimeout()
+        result = reconcile(client, REPO, 101)
+        self.assertIn("qualification_status_error", result)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.writes[-1][0], f"repos/{REPO}/issues/3/comments")
+
+    def test_draft_receipt_cannot_qualify_the_same_head_after_ready(self):
+        client = Client()
+        ready_plan = client.plan.copy()
+        client.plan.update(
+            draft=True,
+            expected_verification_ids=[],
+            required_verification_ids=[],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for draft in (True, False):
+            with self.subTest(draft=draft):
+                client.pull["draft"] = draft
+                self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+                self.assertEqual(client.writes, [])
+
+        client.run["id"] = 102  # ready_for_review run on the same head and base.
+        client.plan = ready_plan
+        client.refresh_report()
+        waiting = reconcile(client, REPO, 102)
+        self.assertEqual(waiting["state"], "awaiting-approval")
+        self.assertEqual(waiting["check"]["status"], "in_progress")
+        self.assertIn("/ci run", waiting["comment"])
+
+        client.run["run_attempt"] = 2  # Completed attempt after authorized /ci run.
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        green = reconcile(client, REPO, 102)["check"]
+        self.assertEqual(green["external_id"], f"{PREFIX}3:102:2")
+        self.assertEqual(green["head_sha"], HEAD)
+        self.assertEqual(green["conclusion"], "success")
+
+    def test_completed_draft_check_requires_trusted_mergify_identity(self):
+        for author_id in (MERGIFY_BOT_ID, 42):
+            with self.subTest(author_id=author_id):
+                client = Client()
+                ref = "mergify/merge-queue/test"
+                client.run.update(head_branch=ref, head_repository={"full_name": REPO})
+                client.pull["head"].update(ref=ref, repo={"full_name": REPO})
+                client.pull.update(
+                    draft=True,
+                    user={"id": author_id, "login": "mergify[bot]", "type": "Bot"},
+                )
+                client.plan.update(
+                    expected_verification_ids=client.plan["required_verification_ids"],
+                    deferred_verifications=[],
+                    deferred_images=[],
+                )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                if author_id == MERGIFY_BOT_ID:
+                    self.assertEqual(result["check"]["conclusion"], "success")
+                    self.assertEqual(client.status_writes[0]["state"], "success")
+                else:
+                    self.assertIsNone(result.get("check"))
+                    self.assertEqual(client.writes, [])
+                    self.assertEqual(client.status_writes, [])
+
+    def test_publish_rechecks_draft_before_marking_success(self):
+        class ConvertedToDraft(Client):
+            def request(self, endpoint, **kwargs):
+                result = super().request(endpoint, **kwargs)
+                if endpoint.startswith(f"repos/{REPO}/issues/3/comments?"):
+                    self.pull["draft"] = True
+                return result
+
+        client = ConvertedToDraft()
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+        self.assertEqual(client.writes, [])
+
     def test_fork_waiting_is_pending_with_actionable_comment(self):
         client = Client()
         result = reconcile(client, REPO, 101)
@@ -659,6 +872,544 @@ class PRStatusTests(unittest.TestCase):
             ):
                 self.assertEqual(main(), 0)
             self.assertEqual(reconcile_mock.call_args.args[1:], (REPO, 101))
+
+
+class DiagnosticClient(Client):
+    """Explicit read-only same-head checks, suite runs and exact-attempt jobs."""
+
+    def __init__(self):
+        super().__init__()
+        self.plan.update(
+            expected_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        self.refresh_report()
+        self.run["repository"] = {"full_name": REPO}
+        self.run["check_suite_id"] = 20
+        self.native_run = {
+            **copy.deepcopy(self.run),
+            "id": 99,
+            "check_suite_id": 19,
+            "conclusion": "cancelled",
+        }
+        self.native_jobs = [
+            {"id": 70, "name": "PR Gate", "conclusion": "failure"},
+            {"id": 71, "name": "CI / Gate", "conclusion": "failure"},
+            {"id": 72, "name": "Quality", "conclusion": "cancelled"},
+        ]
+        self.checks = [
+            self.check(80, f"{PREFIX}3:101:1", "success", 19),
+            self.check(70, "12345678-1234-1234-1234-123456789abc", "failure", 19),
+        ]
+        self.visible = {70, 80}
+        self.required = {70: True, 80: True}
+        self.required_complete = True
+        self.reads = []
+        self.mutate_on_final = None
+        self.run_reads = {}
+        self.live_base = BASE
+        self.rollup = {"oid": HEAD, "state": "SUCCESS"}
+        self.suites = {
+            identity: {
+                "id": identity,
+                "head_sha": HEAD,
+                "app": {"id": APP_ID},
+                "status": "completed",
+                "conclusion": conclusion,
+            }
+            for identity, conclusion in ((19, "cancelled"), (20, "success"))
+        }
+
+    def gh(self, arguments, *, read, text):
+        assert read and text and arguments[:3] == ["gh", "api", "graphql"]
+        assert f"head={HEAD}" in arguments
+        return type(
+            "Response",
+            (),
+            {
+                "returncode": 0,
+                "stdout": json.dumps(
+                    {
+                        "data": {
+                            "repository": {
+                                "object": {
+                                    "oid": self.rollup["oid"],
+                                    "statusCheckRollup": {
+                                        "state": self.rollup["state"]
+                                    },
+                                }
+                            }
+                        }
+                    }
+                ),
+            },
+        )()
+
+    def advance_main_unrelated(self):
+        self.live_base = "d" * 40
+        self.base_ancestor = "f" * 40
+
+    @staticmethod
+    def check(identity, external, conclusion, suite):
+        return {
+            "id": identity,
+            "name": "PR Gate",
+            "head_sha": HEAD,
+            "app": {"id": APP_ID},
+            "external_id": external,
+            "check_suite": {"id": suite},
+            "status": "completed",
+            "conclusion": conclusion,
+        }
+
+    def required_checks(self, repo, head, number):
+        assert (repo, head, number) == (REPO, HEAD, 3)
+        return copy.deepcopy(self.required), self.required_complete
+
+    def request(self, endpoint, **kwargs):
+        assert kwargs.get("method", "GET") == "GET"
+        self.reads.append(endpoint)
+        path = endpoint.removeprefix(f"repos/{REPO}/")
+        if path.startswith("check-suites/"):
+            return copy.deepcopy(self.suites[int(path.rsplit("/", 1)[1])])
+        if path.startswith(f"commits/{HEAD}/check-runs?"):
+            checks = self.checks
+            if "filter=latest" in path:
+                checks = [c for c in checks if c["id"] in self.visible]
+            return {"check_runs": copy.deepcopy(checks)}
+        if path.startswith("actions/runs?check_suite_id="):
+            return {"workflow_runs": [copy.deepcopy(self.native_run)]}
+        if path == "actions/runs/99":
+            return copy.deepcopy(self.native_run)
+        if path.startswith("actions/runs/99/attempts/"):
+            jobs = self.native_jobs if "/attempts/1/" in path else []
+            return {"jobs": copy.deepcopy(jobs)}
+        if path == "git/ref/heads/main":
+            return {
+                "ref": "refs/heads/main",
+                "object": {"type": "commit", "sha": self.live_base},
+            }
+        if path == "actions/runs/101":
+            self.run_reads[path] = self.run_reads.get(path, 0) + 1
+            if self.run_reads[path] > 1 and self.mutate_on_final:
+                self.mutate_on_final(self)
+        return super().request(endpoint, **kwargs)
+
+    def write(self, *args, **kwargs):
+        raise AssertionError("Diagnostic attempted a write")
+
+
+class DiagnosticTests(unittest.TestCase):
+    def diagnose(self, client):
+        with (
+            patch("pr_ci_status.reconcile", side_effect=AssertionError("reconcile")),
+            patch("pr_ci_status.publish", side_effect=AssertionError("publish")),
+            patch("subprocess.run", side_effect=AssertionError("unmocked subprocess")),
+        ):
+            return diagnose(client, REPO, 3, HEAD, 101, 1)
+
+    def test_confirmed_competition_does_not_prove_cancellation_cause(self):
+        result = self.diagnose(DiagnosticClient())
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["native_failures_verified"])
+        self.assertIsNone(result["evidence"]["cancellation_only"])
+        self.assertIn("cancellation_cause_unproven", result["reason_codes"])
+        self.assertTrue(result["evidence"]["full_qualification"])
+        self.assertFalse(result["actionable"])
+        self.assertEqual(result["checks"]["all"][1]["role"], "native")
+        self.assertEqual(result["checks"]["all"][0]["suite_id"], 19)
+
+    def test_healthy_without_native_failure_does_not_claim_recovery(self):
+        client = DiagnosticClient()
+        client.checks.pop()
+        client.checks[0]["check_suite"]["id"] = 20
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "healthy")
+        self.assertFalse(result["evidence"]["competition"])
+        self.assertFalse(result["actionable"])
+
+    def test_all_exposes_hidden_native_and_publisher_checks(self):
+        for visible in ({80}, {70}, {70, 80}):
+            with self.subTest(visible=visible):
+                client = DiagnosticClient()
+                client.visible = visible
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], "competing_required")
+                self.assertEqual(len(result["checks"]["all"]), 2)
+                self.assertEqual(len(result["checks"]["latest"]), len(visible))
+
+    def test_running_qualification_is_not_reported_as_failed(self):
+        for status in ("queued", "in_progress"):
+            with self.subTest(status=status):
+                client = DiagnosticClient()
+                client.run.update(status=status, conclusion=None)
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], "running")
+                self.assertIn("qualification_incomplete", result["reason_codes"])
+                self.assertFalse(result["evidence"]["full_qualification"])
+                self.assertTrue(result["evidence"]["snapshot_current"])
+
+    def test_running_publisher_check_is_not_reported_as_failed(self):
+        client = DiagnosticClient()
+        client.run.update(status="in_progress", conclusion=None)
+        client.checks[0].update(status="in_progress", conclusion=None)
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "running")
+        self.assertIn("qualification_incomplete", result["reason_codes"])
+
+    def test_hidden_awaiting_approval_gate_stays_deferred(self):
+        client = DiagnosticClient()
+        client.plan.update(
+            expected_verification_ids=["quality"],
+            required_verification_ids=["quality", "e2e.dashboard"],
+            deferred_verifications=["e2e.dashboard"],
+        )
+        client.refresh_report()
+        client.checks[0].update(status="in_progress", conclusion=None)
+        client.visible = {70}
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "deferred")
+        self.assertIn("qualification_deferred", result["reason_codes"])
+        self.assertFalse(result["evidence"]["full_qualification"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(len(result["checks"]["all"]), 2)
+        self.assertEqual(len(result["checks"]["latest"]), 1)
+
+    def test_failed_current_qualification_stays_failed(self):
+        for field in ("run", "native_job", "own_check"):
+            with self.subTest(field=field):
+                client = DiagnosticClient()
+                if field == "run":
+                    client.run["conclusion"] = "failure"
+                elif field == "native_job":
+                    client.jobs.append(client.native_jobs[0])
+                else:
+                    client.checks[0]["conclusion"] = "failure"
+                self.assertEqual(self.diagnose(client)["state"], "failed")
+
+    def test_wrong_app_or_unproved_native_is_uncertain(self):
+        for mutation in (
+            lambda c: c.checks[1]["app"].update(id=1),
+            lambda c: c.checks[1].update(external_id="private raw payload"),
+            lambda c: c.native_jobs[0].update(id=700),
+            lambda c: c.native_run.update(path=".github/workflows/other.yml"),
+            lambda c: c.native_run.update(head_branch="other"),
+            lambda c: c.native_run.update(run_attempt=2),
+        ):
+            with self.subTest(mutation=mutation):
+                client = DiagnosticClient()
+                mutation(client)
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], "uncertain")
+                self.assertFalse(result["evidence"]["cancellation_only"])
+                self.assertNotIn("private raw payload", json.dumps(result))
+
+    def test_closed_pull_is_reported_as_not_open(self):
+        client = DiagnosticClient()
+        client.pull.update(state="closed")
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "ignored")
+        self.assertEqual(result["reason_codes"], ["pull_not_open"])
+
+    def test_explicit_identity_mismatches_stop(self):
+        for mutation in (
+            lambda c: c.pull.update(number=4),
+            lambda c: c.run.update(head_sha="d" * 40),
+            lambda c: c.run.update(workflow_id=9),
+            lambda c: c.run.update(path=".github/workflows/other.yml"),
+            lambda c: c.run.update(run_attempt=2),
+            lambda c: c.run["repository"].update(full_name="other/router"),
+            lambda c: setattr(c, "newer_run", True),
+        ):
+            with self.subTest(mutation=mutation):
+                client = DiagnosticClient()
+                mutation(client)
+                self.assertEqual(self.diagnose(client)["state"], "ignored")
+
+    def test_deferred_or_unvalidated_receipts_never_qualify(self):
+        for mutation, state in (
+            (lambda c: c.plan.update(deferred_images=["router"]), "deferred"),
+            (lambda c: setattr(c, "missing_report", True), "evidence_unavailable"),
+            (lambda c: c.report.update(run_attempt=9), "evidence_unavailable"),
+            (lambda c: c.parents.reverse(), "evidence_unavailable"),
+        ):
+            with self.subTest(state=state):
+                client = DiagnosticClient()
+                mutation(client)
+                if state == "deferred":
+                    client.refresh_report()
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], state)
+                self.assertFalse(result["evidence"]["full_qualification"])
+
+    def test_tampered_plan_is_not_echoed(self):
+        client = DiagnosticClient()
+        client.plan["source_sha"] = "secret-private-host"
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "evidence_unavailable")
+        self.assertNotIn("secret-private-host", json.dumps(result))
+
+    def test_current_source_uses_shared_plan_selection_contract(self):
+        client = DiagnosticClient()
+        live_identity = {
+            "head_sha": HEAD,
+            "base_sha": "d" * 40,
+            "source_sha": "e" * 40,
+        }
+        with (
+            patch("pr_ci_status.source_identity", return_value=live_identity),
+            patch("pr_ci_status.plan_for_run", return_value=client.plan) as select_plan,
+        ):
+            result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["current_source"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(select_plan.call_count, 2)
+
+    def test_current_source_change_during_collection_invalidates_snapshot(self):
+        client = DiagnosticClient()
+        live_identity = {
+            "head_sha": HEAD,
+            "base_sha": "d" * 40,
+            "source_sha": "e" * 40,
+        }
+        with (
+            patch("pr_ci_status.source_identity", return_value=live_identity),
+            patch("pr_ci_status.plan_for_run", side_effect=[client.plan, None]),
+        ):
+            result = self.diagnose(client)
+        self.assertEqual(result["state"], "stale")
+        self.assertIn("source_changed", result["reason_codes"])
+        self.assertFalse(result["evidence"]["snapshot_current"])
+
+    def test_ancestor_base_preserves_current_competition(self):
+        client = DiagnosticClient()
+        client.live_base = "d" * 40
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["competition"])
+        self.assertTrue(result["evidence"]["current_source"])
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertNotIn("source_stale", result["reason_codes"])
+
+    def test_unrelated_base_preserves_raw_competition_but_no_readiness(self):
+        client = DiagnosticClient()
+        client.advance_main_unrelated()
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "stale_blockers")
+        self.assertTrue(result["evidence"]["competition"])
+        self.assertFalse(result["evidence"]["current_source"])
+        self.assertIn("source_stale", result["reason_codes"])
+
+    def test_requiredness_change_during_collection_invalidates_snapshot(self):
+        client = DiagnosticClient()
+        reads = 0
+
+        def required_checks(repo, head, number):
+            nonlocal reads
+            self.assertEqual((repo, head, number), (REPO, HEAD, 3))
+            reads += 1
+            if reads == 1:
+                return {70: True, 80: True}, True
+            return {70: False, 80: False}, True
+
+        client.required_checks = required_checks
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "stale")
+        self.assertIn("requiredness_changed", result["reason_codes"])
+        self.assertFalse(result["evidence"]["snapshot_current"])
+        self.assertEqual(reads, 2)
+
+    def test_stable_requiredness_is_revalidated(self):
+        client = DiagnosticClient()
+        reads = 0
+        original = client.required_checks
+
+        def required_checks(repo, head, number):
+            nonlocal reads
+            reads += 1
+            return original(repo, head, number)
+
+        client.required_checks = required_checks
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "competing_required")
+        self.assertTrue(result["evidence"]["snapshot_current"])
+        self.assertEqual(reads, 2)
+
+    def test_requiredness_unavailable_or_incomplete_is_not_inferred(self):
+        for unavailable in (False, True):
+            client = DiagnosticClient()
+            client.required_complete = False
+            if unavailable:
+                client.required_checks = lambda *a: (_ for _ in ()).throw(
+                    RuntimeError("private API payload")
+                )
+            result = self.diagnose(client)
+            self.assertEqual(result["state"], "suspected_competition")
+            self.assertFalse(result["evidence"]["requiredness_complete"])
+            self.assertIsNone(result["checks"]["all"][0]["required"])
+            self.assertNotIn("private API payload", json.dumps(result))
+
+    def test_reconciliation_failure_followed_by_cancel_is_not_only_cancel(self):
+        client = DiagnosticClient()
+        client.native_jobs[0]["steps"] = [
+            {"name": "Require successful reconciliation", "conclusion": "failure"}
+        ]
+        result = self.diagnose(client)
+        self.assertTrue(result["evidence"]["native_failures_verified"])
+        self.assertIsNone(result["evidence"]["cancellation_only"])
+        self.assertIn("cancellation_cause_unproven", result["reason_codes"])
+        self.assertFalse(result["actionable"])
+
+    def test_mixed_real_failure_is_not_cancellation_only(self):
+        client = DiagnosticClient()
+        client.native_jobs.append(
+            {"id": 73, "name": "Unit tests", "conclusion": "failure"}
+        )
+        result = self.diagnose(client)
+        self.assertEqual(result["state"], "uncertain")
+        self.assertFalse(result["evidence"]["cancellation_only"])
+
+    def test_final_snapshot_change_stops_classification(self):
+        for mutate in (
+            lambda c: c.pull["head"].update(sha="d" * 40),
+            lambda c: c.pull["base"].update(sha="d" * 40),
+            lambda c: c.pull.update(merge_commit_sha="d" * 40),
+            lambda c: c.run.update(run_attempt=2),
+            lambda c: c.run.update(status="in_progress"),
+            lambda c: c.native_run.update(run_attempt=2),
+            lambda c: setattr(c, "newer_run", True),
+            lambda c: c.advance_main_unrelated(),
+            lambda c: c.checks[0].update(conclusion="failure"),
+        ):
+            with self.subTest(mutate=mutate):
+                client = DiagnosticClient()
+                client.mutate_on_final = mutate
+                result = self.diagnose(client)
+                self.assertEqual(result["state"], "stale")
+                self.assertFalse(result["actionable"])
+                self.assertFalse(result["evidence"]["snapshot_current"])
+
+    def test_failed_run_missing_artifact_still_reports_failure(self):
+        client = DiagnosticClient()
+        client.run["conclusion"] = "failure"
+        client.missing_report = True
+        self.assertEqual(self.diagnose(client)["state"], "failed")
+
+    def test_fixed_requiredness_query_batches_by_node_identity_read_only(self):
+        client = DiagnosticClient()
+        checks = [
+            {"id": identity, "node_id": f"CR_{identity}"} for identity in range(1, 103)
+        ]
+        client.request = lambda endpoint: {
+            "check_runs": checks[:100] if endpoint.endswith("&page=1") else checks[100:]
+        }
+        calls = []
+
+        def gh(arguments, *, read, text):
+            self.assertTrue(read)
+            self.assertTrue(text)
+            self.assertNotIn("mutation", arguments)
+            calls.append(arguments)
+            ids = [
+                int(arg.rsplit("_", 1)[1])
+                for arg in arguments
+                if arg.startswith("ids[]=")
+            ]
+            return type(
+                "Response",
+                (),
+                {
+                    "returncode": 0,
+                    "stdout": json.dumps(
+                        {
+                            "data": {
+                                "nodes": [
+                                    {
+                                        "databaseId": identity,
+                                        "isRequired": identity % 2 == 0,
+                                    }
+                                    for identity in ids
+                                ]
+                            }
+                        }
+                    ),
+                },
+            )()
+
+        client.gh = gh
+        mapping, complete = required_checks(client, REPO, HEAD, 3)
+        self.assertTrue(complete)
+        self.assertEqual(len(mapping), 102)
+        self.assertEqual(len(calls), 2)
+        self.assertFalse(mapping[1])
+        self.assertTrue(mapping[102])
+
+    def test_requiredness_partial_graphql_error_discards_all_requiredness(self):
+        client = DiagnosticClient()
+        client.request = lambda endpoint: {
+            "check_runs": [{"id": 80, "node_id": "CR_80"}]
+        }
+        client.gh = lambda arguments, **kwargs: type(
+            "Response",
+            (),
+            {
+                "returncode": 0,
+                "stdout": json.dumps(
+                    {"errors": [{"message": "private"}], "data": {"nodes": []}}
+                ),
+            },
+        )()
+        self.assertEqual(required_checks(client, REPO, HEAD, 3), ({}, False))
+
+    def test_diagnostic_flags_cannot_fall_through_to_publication(self):
+        for arguments in (
+            ["--pr", "3", "--run-id", "101"],
+            ["--head", HEAD, "--run-id", "101"],
+            ["--attempt", "1", "--run-id", "101"],
+            ["--diagnose", "--pr", "3", "--run-id", "101"],
+            ["--diagnose", "--event", "event.json"],
+        ):
+            with (
+                self.subTest(arguments=arguments),
+                patch("sys.argv", ["pr_ci_status.py", *arguments]),
+                patch(
+                    "pr_ci_status.StatusClient", side_effect=AssertionError("client")
+                ),
+                patch("pr_ci_status.reconcile", side_effect=AssertionError("publish")),
+                patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit) as error,
+            ):
+                main()
+            self.assertEqual(error.exception.code, 2)
+
+    def test_diagnose_cli_is_read_only_even_without_dry_run(self):
+        client = DiagnosticClient()
+        output = io.StringIO()
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "pr_ci_status.py",
+                    "--diagnose",
+                    "--pr",
+                    "3",
+                    "--head",
+                    HEAD,
+                    "--run-id",
+                    "101",
+                    "--attempt",
+                    "1",
+                ],
+            ),
+            patch.dict("os.environ", {"GITHUB_REPOSITORY": REPO}),
+            patch("pr_ci_status.StatusClient", return_value=client),
+            patch("sys.stdout", output),
+            patch("subprocess.run", side_effect=AssertionError("subprocess")),
+        ):
+            self.assertEqual(main(), 0)
+        self.assertEqual(json.loads(output.getvalue())["state"], "competing_required")
 
 
 if __name__ == "__main__":

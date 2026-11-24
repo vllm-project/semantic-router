@@ -26,8 +26,9 @@ func prepareBufferedLooperResponse(
 	if responseID := responseObjectPublicID(ctx); responseID != "" {
 		response.ID = responseID
 	}
+	requestToolNamespaces(ctx).RestoreResponse(&response)
 	response.Generation++
-	envelope.ResponseRender.PreviousResponseID = responseObjectPreviousID(ctx)
+	envelope.ResponseRender = responseObjectRender(ctx)
 	encoded, err := engine.EncodeResponse(target, response, envelope)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
 	if err != nil {
@@ -44,7 +45,7 @@ func prepareBufferedLooperResponse(
 	}
 	body, diagnostics, err := engine.EncodeResponseStream(target, projected, llmprotocol.StreamContext{
 		Context: ctx.TraceContext, Source: target, Target: target,
-		Options: clientStreamOptions(ctx), PreviousResponseID: responseObjectPreviousID(ctx),
+		Options: clientStreamOptions(ctx), ResponseRender: responseObjectRender(ctx),
 	})
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	return &response, body, err

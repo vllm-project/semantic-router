@@ -1,7 +1,7 @@
 ---
 title: "vela3-turbo"
 sidebar_label: "vela3-turbo"
-sidebar_position: 6
+sidebar_position: 7
 description: "Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's state-once path, then asks the router questions again with their adapters on."
 custom_edit_url: null
 ---
@@ -37,8 +37,8 @@ Vela 3.0 on d3-turbo, the largest Vela: it answers each request on d3-turbo's st
 | `set` | Yes, asked as one `noul` per label |
 | `span` | Yes, on the `router` span head |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
-resolve to it.
+Rules that read the request's images (`input.image`) or the current turn's
+videos (`input.video`) can resolve to it.
 
 ## Built-in questions
 

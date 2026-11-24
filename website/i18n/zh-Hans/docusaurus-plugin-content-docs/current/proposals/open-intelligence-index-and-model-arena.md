@@ -11,6 +11,8 @@ translation:
 ---
 
 > **状态：** 已实现 · **跟踪：** [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
+>
+> **生命周期更新：** [控制面板 UX 重设计](./dashboard-ux-redesign)已将 Model Arena 展示从控制面板和网站的 [Models 页面](/models)移除；Model Hub 将每个模型已发布的结果作为证据保留，而不是排名。模型目录中的指数数据仍为多因素选择提供依据。
 
 ## 决策 {#decision}
 

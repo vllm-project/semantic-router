@@ -101,9 +101,9 @@ Card before using it; the card explains its intended use, backend roles, data
 handling, evaluation scope, and limitations.
 
 `config/recipes/built-in/` is the versioned source for virtual models bundled
-with the distribution. Dashboard presents these under **Build →
-Mixture-of-Models → Recipes** and lets operators assign connected Models
-without editing provider credentials into a Recipe.
+with the distribution. Dashboard presents these under **Routing → Recipes**
+and lets operators assign connected Models without editing provider
+credentials into a Recipe.
 
 ### Runtime examples
 
@@ -164,8 +164,11 @@ runtime dependency; they do not define routing behavior by themselves.
   `limits.max_response_bytes`.
 - Router Learning lives under `global.router.learning`; it is separate from a
   decision's request-time base algorithm.
-- Router replay is disabled by default and can capture request or response
-  bodies. Review its access controls and retention settings before enabling it.
+- Router replay records each request's routing data by default, with no
+  request or response text, in `.vllm-sr/router-replay.jsonl` beside the
+  configuration file, and can capture request or response bodies when a
+  `router_replay` plugin asks for it. Review its access controls and retention
+  settings before capturing text.
 - `global.router.skip_processing.enabled` should be enabled only when an
   authenticated upstream component owns the bypass header.
 

@@ -278,6 +278,22 @@ def _connection_manager(rendered, index):
     return listener["filter_chains"][0]["filters"][0]["typed_config"]
 
 
+def test_caller_credential_backend_keeps_the_client_login(tmp_path):
+    path = _write_config(tmp_path, ["claude"])
+    document = yaml.safe_load(path.read_text())
+    document["providers"]["models"][0]["backend_refs"] = [
+        {
+            "provider": "anthropic",
+            "endpoint": "https://api.anthropic.com",
+            "auth": {"credential": "caller"},
+        }
+    ]
+    hcm = _connection_manager(_render(tmp_path, document), 0)
+    # The client's own login is the upstream credential, so no filter ahead of
+    # the Router removes it.
+    assert 'remove("authorization")' not in yaml.safe_dump(hcm["http_filters"])
+
+
 def test_listener_removes_client_identity_before_any_filter(tmp_path):
     document = yaml.safe_load(_write_config(tmp_path, ["model-a"]).read_text())
     document["listeners"].append(

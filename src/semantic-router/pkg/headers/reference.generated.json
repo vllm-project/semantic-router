@@ -60,7 +60,7 @@
       "sensitivity": "none",
       "owner": "response_contract",
       "version": "v0.5",
-      "doc": "Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."
+      "doc": "Warnings about the response, as an RFC 8941 list: `scan_partial` when a request-stage guard rule read only part of a long input, `guard_overloaded` on the retryable error answered instead of a refusal or a forward that rules unread on an overloaded decision runtime decide, the codes of the `response_guard` rules that annotated the answer, then each `protocol` translation loss with its `action`, `reason` and `field`."
     },
     {
       "name": "x-vsr-selected-recipe",
@@ -115,7 +115,7 @@
       "sensitivity": "none",
       "owner": "cost",
       "version": "v0.4",
-      "doc": "Usage priced with the served model's configured pricing; buffered responses only."
+      "doc": "Usage priced with the served model's configured pricing; buffered responses and Looper answers only. A Looper answer's cost is the sum of its calls, when every one has a price."
     },
     {
       "name": "x-vsr-cost-currency",
@@ -127,6 +127,61 @@
       "owner": "cost",
       "version": "v0.4",
       "doc": "Currency of `x-vsr-cost`, from `pricing.currency`."
+    },
+    {
+      "name": "x-vsr-budget-remaining",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "What the tightest spend budget of the request has left, in `global.services.budgets.currency`, on every reply to a request a budget covers: after the call's actual cost on a buffered response and a Looper answer, after a failed call's reservation ends, and after its reservation on a stream and on a `budget_exceeded` refusal."
+    },
+    {
+      "name": "x-vsr-budget-scope",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "The spend budget `x-vsr-budget-remaining` reports: `run`, or `user/<rule name>`."
+    },
+    {
+      "name": "x-should-retry",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "On a spend budget refusal, whether a retry may succeed: `false` on `budget_unpriced` and on a `budget_exceeded` no retry before the budget's window starts again can clear, `true` on one only calls in flight cause. OpenAI and Anthropic SDKs, Claude Code and Pi follow it."
+    },
+    {
+      "name": "x-codex-promo-message",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "The message of an out-of-budget refusal on the Responses API, which Codex shows with the usage limit error it ends the turn on."
+    },
+    {
+      "name": "anthropic-ratelimit-unified-overage-disabled-reason",
+      "direction": [
+        "response"
+      ],
+      "surface": "public",
+      "sensitivity": "none",
+      "owner": "cost",
+      "version": "v0.5",
+      "doc": "`budget_exceeded` on an out-of-budget refusal on the Messages API, as Anthropic marks a spend limit refusal: Claude Code on a Claude login or a gateway login then shows the message as it is, rather than as a temporary limit that is not the user's."
     },
     {
       "name": "x-ratelimit-limit",
@@ -239,7 +294,7 @@
       "sensitivity": "none",
       "owner": "session",
       "version": "v0.3",
-      "doc": "Client session id `session_id_headers` accepts by default; providers receive it."
+      "doc": "Client session id `session_id_headers` accepts by default, which OpenCode sends on every call; providers receive it."
     },
     {
       "name": "x-claude-code-session-id",
@@ -252,6 +307,114 @@
       "owner": "session",
       "version": "v0.3",
       "doc": "Conversation id Claude Code sends, which `session_id_headers` accepts by default after `x-session-id`; providers receive it."
+    },
+    {
+      "name": "x-claude-code-agent-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Subagent id Claude Code sends on a subagent's calls, which protection and Router Replay read as the agent when `identity.headers.agent` is unset; providers receive it."
+    },
+    {
+      "name": "x-claude-code-agent-type",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Subagent type Claude Code sends on a subagent's own turns when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: a built-in agent's name such as `Explore`, `Plan` or `general-purpose`, or `custom`, `teammate` or `fork`; `agent` signal rules match it as a type, and providers receive it."
+    },
+    {
+      "name": "x-claude-code-request-class",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Class Claude Code gives every request when `CLAUDE_CODE_GATEWAY_HINT_HEADERS` is set: `main`, `subagent`, `workflow`, `compaction` or `auxiliary`; `agent` signal rules match it as a request class, protection holds a request of any class but `main`, `subagent` and `workflow` under a key of its class beside its agent's, Router Replay reads an `auxiliary` call asking for a JSON object of one `title` field as the session's title request and names its run with the answer, and providers receive it."
+    },
+    {
+      "name": "session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Session id Codex sends on every call, which protection and Router Replay read when `identity.headers.session` is unset and the request pins no session; providers receive it."
+    },
+    {
+      "name": "thread-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Thread id Codex sends on every call, which protection and Router Replay read as the agent when `identity.headers.agent` is unset, except on a root thread, where it equals `session-id`; providers receive it."
+    },
+    {
+      "name": "x-openai-subagent",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Kind of child thread Codex sends a request for, `collab_spawn` for a `spawn_agent` child whatever its role and `review` for a review child, which `agent` signal rules match as a type and Router Replay records with the agent; providers receive it."
+    },
+    {
+      "name": "x-codex-turn-metadata",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Turn metadata Codex sends with each call, its session, thread and turn ids, also in a Responses request's `client_metadata`; Router Replay records each request's thread and turn from it and files an approval review under the session it judged, protection reads its session and thread when `identity.headers` names none and no header carries them, and providers receive it."
+    },
+    {
+      "name": "x-codex-parent-thread-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Thread that spawned a Codex subagent's thread, which Router Replay records as the agent's parent in its run unless it is the root thread; providers receive it."
+    },
+    {
+      "name": "x-parent-session-id",
+      "direction": [
+        "request",
+        "provider request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_learning",
+      "version": "v0.5",
+      "doc": "Session that spawned an OpenCode subagent's session, which OpenCode sends on every call of the child beside the child's own `x-session-id`; with `identity.headers` unset and no `x-vsr-session-id`, protection and Router Replay key the call by that session and the child as its agent, and the `agent` signal reads it as a subagent's; providers receive it."
     },
     {
       "name": "x-conversation-id",
@@ -884,6 +1047,8 @@
     "x-vsr-replay-id",
     "x-vsr-cost",
     "x-vsr-cost-currency",
+    "x-vsr-budget-remaining",
+    "x-vsr-budget-scope",
     "x-vsr-trace",
     "x-vsr-route-model",
     "x-vsr-upstream-host",
@@ -947,6 +1112,11 @@
       "doc": "Provider wire protocol, such as `openai`."
     },
     {
+      "key": "requested_model",
+      "owner": "listener",
+      "doc": "The model the client named when the listener's `unserved_models` routed the request to one of its own models."
+    },
+    {
       "key": "effective_input_tokens",
       "owner": "automatic_output",
       "doc": "Rendered input tokens of the final automatic-output dispatch, chat template included."
@@ -979,7 +1149,7 @@
     {
       "key": "reasoning",
       "owner": "classification",
-      "doc": "Reasoning mode chosen for the request: `on` or `off`."
+      "doc": "Reasoning mode chosen for the request: `on` or `off`, with `reason=output_budget` when an output limit below `providers.defaults.reasoning_min_output_tokens` turned the decision's reasoning off, and `reason=stop_sequences` when the request's stop sequences did."
     },
     {
       "key": "modality",

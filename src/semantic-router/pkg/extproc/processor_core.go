@@ -37,6 +37,9 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// This guarantees no chunk accumulation, model detection, or buffered
 	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
 	if ctx.SkipProcessing {
+		if refused := r.skippedRequestRefusal(ctx); refused != nil {
+			return refused, nil
+		}
 		if ctx.FullDuplexRequestBody {
 			return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), v.RequestBody.GetEndOfStream()), nil
 		}
@@ -99,7 +102,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		// Requests that ended through a normal path already zeroed the token,
 		// making this a no-op.
 		releaseInflightAdmission(ctx)
+		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
+		finishRequestWork(ctx)
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -135,7 +140,19 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	}
 }
 
+func finishRequestWork(ctx *RequestContext) {
+	if ctx != nil && ctx.cancelAbandonedWork != nil {
+		if !ctx.responseComplete {
+			ctx.cancelAbandonedWork()
+		}
+		ctx.cancelAbandonedWork = nil
+	}
+}
+
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if errors.Is(err, io.EOF) && ctx.bufferedResponseComplete {
+		ctx.responseComplete = true
+	}
 	if !errors.Is(err, io.EOF) {
 		ctx.TraceReceiveError = err
 	} else if ctx.RequestSpan != nil {
@@ -151,6 +168,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		// evidence that is no longer from the latest turns. The recorder is
 		// idempotent and empty usage stays non-attributable.
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+		r.recordInterruptedStreamUsage(ctx)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	r.recordHeldStreamOverMessageLimit(ctx, err)
@@ -348,7 +366,13 @@ func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (
 	var maskingErr *maskingDispatchError
 	if errors.As(err, &maskingErr) {
 		// A stream error would let failure_mode_allow forward the unmasked
-		// body upstream, so a masking failure always answers here (#3566).
+		// body upstream, so a masking failure always answers here (#3566),
+		// and the client's protocol carries this message, not a generic one.
+		if ctx != nil {
+			ctx.ImmediateProtocolError = llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable, "masking_unavailable", maskingUnavailableMessage, nil,
+			)
+		}
 		return r.createErrorResponse(http.StatusServiceUnavailable, maskingUnavailableMessage), true
 	}
 	var protocolError *llmprotocol.ProtocolError

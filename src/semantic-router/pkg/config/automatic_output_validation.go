@@ -30,8 +30,8 @@ func validateDecisionAutomaticOutputCandidates(cfg *RouterConfig, decision Decis
 		return nil
 	}
 	for _, ref := range decision.ModelRefs {
-		if path, delegated := cfg.DelegatedBackendOf(ref.Model); delegated {
-			return delegatedRouterOwnError(path, fmt.Sprintf("the automatic output render (decisions[%s]) calls it as the Router", decision.Name))
+		if path, mode, ok := cfg.CredentialBackendOf(ref.Model); ok {
+			return requestCredentialRouterOwnError(path, mode, fmt.Sprintf("the automatic output render (decisions[%s]) calls it as the Router", decision.Name))
 		}
 	}
 	return nil

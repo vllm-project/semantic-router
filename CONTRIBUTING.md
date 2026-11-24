@@ -3,6 +3,11 @@
 Thank you for contributing. This guide covers the repository workflow; the
 public installation guide is at <https://vllm-sr.ai/docs/installation/>.
 
+New to the project? Start with the
+[Contributor Guide](https://vllm-sr.ai/community/contributor-guide): how
+vLLM Semantic Router works, which Work Group owns each area, and how to grow
+from your first pull request to maintainer.
+
 ## Before you start
 
 Install:
@@ -10,7 +15,8 @@ Install:
 - Docker or Podman;
 - Make;
 - Git; and
-- Python 3.10 or newer for the CLI, tests, or training tools you plan to use.
+- Python 3.10 or newer for the CLI and tests, and Python 3.11 or newer for the
+  training projects under `src/training/`.
 
 Clone the repository:
 
@@ -233,6 +239,19 @@ Valid scopes accumulate for the same revision; partial authorization does not
 waive the remaining checks. A new head revision requires fresh
 authorization.
 
+GitHub may regenerate a synthetic merge commit without changing its base and
+PR head. The existing Plan and authorization remain usable when the original
+merge's ordered parents can be verified against those inputs and both merge
+commits have the same verifiable tree. A different merge SHA alone does not
+require another push. The existing ancestor-base policy also allows main to
+advance while the planned base remains in its history; that path does not require
+equal trees across different bases.
+
+If the original planned merge commit is no longer readable, CI stays blocked
+with **CI source evidence unavailable**. Diagnostics identify this boundary as
+`planned_merge_unavailable`. Retain the Plan and run evidence for investigation;
+an unavailable object does not prove that qualification succeeded.
+
 The command handler reacts with 👀 when it receives a request and 🚀 after it
 successfully triggers the PR workflow. The rocket means CI was started, not that
 tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
@@ -246,6 +265,21 @@ lands on main to use the pending state and bot guidance.
 Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
+
+GitHub requests the repository-wide reviewers in `.github/CODEOWNERS` when a
+non-draft PR is ready for review. After the linked issue is accepted and its
+single `wg/*` owner is synchronized to the PR, Community Label Sync requests
+one Lead of that Working Group, rotating among the group's Leads by PR number.
+It skips the PR author and the repository-wide reviewers, and requests no one
+while a Lead of the group is already requested or has reviewed. With each
+request it keeps one PR comment that names the requested Lead and up to two
+other Leads of the group; mention them in a reply to speed up the review. Only
+Leads who are Maintainers or Committers with write access are requested,
+because only their approvals count toward the two the merge queue needs. The
+rosters are maintained in `tools/ci/community_reviewers.py`; update them when
+a Lead joins or leaves a group or their repository access changes.
+Cross-Workgroup changes may need additional specialist reviewers. Working
+Group membership alone does not grant repository review or merge authority.
 
 ### Troubleshoot a PR workflow with no jobs
 
@@ -311,6 +345,53 @@ Summary check shows the effective conditions, including inherited requirements.
   fork secrets and allow access to other branches. This is optional; if you
   leave it off, update the branch yourself after a dequeue. See
   [GitHub's explanation of fork permissions][fork-permissions].
+
+- **Conflicting `PR Gate` results:** a successful publisher check does not
+  necessarily supersede a failed native Actions check on the same head. Inspect
+  both `filter=all` and `filter=latest`, the check suites, and GitHub's required
+  flags rather than choosing the highest check ID. From a trusted checkout,
+  collect a read-only diagnostic with explicit identities:
+
+  ```bash
+  GITHUB_REPOSITORY=vllm-project/semantic-router python3 tools/ci/pr_ci_status.py \
+    --diagnose --pr <number> --head <full-head-sha> \
+    --run-id <replacement-run-id> --attempt <replacement-attempt>
+  ```
+
+  This command reports evidence; it does not update checks, authorize CI, or
+  requeue the PR. Unavailable requiredness or provenance is unknown, not proof
+  of a recoverable failure. Save the diagnostic and the queue's refusal before
+  recovery. Do not rerun a cancelled sibling or repeatedly requeue the same
+  head to try to erase a required failure.
+
+  The diagnostic separates successful qualification from check visibility,
+  suite conclusions, and the commit rollup. A required green publisher Gate
+  in an unsuccessful suite reports `suite_mismatch`; an unsuccessful rollup
+  reports `rollup_blocked`. A successful sibling suite is valid even when its
+  ID differs from the qualification run's suite. Missing or changing evidence
+  cannot establish a healthy state. These reports never authorize cleanup or
+  claim that GitHub's final merge evaluation will succeed.
+
+  Any fresh-head recovery needs the author's or maintainer's explicit consent
+  and confirmation that the PR is no longer queued. Use a normal merge from
+  upstream `main` or **Update branch**, not a default rebase/force-push. Confirm
+  that the head actually changed, the new Plan matches the current head/base/
+  merge revision, and affected qualification passes with fresh authorization
+  where needed. Recheck required checks, valid approvals and resolved threads,
+  then observe requeue/merge eligibility. A new green check alone is not proof
+  of recovery. If no new head is produced or the new head is still refused,
+  stop and retain the evidence; do not change native failures to success or
+  neutral. This is a controlled recovery path, not a guarantee that every
+  branch update resolves every check conflict.
+
+- **Waiting Gate disappears after a Community rerun:** the trusted publisher
+  can restore a verified current-attempt pending Gate without another branch
+  push or manual Actions rerun. It keeps the check pending and preserves the
+  existing `/ci run` guidance; it does not authorize CI, publish success, or
+  replace a completed verdict. Recovery must confirm the replacement in the
+  latest check set before retiring the original pending check. An uncertain
+  write or visibility result stops repeated creation. Retain the qualification
+  run/attempt and check IDs for Maintainer investigation of #5866.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.

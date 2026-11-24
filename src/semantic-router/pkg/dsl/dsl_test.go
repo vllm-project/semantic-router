@@ -1639,7 +1639,7 @@ func TestCompileAllPluginTypes(t *testing.T) {
 		{
 			name:       "router_replay_shadow",
 			pluginType: "router_replay",
-			body:       `enabled: true shadow: { model: "candidate" sample_rate: 0.1 max_concurrency: 2 timeout_seconds: 20 forward_headers: ["x-tenant"] }`,
+			body:       `enabled: true shadow: { models: ["candidate", "other"] sample_rate: 0.1 execution: { max_concurrency: 2 timeout: "20s" } budget: { max_response_bytes: 4096 } capture: { enabled: true max_bytes: 1024 } }`,
 			verifyType: "router_replay",
 		},
 		{
@@ -3378,6 +3378,10 @@ SIGNAL conversation conv {
   feature: { type: "count", source: { type: "message", role: "user" } }
   predicate: { gte: 2 }
 }
+SIGNAL conversation failing_tools {
+  feature: { type: "count", source: { type: "failed_tool_result" } }
+  predicate: { gte: 2 }
+}
 SIGNAL complexity comp { labels: ["hard"] }
 SIGNAL modality mod { description: "image" labels: ["image"] }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
@@ -3406,6 +3410,7 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		"SIGNAL jailbreak jb", "SIGNAL safety unsafe", "SIGNAL pii pii_rule", "SIGNAL hallucination halu",
 		"SIGNAL refusal declined", "SIGNAL input_modality pictures",
 		`threshold: 0.6`, `previous_turns: 2`, `model_scores:`, `count: { gte: 1 }`, `modality: "image"`,
+		`type: "failed_tool_result"`,
 	} {
 		if !strings.Contains(dslText, want) {
 			t.Errorf("decompiled DSL missing %q:\n%s", want, dslText)

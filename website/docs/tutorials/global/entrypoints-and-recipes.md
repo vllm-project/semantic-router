@@ -140,6 +140,15 @@ This is the entry for `vllm-sr/auto`:
 }
 ```
 
+An entrypoint that others name as their `review_model` or `memory_model` is
+listed with `"delegates"`: `["review"]`, `["memory"]`, or `["memory", "review"]`
+when it serves both. It is listed with `"selectable": false`, so a client does
+not offer it for chat, except the default entrypoint, which stays selectable so
+the Dashboard playground and the VS Code picker keep it. It takes requests all the same,
+and a Dashboard recipe probe resolves to it when no selectable entrypoint serves
+its recipe. To keep another entrypoint offered for chat, point `review_model` or
+`memory_model` at a name of its own that maps the same recipe.
+
 Coding agents and other clients that size a request before sending it need
 these values in their own configuration. Any turn of a session can reach any
 model the recipe can select, including `providers.defaults.model`, so
@@ -186,8 +195,16 @@ required input such as images:
   estimated above a window it fits.
 - **Second count.** When the estimate exceeds every candidate's window, the
   Router counts the request without those reserves and keeps the candidates
-  that fit. It rejects the request only when it fits none, and the backend
-  still checks the real length.
+  that fit. When none fits, the widest candidates stay: an estimate never
+  rejects a request, and the backend checks the real length.
+- **The Router's count.** A request whose bytes could exceed a window is
+  counted with each model's
+  [tokenizer](../../installation/model-configuration#check-prompts-against-the-context-window).
+  A request whose count is beyond the band of every window it can reach (3%
+  with a model's own tokenizer, 30% with the proxy) is rejected with `400`
+  `context_length_exceeded` as soon as it is counted, which runs beside the
+  signals and cancels those still running; one within the band goes on, and
+  the backend decides.
 - **Output limits are not checked** by default, so a request for 16,384 output
   tokens can still reach `local-coder`.
 

@@ -20,6 +20,10 @@ func TestChatUpstreamErrorEventDoesNotDependOnReadSplit(t *testing.T) {
 	event := `data: {"error":{"message":"mock provider stream failed","type":"vendor_overloaded","param":null,"code":"provider_overloaded"}}` + "\n\n"
 	routerFrame := `data: {"error":{"type":"server_error","code":"provider_overloaded","message":"mock provider stream failed","param":null}}` + "\n\n"
 	content := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","system_fingerprint":"fp1","choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}]}` + "\n\n"
+	// The public filter leaves out the server's fingerprint, and adds the null
+	// usage for a client that asks for usage.
+	publicContent := `data: {"choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}],"created":1,"id":"c1","model":"provider-model","object":"chat.completion.chunk"}` + "\n\n"
+	publicContentWithNullUsage := `data: {"choices":[{"index":0,"delta":{"content":"partial"},"logprobs":null,"finish_reason":null}],"created":1,"id":"c1","model":"provider-model","object":"chat.completion.chunk","usage":null}` + "\n\n"
 	usage := `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","choices":[],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}` + "\n\n"
 	done := "data: [DONE]\n\n"
 	type caller struct {
@@ -45,9 +49,9 @@ func TestChatUpstreamErrorEventDoesNotDependOnReadSplit(t *testing.T) {
 					}
 					sameRead := body(prefix + event + done)
 					if caller.client == llmprotocol.OpenAIChatV1 {
-						want := prefix
+						want := strings.ReplaceAll(prefix, content, publicContentWithNullUsage)
 						if !includeUsage {
-							want = strings.ReplaceAll(want, usage, "")
+							want = strings.ReplaceAll(strings.ReplaceAll(prefix, content, publicContent), usage, "")
 						}
 						require.Equal(t, want+routerFrame, sameRead)
 					}
@@ -179,4 +183,47 @@ func chatUpstreamClientBody(t *testing.T, client llmprotocol.WireFormat, looper,
 		out.WriteString(read)
 	}
 	return out.String()
+}
+
+// A rejected tool delta must keep the accepted prefix regardless of how
+// Envoy groups the SSE frames into body reads.
+func TestChatToolKindSwitchPreservesAcceptedPrefix(t *testing.T) {
+	chunk := func(delta, finish string) string {
+		return `data: {"id":"c1","object":"chat.completion.chunk","created":1,"model":"provider-model","choices":[{"index":0,"delta":` +
+			delta + `,"finish_reason":` + finish + `}]}` + "\n\n"
+	}
+	role := chunk(`{"role":"assistant"}`, "null")
+	valid := chunk(`{"tool_calls":[{"index":0,"id":"call_mock_custom_kind","type":"custom","custom":{"name":"apply_patch","input":"abc"}}]}`, "null")
+	invalid := chunk(`{"tool_calls":[{"index":0,"function":{"arguments":"{\"x\":1}"}}]}`, "null")
+	finish := chunk("{}", `"tool_calls"`)
+	done := "data: [DONE]\n\n"
+	partial := strings.TrimSuffix(invalid, "\n\n")
+	for _, layout := range []struct {
+		name  string
+		reads []string
+	}{
+		{"separate reads", []string{role, valid, invalid, finish, done}},
+		{"one read", []string{role + valid + invalid + finish + done}},
+		{"mismatch and finish", []string{role, valid, invalid + finish, done}},
+		{"mismatch and done", []string{role, valid, invalid + done}},
+		{"mismatch and both terminal frames", []string{role, valid, invalid + finish + done}},
+		{"mismatch in final read", []string{role, valid, invalid}},
+		{"mismatch in unterminated final frame", []string{role, valid, partial}},
+		{"tool delta before unterminated frame in final read", []string{role, valid + partial}},
+		{"tool delta before unterminated frame and empty read", []string{role, valid + partial, ""}},
+		{"mismatch finalized by empty read", []string{role, valid, partial, ""}},
+	} {
+		t.Run(layout.name, func(t *testing.T) {
+			body := chatUpstreamClientBody(t, llmprotocol.OpenAIChatV1, false, false, layout.reads)
+			frames := strings.Split(strings.TrimSuffix(body, "\n\n"), "\n\n")
+			require.Len(t, frames, 3, "%s", body)
+			require.Contains(t, frames[0], `"role":"assistant"`)
+			require.Contains(t, frames[1], `"id":"call_mock_custom_kind"`)
+			require.Contains(t, frames[1], `"type":"custom"`)
+			require.Contains(t, frames[1], `"name":"apply_patch"`)
+			require.Contains(t, frames[1], `"input":"abc"`)
+			require.NotContains(t, frames[1], `"function":`)
+			require.Contains(t, frames[2], `"code":"stream_tool_identity_mismatch"`)
+		})
+	}
 }

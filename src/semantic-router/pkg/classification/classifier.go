@@ -36,8 +36,16 @@ type Classifier struct {
 	// compiled into the systemone rules they ask.
 	applicationRules []config.ApplicationRule
 	// windowPaces are the paces its deployments read guard windows at, which
-	// size a long input's windows to the signals' deadline.
+	// say whether a scan that fell behind its deadline reads the rest of its
+	// windows in time at a larger size.
 	windowPaces windowPaces
+	// windowVerdicts are the answers of the guard windows it read, which a
+	// request whose input is the same up to a window's end takes instead of
+	// reading the window again.
+	windowVerdicts windowVerdicts
+	// overloadGates pace the requests that wait for an overloaded decision
+	// runtime to have capacity (on_signal_overload).
+	overloadGates overloadGates
 	// tokenCalibrator learns provider-specific prompt token ratios for context routing.
 	tokenCalibrator *CalibratedTokenCounter
 

@@ -126,6 +126,28 @@ func (d *decompiler) decompileInputModalitySignals() {
 	}
 }
 
+func (d *decompiler) decompileAgentSignals() {
+	for _, rule := range d.cfg.AgentRules {
+		d.write("SIGNAL agent %s {\n", quoteName(rule.Name))
+		if rule.Description != "" {
+			d.write("  description: %q\n", rule.Description)
+		}
+		if rule.Role != "" {
+			d.write("  role: %q\n", rule.Role)
+		}
+		if rule.Harness != "" {
+			d.write("  harness: %q\n", rule.Harness)
+		}
+		if len(rule.Types) > 0 {
+			d.write("  types: %s\n", formatStringArray(rule.Types))
+		}
+		if len(rule.RequestClasses) > 0 {
+			d.write("  request_classes: %s\n", formatStringArray(rule.RequestClasses))
+		}
+		d.write("}\n\n")
+	}
+}
+
 func (d *decompiler) decompileSystemOneSignals() {
 	for _, rule := range d.cfg.SystemOneRules {
 		d.write("SIGNAL systemone %s {\n", quoteName(rule.Name))
@@ -187,6 +209,9 @@ func systemOneInputValue(input config.SystemOneInput) map[string]interface{} {
 	}
 	if input.PreviousTurns > 0 {
 		value["previous_turns"] = input.PreviousTurns
+	}
+	if input.MaxStateBytes > 0 {
+		value["max_state_bytes"] = input.MaxStateBytes
 	}
 	if !input.ReadsRequest() {
 		value["request"] = false

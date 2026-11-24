@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react'
-import styles from './ConfigPage.module.css'
 import { ConfigSection } from '../components/ConfigNav'
 import EditModal, { type EditFormData, FieldConfig } from '../components/EditModal'
 import ViewModal, { ViewSection } from '../components/ViewModal'
@@ -7,21 +6,37 @@ import { useReadonly } from '../contexts/ReadonlyContext'
 import { useAuth } from '../contexts/AuthContext'
 import { canRunEvaluation, canWriteConfig } from '../utils/accessControl'
 import ConfigSaveWarnings from '../components/ConfigSaveWarnings'
-import ProductLoadingState from '../components/ProductLoadingState'
+import { TriangleAlert } from 'lucide-react'
+import RouteLoadingFallback from '../app/RouteLoadingFallback'
+import { Button, EmptyState, PageContainer, toast } from '../ui'
 import { responseConfigWarnings, type RouterConfigWarning } from '../utils/configSaveWarnings'
 import {
   canonicalizeConfigForManagerSave,
   projectCanonicalConfigForManager,
 } from './configPageCanonicalization'
-import {
-  ConfigData,
-  getDefaultModelName,
-  getReasoningFamiliesMap,
-} from './configPageSupport'
+import { ConfigData, getDefaultModelName, getReasoningFamiliesMap } from './configPageSupport'
 import { getNormalizedModels } from './configPageModelNormalization'
 import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 import { withRequestTimeout } from '../utils/boundedRequest'
+
+/** What a configuration save reports: whether the running stack applies it or a restart does. */
+interface ConfigSaveResult {
+  restartRequired: boolean
+  message?: string
+}
+
+async function responseSaveResult(response: Response): Promise<ConfigSaveResult> {
+  try {
+    const body = (await response.clone().json()) as { status?: unknown; message?: unknown }
+    return {
+      restartRequired: body?.status === 'restart_required',
+      message: typeof body?.message === 'string' ? body.message : undefined,
+    }
+  } catch {
+    return { restartRequired: false }
+  }
+}
 
 const ConfigPageRouterConfigSection = lazy(() => import('./ConfigPageRouterConfigSection'))
 const ConfigPageModelsSection = lazy(() => import('./ConfigPageModelsSection'))
@@ -104,8 +119,13 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       setConfig(projectCanonicalConfigForManager(data))
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch config')
-      setConfig(null)
+      const message = err instanceof Error ? err.message : 'Failed to fetch config'
+      if (showLoading) {
+        setError(message)
+        setConfig(null)
+      } else {
+        toast.error('The configuration could not be reloaded', { description: message })
+      }
       return false
     } finally {
       if (showLoading) setLoading(false)
@@ -133,9 +153,16 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
         throw new Error(await responseErrorMessage(response))
       }
       setSaveWarnings(await responseConfigWarnings(response))
+      const result = await responseSaveResult(response)
+      if (result.restartRequired) {
+        toast.warning('Saved. A restart applies this change.', {
+          description: result.message,
+          duration: 15000,
+        })
+      }
 
-      // Refresh config after save
-      await fetchConfig()
+      // Refresh in place so the section keeps its state instead of remounting.
+      await fetchConfig(false)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')
     }
@@ -269,8 +296,9 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
       isReadonly={configEditorReadonly}
       openEditModal={openEditModal}
       refreshConfig={async () => {
-        await fetchConfig()
+        await fetchConfig(false)
       }}
+      saveConfig={saveConfig}
     />
   )
 
@@ -298,40 +326,37 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
   const pageLoading = loading
 
   return (
-    <div className={styles.container}>
-      <div className={styles.content}>
-        {!isMCPSection && pageLoading && <ProductLoadingState label="Loading configuration" />}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {!isMCPSection && pageLoading ? <RouteLoadingFallback /> : null}
 
-        {!isMCPSection && error && !pageLoading && (
-          <div className={styles.error}>
-            <span className={styles.errorIcon}></span>
-            <div>
-              <h3>Error Loading Config</h3>
-              <p>{error}</p>
-              <button type="button" className={styles.button} onClick={() => fetchConfig()}>
-                Retry
-              </button>
+      {!isMCPSection && error && !pageLoading ? (
+        <PageContainer>
+          <EmptyState
+            icon={TriangleAlert}
+            tone="orange"
+            title="The configuration could not be loaded"
+            description={error}
+            actions={<Button onClick={() => void fetchConfig()}>Try again</Button>}
+          />
+        </PageContainer>
+      ) : null}
+
+      {isMCPSection ? (
+        <Suspense fallback={<RouteLoadingFallback />}>
+          <ConfigPageMCPSection />
+        </Suspense>
+      ) : null}
+
+      {!isMCPSection && config && !pageLoading && !error ? (
+        <>
+          {saveWarnings.length > 0 ? (
+            <div className="mx-auto w-full max-w-[1360px] px-5 pt-6 md:px-8">
+              <ConfigSaveWarnings warnings={saveWarnings} />
             </div>
-          </div>
-        )}
-
-        {isMCPSection && (
-          <div className={styles.contentArea}>
-            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
-              <ConfigPageMCPSection />
-            </Suspense>
-          </div>
-        )}
-
-        {!isMCPSection && config && !pageLoading && !error && (
-          <div className={styles.contentArea}>
-            <ConfigSaveWarnings warnings={saveWarnings} />
-            <Suspense fallback={<ProductLoadingState label="Loading configuration" />}>
-              {renderActiveSection()}
-            </Suspense>
-          </div>
-        )}
-      </div>
+          ) : null}
+          <Suspense fallback={<RouteLoadingFallback />}>{renderActiveSection()}</Suspense>
+        </>
+      ) : null}
 
       {/* Edit Modal */}
       <EditModal

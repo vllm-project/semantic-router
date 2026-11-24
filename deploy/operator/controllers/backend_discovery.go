@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -208,7 +209,7 @@ func discoverBackendEndpoint(ctx context.Context, c client.Client, vllmEndpoint 
 
 	// Set name and weight from VLLMEndpointSpec
 	endpoint.Name = vllmEndpoint.Name
-	endpoint.Weight = vllmEndpoint.Weight
+	endpoint.Weight = ptr.Deref(vllmEndpoint.Weight, 1)
 	if endpoint.Weight == 0 {
 		endpoint.Weight = 1
 	}

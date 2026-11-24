@@ -97,7 +97,11 @@ func (builder *responseHeaderMutationBuilder) addTrace(ctx *RequestContext) {
 // responseWarnings encodes x-vsr-warnings and counts and logs, once per
 // request, each diagnostic it carries.
 func responseWarnings(ctx *RequestContext) string {
-	value, included := formatWarnings(append(scanWarnings(ctx.VSRScanCoverage), ctx.ResponseGuard.warnings()...), ctx.ProtocolDiagnostics)
+	warnings := scanWarnings(ctx.VSRScanCoverage)
+	if ctx.guardOverloadAnswered {
+		warnings = append(warnings, headers.WarningGuardOverloaded)
+	}
+	value, included := formatWarnings(append(warnings, ctx.ResponseGuard.warnings()...), ctx.ProtocolDiagnostics)
 	if reported := min(ctx.protocolDiagnosticsReported, included); included > reported {
 		recordProtocolDiagnostics(ctx, ctx.ProtocolDiagnostics[reported:included])
 		ctx.protocolDiagnosticsReported = included
@@ -198,6 +202,8 @@ func normalizeProtocol(value string) string {
 		return "responses"
 	case llmprotocol.OpenAIImagesV1:
 		return "images"
+	case llmprotocol.OpenAISpeechV1:
+		return "speech"
 	case llmprotocol.OpenAIChatV1, "":
 		return protocolDefault
 	default:
@@ -224,6 +230,7 @@ func buildResponseHeaderMutation(ctx *RequestContext) *ext_proc.HeaderMutation {
 	builder.addKeystone(ctx)
 	builder.addConfigVersion(ctx)
 	builder.addPublicRoutingHeaders(ctx)
+	builder.addBudget(ctx)
 	builder.addWarnings(ctx)
 	builder.addTrace(ctx)
 	return builder.mutation()

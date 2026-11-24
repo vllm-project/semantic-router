@@ -267,7 +267,7 @@ func requestTraceRoute(raw string) (route, kind string) {
 		return "/{unmatched}", "other"
 	}
 	switch path := parsed.Path; path {
-	case "/v1/chat/completions", "/v1/completions", "/v1/responses", "/v1/messages", imagesGenerationsPath,
+	case "/v1/chat/completions", "/v1/completions", "/v1/responses", "/v1/messages", imagesGenerationsPath, audioSpeechPath,
 		azureV1ChatPath, azureResponsesPath, azureV1ResponsesPath:
 		return path, "inference"
 	case "/v1/models":

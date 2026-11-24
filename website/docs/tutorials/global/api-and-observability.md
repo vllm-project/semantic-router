@@ -121,6 +121,119 @@ attaches the credential it issued the requesting user:
 See
 [Security Hardening](../../installation/security-hardening#delegate-the-users-credential-to-an-upstream).
 
+### Spend budgets
+
+`budgets` caps what model calls may spend, set once for every route: per agent
+run, and per user over a window. Without it nothing is capped.
+
+```yaml
+global:
+  services:
+    budgets:
+      currency: USD
+      unpriced: refuse
+      output_reserve_tokens: 4096
+      run:
+        limit: 5.00
+        idle_timeout_seconds: 86400
+      users:
+        - name: daily
+          match:
+            group: eng
+          limit: 50.00
+          window: day
+```
+
+- **A run** is one user's session: every request that carries the session id
+  Router Replay records (`x-vsr-session-id`, a `session_id_headers` header,
+  `learning.protection.identity.headers.session`, or the session a supported
+  harness sends), so a harness's subagents share it. The Looper hops, fallback
+  attempts and Router model calls, such as the decision model's, made for
+  those requests count too. A request without a session is a run of its own.
+  A run unused for `idle_timeout_seconds` (default a day) starts again from
+  zero at its next request.
+- **A user budget** applies to each user `match` selects, as a rate-limit rule
+  does: an empty or `*` `user` or `group` matches everyone. The user is the
+  `authz.identity.user_id_header` value, which a listener keeps only when it
+  trusts identity headers. Requests without one share one budget per rule.
+  `window` is `hour`, `day`, `week` (from Monday) or `month`, in UTC. Listener
+  `api_keys` name no user, so a budget per key needs the authenticator in front
+  to send the key's identity as the user.
+- **Before a call is sent**, the Router reserves its estimated cost against
+  every budget the request belongs to: the input it counts, at the model's
+  highest input rate, and the output the request allows (`max_tokens`), else the
+  model's `max_output_tokens`, else `output_reserve_tokens`, at its output rate.
+  The call goes out only when that fits every budget. Calls in flight together
+  each hold their reservation, so they cannot together spend past a budget.
+- **After the reply**, its priced usage (`x-vsr-cost`) replaces the
+  reservation. Each Looper call is charged its own usage at its model's price,
+  as the request's record prices it, so a run spends what Insights and
+  `vllm-sr usage` report for it. A reply without usage that can be priced is
+  charged its estimate, a stream cut short, such as by its client, is charged
+  the usage it reported before it stopped (settlement `partial_usage`), and a
+  call no provider answered is charged nothing. A call that costs more than
+  its estimate can leave a budget below zero.
+- **At the limit** the call is refused with `429` and the code
+  `budget_exceeded`. A request whose budget is already spent is refused before
+  its signals run. A fallback candidate that does not fit is skipped for the
+  next one. A Looper run that fails because a call was refused answers with
+  that call's refusal. In the run's attempt trace a refused call has the
+  reason `budget_exceeded` or `budget_unpriced`, and it is no call in the
+  record's cost.
+- **The message** names the budget, its limit, and what it has left for a
+  call now: the limit less what the budget spent and what calls in flight
+  hold, the figure `x-vsr-budget-remaining` reports. It then gives the spend
+  and the held amount on their own, so the limit less what is left is not
+  mistaken for the spend, for example
+  `out of budget: the run spend budget of 1.750000 has 1.734367 left (0.000600 spent, 0.015033 held by calls in flight), and this call is estimated at 1.920015`.
+  With no call in flight it gives the spend alone.
+- **Out of budget** means what the budget spent leaves no room for the call,
+  so no retry before the window starts again can succeed. The message starts
+  `out of budget`, the reply carries `x-should-retry: false`, and a user
+  budget's refusal carries `Retry-After` until its window starts again and
+  names that time in the message. On the Responses API the error's `type` is
+  `usage_limit_reached`, with `resets_at`, the window's start in Unix
+  seconds, and `x-codex-promo-message` repeats the message: Codex ends the
+  turn on that error and shows the message. On the Messages API the reply
+  carries `budget_exceeded` in
+  `anthropic-ratelimit-unified-overage-disabled-reason`, as Anthropic marks a
+  spend limit refusal: without it, Claude Code on a Claude login or a gateway
+  login presents any 429 as
+  `Server is temporarily limiting requests (not your usage limit)`.
+- **Held by calls in flight** means the spend alone leaves room, but the
+  reservations of other calls in flight do not. The message says so and asks
+  for a retry once they finish, with `Retry-After: 5` and
+  `x-should-retry: true`.
+- **A model with no price** in `currency` is refused with `403`
+  `budget_unpriced` under `unpriced: refuse`, the default. `unpriced: allow`
+  sends the call, spends nothing for it, and counts it in Replay.
+
+Once a request reaches the budgets, every reply to it carries
+`x-vsr-budget-remaining` and `x-vsr-budget-scope` (`run` or `user/<name>`) for
+the tightest budget of the request: a provider's reply, a refusal, and the
+Router's own answers, such as a Looper answer, a fallback chain whose candidates
+all failed, or a reply it could not read. A buffered reply reports the budget
+after the call's cost, a failed call's reply after its reservation ends, and a
+stream after its reservation. A Looper answer also carries `x-vsr-cost`, the
+price of all its calls when every one has a price. The Replay record keeps the
+same in `cost_accounting.budget`, where a Looper request's record counts every
+call of its run and each hop's record its own. A refused request is a `failed`
+record with `terminal_reason: budget_exceeded`, under the model the client
+asked for. See [Router API errors](../../api/router.md#routing-errors).
+
+What the harnesses do with a refusal, measured with Claude Code 2.1.325,
+Codex 0.166.0 and Pi 1.5.2:
+
+| Refusal | Claude Code | Codex | Pi |
+| --- | --- | --- | --- |
+| Out of budget, run or user window | Ends the turn at once. With an API key it shows `API Error: Request rejected (429) ·` and the message; with a Claude login or a gateway login, the message alone. | Ends the turn at once: `You’ve hit your usage limit.` with the message, then `or try again at` the window's start, or `or try again later.` for a run. | Ends the turn at once and prints the error with the message. |
+| Held by calls in flight | Retries, at least 5 seconds apart. | Retries every 5 seconds, five times, then prints `exceeded retry limit, last status: 429 Too Many Requests`. | Retries after 2, 4 and 8 seconds, then prints the error with the message. |
+
+The Router keeps the budgets in its own memory. A configuration reload keeps
+what was spent; a restart forgets it. Each Router counts alone, so behind
+several replicas a budget can be spent once per replica: send each user's and
+session's requests to one Router.
+
 ### Response API
 
 ```yaml
@@ -128,7 +241,7 @@ global:
   services:
     response_api:
       enabled: true
-      store_backend: redis        # default; use "memory" only for local development
+      store_backend: redis
       redis:
         address: "redis:6379"
 ```
@@ -137,8 +250,10 @@ The `store_backend` field controls where response and conversation history is pe
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `redis` | Survives router restart, shared across replicas | Production (default) |
-| `memory` | Lost on router restart | Local development only |
+| `redis` | Survives router restart, shared across replicas | Production |
+| `memory` | Lost on router restart | Local development (the default when no Redis server is named) |
+
+A configuration that names no store gets `redis` when its `redis` block names a server (`address`, `cluster_addresses` or `config_path`), as configurations written when `redis` was the default do, and `memory` otherwise, so the Responses API works without another service. `vllm-sr serve` runs Redis for its stack and selects it when the configuration names no store.
 
 The `redis` store needs `redis.address` (or `cluster_addresses` in cluster mode). When the store cannot start, the router still starts, logs `response_api_store_init_failed`, and answers every `/v1/responses` request with 503 and code `response_store_unavailable`. Set `enabled: false` to serve no Responses API at all, which answers 404.
 
@@ -166,6 +281,12 @@ global:
 configurations that use `traceidratio` or `trace_id_ratio` continue to work as
 compatibility aliases.
 
+An agent run is one trace. A request that carries `traceparent` stays in its
+harness's trace; one that carries none and names a session is parented under a
+`semantic_router.run` root and a `semantic_router.agent` span per subagent the
+Router creates for that run, so all of the run's calls share a trace. See
+[Agent runs](../plugin/router-replay#agent-runs).
+
 Common Prometheus metric families:
 
 | Family | Example metrics |
@@ -187,12 +308,17 @@ Common Prometheus metric families:
 | Configuration lifecycle | `llm_config_updates_total` (`source`, `result`, `stage`), `llm_config_update_duration_seconds`, `llm_config_active_version`, `llm_config_active_info` (`version`, `hash`), `llm_config_last_rejection_timestamp_seconds` |
 | Remote model calls | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
 | Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` (stages `signals`, `decision`, `algorithm`, `prompt_compression`), `llm_prompt_compression_total` (by `recipe` and `outcome`: `compressed`, `skipped_disabled`, `skipped_min_length`, `skipped_max_tokens`) |
+| Context window | `llm_context_window_checks_total` (by `count`: `exact` or `proxy`, and `verdict`: `fits`, `in_band` or `exceeds`), `llm_context_window_refusals_total` (by `count`), `llm_context_window_margin` (by `count`), `llm_context_window_wait_seconds`, `llm_context_window_tokenizer_loaded` (by `tokenizer`), from the [context window check](../../installation/model-configuration#check-prompts-against-the-context-window) |
 | Routing input | `llm_routing_input_removed_total` (by `kind`: `skipped_message`, `stripped_block`), from [`global.router.routing_input`](../signal/overview#choose-the-user-text-signals-read) |
 | Streamed request body | `llm_streamed_body_arrival_seconds`, `llm_streamed_body_bytes`, `llm_streamed_body_chunks` (by `recipe`; STREAMED and FULL_DUPLEX_STREAMED modes only) |
 | Projections | `llm_projection_score` (by configured recipe and projection name) |
 | Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
 
 Router Memory counters use bounded labels only. See the [Router Memory Prometheus label release note](../../release-notes/router-memory-prometheus-labels).
+
+A request that names a model the configuration does not serve counts in
+`llm_request_errors_total` as `model="unknown"`, `reason="model_not_found"`;
+the `specified_model_not_found` log event keeps the name it sent.
 
 `llm_request_graph_node_duration_seconds` times each step of a request graph,
 such as a Looper template's algorithm and respond steps; a step that holds
@@ -266,7 +392,7 @@ dashboard in Grafana:
   looper attempt evidence.
 - **Means, not quantiles.** Recipe stage duration and the model timing panels
   are observed means; projection counts show evaluations, with individual
-  scores in Insights.
+  scores in the Dashboard's **Requests** page.
 - **Sources.** Prometheus scrapes both the Router and Jaeger's internal admin
   metrics.
 
@@ -413,14 +539,17 @@ global:
         enabled: true
 ```
 
-Router replay is disabled by default:
+Router replay records routing data by default:
 
-- **Router-wide.** A `router_replay` plugin in `global.plugins` turns it on.
+- **Router-wide.** Without a `router_replay` plugin anywhere, every request
+  keeps a record of its routing data and none of its text. A `router_replay`
+  plugin in `global.plugins` sets the capture defaults, and `enabled: false`
+  there turns Replay off.
 - **Per recipe or decision.** A recipe's or decision's `router_replay` plugin
   overrides it: `enabled: false` turns capture off there, and `enabled: true`
   opts in when the default is off.
-- **Storage.** Without a durable backend, the default in-memory store is
-  process-local and lost on restart.
+- **Storage.** Without a configured backend, records go to the `file` store,
+  which [keeps them across restarts](../plugin/router-replay#keep-records-across-restarts).
 
 The `store_backend` field controls where routing-decision replay records are persisted. Available backends:
 
@@ -430,6 +559,7 @@ The `store_backend` field controls where routing-decision replay records are per
 | `redis` | Survives router restart, shared across replicas | Lightweight deployments already running Redis |
 | `milvus` | Vector-searchable replay records | Semantic replay search |
 | `qdrant` | Vector-searchable replay records | Semantic replay search in a Qdrant deployment |
+| `file` | Survives router restart on one Router; routing data only | The default for local and single-Router deployments |
 | `memory` | Lost on router restart | Local development only |
 
 ## Data and Security

@@ -8,6 +8,7 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount/tokenizerspec"
 )
 
 // CanonicalConfigVersion identifies the steady-state public configuration
@@ -96,6 +97,7 @@ type CanonicalSignals struct {
 	Conversation  []ConversationRule  `yaml:"conversation,omitempty"`
 	Metadata      []MetadataRule      `yaml:"metadata,omitempty"`
 	InputModality []InputModalityRule `yaml:"input_modality,omitempty"`
+	Agent         []AgentRule         `yaml:"agent,omitempty"`
 	SystemOne     []SystemOneRule     `yaml:"systemone,omitempty"`
 }
 
@@ -143,7 +145,7 @@ func isCanonicalConfig(raw map[string]interface{}) bool {
 	return hasGlobal || hasRecipes || hasEntrypoints
 }
 
-func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
+func normalizeCanonicalConfig(canonical *CanonicalConfig, skipExternalAssets bool) (*RouterConfig, error) {
 	if err := validateCanonicalContract(canonical); err != nil {
 		return nil, err
 	}
@@ -173,12 +175,16 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 	}
 
 	cfg := DefaultGlobalConfig()
+	cfg.SkipExternalAssetValidation = skipExternalAssets
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
 
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	if err := normalizeListenerAPIs(cfg.Listeners); err != nil {
+		return nil, err
+	}
+	if err := readListenerKeyFiles(cfg.Listeners, skipExternalAssets); err != nil {
 		return nil, err
 	}
 	cfg.ModelConfig = make(map[string]ModelParams)
@@ -190,6 +196,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 		return nil, err
 	}
 	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
+	cfg.ReasoningMinOutputTokens = canonical.Providers.Defaults.ReasoningMinOutputTokens
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -216,6 +223,10 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalDelegatedBackends(canonical); err != nil {
 		return err
 	}
+	if global := canonical.Global; global != nil && global.Router.StreamedBody.Enabled && global.Router.StreamedBody.MaxBytes <= 0 {
+		// The handler accumulates without a bound until this names a ceiling.
+		return fmt.Errorf("global.router.streamed_body.max_bytes: an enabled streamed body needs a positive max_bytes")
+	}
 	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
@@ -223,6 +234,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	aliases, err := canonicalProviderModelIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
+	}
+	if canonical.Providers.Defaults.ReasoningMinOutputTokens < 0 {
+		return fmt.Errorf("providers.defaults.reasoning_min_output_tokens must not be negative")
 	}
 	return validateCanonicalDefaultModel(canonical.Providers, aliases, cards)
 }
@@ -398,6 +412,11 @@ func validateCanonicalProviderModelMetadata(model CanonicalProviderModel) error 
 	if _, err := llmprotocol.ParseUnsupportedCapabilities(model.UnsupportedCapabilities); err != nil {
 		return fmt.Errorf("providers.models[%s].unsupported_capabilities: %w", model.Name, err)
 	}
+	if model.Tokenizer != "" {
+		if _, err := tokenizerspec.Parse(model.Tokenizer); err != nil {
+			return fmt.Errorf("providers.models[%s].tokenizer: %w", model.Name, err)
+		}
+	}
 	return validateModelPricing(model.Name, model.Pricing)
 }
 
@@ -543,6 +562,7 @@ func normalizeSignals(signals CanonicalSignals) Signals {
 		ConversationRules:  append([]ConversationRule(nil), signals.Conversation...),
 		MetadataRules:      append([]MetadataRule(nil), signals.Metadata...),
 		InputModalityRules: append([]InputModalityRule(nil), signals.InputModality...),
+		AgentRules:         append([]AgentRule(nil), signals.Agent...),
 		SystemOneRules:     append([]SystemOneRule(nil), signals.SystemOne...),
 	}
 }

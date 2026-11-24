@@ -1,5 +1,7 @@
 import React, { useState, useCallback } from 'react'
-import styles from './FeedbackButtons.module.css'
+import { Check, Loader2, ThumbsDown, ThumbsUp, X } from 'lucide-react'
+
+import { cn } from '../ui'
 
 const OUTCOMES_API = '/api/router/api/v1/observability/outcomes'
 
@@ -25,41 +27,8 @@ interface FeedbackButtonsProps {
   onError?: (message: string) => void
 }
 
-function ThumbUpIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={styles.icon}
-    >
-      <path d="M9 11.5V20H5.5A1.5 1.5 0 0 1 4 18.5v-5.5A1.5 1.5 0 0 1 5.5 11.5H9Z" />
-      <path d="M9 11.5 12.3 4.9A1.8 1.8 0 0 1 15.7 6l-.7 5.5h4.2a1.8 1.8 0 0 1 1.8 2.1l-1 4.9a1.8 1.8 0 0 1-1.8 1.5H9" />
-    </svg>
-  )
-}
-
-function ThumbDownIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className={styles.icon}
-    >
-      <path d="M15 12.5V4H18.5A1.5 1.5 0 0 1 20 5.5V11A1.5 1.5 0 0 1 18.5 12.5H15Z" />
-      <path d="M15 12.5 11.7 19.1A1.8 1.8 0 0 1 8.3 18l.7-5.5H4.8A1.8 1.8 0 0 1 3 10.4l1-4.9A1.8 1.8 0 0 1 5.8 4H15" />
-    </svg>
-  )
-}
+const feedbackButton =
+  'grid size-7 place-items-center rounded-md text-subtle-foreground outline-none transition-[color,background-color,transform] duration-150 hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 active:scale-95 disabled:cursor-default disabled:opacity-80 [&_svg]:size-4'
 
 const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   modelId,
@@ -178,55 +147,73 @@ const FeedbackButtons: React.FC<FeedbackButtonsProps> = ({
   )
 
   return (
-    <div className={styles.container}>
-      <div className={styles.wrapper} role="group" aria-label="Feedback">
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.thumbsUp} ${selection === 'up' ? styles.selected : ''}`}
-          onClick={() => handleClick('up')}
-          disabled={loading}
-          title={selection === 'up' ? 'Good response (selected)' : 'Good response'}
-          aria-label={selection === 'up' ? 'Good response (selected)' : 'Good response'}
-          aria-pressed={selection === 'up'}
-        >
-          {loading && selection === 'up' ? (
-            <span className={styles.spinner} aria-hidden />
-          ) : (
-            <ThumbUpIcon />
-          )}
-        </button>
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.thumbsDown} ${selection === 'down' ? styles.selected : ''}`}
-          onClick={() => handleClick('down')}
-          disabled={loading}
-          title={selection === 'down' ? 'Bad response (selected)' : 'Bad response'}
-          aria-label={selection === 'down' ? 'Bad response (selected)' : 'Bad response'}
-          aria-pressed={selection === 'down'}
-        >
-          {loading && selection === 'down' ? (
-            <span className={styles.spinner} aria-hidden />
-          ) : (
-            <ThumbDownIcon />
-          )}
-        </button>
-      </div>
-      {submitted && (
-        <span className={styles.sentLabel}>
-          Feedback Sent!
-          {insightsHref ? <a href={insightsHref}>View in Insights</a> : null}
-        </span>
-      )}
-      {errorMessage && (
-        <div className={styles.error} role="alert">
-          {errorMessage}
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <div className="inline-flex items-center gap-0.5" role="group" aria-label="Feedback">
           <button
             type="button"
-            className={styles.dismissError}
+            className={cn(
+              feedbackButton,
+              selection === 'up' &&
+                'bg-success-soft text-success-foreground hover:bg-success-soft hover:text-success-foreground',
+            )}
+            onClick={() => handleClick('up')}
+            disabled={loading}
+            title={selection === 'up' ? 'Good response (selected)' : 'Good response'}
+            aria-label={selection === 'up' ? 'Good response (selected)' : 'Good response'}
+            aria-pressed={selection === 'up'}
+          >
+            {loading && selection === 'up' ? (
+              <Loader2 className="animate-spin" aria-hidden="true" />
+            ) : (
+              <ThumbsUp aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            className={cn(
+              feedbackButton,
+              selection === 'down' &&
+                'bg-destructive-soft text-destructive-foreground hover:bg-destructive-soft hover:text-destructive-foreground',
+            )}
+            onClick={() => handleClick('down')}
+            disabled={loading}
+            title={selection === 'down' ? 'Bad response (selected)' : 'Bad response'}
+            aria-label={selection === 'down' ? 'Bad response (selected)' : 'Bad response'}
+            aria-pressed={selection === 'down'}
+          >
+            {loading && selection === 'down' ? (
+              <Loader2 className="animate-spin" aria-hidden="true" />
+            ) : (
+              <ThumbsDown aria-hidden="true" />
+            )}
+          </button>
+        </div>
+        {submitted && (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-success-foreground animate-in fade-in-0 duration-300">
+            <Check className="size-3.5" aria-hidden="true" />
+            Feedback Sent!
+            {insightsHref ? (
+              <a
+                href={insightsHref}
+                className="font-normal text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              >
+                View request
+              </a>
+            ) : null}
+          </span>
+        )}
+      </div>
+      {errorMessage && (
+        <div className="flex items-center gap-1.5 text-xs text-destructive-foreground" role="alert">
+          <span className="[overflow-wrap:anywhere]">{errorMessage}</span>
+          <button
+            type="button"
+            className="grid size-5 shrink-0 place-items-center rounded text-destructive-foreground/80 outline-none hover:bg-destructive-soft hover:text-destructive-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40"
             onClick={clearError}
             aria-label="Dismiss"
           >
-            ×
+            <X className="size-3.5" aria-hidden="true" />
           </button>
         </div>
       )}

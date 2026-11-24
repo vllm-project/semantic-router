@@ -65,6 +65,9 @@ type maskingWireCase struct {
 	name string
 	path string
 	body map[string]interface{}
+	// decision is the masking decision the request must select; empty is
+	// maskingDecisionName.
+	decision string
 }
 
 // testMaskingCrossProtocol is this feature's headline claim: because every
@@ -262,10 +265,14 @@ func runMaskingWireCase(ctx context.Context, session *fixtures.ServiceSession, t
 	}
 	// Without this the whole case can pass vacuously: a request that bypasses
 	// the decision never runs the plugin, so "no raw value" would prove nothing.
-	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != maskingDecisionName {
+	want := tc.decision
+	if want == "" {
+		want = maskingDecisionName
+	}
+	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != want {
 		return "", fmt.Errorf(
 			"selected decision = %q, want %q; the request bypassed the masking decision so nothing was masked",
-			decision, maskingDecisionName,
+			decision, want,
 		)
 	}
 	content, err := extractAssistantText(tc.path, resp.Body)

@@ -87,6 +87,9 @@ type FastResponsePluginConfig struct {
 	// Enabled false turns off the fast_response a decision inherits.
 	Enabled *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	Message string `json:"message" yaml:"message"`
+	// Block refuses the request with HTTP 400 and Message as the error,
+	// instead of answering with Message as the model's reply.
+	Block bool `json:"block,omitempty" yaml:"block,omitempty"`
 }
 
 // IsEnabled reports whether the fast_response runs: unless enabled is false.
@@ -163,24 +166,38 @@ type HeaderPair struct {
 
 // RouterReplayPluginConfig represents configuration for router_replay plugin.
 type RouterReplayPluginConfig struct {
-	// nil permits personal data, matching the built-in capture default.
-	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
-	Enabled             bool  `json:"enabled" yaml:"enabled"`
-	MaxRecords          int   `json:"max_records,omitempty" yaml:"max_records,omitempty"`
-	CaptureRequestBody  bool  `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
-	CaptureResponseBody bool  `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
+	Enabled bool `json:"enabled" yaml:"enabled"`
+	// PromptCapture is what a record keeps of the request and its answer
+	// besides routing data: none, raw or verified (PromptCaptureMode). Unset
+	// is none.
+	PromptCapture       string `json:"prompt_capture,omitempty" yaml:"prompt_capture,omitempty" jsonschema:"enum=none,enum=raw,enum=verified"`
+	MaxRecords          int    `json:"max_records,omitempty" yaml:"max_records,omitempty"`
+	CaptureRequestBody  bool   `json:"capture_request_body,omitempty" yaml:"capture_request_body,omitempty"`
+	CaptureResponseBody bool   `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
 	// CaptureToolResults keeps client tool-result text in the captured request
 	// body and in each client_tool_result step's Output, bounded by
-	// MaxToolTraceBytes. It requires CapturePersonalData, stores nothing while
-	// CaptureRequestBody is off, and principals without replay.detail still
+	// MaxToolTraceBytes. It stores nothing unless PromptCapture is raw and
+	// CaptureRequestBody is on, and principals without replay.detail still
 	// read the results redacted.
 	CaptureToolResults bool `json:"capture_tool_results,omitempty" yaml:"capture_tool_results,omitempty"`
 	MaxBodyBytes       int  `json:"max_body_bytes,omitempty" yaml:"max_body_bytes,omitempty"`
-	// MaxToolTraceBytes caps each structured text field (Prompt,
-	// ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
+	// MaxPromptBytes caps the prompt a record keeps under raw and verified,
+	// cut on a UTF-8 boundary; a cut record keeps the whole prompt's size and
+	// SHA-256. 0 means no limit. Nil where no layer sets it, so that
+	// PromptByteLimit can fall back to MaxToolTraceBytes.
+	MaxPromptBytes *int `json:"max_prompt_bytes,omitempty" yaml:"max_prompt_bytes,omitempty" jsonschema:"minimum=0"`
+	// MaxToolTraceBytes caps each structured tool text field
+	// (ToolDefinitions, ToolTraceStep.Text, Arguments and Output).
 	// 0 means no limit. Configurable independently of MaxBodyBytes so that
 	// structured fields remain complete even when the raw body is truncated.
-	MaxToolTraceBytes int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// Nil where no layer sets it: then ToolTraceByteLimit is 64 KiB, which
+	// bounds the steps' raw copies too, and the trace has a total budget.
+	MaxToolTraceBytes *int `json:"max_tool_trace_bytes,omitempty" yaml:"max_tool_trace_bytes,omitempty"`
+	// MaxToolTraceTotalBytes caps the text all steps of a record keep
+	// together, raw copies included: the oldest steps are dropped first, and
+	// the newest is always kept. 0 means no limit. Nil where no layer sets it:
+	// see ToolTraceTotalByteLimit.
+	MaxToolTraceTotalBytes *int `json:"max_tool_trace_total_bytes,omitempty" yaml:"max_tool_trace_total_bytes,omitempty" jsonschema:"minimum=0"`
 	// MaxToolTraceSteps caps the number of ToolTraceStep entries retained per
 	// record. Long agent sessions produce one step per tool-call turn, so an
 	// unbounded chain (e.g. a runaway hermes-style loop) can otherwise grow
@@ -188,53 +205,57 @@ type RouterReplayPluginConfig struct {
 	// oldest steps are dropped and ToolTrace.StepsTruncated is set so callers
 	// can see that a cap was applied. 0 means no limit.
 	MaxToolTraceSteps int `json:"max_tool_trace_steps,omitempty" yaml:"max_tool_trace_steps,omitempty"`
-	// Shadow sends a sampled copy of the decision's requests to a shadow
-	// model, whose outcome the replay record keeps. It runs while the
+	// CostBaselineModel is the configured model a record's savings compare
+	// with: the same recorded tokens at that model's rates, so a request
+	// routed to a dearer model saves a negative amount. Unset, the baseline is
+	// the most expensive model of the selected recipe's pool.
+	CostBaselineModel string `json:"cost_baseline_model,omitempty" yaml:"cost_baseline_model,omitempty"`
+	// Shadow sends sampled copies of the decision's requests to candidate
+	// models, whose outcomes the replay record keeps. It runs while the
 	// decision records replays.
-	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty"`
+	Shadow *RouterReplayShadowConfig `json:"shadow,omitempty" yaml:"shadow,omitempty" jsonschema:"nullable"`
+	// CapturePersonalData is the deprecated form of PromptCapture: false
+	// meant verified and true raw. Loading a configuration rewrites it as
+	// prompt_capture in its own layer, with a warning; in a policy assembled
+	// otherwise it decides only where PromptCapture is unset.
+	CapturePersonalData *bool `json:"capture_personal_data,omitempty" yaml:"capture_personal_data,omitempty"`
 }
 
-// RouterReplayShadowConfig is router_replay's shadow: a bounded, sampled copy
-// of the approved provider-bound request, sent to a secondary configured
-// model after the primary dispatch has been finalized. The primary response
-// never waits on, or changes because of, the shadow call.
+// RouterReplayShadowConfig sends bounded, sampled copies of the approved
+// provider-bound request to candidate models and captures their outcomes in Replay.
 type RouterReplayShadowConfig struct {
-	// Model is the configured logical model that receives the shadow copy.
-	Model string `json:"model" yaml:"model"`
+	// Models names the configured backends observed for the same approved input.
+	Models []string `json:"models" yaml:"models"`
 	// SampleRate is the fraction of eligible requests that are shadowed, in
 	// [0, 1]. nil means every eligible request; 0 disables dispatch while
 	// keeping the shadow declared.
-	SampleRate *float64 `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty"`
-	// MaxConcurrency bounds in-flight shadow calls for this decision.
-	MaxConcurrency int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty"`
-	// MaxQueueDepth bounds shadow calls waiting for an in-flight slot. Calls
-	// beyond the depth are dropped with a queue_full reason.
-	MaxQueueDepth int `json:"max_queue_depth,omitempty" yaml:"max_queue_depth,omitempty"`
-	// TimeoutSeconds bounds queue wait plus execution for one shadow call.
-	TimeoutSeconds int `json:"timeout_seconds,omitempty" yaml:"timeout_seconds,omitempty"`
-	// MaxResponseBytes bounds the shadow response body read from the backend.
-	MaxResponseBytes int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty"`
-	// MaxRetries bounds additional attempts on transport errors or retryable
-	// upstream statuses. All attempts share the same deadline.
-	MaxRetries int `json:"max_retries,omitempty" yaml:"max_retries,omitempty"`
-	// CaptureResponseBody stores a bounded excerpt of the shadow output text
-	// in the replay outcome. Off by default: only hashes and sizes are kept.
-	CaptureResponseBody bool `json:"capture_response_body,omitempty" yaml:"capture_response_body,omitempty"`
-	// MaxCaptureBytes bounds the stored excerpt when CaptureResponseBody is on.
-	MaxCaptureBytes int `json:"max_capture_bytes,omitempty" yaml:"max_capture_bytes,omitempty"`
-	// TLSSkipVerify disables certificate verification for an https shadow
-	// backend. The primary path reaches backends through Envoy, which does not
-	// verify upstream certificates, so this matches that posture for internal
-	// CAs. Off by default.
-	TLSSkipVerify bool `json:"tls_skip_verify,omitempty" yaml:"tls_skip_verify,omitempty"`
-	// ForwardHeaders names the decision header_mutation headers a shadow copy
-	// may carry. Nothing a decision sets for the primary backend is forwarded
-	// unless listed here, so a custom credential such as X-Internal-Token
-	// stays on the primary path. Known credential carriers (Authorization,
-	// Proxy-Authorization, Cookie, x-api-key, api-key, x-goog-api-key, the
-	// x-user-*-key headers) cannot be listed. Names match case-insensitively.
-	// Empty by default.
+	SampleRate *float64              `json:"sample_rate,omitempty" yaml:"sample_rate,omitempty" jsonschema:"nullable"`
+	Execution  ShadowExecutionConfig `json:"execution,omitempty" yaml:"execution,omitempty"`
+	Budget     ShadowBudgetConfig    `json:"budget,omitempty" yaml:"budget,omitempty"`
+	Capture    ShadowCaptureConfig   `json:"capture,omitempty" yaml:"capture,omitempty"`
+	// ForwardHeaders lists decision header mutations explicitly allowed on shadow copies.
 	ForwardHeaders []string `json:"forward_headers,omitempty" yaml:"forward_headers,omitempty"`
+}
+
+// ShadowExecutionConfig bounds all observations of one recipe and decision.
+type ShadowExecutionConfig struct {
+	MaxConcurrency *int `json:"max_concurrency,omitempty" yaml:"max_concurrency,omitempty" jsonschema:"nullable"`
+	MaxQueueSize   *int `json:"max_queue_size,omitempty" yaml:"max_queue_size,omitempty" jsonschema:"nullable"`
+	// Timeout includes queue wait and every candidate's execution.
+	Timeout string `json:"timeout,omitempty" yaml:"timeout,omitempty" jsonschema:"minLength=1,maxLength=128"`
+}
+
+// ShadowBudgetConfig applies to one sampled request, across all candidates.
+type ShadowBudgetConfig struct {
+	MaxResponseBytes *int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty" jsonschema:"nullable"`
+	// MaxEstimatedCost admits a sampled group in the configured budget currency.
+	MaxEstimatedCost *float64 `json:"max_estimated_cost,omitempty" yaml:"max_estimated_cost,omitempty" jsonschema:"nullable,exclusiveMinimum=0"`
+}
+
+// ShadowCaptureConfig controls aggregate answer-text capture for one request.
+type ShadowCaptureConfig struct {
+	Enabled  bool `json:"enabled" yaml:"enabled"`
+	MaxBytes *int `json:"max_bytes,omitempty" yaml:"max_bytes,omitempty" jsonschema:"nullable"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

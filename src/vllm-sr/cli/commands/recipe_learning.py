@@ -51,19 +51,24 @@ def load_replay_records(
     if replay_file is not None:
         payload = json.loads(replay_file.read_text(encoding="utf-8"))
     else:
+        limit = min(limit, _MAX_REPLAY_LIMIT)
         payload = fetch_replay_payload(endpoint or "", limit, timeout)
     return normalize_replay_payload(payload)
 
 
-def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
-    """Fetch up to limit records, following next_offset past the Router's page cap.
+def fetch_replay_payload(
+    endpoint: str, limit: int, timeout: float, filters: dict[str, str] | None = None
+) -> Any:
+    """Fetch up to limit records the list filters select, following next_offset
+    past the Router's page cap.
 
     The list is newest first, so a record stored between two pages shifts the
     next one and repeats a record; records are kept once by id."""
     client = RouterManagementClient(endpoint or None, timeout=timeout)
-    limit = max(1, min(limit, _MAX_REPLAY_LIMIT))
+    limit = max(1, limit)
+    filters = filters or {}
     records: dict[Any, dict[str, Any]] = {}
-    params = {"limit": str(limit)}
+    params = {**filters, "limit": str(limit)}
     offset = 0
     while True:
         payload = client.request(
@@ -76,7 +81,7 @@ def fetch_replay_payload(endpoint: str, limit: int, timeout: int) -> Any:
         if stalled or len(records) >= limit:
             break
         offset = next_offset
-        params = {"limit": str(limit - len(records)), "offset": str(offset)}
+        params = {**filters, "limit": str(limit - len(records)), "offset": str(offset)}
     return {"object": "router_replay.list", "data": list(records.values())[:limit]}
 
 
