@@ -219,7 +219,8 @@ def validate_status_publisher(
             "for the same qualification run"
         )
     direct_steps = direct.get("steps", [])
-    if len(direct_steps) == 3:
+    expected_direct_step_count = 3
+    if len(direct_steps) == expected_direct_step_count:
         _, direct_resolve, direct_publish = direct_steps
         direct_condition = (
             "steps.qualification.outputs.mode == 'publish' "
