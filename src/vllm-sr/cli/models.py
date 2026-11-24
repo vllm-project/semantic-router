@@ -221,6 +221,14 @@ class ListenerAPI(BaseModel):
         "systemone, vllm-sr/5.0 (the default) or vllm-sr/4.0, which also "
         "accepts the earlier contract's request forms.",
     )
+    prefix: Optional[str] = Field(
+        default=None,
+        pattern=r"^(/[A-Za-z0-9._~-]+)+$",
+        description="A path root this API is also served under, as a gateway "
+        "registers a provider's endpoints (/anthropic serves "
+        "/anthropic/v1/messages as /v1/messages). The upstream request never "
+        "carries it. Omitted, the API is served at its own paths only.",
+    )
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
@@ -394,6 +402,14 @@ class Listener(BaseModel):
         if self.apis is None:
             return DEFAULT_LISTENER_APIS
         return tuple(name for name in API_NAMES if name in self.apis)
+
+    def api_prefixes(self) -> dict[str, str]:
+        """The path root each served API is also mounted under, by API name."""
+        return {
+            name: entry.prefix
+            for name, entry in (self.apis or {}).items()
+            if entry.prefix
+        }
 
     def systemone_models(self) -> Optional[List[str]]:
         """The models the listener's systemone API names; None when it serves systemone for every model, or
