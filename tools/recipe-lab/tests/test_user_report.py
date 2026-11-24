@@ -4,6 +4,21 @@ import pytest
 from recipe_lab.user_report import render_report
 
 CONFIG = "4" * 64
+DRAFT = {
+    "schema": "recipe-lab-v05-speed-draft-v1",
+    "status": "statically_validated",
+    "template": {"bundle": "mom-v1", "recipe": "speed"},
+    "public_model": "lab/router",
+    "router_warning_count": 1,
+    "bindings": {
+        "fast": [{"model": "tiny"}, {"model": "large"}],
+        "reasoning": [{"model": "large"}],
+        "tools": [{"model": "large"}],
+    },
+    "sha256": {"config.yaml": CONFIG},
+    "gateway_started": False,
+    "business_quality_measured": False,
+}
 RUN = {
     "schema": "recipe-lab-sr-bench-run-v1",
     "baseline_run": "r1",
@@ -79,6 +94,25 @@ def test_service_target_names_and_generated_background():
     assert "Check whether the candidate preserves graded task success" in report
 
 
+def test_draft_receipt_ranks_before_depth_and_grade():
+    report = render_report([DRAFT, DEPTH, RUN], background="Tune the service.")
+    assert (
+        report.index("Generate a recipe")
+        < report.index("Propose a depth change")
+        < report.index("Grade a benchmark")
+    )
+    for substring in (
+        "static configuration validation",
+        "config.yaml",
+        CONFIG,
+        "`tiny` then `large`",
+        "Router warning count was 1",
+    ):
+        assert substring in report
+    # the draft never claims measured gateway behavior or task quality
+    assert "unmeasured by this receipt" in report
+
+
 def test_depth_receipt_ranks_between_generation_and_grade():
     report = render_report([DEPTH, RUN], background="Tune the service.")
     assert report.index("Propose a depth change") < report.index("Grade a benchmark")
@@ -141,6 +175,8 @@ def test_inconclusive_error_does_not_export_private_fields_or_errors():
         [{"kind": "measurement", "split": "holdout"}],
         [{**RUN, "verdict": "PASS", "metrics": None}],
         [{**RUN, "candidate_sha256": "../bad"}],
+        [{**DRAFT, "sha256": {"config.yaml": "../bad"}}],
+        [{**DRAFT, "bindings": {"fast": [], "reasoning": [], "tools": []}}],
     ],
 )
 def test_rejects_empty_unknown_and_malformed_evidence(evidence):

@@ -75,6 +75,80 @@ def test_plan_accepts_the_v3_multi_workload_contract(tmp_path, capsys):
     ]
 
 
+def test_observe_lanes_keeps_separate_configs_for_splits_and_retries(
+    tmp_path, monkeypatch
+):
+    from recipe_lab import cli, observe_lanes
+
+    spec_path = Path(_write_workloads_spec(tmp_path))
+    spec = yaml.safe_load(spec_path.read_text(encoding="utf-8"))
+    spec["template"] = {"bundle": "mom-v1", "recipe": "balance"}
+    spec["models"] = [{"name": "test-model", "endpoint": "http://127.0.0.1:8001/v1"}]
+    spec["providers_config"] = "providers.yaml"
+    (tmp_path / "providers.yaml").write_text("version: v0.3\n", encoding="utf-8")
+    spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    template = {
+        "bundle": "mom-v1",
+        "recipe": "balance",
+        "sha256": "abc",
+        "catalog_version": "latest",
+        "lanes": {"fast": {"immediate": False, "minimum_candidates": 1}},
+    }
+    monkeypatch.setattr(cli, "template_info", lambda **kwargs: template)
+
+    def exclusive_init(argv, **kwargs):
+        output = Path(argv[argv.index("--output") + 1])
+        with output.open("x", encoding="utf-8") as f:
+            f.write("version: v0.3\n")
+        return {}
+
+    monkeypatch.setattr(
+        cli,
+        "build_observation_config",
+        lambda **kwargs: observe_lanes.build_observation_config(
+            **kwargs, run_json=exclusive_init
+        ),
+    )
+    monkeypatch.setattr(
+        observe_lanes, "probe_records", lambda *args, **kwargs: ([], {}, {})
+    )
+    out = tmp_path / "lanes"
+    configs = []
+    for split in ("calib", "dev", "dev"):
+        assert (
+            main(
+                [
+                    "observe-lanes",
+                    "--spec",
+                    str(spec_path),
+                    "--workload",
+                    "mmlu-pro",
+                    "--split",
+                    split,
+                    "--out",
+                    str(out),
+                    "--router-bin",
+                    "stub",
+                    "--mock-backend",
+                    "stub",
+                ]
+            )
+            == 0
+        )
+        summary = json.loads(
+            (out / f"lanes-{split}-summary.json").read_text(encoding="utf-8")
+        )
+        configs.append(Path(summary["observation_config"]))
+    assert len(set(configs)) == len(configs)
+    assert all(config.is_file() for config in configs)
+    for name in (
+        "observe-config.yaml",
+        "bindings-observe.yaml",
+        "providers-observe.yaml",
+    ):
+        assert (out / name).read_bytes() == (configs[0].parent / name).read_bytes()
+
+
 def test_attribute_honors_workload_selection(tmp_path, capsys):
     spec_path = _write_workloads_spec(tmp_path)
     records = tmp_path / "records.jsonl"
@@ -537,6 +611,7 @@ def test_run_records_declared_gates_as_not_evaluated(monkeypatch, tmp_path):
         "rule-threshold",
         "distribution-calibration",
         "bootstrap",
+        "bindings",
         "agent:claude-1",
         "agent:a.b_c-d",
     ],
@@ -583,6 +658,8 @@ def test_run_proposer_rejects_invalid_tags(tag, capsys):
     ("proposer", "override", "expected_model"),
     [
         ("agent:claude-loop", None, "vllm-sr/auto"),
+        ("bindings", None, "vllm-sr/recipe-lab"),
+        ("bindings", "custom", "custom"),
     ],
 )
 def test_run_targets_proposer_entrypoint_and_records_provenance(
@@ -1127,6 +1204,151 @@ def _model_eval_verify_args(spec_path, tmp_path, candidate):
         ({"proposer": "bindings"}, "custom", "custom"),
     ],
 )
+def test_verify_model_eval_driver_runs_without_srbench(
+    tmp_path, capsys, monkeypatch, provenance, override, expected_model
+):
+    # C7: the driver branch skips the sr-bench targets entirely - the
+    # candidate JSON needs no srbench_targets and SrbenchCli is never built.
+    # Y3: --tasks is hash-checked against the contract's declared rendering
+    # and --labels is passed through for the in-driver category rewrite.
+    import recipe_lab.cli as cli_module
+
+    spec_path = _write_model_eval_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1", "provenance": provenance}),
+        encoding="utf-8",
+    )
+    captured: dict = {}
+
+    def fake_verify(**kwargs):
+        captured.update(kwargs)
+        return dict(_FAKE_MODEL_EVAL_RESULT)
+
+    monkeypatch.setattr(cli_module, "verify_live_model_eval", fake_verify)
+    assert (
+        main(
+            [
+                *_model_eval_verify_args(spec_path, tmp_path, candidate),
+                *(["--router-model", override] if override is not None else []),
+                "--candidate-management-endpoint",
+                "http://127.0.0.1:8080",
+            ]
+        )
+        == 0
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert out["verdict"] == "PASS"
+    assert captured["tasks_path"] == str(tmp_path / "tasks.jsonl")
+    assert captured["labels_path"] == str(tmp_path / "labels.jsonl")
+    assert captured["baseline_endpoint"] == "http://127.0.0.1:9001/v1"
+    assert captured["candidate_endpoint"] == "http://127.0.0.1:9002/v1"
+    assert captured["management_endpoint"] == "http://127.0.0.1:8080"
+    assert captured["router_model"] == expected_model
+
+
+def test_verify_model_eval_driver_appends_ledger(tmp_path, capsys, monkeypatch):
+    import recipe_lab.cli as cli_module
+
+    spec_path = _write_model_eval_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1"}), encoding="utf-8"
+    )
+    ledger = tmp_path / "ledger.jsonl"
+    monkeypatch.setattr(
+        cli_module,
+        "verify_live_model_eval",
+        lambda **kwargs: dict(_FAKE_MODEL_EVAL_RESULT),
+    )
+    assert (
+        main(
+            [
+                *_model_eval_verify_args(spec_path, tmp_path, candidate),
+                "--ledger",
+                str(ledger),
+                "--round",
+                "2",
+            ]
+        )
+        == 0
+    )
+    records = [
+        json.loads(line)
+        for line in ledger.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(records) == 1
+    record = records[0]
+    assert record["tier"] == "live"
+    assert record["verdict"] == "PASS"
+    assert record["round"] == 2
+    assert record["baseline_ref"] is None  # no sr-bench run behind this evidence
+    # Y4: the ledger's candidate names the config the verdict graded
+    assert record["candidate"]["config_sha256"] == "sha256:cd"
+    # without --final the record carries no promotion flag
+    assert "final" not in record
+    assert "repetitions=1" in record["notes"]
+    # the model_eval driver's distribution rides the result, not a preview
+    assert "routing_distribution=" in record["notes"]
+
+
+def test_verify_model_eval_rejects_srbench_baseline(tmp_path, capsys):
+    spec_path = _write_model_eval_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1"}), encoding="utf-8"
+    )
+    rc = main(
+        [
+            *_model_eval_verify_args(spec_path, tmp_path, candidate),
+            "--baseline-run-id",
+            "run-b",
+        ]
+    )
+    assert rc == EXIT_CONTRACT_ERROR
+    assert "takes no sr-bench baseline" in capsys.readouterr().err
+
+
+def test_verify_model_eval_requires_tasks_and_flags(tmp_path, capsys):
+    spec_path = _write_model_eval_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1"}), encoding="utf-8"
+    )
+    base = ["verify", "--spec", spec_path, "--candidate", str(candidate)]
+    assert main([*base, "--model-eval-dir", str(tmp_path / "s")]) == EXIT_CONTRACT_ERROR
+    assert "--tasks" in capsys.readouterr().err
+    err = main(
+        [
+            *base,
+            "--tasks",
+            str(tmp_path / "tasks.jsonl"),
+            "--baseline-router-endpoint",
+            "http://ep1/v1",
+            "--candidate-router-endpoint",
+            "http://ep2/v1",
+        ]
+    )
+    assert err == EXIT_CONTRACT_ERROR
+    assert "--labels" in capsys.readouterr().err
+    err = main(
+        [
+            *base,
+            "--tasks",
+            str(tmp_path / "tasks.jsonl"),
+            "--labels",
+            str(tmp_path / "labels.jsonl"),
+            "--baseline-router-endpoint",
+            "http://ep1/v1",
+            "--candidate-router-endpoint",
+            "http://ep2/v1",
+        ]
+    )
+    assert err == EXIT_CONTRACT_ERROR
+    assert "--model-eval-dir" in capsys.readouterr().err
+
+
 def _write_agentic_srbench_spec(tmp_path):
     """Spec whose single workload is an sr-bench agentic workload (Z4)."""
     dev = tmp_path / "dev.jsonl"
@@ -1222,3 +1444,87 @@ def test_verify_agentic_requires_arm_management_endpoints(
     )
     assert captured["candidate_management_endpoint"] == "http://127.0.0.1:8081"
     assert captured["baseline_management_endpoint"] == "http://127.0.0.1:8080"
+
+
+def test_verify_model_eval_rejects_unbound_tasks(tmp_path, capsys):
+    # Y3: --tasks must be byte-identical to the contract's declared
+    # rendering - a different task file is refused even when it is a
+    # valid tasks JSONL.
+    spec_path = _write_model_eval_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1"}), encoding="utf-8"
+    )
+    other = tmp_path / "other-tasks.jsonl"
+    other.write_bytes(b'{"task_id":"t1","prompt_user":"DIFFERENT","answer":"A"}\n')
+    rc = main(
+        [
+            "verify",
+            "--spec",
+            spec_path,
+            "--candidate",
+            str(candidate),
+            "--tasks",
+            str(other),
+            "--labels",
+            str(tmp_path / "labels.jsonl"),
+            "--baseline-router-endpoint",
+            "http://ep1/v1",
+            "--candidate-router-endpoint",
+            "http://ep2/v1",
+            "--model-eval-dir",
+            str(tmp_path / "s"),
+        ]
+    )
+    assert rc == EXIT_CONTRACT_ERROR
+    assert "--tasks hash mismatch" in capsys.readouterr().err
+
+
+def test_verify_model_eval_requires_declared_rendering(tmp_path, capsys):
+    # Y3: without the contract declaration the driver refuses to run at
+    # all - no hash to bind --tasks to.
+    dev = tmp_path / "dev.jsonl"
+    dev.write_bytes(b'{"case_id":"t1","prompt":"q","truth":"A"}\n')
+    spec = copy.deepcopy(VALID_SPEC)
+    spec.pop("workload", None)
+    spec["workloads"] = [
+        {
+            "name": "cold",
+            "profile": "quick",
+            "driver": "model_eval",
+            "splits": {
+                "dev": {
+                    "manifest": "dev.jsonl",
+                    "content_hash": "sha256:"
+                    + hashlib.sha256(dev.read_bytes()).hexdigest(),
+                }
+            },
+        }
+    ]
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "ref": "cand-1"}), encoding="utf-8"
+    )
+    rc = main(
+        [
+            "verify",
+            "--spec",
+            str(spec_path),
+            "--candidate",
+            str(candidate),
+            "--tasks",
+            str(tmp_path / "tasks.jsonl"),
+            "--labels",
+            str(tmp_path / "labels.jsonl"),
+            "--baseline-router-endpoint",
+            "http://ep1/v1",
+            "--candidate-router-endpoint",
+            "http://ep2/v1",
+            "--model-eval-dir",
+            str(tmp_path / "s"),
+        ]
+    )
+    assert rc == EXIT_CONTRACT_ERROR
+    assert "must declare model_eval_tasks" in capsys.readouterr().err

@@ -2,12 +2,16 @@
 
 import argparse
 import json
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from recipe_lab import cli, loop, report_delivery, srbench
+import yaml
+from recipe_lab import cli, loop, report_delivery, speed_draft, srbench
 from recipe_lab.loop_evidence import digest
+
+import test_speed_draft as speed
 
 CONFIG = "4" * 64
 
@@ -23,6 +27,67 @@ def _awaiting_receipt(run_id):
         "case_sha256": "c" * 64,
         "reason": "candidate submitted; awaiting evidence",
     }
+
+
+def test_draft_publishes_report_with_validated_package(tmp_path, monkeypatch, capsys):
+    providers_path = tmp_path / "providers.yaml"
+    providers_path.write_text(yaml.safe_dump(speed.providers()), encoding="utf-8")
+    output = tmp_path / "package"
+
+    def native(argv):
+        if "export" in argv:
+            folder = Path(argv[argv.index("--output-dir") + 1])
+            folder.mkdir()
+            (folder / "config.yaml").write_text("version: v0.5\n", encoding="utf-8")
+            return json.dumps({"catalog_version": "fixture", "sha256": "a" * 64})
+        if "init" in argv:
+            path = Path(argv[argv.index("--output") + 1])
+            path.write_text(yaml.safe_dump(speed.compiled()), encoding="utf-8")
+            return json.dumps({"valid": True, "catalog_version": "fixture"})
+        if "-validate-config" in argv:
+            return '{"valid":true}'
+        if "--version" in argv:
+            return "fixture"
+        assert "validate" in argv
+        return ""
+
+    monkeypatch.setattr(speed_draft, "_run", native)
+    cli.main(
+        [
+            "draft",
+            "--providers",
+            str(providers_path),
+            "--strong",
+            speed.STRONG,
+            "--fast",
+            speed.FAST,
+            "--public-model",
+            speed.PUBLIC,
+            "--out",
+            str(output),
+            "--vllm-sr",
+            sys.executable,
+            "--router",
+            sys.executable,
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+    report = Path(result["report"])
+    assert report == output / "report.md"
+    assert (output / "config.yaml").is_file()
+    assert (
+        cli.main(
+            [
+                "report",
+                "--evidence",
+                str(output / "manifest.json"),
+                "--output",
+                str(report),
+            ]
+        )
+        == 0
+    )
+    assert report.read_text(encoding="utf-8").startswith("#")
 
 
 def test_explicit_evidence_order_and_safe_output(tmp_path, capsys):

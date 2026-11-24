@@ -7,7 +7,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from .user_report import render_report
+if __package__:
+    from .user_report import render_report
+else:
+    # standalone execution (the speed draft calls this file by script path)
+    from user_report import render_report
 
 
 def _publish(path, data):

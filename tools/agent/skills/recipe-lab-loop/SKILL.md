@@ -77,5 +77,23 @@ Read `references/command-reference.md`'s agentic sections and
 (`propose-session-policy` - one variable per candidate, causes that must not
 become knobs come back as handoffs).
 
+## Cold start
+
+No recipe exists yet? Two paths start one. Without any dataset, `recipe-lab
+draft` derives a two-backend Speed recipe from declared provider cards
+(static validation only - gateway behavior and task quality stay unmeasured).
+With one labeled MCQ dataset, the measured chain generates candidates: the
+template path observes template lanes (`observe-lanes`), profiles them
+(`profile --lanes`) and compiles capability-aware bindings through the real
+`recipe builtin init` (`bindings`); the legacy 14-domain path stays behind
+`bootstrap --legacy-domain-template` with the Y2 label-agreement gate. Rank
+with `run --proposer bindings` (or `bootstrap`), verify with the model_eval
+driver (`verify --tasks/--labels/--lanes` - the candidate's management
+endpoint must confirm the exact graded config, Y4) and package with `bundle`
+(only a live PASS `--final` record, every hash re-bound). Both paths and the
+answer-bank import (`bank import`) are chained by
+`tools/recipe-lab/examples/cold-start/cold-start.sh`. Read
+`references/command-reference.md`'s cold-start section before driving it.
+
 Run `make check` after changing recipe-lab code; skill changes follow the
 `tools/agent` structure checks and public-skill sync tests.

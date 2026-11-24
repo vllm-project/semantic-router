@@ -217,6 +217,37 @@ def _compare(row):
     )
 
 
+def _draft(row):
+    _choice(row["status"], ("statically_validated",))
+    config = _hash(row["sha256"]["config.yaml"])
+    details = [
+        f"Source template {_label(row['template']['bundle'])} / {_label(row['template']['recipe'])}. "
+        f"The public model is {_label(row['public_model'])}.",
+        f"Deliver the generated `config.yaml` with SHA-256 {config}.",
+    ]
+    for lane in ("fast", "reasoning", "tools"):
+        refs = _items(row["bindings"][lane])
+        if not refs:
+            raise ValueError("draft lane is missing its bindings")
+        models = " then ".join(_label(ref["model"]) for ref in refs)
+        details.append(f"The {lane} lane considers {models} in that order.")
+    details.append(
+        f"The CLI offline check and native Router validation completed. "
+        f"The native Router warning count was {_count(row['router_warning_count'])}."
+    )
+    details.append(
+        "These checks establish configuration validity. Gateway behavior and task quality remain unmeasured by this receipt."
+    )
+    return Finding(
+        "Generate a recipe",
+        "Derive a two-backend routing configuration from the installed Speed template and check it before startup.",
+        "The draft passed static configuration validation.",
+        details,
+        "Start the packaged configuration and probe both backends, a tool round trip and an expected refusal. "
+        "Measure task success and latency on representative work.",
+    )
+
+
 def _depth(row):
     status = _choice(row["status"], ("proposed", "keep-parent", "inconclusive"))
     details = [
@@ -256,6 +287,7 @@ def _depth(row):
 
 
 _RENDER = {
+    "recipe-lab-v05-speed-draft-v1": _draft,
     "recipe-lab-sr-bench-run-v1": _bench,
     "recipe-lab-sr-bench-depth-v1": _depth,
 }

@@ -12,6 +12,7 @@ Subcommands:
   propose-rule-thresholds move every rule-level predicate site of one signal (C)
   propose-calibrated      rule threshold candidates at observed quantiles (D)
   suggest-depth           propose a Speed depth threshold from development evidence
+  draft                   create a two-backend Speed recipe from declared cards (starter path)
   run                     evaluate candidate configs in the replay tier -> ledger
   ledger                  inspect or append to the evidence ledger (append/show/top)
   live-verdict            compare two sr-bench runs -> PASS/FAIL/INCONCLUSIVE
@@ -61,9 +62,18 @@ from .attribution import (
     summarize,
     write_jsonl,
 )
-from .bank import apply_bank, build_bank, load_bank, write_bank
+from .bank import apply_bank, build_bank, import_judged, load_bank, write_bank
+from .bindings import run_bindings
+from .bootstrap import (
+    DEFAULT_LAMBDAS,
+    DEFAULT_LISTENER_PORT,
+    run_bootstrap,
+)
+from .bundle import build_bundle
+from .classification import load_classification_source
 from .contract import (
     DEFAULT_AGENTIC_GATES,
+    RUNNABLE_SPLITS,
     ContractError,
     ExperimentSpec,
     Workload,
@@ -83,7 +93,28 @@ from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_re
 from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
 from .live import live_verdict_from_runs, measurements_from_rows, verify_live
+from .model_eval_driver import verify_live_model_eval
+from .model_eval_tasks import load_source_rows, rows_to_model_eval_tasks, write_tasks
 from .next import write_next_context
+from .observe_labels import (
+    build_seed_config,
+    observe_split,
+    seed_config_fingerprint,
+    write_labels,
+    write_labels_summary,
+    write_seed_config,
+)
+from .observe_lanes import (
+    OBSERVE_MODEL_NAME,
+    build_observation_config,
+    observation_config_fingerprint,
+    observe_lanes_split,
+    publish_observation_snapshot,
+    template_info,
+    write_lanes,
+    write_lanes_summary,
+)
+from .profile import results_dirname, run_profile
 from .proposers import distribution_calibration, rule_threshold, threshold_search
 from .proposers import session_policy as session_policy_proposer
 from .provenance import promotion_candidate, write_run_manifest
@@ -156,15 +187,33 @@ def _load_spec(path: str) -> ExperimentSpec:
         _fail(f"cannot read spec: {exc}")
 
 
+def _router_model_for_proposer(override: str | None, proposer: str | None) -> str:
+    return override or (
+        OBSERVE_MODEL_NAME if proposer == "bindings" else "vllm-sr/auto"
+    )
+
+
 def _select_split(
-    spec: ExperimentSpec, split_name: str, workload: Workload | None = None
+    spec: ExperimentSpec,
+    split_name: str,
+    workload: Workload | None = None,
+    *,
+    allow_frozen_test: bool = False,
 ) -> str:
     """B: resolve --split against the workload; frozen_test is quarantined and
     legacy single-dataset workloads only accept 'dev'. M5: `workload` is the
-    selected Workload (default: the spec's first)."""
+    selected Workload (default: the spec's first).
+
+    Y1: observe-labels passes ``allow_frozen_test`` - the model_eval verify
+    driver rewrites the frozen split's categories from the C2 labels file, so
+    the seed config must be able to label frozen_test too. Observation through
+    the seed config is labeling, never tuning: the profile only ever consumes
+    the calib/dev labels, so the quarantine's purpose (no frozen_test feedback
+    into candidate selection) still holds."""
     workload = workload if workload is not None else spec.workload
     try:
-        check_runnable_split(split_name)
+        if not allow_frozen_test:
+            check_runnable_split(split_name)
         workload.split_hash(split_name)
     except ContractError as exc:
         raise ContractError(str(exc)) from exc
@@ -582,6 +631,485 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cases_to_model_eval(args: argparse.Namespace) -> int:
+    """C1: convert an MCQ source into model_eval's tasks format.
+
+    Deterministic (same source => byte-identical output), so the printed
+    tasks_sha256 can be frozen into the contract like the sr-bench hash.
+    """
+    try:
+        rows = load_source_rows(args.source)
+    except OSError as exc:
+        raise ContractError(f"cannot read source: {exc}") from exc
+    tasks = rows_to_model_eval_tasks(rows, default_dataset=args.dataset)
+    output = write_tasks(tasks, args.out)
+    _print_json(
+        {
+            "source": str(args.source),
+            "output": str(output),
+            "tasks_count": len(tasks),
+            "tasks_sha256": dataset_content_hash(output),
+        }
+    )
+    return 0
+
+
+def cmd_observe_labels(args: argparse.Namespace) -> int:
+    """C2: observe the router's own domain labels for one split.
+
+    Generates the seed config (14 domain decisions + catch-all, decision
+    model pinned), boots the stack via the runner with tagged request ids,
+    and writes labels-<split>.jsonl (case_id/router_label/confidence) plus a
+    summary carrying the label coverage the provenance records.
+    """
+    spec = _load_spec(args.spec)
+    # B/M5: the same split resolution as run/attribute - except frozen_test,
+    # which the C2 labeler may observe (Y1: the model_eval verify driver
+    # rewrites the frozen split's task categories from these labels; the
+    # profile never sees them, so the quarantine still holds).
+    workload = spec.require_tunable_workload(getattr(args, "workload", None))
+    split_name = _select_split(spec, args.split, workload, allow_frozen_test=True)
+    # A4: re-hash the selected split before touching it.
+    spec.verify_workload(split=split_name, workload=workload.name)
+    if spec.spec_dir is None:
+        raise ContractError("spec must be loaded from a file to resolve its manifest")
+    cases_path = Path(spec.spec_dir) / workload.split_manifest(split_name)
+    try:
+        cases = load_cases(cases_path)
+    except OSError as exc:
+        raise ContractError(f"cannot read split manifest: {exc}") from exc
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # Y2: the seed classifies with the same classification sections every
+    # bootstrap candidate will carry - one explicit source config.
+    classification = load_classification_source(args.classification_config)
+    seed_config = build_seed_config(
+        backend_endpoint=f"127.0.0.1:{args.backend_port}",
+        classification=classification,
+    )
+    config_path = write_seed_config(seed_config, out_dir / "seed-config.yaml")
+
+    env = RunnerEnv(
+        router_bin=args.router_bin,
+        mock_backend_script=args.mock_backend,
+        python_bin=args.python_bin,
+        work_dir=out_dir / "work",
+        backend_port=args.backend_port,
+        ready_timeout_s=args.ready_timeout,
+        hf_home=args.hf_home,
+        mock_extra_args=(
+            tuple(args.mock_extra_args.split()) if args.mock_extra_args else ()
+        ),
+    )
+    # A5: the per-trial budget bounds readiness wait + requests + fetch.
+    trial_timeout_s = spec.budget.max_minutes_per_trial * 60
+    try:
+        result = observe_split(
+            env=env,
+            config=config_path,
+            cases=cases,
+            router_model=args.router_model,
+            request_timeout=args.request_timeout,
+            trial_timeout_s=trial_timeout_s,
+        )
+    except RunnerTimeoutError as exc:
+        raise SystemExit(f"observation exceeded the trial budget: {exc}") from exc
+    except (RunnerError, ContractError) as exc:
+        raise SystemExit(f"observation failed: {exc}") from exc
+
+    labels_path = write_labels(result["rows"], out_dir / f"labels-{split_name}.jsonl")
+    summary = {
+        **result["summary"],
+        "split": split_name,
+        "workload": workload.name,
+        "cases_file": str(cases_path),
+        "cases_sha256": workload.split_hash(split_name),
+        "seed_config": str(config_path),
+        "seed_config_sha256": seed_config_fingerprint(config_path),
+        "classification_source": str(args.classification_config),
+        "classification_source_sha256": dataset_content_hash(
+            args.classification_config
+        ),
+        "join_stats": result["stats"],
+        "timings": result["timings"],
+    }
+    summary_path = write_labels_summary(
+        summary, out_dir / f"labels-{split_name}-summary.json"
+    )
+    _print_json(
+        {
+            "labels": str(labels_path),
+            "summary": str(summary_path),
+            "cases": summary["cases"],
+            "observed": summary["observed"],
+            "missing": summary["missing"],
+            "label_coverage": summary["label_coverage"],
+            "label_counts": summary["label_counts"],
+        }
+    )
+    return 0
+
+
+def cmd_observe_lanes(args: argparse.Namespace) -> int:
+    """C2 (template path): observe which template lane each case hits.
+
+    Reads the template's lanes via ``vllm-sr recipe builtin list``, builds
+    the observation config via ``recipe builtin init`` (template bound to
+    placeholder models; the bundle's pinned decision model decides the
+    lane), boots the stack with tagged request ids, and writes
+    lanes-<split>.jsonl (case_id/lane/confidence) plus a summary carrying
+    the lane coverage.
+    """
+    spec = _load_spec(args.spec)
+    if spec.template is None:
+        raise ContractError(
+            "spec declares no template section: observe-lanes generates the "
+            "observation config from a built-in recipe template (sub-issue-8 "
+            "§2.1; the legacy path is observe-labels)"
+        )
+    # M5/Y1: observe-lanes is labeling, never tuning. A transfer workload may
+    # be observed only on frozen_test (the final verify's grouping source);
+    # the profile/bank/run commands keep their tunable guards, so no tuning
+    # feedback path opens. frozen_test is allowed for the same reason
+    # observe-labels allows it: the model_eval verify driver rewrites the
+    # frozen split's task categories from the C2 lanes file, and the profile
+    # only ever consumes calib/dev lanes.
+    workload = spec.select_workload(getattr(args, "workload", None))
+    if workload.role == "transfer" and args.split != "frozen_test":
+        raise ContractError(
+            f"workload {workload.name!r} has role 'transfer': observe-lanes "
+            "accepts it only on --split frozen_test (the final verify's "
+            "grouping source)"
+        )
+    split_name = _select_split(spec, args.split, workload, allow_frozen_test=True)
+    spec.verify_workload(split=split_name, workload=workload.name)
+    if spec.spec_dir is None:
+        raise ContractError("spec must be loaded from a file to resolve its manifest")
+    cases_path = Path(spec.spec_dir) / workload.split_manifest(split_name)
+    try:
+        cases = load_cases(cases_path)
+    except OSError as exc:
+        raise ContractError(f"cannot read split manifest: {exc}") from exc
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    template = template_info(
+        bundle=spec.template.bundle,
+        recipe=spec.template.recipe,
+        vllm_sr_bin=args.vllm_sr_bin,
+        catalog_version=args.catalog_version,
+        timeout_s=args.init_timeout,
+    )
+    # builtin init exclusively creates its output. Keep the evaluated
+    # config and router logs for each attempt, including repeated splits.
+    run_dir = Path(tempfile.mkdtemp(prefix=f"observe-{split_name}-", dir=out_dir))
+    try:
+        observation = build_observation_config(
+            template=template,
+            out_dir=run_dir,
+            backend_endpoint=f"127.0.0.1:{args.backend_port}",
+            vllm_sr_bin=args.vllm_sr_bin,
+            model_name=args.model_name,
+            listener_port=args.listener_port,
+            timeout_s=args.init_timeout,
+        )
+    except ContractError as exc:
+        raise SystemExit(f"observation config generation failed: {exc}") from exc
+
+    env = RunnerEnv(
+        router_bin=args.router_bin,
+        mock_backend_script=args.mock_backend,
+        python_bin=args.python_bin,
+        work_dir=run_dir / "work",
+        backend_port=args.backend_port,
+        ready_timeout_s=args.ready_timeout,
+        hf_home=args.hf_home,
+        mock_extra_args=(
+            tuple(args.mock_extra_args.split()) if args.mock_extra_args else ()
+        ),
+    )
+    trial_timeout_s = spec.budget.max_minutes_per_trial * 60
+    try:
+        result = observe_lanes_split(
+            env=env,
+            config=observation["config"],
+            cases=cases,
+            router_model=args.model_name,
+            request_timeout=args.request_timeout,
+            trial_timeout_s=trial_timeout_s,
+        )
+    except RunnerTimeoutError as exc:
+        raise SystemExit(f"lane observation exceeded the trial budget: {exc}") from exc
+    except (RunnerError, ContractError) as exc:
+        raise SystemExit(f"lane observation failed: {exc}") from exc
+
+    lanes_path = write_lanes(result["rows"], out_dir / f"lanes-{split_name}.jsonl")
+    summary = {
+        **result["summary"],
+        "split": split_name,
+        "workload": workload.name,
+        "cases_file": str(cases_path),
+        "cases_sha256": workload.split_hash(split_name),
+        "observation_config": str(observation["config"]),
+        "observation_config_sha256": observation_config_fingerprint(
+            observation["config"]
+        ),
+        "template": {
+            "bundle": template["bundle"],
+            "recipe": template["recipe"],
+            "sha256": template["sha256"],
+            "catalog_version": template["catalog_version"],
+        },
+        "init_command": observation["init_command"],
+        "cache_disabled": observation["cache_disabled"],
+        "join_stats": result["stats"],
+        "timings": result["timings"],
+    }
+    summary_path = write_lanes_summary(
+        summary, out_dir / f"lanes-{split_name}-summary.json"
+    )
+    publish_observation_snapshot(out_dir, run_dir)
+    _print_json(
+        {
+            "lanes": str(lanes_path),
+            "summary": str(summary_path),
+            "observation_config": str(observation["config"]),
+            "cases": summary["cases"],
+            "observed": summary["observed"],
+            "missing": summary["missing"],
+            "lane_coverage": summary["lane_coverage"],
+            "lane_counts": summary["lane_counts"],
+        }
+    )
+    return 0
+
+
+def cmd_profile(args: argparse.Namespace) -> int:
+    """C3: per-model profiles grouped by labels (legacy) or template lanes."""
+    spec = _load_spec(args.spec)
+    labels = getattr(args, "labels", None)
+    lanes = getattr(args, "lanes", None)
+    if (labels is None) == (lanes is None):
+        raise ContractError(
+            "profile needs exactly one grouping source: --labels (legacy "
+            "domain-template path) or --lanes (template lane mode)"
+        )
+    if lanes is not None and spec.template is None:
+        raise ContractError(
+            "--lanes requires the spec's template section (lane mode is the "
+            "template path; sub-issue-8 §2.1)"
+        )
+    workload = spec.require_tunable_workload(getattr(args, "workload", None))
+    if spec.spec_dir is None:
+        raise ContractError("spec must be loaded from a file to resolve its manifest")
+    if not spec.models:
+        raise ContractError(
+            "spec declares no models section: profile needs the candidate "
+            "models and their direct endpoints"
+        )
+    if spec.generation is None:
+        raise ContractError(
+            "spec declares no generation section: profile needs the shared "
+            "generation params"
+        )
+    splits = [s.strip() for s in args.splits.split(",") if s.strip()]
+    if not splits:
+        raise ContractError("--splits is empty")
+    for split in splits:
+        if split not in RUNNABLE_SPLITS:
+            raise ContractError(
+                f"split {split!r} is not profileable: profile runs calib/dev only "
+                "(frozen_test is quarantined; calib feeds bootstrap, dev the bank)"
+            )
+    model_eval_dir = Path(args.model_eval_dir)
+    if not model_eval_dir.is_dir():
+        raise ContractError(f"model_eval directory not found: {model_eval_dir}")
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cases_paths: dict[str, Path] = {}
+    cases_hashes: dict[str, str] = {}
+    for split in splits:
+        cases_hashes[split] = spec.verify_workload(split=split, workload=workload.name)
+        cases_paths[split] = Path(spec.spec_dir) / workload.split_manifest(split)
+
+    # ContractError propagates to main() -> exit 2.
+    profile_path = run_profile(
+        spec=spec,
+        cases_paths=cases_paths,
+        cases_hashes=cases_hashes,
+        labels_dir=Path(labels) if labels else None,
+        lanes_dir=Path(lanes) if lanes else None,
+        splits=splits,
+        out_dir=out_dir,
+        model_eval_dir=model_eval_dir,
+        python_bin=args.python_bin,
+        concurrency=args.concurrency,
+        request_timeout=args.request_timeout,
+        force=args.force,
+    )
+    _print_json(
+        {
+            "profile": str(profile_path),
+            "splits": splits,
+            "models": [model.name for model in spec.models],
+            "grouping": "lanes" if lanes else "labels",
+            "min_label_cases": spec.profile_config.min_label_cases,
+            "min_lane_cases": spec.bootstrap_config.min_lane_cases,
+        }
+    )
+    return 0
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """C4+C5 (legacy domain-template path): per-lambda scaffold via
+    result_to_config, completed to candidates.
+
+    This is the compatibility path (sub-issue-8 §2.5): it only runs with
+    the explicit ``--legacy-domain-template`` flag and is not part of the
+    cold-start completion criteria. The template path is ``bindings``.
+    """
+    if not getattr(args, "legacy_domain_template", False):
+        raise ContractError(
+            "bootstrap is the legacy domain-template path (result_to_config "
+            "scaffold); pass --legacy-domain-template to run it explicitly, "
+            "or use the template path: observe-lanes + profile --lanes + "
+            "bindings (sub-issue-8 §2.5)"
+        )
+    spec = _load_spec(args.spec)
+    if not spec.models:
+        raise ContractError(
+            "spec declares no models section: bootstrap needs the candidate "
+            "models and their direct endpoints"
+        )
+    model_eval_dir = Path(args.model_eval_dir)
+    if not model_eval_dir.is_dir():
+        raise ContractError(f"model_eval directory not found: {model_eval_dir}")
+    profile_dir = Path(args.profile)
+    if not (profile_dir / "profile.json").is_file():
+        raise ContractError(
+            f"profile not found: {profile_dir / 'profile.json'} (bootstrap "
+            "consumes the C3 profile directory)"
+        )
+    # Y2 ①: one explicit classification source for the observe seed and every
+    # candidate; the classification sections are injected into both.
+    classification = load_classification_source(args.classification_config)
+    # Y2 ②: the label-agreement check observes the dev split (never calib,
+    # which bootstrap consumes, and never frozen_test, which is quarantined).
+    workload = spec.require_tunable_workload(getattr(args, "workload", None))
+    if spec.spec_dir is None:
+        raise ContractError("spec must be loaded from a file to resolve its manifest")
+    if "dev" not in workload.splits:
+        raise ContractError(
+            f"workload {workload.name!r} declares no dev split: the bootstrap "
+            "label-agreement check observes dev (declare it in the spec)"
+        )
+    spec.verify_workload(split="dev", workload=workload.name)
+    cases_path = Path(spec.spec_dir) / workload.split_manifest("dev")
+    try:
+        dev_cases = load_cases(cases_path)
+    except OSError as exc:
+        raise ContractError(f"cannot read dev manifest: {exc}") from exc
+    if not dev_cases:
+        raise ContractError(f"dev split is empty: {cases_path}")
+    env = RunnerEnv(
+        router_bin=args.router_bin,
+        mock_backend_script=args.mock_backend,
+        python_bin=args.python_bin,
+        work_dir=Path(args.out) / "label-check",
+        backend_port=args.backend_port,
+        ready_timeout_s=args.ready_timeout,
+        hf_home=args.hf_home,
+        mock_extra_args=(
+            tuple(args.mock_extra_args.split()) if args.mock_extra_args else ()
+        ),
+    )
+    result = run_bootstrap(
+        spec=spec,
+        profile_dir=profile_dir,
+        model_eval_dir=model_eval_dir,
+        lambdas=args.lambdas,
+        out_dir=Path(args.out),
+        python_bin=args.python_bin,
+        validate_bin=args.validate_bin,
+        classification=classification,
+        classification_path=args.classification_config,
+        dev_cases=dev_cases,
+        env=env,
+        request_timeout=args.request_timeout,
+        listener_port=args.listener_port,
+    )
+    _print_json(result)
+    return 0
+
+
+def cmd_bindings(args: argparse.Namespace) -> int:
+    """C4+C5 (template path): per-lane bindings + candidate configs.
+
+    Runs the routing-space check, plans the per-lane bindings for every
+    lambda (capability filter, accuracy - lambda * normalized cost,
+    minimum_candidates, unmeasured lanes by the default rule), generates
+    each candidate via ``recipe builtin init`` over the spec's
+    providers_config, and validates it. A ``no_routing_space`` verdict ends
+    the command with the report and no candidates (sub-issue-8 §2.2).
+    """
+    spec = _load_spec(args.spec)
+    if not spec.models:
+        raise ContractError(
+            "spec declares no models section: bindings needs the candidate "
+            "models, their direct endpoints and their declared capabilities"
+        )
+    profile_dir = Path(args.profile)
+    if not (profile_dir / "profile.json").is_file():
+        raise ContractError(
+            f"profile not found: {profile_dir / 'profile.json'} (bindings "
+            "consumes the C3 profile directory)"
+        )
+    result = run_bindings(
+        spec=spec,
+        profile_dir=profile_dir,
+        out_dir=Path(args.out),
+        lambdas_raw=args.lambdas,
+        exclude=tuple(args.exclude_decision or ()),
+        vllm_sr_bin=args.vllm_sr_bin,
+        catalog_version=args.catalog_version,
+        model_name=args.model_name,
+        timeout_s=args.init_timeout,
+    )
+    _print_json(result)
+    return 0
+
+
+def cmd_bundle(args: argparse.Namespace) -> int:
+    """C9: package final-verify evidence into a reviewable bundle."""
+    revisions: dict[str, str] = {}
+    for item in args.model_revision:
+        name, sep, revision = item.partition("=")
+        if not sep or not name.strip() or not revision.strip():
+            raise ContractError(f"--model-revision must be NAME=REVISION, got {item!r}")
+        revisions[name.strip()] = revision.strip()
+    spec = _load_spec(args.spec)
+    result = build_bundle(
+        spec=spec,
+        ledger_path=args.ledger,
+        record_id=args.record,
+        out_dir=args.out,
+        config_path=args.config,
+        skeleton_path=args.skeleton,
+        bindings_path=args.bindings,
+        profile_path=args.profile,
+        validate_bin=args.validate_bin,
+        router_commit=args.router_commit,
+        model_revisions=revisions,
+        model_eval_script=args.model_eval_script,
+        candidate_sidecar=args.candidate_sidecar,
+        extra_private_patterns=list(args.private_pattern),
+    )
+    _print_json(result)
+    return 0
+
+
 def cmd_bank(args: argparse.Namespace) -> int:
     if args.bank_action == "build":
         cases = []
@@ -599,6 +1127,60 @@ def cmd_bank(args: argparse.Namespace) -> int:
             _fail(f"answer bank error: {exc}")
         out = write_bank(entries, args.output)
         _print_json({"entries": len(entries), "models": models, "output": str(out)})
+        return 0
+
+    if args.bank_action == "import":
+        # C6: convert the profile's direct-model dev judged.jsonl files into
+        # the answer bank format (no endpoint traffic - the evidence is the
+        # profile run itself).
+        try:
+            spec = _load_spec(args.spec)
+            if not spec.models:
+                raise ContractError("spec declares no models: nothing to import")
+            split = str(args.split)
+            if split not in RUNNABLE_SPLITS:
+                raise ContractError(
+                    f"split {split!r} is not importable: profile runs "
+                    f"{sorted(RUNNABLE_SPLITS)} only"
+                )
+            profile_dir = Path(args.profile_dir)
+            stats: dict[str, object] = {}
+            entries: list = []
+            for model in spec.models:
+                judged_path = (
+                    profile_dir
+                    / split
+                    / "results"
+                    / results_dirname(model.name)
+                    / "judged.jsonl"
+                )
+                if not judged_path.is_file():
+                    raise ContractError(
+                        f"no profile judged.jsonl for model {model.name!r}: "
+                        f"{judged_path} (run recipe-lab profile with this split first)"
+                    )
+                judged_rows = [
+                    json.loads(line)
+                    for line in judged_path.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+                model_entries = import_judged(model.name, judged_rows)
+                entries.extend(model_entries)
+                stats[model.name] = {
+                    "cases": len(model_entries),
+                    "correct": sum(1 for e in model_entries if e.answer_ok),
+                }
+            out = write_bank(entries, args.output)
+            _print_json(
+                {
+                    "entries": len(entries),
+                    "models": stats,
+                    "split": split,
+                    "output": str(out),
+                }
+            )
+        except (ContractError, OSError, json.JSONDecodeError) as exc:
+            _fail(f"bank import error: {exc}")
         return 0
 
     if args.bank_action == "apply":
@@ -850,6 +1432,7 @@ _PROPOSER_TAGS = (
     "rule-threshold",
     "distribution-calibration",
     "bootstrap",
+    "bindings",
 )
 
 
@@ -1096,6 +1679,7 @@ def cmd_run_route_replay(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    args.router_model = _router_model_for_proposer(args.router_model, args.proposer)
     if args.tier == "route-replay":
         return cmd_run_route_replay(args)
     spec = _load_spec(args.spec)
@@ -1666,8 +2250,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     """
     spec = _load_spec(args.spec)
     # B: frozen_test is quarantined; only the --final promotion verdict may
-    # cite it. M5: a transfer workload is final-verify only (the frozen_test
-    # rule applies to the whole workload).
+    # cite it. Every other split goes through the normal A4 re-hash gate.
     workload = spec.select_workload(getattr(args, "workload", None))
     workload.check_live_split(args.split, final=args.final)
     dataset_hash = spec.verify_workload(split=args.split, workload=workload.name)
@@ -1694,86 +2277,177 @@ def cmd_verify(args: argparse.Namespace) -> int:
     ledger = Ledger(args.ledger) if args.ledger else None
     insight_refs = resolve_insight_refs(parse_insight_refs(args.insight_refs), ledger)
     merge_insight_refs(candidate_row.setdefault("provenance", {}), insight_refs)
-    # sr-bench MoM target ids the router is serving the candidate on: the
-    # CLI flag wins; otherwise the candidate file must carry srbench_targets.
-    if args.candidate_targets:
-        targets = [t.strip() for t in args.candidate_targets.split(",") if t.strip()]
-    else:
-        targets = candidate_row.get("srbench_targets")
-    if (
-        not isinstance(targets, list)
-        or not targets
-        or not all(isinstance(t, str) and t.strip() for t in targets)
-    ):
-        raise ContractError(
-            "verify needs sr-bench MoM target ids: pass --candidate-targets "
-            "(comma-separated) or add a non-empty srbench_targets list to the candidate JSON"
-        )
+    # M4: reference-arm run IDs are cached so repeated verify invocations do
+    # not re-run the (expensive) reference arms; default location follows the
+    # ledger when present, else the work dir.
+    run_cache = args.run_cache or (
+        Path(args.ledger).parent / "run-id-cache.json" if args.ledger else None
+    )
     work_dir = (
         Path(args.work_dir)
         if args.work_dir
         else Path(tempfile.mkdtemp(prefix="rl-verify-"))
     )
-    cli = SrbenchCli(
-        bin=args.srbench_bin,
-        url=args.srbench_url,
-        store=args.srbench_store,
-        timeout_s=args.timeout,
-    )
-    # Z4: the replay-sourced stability gates judge the arms' own router
-    # replay records, and the CLI is their only source - an agentic
-    # verify without the management endpoints could never evaluate
-    # them, so fail fast before anything is spent on runs.
-    if workload.kind == "agentic":
-        resolved_gates = workload.resolved_agentic_gates()
-        if (
-            any(
-                gate in resolved_gates
-                for gate in ("max_selection_rejected", "max_tool_loop_interrupted")
+    if workload.driver == "model_eval":
+        # C7: the model_eval driver replaces sr-bench end to end - every arm
+        # is a multi_benchmark_eval + mcq_judge pass (router arms hit the
+        # router endpoints, reference arms the models' direct endpoints) and
+        # the per-case correctness feeds the same M2/M3/M4 machinery.
+        if args.baseline_run_id or args.baseline_manifest:
+            raise ContractError(
+                "the model_eval driver takes no sr-bench baseline: the "
+                "baseline arm is --baseline-router-endpoint"
             )
-            and not args.candidate_management_endpoint
+        # Y3: the arms answer the contract-declared `model_eval_tasks`
+        # rendering of the split - never an arbitrary file. verify_workload
+        # above re-hashed the declared rendering; here the CLI file must be
+        # byte-identical to it, and the C2 labels file drives the in-driver
+        # category rewrite.
+        if not args.tasks:
+            raise ContractError(
+                "the model_eval driver needs --tasks (the contract-declared "
+                "model_eval_tasks rendering for this split)"
+            )
+        declared_tasks_hash = workload.split_model_eval_tasks_hash(args.split)
+        if declared_tasks_hash is None:
+            raise ContractError(
+                f"workload {workload.name!r} split {args.split!r} must declare "
+                "model_eval_tasks and model_eval_tasks_sha256 (the "
+                "`cases to-model-eval` rendering) for the model_eval driver"
+            )
+        if not args.labels and not getattr(args, "lanes", None):
+            raise ContractError(
+                "the model_eval driver needs exactly one grouping source: "
+                "--labels (the C2 labels JSONL) or --lanes (the C2 lane-mode "
+                "lanes JSONL for this split; the driver rewrites task "
+                "categories from it)"
+            )
+        if args.labels and getattr(args, "lanes", None):
+            raise ContractError(
+                "pass --labels or --lanes, not both (the driver rewrites task "
+                "categories from exactly one grouping source)"
+            )
+        if getattr(args, "lanes", None) and spec.template is None:
+            raise ContractError(
+                "--lanes requires the spec's template section (lane mode is "
+                "the template path; sub-issue-8 §2.1)"
+            )
+        spec.require_dataset_file(
+            args.tasks, what="--tasks", expected_hash=declared_tasks_hash
+        )
+        missing_flags = [
+            flag
+            for flag, value in (
+                ("--baseline-router-endpoint", args.baseline_router_endpoint),
+                ("--candidate-router-endpoint", args.candidate_router_endpoint),
+                # Y4: the verdict must name the config it graded.
+                ("--candidate-config", args.candidate_config),
+                ("--model-eval-dir", args.model_eval_dir),
+            )
+            if not value
+        ]
+        if missing_flags:
+            raise ContractError(
+                "the model_eval driver needs " + ", ".join(missing_flags)
+            )
+        try:
+            result = verify_live_model_eval(
+                spec=spec,
+                tasks_path=args.tasks,
+                labels_path=args.labels,
+                lanes_path=getattr(args, "lanes", None),
+                candidate_config=args.candidate_config,
+                baseline_endpoint=args.baseline_router_endpoint,
+                candidate_endpoint=args.candidate_router_endpoint,
+                management_endpoint=args.candidate_management_endpoint,
+                router_model=_router_model_for_proposer(
+                    args.router_model, candidate_row["provenance"].get("proposer")
+                ),
+                repetitions=args.repetitions,
+                measurements=measurements,
+                model_eval_dir=args.model_eval_dir,
+                python_bin=args.python_bin,
+                work_dir=work_dir,
+                concurrency=args.concurrency,
+                request_timeout=args.request_timeout,
+                force=args.force,
+                run_cache=run_cache,
+            )
+        except (ContractError, OSError) as exc:
+            raise SystemExit(f"verify error: {exc}") from exc
+    else:
+        # sr-bench MoM target ids the router is serving the candidate on: the
+        # CLI flag wins; otherwise the candidate file must carry srbench_targets.
+        if args.candidate_targets:
+            targets = [
+                t.strip() for t in args.candidate_targets.split(",") if t.strip()
+            ]
+        else:
+            targets = candidate_row.get("srbench_targets")
+        if (
+            not isinstance(targets, list)
+            or not targets
+            or not all(isinstance(t, str) and t.strip() for t in targets)
         ):
             raise ContractError(
-                "agentic verify needs --candidate-management-endpoint (the "
-                "candidate arm's router management base URL): the "
-                "replay-sourced stability gates judge the arm's own "
-                "replay records"
+                "verify needs sr-bench MoM target ids: pass --candidate-targets "
+                "(comma-separated) or add a non-empty srbench_targets list to the "
+                "candidate JSON"
             )
-        if (
-            resolved_gates.get("max_tool_loop_interrupted") == "baseline"
-            and not args.baseline_management_endpoint
-        ):
-            raise ContractError(
-                'agentic gate max_tool_loop_interrupted pins "baseline": '
-                "pass --baseline-management-endpoint (the baseline arm's "
-                "router management base URL), or declare a numeric "
-                "ceiling instead when the comparison has no comparable "
-                "baseline router (cold start)"
+        cli = SrbenchCli(
+            bin=args.srbench_bin,
+            url=args.srbench_url,
+            store=args.srbench_store,
+            timeout_s=args.timeout,
+        )
+        # Z4: the replay-sourced stability gates judge the arms' own router
+        # replay records, and the CLI is their only source - an agentic
+        # verify without the management endpoints could never evaluate
+        # them, so fail fast before anything is spent on runs.
+        if workload.kind == "agentic":
+            resolved_gates = workload.resolved_agentic_gates()
+            if (
+                any(
+                    gate in resolved_gates
+                    for gate in ("max_selection_rejected", "max_tool_loop_interrupted")
+                )
+                and not args.candidate_management_endpoint
+            ):
+                raise ContractError(
+                    "agentic verify needs --candidate-management-endpoint (the "
+                    "candidate arm's router management base URL): the "
+                    "replay-sourced stability gates judge the arm's own "
+                    "replay records"
+                )
+            if (
+                resolved_gates.get("max_tool_loop_interrupted") == "baseline"
+                and not args.baseline_management_endpoint
+            ):
+                raise ContractError(
+                    'agentic gate max_tool_loop_interrupted pins "baseline": '
+                    "pass --baseline-management-endpoint (the baseline arm's "
+                    "router management base URL), or declare a numeric "
+                    "ceiling instead when the comparison has no comparable "
+                    "baseline router (cold start)"
+                )
+        try:
+            result = verify_live(
+                spec=spec,
+                cli=cli,
+                baseline_run_id=args.baseline_run_id,
+                baseline_manifest=args.baseline_manifest,
+                targets=targets,
+                repetitions=args.repetitions,
+                measurements=measurements,
+                work_dir=work_dir,
+                workload_split=args.split,
+                run_cache=run_cache,
+                workload=workload,
+                candidate_management_endpoint=args.candidate_management_endpoint,
+                baseline_management_endpoint=args.baseline_management_endpoint,
             )
-    try:
-        # M4: reference-arm run IDs are cached so repeated verify invocations
-        # do not re-run the (expensive) reference arms; default location
-        # follows the ledger when present, else the work dir.
-        run_cache = args.run_cache or (
-            Path(args.ledger).parent / "run-id-cache.json" if args.ledger else None
-        )
-        result = verify_live(
-            spec=spec,
-            cli=cli,
-            baseline_run_id=args.baseline_run_id,
-            baseline_manifest=args.baseline_manifest,
-            targets=targets,
-            repetitions=args.repetitions,
-            measurements=measurements,
-            work_dir=work_dir,
-            workload_split=args.split,
-            run_cache=run_cache,
-            workload=workload,
-            candidate_management_endpoint=args.candidate_management_endpoint,
-            baseline_management_endpoint=args.baseline_management_endpoint,
-        )
-    except (ContractError, RuntimeError) as exc:
-        raise SystemExit(f"verify error: {exc}") from exc
+        except (ContractError, RuntimeError) as exc:
+            raise SystemExit(f"verify error: {exc}") from exc
 
     if args.ledger:
         preview = result.get("preview") or {}
@@ -1783,12 +2457,18 @@ def cmd_verify(args: argparse.Namespace) -> int:
         ]
         if preview.get("run_id"):
             notes_parts.append(f"preview_run={preview['run_id']}")
-        distribution = preview.get("distribution")
+        # the model_eval driver has no sr-bench preview: its distribution
+        # rides the result (alias-keyed shares behind the random mix R)
+        distribution = preview.get("distribution") or result.get("distribution")
         if distribution:
             notes_parts.append(
                 "routing_distribution="
                 + json.dumps(distribution, sort_keys=True, ensure_ascii=False)
             )
+        # Y4: the ledger's candidate names the config the verdict graded -
+        # sr-bench driver: the frozen config_hash of the MoM targets;
+        # model_eval driver: the sha256 the management API acknowledged.
+        candidate_row["config_sha256"] = result["config_sha256"]
         record = LedgerRecord(
             round=args.round,
             ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -1815,14 +2495,16 @@ def cmd_verify(args: argparse.Namespace) -> int:
             paired=result.get("paired"),
             # AG1: agentic continuity evidence for agentic workloads.
             agentic=result.get("agentic"),
+            attribution_delta=None,
             verification={
                 "baseline": result["metrics"]["baseline"],
                 "guard_measurements": measurements,
                 "evidence_quality": result.get("evidence_quality"),
             },
-            attribution_delta=None,
             attribution_ref=args.attribution_ref,
             coverage_warning=False,
+            # Y4: --final marks the promotion record the bundle reads.
+            final=bool(args.final),
             notes="; ".join(notes_parts),
         )
         ledger.append(record)
@@ -2071,6 +2753,437 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_fromreplays.set_defaults(func=cmd_cases_from_replays)
 
+    p_boot = sub.add_parser(
+        "bootstrap",
+        help="legacy domain-template path (sub-issue-8 §2.5): per-lambda "
+        "scaffold via result_to_config, completed to candidates; requires "
+        "--legacy-domain-template and is not part of the cold-start "
+        "completion criteria - the template path is observe-lanes + profile "
+        "--lanes + bindings",
+    )
+    p_boot.add_argument(
+        "--legacy-domain-template",
+        action="store_true",
+        help="run the legacy result_to_config scaffold path explicitly "
+        "(sub-issue-8 §2.5: compatibility only)",
+    )
+    p_boot.add_argument(
+        "--spec", required=True, help="experiment spec YAML (models + cost_basis)"
+    )
+    p_boot.add_argument(
+        "--profile",
+        required=True,
+        help="C3 profile directory (profile.json + calib/results + calib/token_costs)",
+    )
+    p_boot.add_argument(
+        "--model-eval-dir",
+        required=True,
+        help="directory holding result_to_config.py; the script runs as a "
+        "subprocess and its hash lands in the provenance sidecar",
+    )
+    p_boot.add_argument(
+        "--classification-config",
+        required=True,
+        help="classification source config whose global.model_catalog.modules "
+        "and .embeddings replace the scaffold's copies in every candidate (Y2: "
+        "same source as observe-labels' seed config)",
+    )
+    p_boot.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads whose dev split the label-agreement "
+        "check observes (default: the first workload)",
+    )
+    p_boot.add_argument(
+        "--router-bin",
+        required=True,
+        help="path to the semantic-router binary (boots the Y2 label-agreement "
+        "check: dev observed through the seed config and through every "
+        "candidate)",
+    )
+    p_boot.add_argument(
+        "--mock-backend",
+        required=True,
+        help="path to a mock/real OpenAI backend launcher script for the "
+        "label-agreement check",
+    )
+    p_boot.add_argument(
+        "--backend-port", type=int, default=8000, help="label-check backend port"
+    )
+    p_boot.add_argument(
+        "--ready-timeout",
+        type=int,
+        default=300,
+        help="model-runtime readiness timeout for the label-agreement check",
+    )
+    p_boot.add_argument(
+        "--hf-home",
+        default=None,
+        help="HF_HOME for the label-check router process (model artifacts)",
+    )
+    p_boot.add_argument(
+        "--mock-extra-args",
+        default="",
+        help="extra args passed to the label-check mock backend (split on spaces)",
+    )
+    p_boot.add_argument(
+        "--request-timeout",
+        type=float,
+        default=180.0,
+        help="per-request timeout for the label-agreement observations",
+    )
+    p_boot.add_argument(
+        "--lambdas",
+        default=DEFAULT_LAMBDAS,
+        help="comma-separated cost-lambda values (0 = pure accuracy; a lambda "
+        "whose token costs are missing is rejected, never silently ignored)",
+    )
+    p_boot.add_argument(
+        "--out",
+        required=True,
+        help="output directory (scaffold-lambda-<lambda>.yaml + "
+        "candidate-lambda-<lambda>.yaml + candidate-lambda-<lambda>.provenance.json)",
+    )
+    p_boot.add_argument(
+        "--python-bin", default=sys.executable, help="python used to run the script"
+    )
+    p_boot.add_argument(
+        "--validate-bin",
+        default="vllm-sr",
+        help="validator invoked as '<bin> config validate --config <path>'; a "
+        "rejected candidate fails the command (C5 completion criterion)",
+    )
+    p_boot.add_argument(
+        "--listener-port",
+        type=int,
+        default=DEFAULT_LISTENER_PORT,
+        help="gateway listener port written into every candidate",
+    )
+    p_boot.set_defaults(func=cmd_bootstrap)
+
+    p_bindings = sub.add_parser(
+        "bindings",
+        help="per-lane bindings + candidate configs from the C3 profile "
+        "(C4+C5 template path: routing-space check, capability filter, "
+        "accuracy - lambda * normalized cost ranking, minimum_candidates, "
+        "unmeasured lanes by the default rule, then recipe builtin init "
+        "generates and config validate accepts every candidate; a "
+        "no-routing-space verdict ends with the report and no candidates)",
+    )
+    p_bindings.add_argument(
+        "--spec",
+        required=True,
+        help="experiment spec YAML (template + models with capabilities + "
+        "providers_config + cost_basis)",
+    )
+    p_bindings.add_argument(
+        "--profile",
+        required=True,
+        help="C3 profile directory (profile.json; lane mode, calib split only)",
+    )
+    p_bindings.add_argument(
+        "--out",
+        required=True,
+        help="output directory (providers-eval.yaml + bindings-lambda-<tag>.yaml "
+        "+ candidate-lambda-<tag>.yaml + bindings-lambda-<tag>.provenance.json)",
+    )
+    p_bindings.add_argument(
+        "--lambdas",
+        default=None,
+        help="comma-separated cost-lambda values (default: the spec's "
+        "bootstrap.lambdas, else 0 = pure accuracy)",
+    )
+    p_bindings.add_argument(
+        "--exclude-decision",
+        action="append",
+        default=None,
+        help="explicitly omit a named lane whose capability requirement no "
+        "model satisfies (repeatable; passed to recipe builtin init)",
+    )
+    p_bindings.add_argument(
+        "--vllm-sr-bin",
+        default="vllm-sr",
+        help="vllm-sr binary for recipe builtin list/init and config validate",
+    )
+    p_bindings.add_argument(
+        "--catalog-version",
+        default="latest",
+        help="built-in bundle catalog version (recipe builtin list/init)",
+    )
+    p_bindings.add_argument(
+        "--model-name",
+        default=OBSERVE_MODEL_NAME,
+        help="public entrypoint name of the generated config (recipe builtin "
+        "init --model-name)",
+    )
+    p_bindings.add_argument(
+        "--init-timeout",
+        type=float,
+        default=300.0,
+        help="per-invocation timeout for recipe builtin list/init",
+    )
+    p_bindings.set_defaults(func=cmd_bindings)
+
+    p_profile = sub.add_parser(
+        "profile",
+        help="per-model MCQ profiles grouped by the router's own labels "
+        "(--labels, legacy domain-template path) or by template lanes "
+        "(--lanes, template path; C3: rewrites task categories, runs the "
+        "model_eval scripts direct per model, writes profile.json with the "
+        "provenance; lane mode records unmeasured lanes instead of merging)",
+    )
+    p_profile.add_argument(
+        "--spec", required=True, help="experiment spec YAML (models/generation/profile)"
+    )
+    p_profile.add_argument(
+        "--labels",
+        default=None,
+        help="labels directory from observe-labels (labels-<split>.jsonl); "
+        "exactly one of --labels/--lanes",
+    )
+    p_profile.add_argument(
+        "--lanes",
+        default=None,
+        help="lanes directory from observe-lanes (lanes-<split>.jsonl); "
+        "requires the spec's template section; exactly one of --labels/--lanes",
+    )
+    p_profile.add_argument(
+        "--splits",
+        default="calib,dev",
+        help="comma-separated splits to profile (calib,dev; frozen_test is "
+        "quarantined; calib feeds bootstrap, dev the answer bank)",
+    )
+    p_profile.add_argument(
+        "--out",
+        required=True,
+        help="output directory (generation.json + <split>/{tasks,results,token_costs}"
+        " + profile.json)",
+    )
+    p_profile.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
+    )
+    p_profile.add_argument(
+        "--model-eval-dir",
+        required=True,
+        help="directory holding the invoked model_eval scripts "
+        "(multi_benchmark_eval.py / mcq_judge.py / cost_aware_calib.py); "
+        "the scripts run as subprocesses and their hashes land in the profile",
+    )
+    p_profile.add_argument(
+        "--python-bin", default=sys.executable, help="python used to run the scripts"
+    )
+    p_profile.add_argument(
+        "--concurrency", type=int, default=8, help="per-model request concurrency"
+    )
+    p_profile.add_argument(
+        "--request-timeout",
+        type=float,
+        default=1800.0,
+        help="per-request timeout in seconds (multi_benchmark_eval default)",
+    )
+    p_profile.add_argument(
+        "--force",
+        action="store_true",
+        help="re-run all tasks instead of resuming completed records",
+    )
+    p_profile.set_defaults(func=cmd_profile)
+
+    p_observe_lanes = sub.add_parser(
+        "observe-lanes",
+        help="observe which template lane each case hits (C2 template path: "
+        "recipe builtin list reads the lanes, recipe builtin init binds the "
+        "template to placeholder models, the bundle's pinned decision model "
+        "decides; writes lanes-<split>.jsonl with case_id/lane/confidence)",
+    )
+    p_observe_lanes.add_argument(
+        "--spec",
+        required=True,
+        help="experiment spec YAML (template section "
+        "selects the built-in bundle/recipe; selects the split)",
+    )
+    p_observe_lanes.add_argument(
+        "--split",
+        default="dev",
+        choices=["calib", "dev", "frozen_test"],
+        help="workload split to observe (frozen_test is quarantined; B)",
+    )
+    p_observe_lanes.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
+    )
+    p_observe_lanes.add_argument(
+        "--out",
+        required=True,
+        help="output directory for lanes-<split>.jsonl and its summary; "
+        "config and router logs are retained under observe-<split>-<run>/",
+    )
+    p_observe_lanes.add_argument(
+        "--vllm-sr-bin",
+        default="vllm-sr",
+        help="vllm-sr binary for recipe builtin list/init (its hash-held "
+        "commands land in the summary)",
+    )
+    p_observe_lanes.add_argument(
+        "--catalog-version",
+        default="latest",
+        help="built-in bundle catalog version (recipe builtin list/init)",
+    )
+    p_observe_lanes.add_argument(
+        "--model-name",
+        default=OBSERVE_MODEL_NAME,
+        help="entrypoint model name of the observation config (recipe builtin "
+        "init --model-name)",
+    )
+    p_observe_lanes.add_argument(
+        "--router-bin", required=True, help="path to the semantic-router binary"
+    )
+    p_observe_lanes.add_argument(
+        "--mock-backend",
+        required=True,
+        help="path to a mock/real OpenAI backend launcher script (serves the "
+        "placeholder lane models; answers are irrelevant)",
+    )
+    p_observe_lanes.add_argument(
+        "--python-bin", default=sys.executable, help="python used to launch the backend"
+    )
+    p_observe_lanes.add_argument("--backend-port", type=int, default=8000)
+    p_observe_lanes.add_argument(
+        "--listener-port",
+        type=int,
+        default=8899,
+        help="listener port written into the observation config",
+    )
+    p_observe_lanes.add_argument(
+        "--init-timeout",
+        type=float,
+        default=300.0,
+        help="per-invocation timeout for recipe builtin list/init",
+    )
+    p_observe_lanes.add_argument(
+        "--ready-timeout",
+        type=int,
+        default=300,
+        help="model-runtime readiness timeout in seconds",
+    )
+    p_observe_lanes.add_argument(
+        "--hf-home",
+        default=None,
+        help="HF_HOME for the router process (model artifacts)",
+    )
+    p_observe_lanes.add_argument(
+        "--mock-extra-args",
+        default="",
+        help="extra args passed to the mock backend (split on spaces)",
+    )
+    p_observe_lanes.add_argument(
+        "--request-timeout",
+        type=float,
+        default=180.0,
+        help="per-request timeout in seconds",
+    )
+    p_observe_lanes.set_defaults(func=cmd_observe_lanes)
+
+    p_observe = sub.add_parser(
+        "observe-labels",
+        help="observe the router's own domain labels for a split (C2: seed "
+        "config + tagged probe -> labels-<split>.jsonl with case_id/"
+        "router_label/confidence; unmatched decisions record other)",
+    )
+    p_observe.add_argument(
+        "--spec", required=True, help="experiment spec YAML (selects the split)"
+    )
+    p_observe.add_argument(
+        "--split",
+        default="dev",
+        choices=["calib", "dev", "frozen_test"],
+        help="workload split to observe (frozen_test allowed: the C2 labels "
+        "feed the model_eval verify driver's category rewrite, Y1)",
+    )
+    p_observe.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
+    )
+    p_observe.add_argument(
+        "--out",
+        required=True,
+        help="output directory (seed-config.yaml + labels-<split>.jsonl + "
+        "labels-<split>-summary.json + work/)",
+    )
+    p_observe.add_argument(
+        "--classification-config",
+        required=True,
+        help="classification source config whose global.model_catalog.modules "
+        "and .embeddings are injected into the seed config (Y2: the observe "
+        "seed and every bootstrap candidate must share one classification "
+        "source; cold-start passes the maintained config/config.yaml)",
+    )
+    p_observe.add_argument(
+        "--router-bin", required=True, help="path to the semantic-router binary"
+    )
+    p_observe.add_argument(
+        "--mock-backend",
+        required=True,
+        help="path to a mock/real OpenAI backend launcher script",
+    )
+    p_observe.add_argument(
+        "--python-bin", default=sys.executable, help="python used to launch the backend"
+    )
+    p_observe.add_argument("--router-model", default="vllm-sr/auto")
+    p_observe.add_argument("--backend-port", type=int, default=8000)
+    p_observe.add_argument(
+        "--ready-timeout",
+        type=int,
+        default=300,
+        help="model-runtime readiness timeout in seconds",
+    )
+    p_observe.add_argument(
+        "--hf-home",
+        default=None,
+        help="HF_HOME for the router process (model artifacts)",
+    )
+    p_observe.add_argument(
+        "--mock-extra-args",
+        default="",
+        help="extra args passed to the mock backend (split on spaces)",
+    )
+    p_observe.add_argument(
+        "--request-timeout",
+        type=float,
+        default=180.0,
+        help="per-request timeout in seconds",
+    )
+    p_observe.set_defaults(func=cmd_observe_labels)
+
+    p_toeval = cases_sub.add_parser(
+        "to-model-eval",
+        help="convert an MCQ source into model_eval tasks format (C1: "
+        "task_id/prompt_user/category + answer letter, options rendered "
+        "into the prompt; cases mirrors included so split works on it)",
+    )
+    p_toeval.add_argument(
+        "--source",
+        required=True,
+        help="source JSONL: sr-bench normalized dataset rows "
+        "(id/benchmark/messages/answer/metadata.stratum) or raw MCQ rows "
+        "(id/source/category/question/options/answer)",
+    )
+    p_toeval.add_argument(
+        "--out", required=True, help="output tasks JSONL path (model_eval format)"
+    )
+    p_toeval.add_argument(
+        "--dataset",
+        default=None,
+        help="dataset label for raw rows without a source field",
+    )
+    p_toeval.set_defaults(func=cmd_cases_to_model_eval)
+
     p_attr = sub.add_parser(
         "attribute", help="run E1/E2/E3 misroute attribution over labeled records"
     )
@@ -2243,6 +3356,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_bbuild.add_argument("--output", required=True, help="output bank JSONL path")
     p_bbuild.add_argument("--timeout", type=float, default=180.0)
     p_bbuild.set_defaults(func=cmd_bank)
+
+    p_bimport = bank_sub.add_parser(
+        "import",
+        help="convert profile direct-model judged.jsonl into the answer bank (C6)",
+    )
+    p_bimport.add_argument(
+        "--spec", required=True, help="experiment spec YAML (declares the models)"
+    )
+    p_bimport.add_argument(
+        "--profile-dir",
+        required=True,
+        help="profile output directory (contains <split>/results/.../judged.jsonl)",
+    )
+    p_bimport.add_argument(
+        "--split",
+        default="dev",
+        help="profile split to import (default: dev; the bank split)",
+    )
+    p_bimport.add_argument("--output", required=True, help="output bank JSONL path")
+    p_bimport.set_defaults(func=cmd_bank)
 
     p_bapply = bank_sub.add_parser(
         "apply", help="join bank correctness into attribution records"
@@ -2432,6 +3565,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="propose a Speed depth threshold from development evidence",
     )
 
+    sub.add_parser(
+        "draft",
+        help="create a two-backend Speed recipe from declared cards (starter path)",
+    )
+
     p_spp = sub.add_parser(
         "propose-session-policy",
         help="AG6: cause-keyed one-variable session-protection candidates "
@@ -2567,7 +3705,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--proposer",
         type=_proposer_arg,
         default="threshold-search",
-        help="provenance tag for the candidates: threshold-search | rule-threshold | distribution-calibration | bootstrap | agent:<id>",
+        help="provenance tag for the candidates: "
+        + " | ".join((*_PROPOSER_TAGS, "agent:<id>")),
     )
     p_run.add_argument(
         "--attribution-ref",
@@ -2598,7 +3737,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--python-bin", default=sys.executable, help="python used to launch the backend"
     )
-    p_run.add_argument("--router-model", default="vllm-sr/auto")
+    p_run.add_argument(
+        "--router-model",
+        help="router entrypoint (defaults to vllm-sr/recipe-lab for bindings, vllm-sr/auto otherwise)",
+    )
     p_run.add_argument(
         "--strong-model",
         default=None,
@@ -2784,11 +3926,60 @@ def build_parser() -> argparse.ArgumentParser:
             "next to the ledger when --ledger is given, else no cache"
         ),
     )
+    p_verify.add_argument("--srbench-bin", default="vllm-sr")
+    p_verify.add_argument("--srbench-url", default=None)
+    p_verify.add_argument("--srbench-store", default=None)
+    p_verify.add_argument("--timeout", type=float, default=3600.0)
+    # C7: model_eval driver (workload.driver == "model_eval") - every arm is
+    # a multi_benchmark_eval + mcq_judge pass instead of an sr-bench run.
+    p_verify.add_argument(
+        "--tasks",
+        default=None,
+        help="model_eval driver: the contract-declared model_eval_tasks "
+        "rendering for this split (from `cases to-model-eval`; hash-checked "
+        "against the contract; required for that driver)",
+    )
+    p_verify.add_argument(
+        "--labels",
+        default=None,
+        help="model_eval driver: the C2 labels-<split>.jsonl the driver "
+        "rewrites the task categories from (legacy label mode) - exactly one "
+        "of --labels/--lanes for that driver",
+    )
+    p_verify.add_argument(
+        "--lanes",
+        default=None,
+        help="model_eval driver: the C2 lanes-<split>.jsonl the driver "
+        "rewrites the task categories from (template lane mode; requires the "
+        "spec's template section) - exactly one of --labels/--lanes",
+    )
+    p_verify.add_argument(
+        "--candidate-config",
+        default=None,
+        help="model_eval driver: the candidate config file the candidate "
+        "router must have loaded; its sha256 is checked against the router's "
+        "GET /api/v1/config/hash and recorded in the ledger (required for "
+        "that driver)",
+    )
+    p_verify.add_argument(
+        "--baseline-router-endpoint",
+        default=None,
+        help="model_eval driver: OpenAI v1 base of the router serving the "
+        "baseline config (required for that driver)",
+    )
+    p_verify.add_argument(
+        "--candidate-router-endpoint",
+        default=None,
+        help="model_eval driver: OpenAI v1 base of the router serving the "
+        "candidate config (required for that driver)",
+    )
     p_verify.add_argument(
         "--candidate-management-endpoint",
         default=None,
         help="router management base URL of the router serving the candidate "
-        "(e.g. http://127.0.0.1:8080); sr-bench driver (agentic): its replay "
+        "(e.g. http://127.0.0.1:8080); model_eval driver: its replay records "
+        "provide the routing distribution behind the random mix R - without "
+        "it the mix is not evaluable; sr-bench driver (agentic): its replay "
         "records judge the candidate arm's stability gates (Z4)",
     )
     p_verify.add_argument(
@@ -2798,10 +3989,39 @@ def build_parser() -> argparse.ArgumentParser:
         "router serving the baseline config; its replay records resolve the "
         "max_tool_loop_interrupted baseline pin (Z4)",
     )
-    p_verify.add_argument("--srbench-bin", default="vllm-sr")
-    p_verify.add_argument("--srbench-url", default=None)
-    p_verify.add_argument("--srbench-store", default=None)
-    p_verify.add_argument("--timeout", type=float, default=3600.0)
+    p_verify.add_argument(
+        "--router-model",
+        help="model_eval driver: model name of the router entrypoint both "
+        "router arms call (defaults to vllm-sr/recipe-lab for bindings, vllm-sr/auto otherwise)",
+    )
+    p_verify.add_argument(
+        "--model-eval-dir",
+        default=None,
+        help="model_eval driver: directory holding multi_benchmark_eval.py / "
+        "mcq_judge.py (required for that driver)",
+    )
+    p_verify.add_argument(
+        "--python-bin",
+        default=sys.executable,
+        help="model_eval driver: python used to run the scripts",
+    )
+    p_verify.add_argument(
+        "--concurrency",
+        type=int,
+        default=8,
+        help="model_eval driver: per-arm request concurrency",
+    )
+    p_verify.add_argument(
+        "--request-timeout",
+        type=float,
+        default=1800.0,
+        help="model_eval driver: per-request timeout in seconds",
+    )
+    p_verify.add_argument(
+        "--force",
+        action="store_true",
+        help="model_eval driver: re-run all tasks instead of resuming completed records",
+    )
     p_verify.add_argument("--round", type=int, default=1)
     p_verify.set_defaults(func=cmd_verify)
 
@@ -3115,6 +4335,73 @@ def build_parser() -> argparse.ArgumentParser:
     p_draft.add_argument("--output", required=True, help="output Markdown draft path")
     p_draft.set_defaults(func=cmd_record_draft)
 
+    p_bundle = sub.add_parser(
+        "bundle",
+        help="package final-verify evidence into a reviewable bundle (C9)",
+    )
+    p_bundle.add_argument("--spec", required=True, help="experiment spec YAML")
+    p_bundle.add_argument("--ledger", required=True, help="evidence ledger JSONL")
+    p_bundle.add_argument(
+        "--record", required=True, help="ledger record id (rec-...) to package"
+    )
+    p_bundle.add_argument("--out", required=True, help="output bundle directory")
+    p_bundle.add_argument(
+        "--config", required=True, help="final candidate config YAML to package"
+    )
+    p_bundle.add_argument(
+        "--skeleton",
+        default=None,
+        help="scaffold config the candidate was completed from (config.diff "
+        "source; legacy bootstrap sidecars only - exactly one of "
+        "--skeleton/--bindings)",
+    )
+    p_bundle.add_argument(
+        "--bindings",
+        default=None,
+        help="bindings YAML the template candidate was generated from "
+        "(bindings.yaml artifact; template bindings sidecars only - exactly "
+        "one of --skeleton/--bindings)",
+    )
+    p_bundle.add_argument(
+        "--profile", required=True, help="C3 profile.json to archive in the bundle"
+    )
+    p_bundle.add_argument(
+        "--candidate-sidecar",
+        required=True,
+        help="candidate provenance JSON (bootstrap or bindings sidecar); its "
+        "recorded hashes bind the packaged inputs to the evidence (Y4)",
+    )
+    p_bundle.add_argument(
+        "--validate-bin",
+        default="vllm-sr",
+        help="config validator binary (same convention as bootstrap)",
+    )
+    p_bundle.add_argument(
+        "--router-commit",
+        default=None,
+        help="router git commit the acceptance ran against (provenance)",
+    )
+    p_bundle.add_argument(
+        "--model-revision",
+        action="append",
+        default=[],
+        metavar="NAME=REVISION",
+        help="model revision recorded in provenance (repeatable)",
+    )
+    p_bundle.add_argument(
+        "--model-eval-script",
+        default=None,
+        help="path to the model_eval script; hashed into provenance",
+    )
+    p_bundle.add_argument(
+        "--private-pattern",
+        action="append",
+        default=[],
+        metavar="REGEX",
+        help="extra private-content regex; a match fails the bundle (repeatable)",
+    )
+    p_bundle.set_defaults(func=cmd_bundle)
+
     return parser
 
 
@@ -3125,6 +4412,11 @@ def main(argv: list[str] | None = None) -> int:
         from .bench_depth import main as suggest_depth  # noqa: PLC0415
 
         return suggest_depth(argv[1:])
+    if argv and argv[0] == "draft":
+        # the starter draft owns its own argparse surface and receipt policy
+        from .speed_draft import main as draft  # noqa: PLC0415
+
+        return draft(argv[1:], prog="recipe-lab draft")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

@@ -14,7 +14,10 @@ agentic_fixtures.json. When the first user message matches a task script,
 the completion is scripted: the model emits `tool_calls` on the fixture's
 configured assistant steps and a final answer otherwise, with per-model
 completion rates and per-step token budgets, and usage that carries the
-cache-read field (prompt_tokens_details.cached_tokens). Everything is
+cache-read field (prompt_tokens_details.cached_tokens). A model entry may
+declare `completion_rate_by_task` ({task prompt: rate}) to override the
+overall rate for specific tasks (V6: the cheap model completes simple
+tasks but abandons the complex ones). Everything is
 deterministic so the same fixture replays the same conversation twice.
 """
 
