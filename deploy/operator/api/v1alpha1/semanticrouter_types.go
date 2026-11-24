@@ -247,8 +247,8 @@ type PersistenceSpec struct {
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
-	// StorageClassName is the storage class name
-	// +kubebuilder:default="standard"
+	// StorageClassName is the storage class name. Leave it empty to use the
+	// cluster's default StorageClass.
 	// +optional
 	StorageClassName string `json:"storageClassName,omitempty"`
 

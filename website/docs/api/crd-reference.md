@@ -653,7 +653,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `enabled` _boolean_ | Enabled indicates if persistence is enabled | true | Optional: \{\} <br /> |
-| `storageClassName` _string_ | StorageClassName is the storage class name | standard | Optional: \{\} <br /> |
+| `storageClassName` _string_ | StorageClassName is the storage class name. Leave it empty to use the<br />cluster's default StorageClass. |  | Optional: \{\} <br /> |
 | `accessMode` _[PersistentVolumeAccessMode](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#persistentvolumeaccessmode-v1-core)_ | AccessMode is the access mode | ReadWriteOnce | Optional: \{\} <br /> |
 | `size` _string_ | Size is the storage size | 10Gi | Optional: \{\} <br /> |
 | `existingClaim` _string_ | ExistingClaim is an existing PVC to use |  | Optional: \{\} <br /> |

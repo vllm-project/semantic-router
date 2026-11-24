@@ -68,9 +68,13 @@ func TestOmittedServiceAccountAndPersistenceAreDefaultedAndReconciled(t *testing
 				s := runtime.NewScheme()
 				_ = scheme.AddToScheme(s)
 				_ = vllmv1alpha1.AddToScheme(s)
-				// The CRD default for persistence.storageClassName.
-				standard := &storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{Name: "standard"}}
-				cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, standard).Build()
+				// The cluster from #7333: gp3 is the default StorageClass and
+				// no class is named "standard".
+				gp3 := &storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{
+					Name:        "gp3",
+					Annotations: map[string]string{StorageClassDefaultAnnotation: "true"},
+				}}
+				cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, gp3).Build()
 				r := &SemanticRouterReconciler{Client: cl, Scheme: s}
 				ctx := context.Background()
 
@@ -97,8 +101,8 @@ func TestOmittedServiceAccountAndPersistenceAreDefaultedAndReconciled(t *testing
 				if modes := pvc.Spec.AccessModes; len(modes) != 1 || modes[0] != corev1.ReadWriteOnce {
 					t.Errorf("PVC access modes = %v, want [%s]", modes, corev1.ReadWriteOnce)
 				}
-				if class := ptr.Deref(pvc.Spec.StorageClassName, ""); class != "standard" {
-					t.Errorf("PVC storage class = %q, want standard", class)
+				if class := ptr.Deref(pvc.Spec.StorageClassName, ""); class != "gp3" {
+					t.Errorf("PVC storage class = %q, want the cluster default gp3", class)
 				}
 				if size := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; size.Cmp(resource.MustParse("10Gi")) != 0 {
 					t.Errorf("PVC size = %s, want 10Gi", size.String())
