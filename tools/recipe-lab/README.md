@@ -33,6 +33,9 @@ pip install -e '.[dev]'
 | `bank` | build / apply the per-case, per-model answer bank |
 | `propose-thresholds` | bounded single-signal threshold perturbations over a base config |
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
+| `diagnose` | label-free distribution diagnosis over unlabeled replay rows: dead/rare decisions, signal distributions, unreachable threshold sites (D) |
+| `propose-calibrated` | rule threshold candidates at observed distribution quantiles, each sidecar citing its diagnosis (D) |
+| `suggest-depth` | propose a Speed depth cutoff from a captured parent, its direct fast backend and one graded development run |
 | `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
 | `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
 | `cases` | case-file utilities; `to-srbench` renders the labeled case list as an sr-bench dataset, and the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
@@ -149,6 +152,67 @@ unverifiable references are rejected (exit 2):
   the file bytes
 - `diag:<path>@sha256:<hex>#<anchor>`: a diagnosis artifact anchored at a
   location inside the file
+
+## Diagnosis and distribution calibration (D)
+
+Two label-free commands turn unlabeled traffic into a proposal basis:
+
+- **`diagnose`** runs three checks over `collect-replays --unlabeled` rows:
+  dead decisions (never matched) and rare decisions (hit but below the
+  `--rare-pct` traffic share; `--expect-rare` whitelists legitimately rare
+  decisions such as security containment - reported, never warned), per-signal
+  quantiles / histogram / range utilization (`--utilization-warn` flags an
+  under-used range, `--min-sample` warns about small samples), and rule
+  predicate sites no traffic ever satisfies (unreachable). It writes
+  `diagnosis.json` (`recipe-lab-diagnosis-v1`, input-hashed, byte-stable -
+  the `next --diagnosis` input) and `diagnosis.md`.
+- **`propose-calibrated`** reads one signal's observed distribution from
+  `diagnosis.json` and proposes rule threshold candidates at chosen quantiles
+  (`--quantiles`) or at a target traffic share (`--target-share`, quantile
+  `1 - share`). It delegates to the rule-level proposer, so sites sharing
+  (signal, op, value) move together. Each sidecar cites the diagnosis it came
+  from; a diagnosis whose config hash does not match `--base-config` is
+  rejected (exit 2). `--from` restricts the move to sites currently at that
+  value (the BUG-3 `2.5 -> 1.75` calibration).
+
+```bash
+recipe-lab collect-replays --url http://127.0.0.1:8080 --unlabeled --output raw.jsonl
+recipe-lab diagnose --records raw.jsonl --config config.yaml --output-dir diag/ \
+  --expect-rare local_security_containment,local_privacy_policy
+recipe-lab propose-calibrated --diagnosis diag/diagnosis.json \
+  --base-config config.yaml --signal difficulty --quantiles 0.75 --output-dir cands/
+```
+
+## Speed depth proposal
+
+`recipe-lab suggest-depth` reads one completed sr-bench development run that
+contains the captured Speed parent (`capture_recipe: true`) and its direct
+fast backend, compares the first comparable opening request of each case,
+previews the parent's routing natively (`vllm-sr route preview`), and moves
+the observed cutoff below the lowest protected reasoning score:
+
+```bash
+recipe-lab suggest-depth --workspace "$WORK" --config "$PARENT_YAML" \
+  --public-model "$PUBLIC" --strong "$STRONG" --fast "$FAST" \
+  --dev-run "$DEV_RUN" --parent-target "$PARENT_TARGET" \
+  --fast-target "$FAST_TARGET" --endpoint "$PARENT_ORIGIN" \
+  --out "$WORK/candidate.yaml"
+```
+
+`--deployed-config` binds the materialized runtime YAML and its adjacent
+`*.provenance.json` instead of the authored parent; `--signal` selects the
+SystemOne signal (default `depth`); `--vllm-sr` overrides the CLI binary.
+The `recipe-lab-sr-bench-depth-v1` receipt reports `status` (`proposed` /
+`keep-parent` / `inconclusive`), the `observations` with their per-case
+`role` (`move` / `protect` / `skip`) and both finish reasons, `before` /
+`after` / `candidate` / `candidate_sha256` when a threshold separates the
+observations, and the identity fields (`dev_run`, `parent_target`,
+`fast_target`, `parent_sha256`, `deployed_source_sha256`,
+`parent_runtime_hash`, `output_policy`). Candidates are published through
+the shared atomic writer; the saved receipt never changes shape even when
+Markdown delivery fails. A slower or unsuccessful fast case protects its
+score - no proposal without separating evidence, and the returned candidate
+is a development proposal that still has to earn a live verdict.
 
 ## Record format (attribution input)
 
@@ -326,6 +390,11 @@ context export and provenance manifests arrive with
 ```bash
 pytest
 ```
+
+`examples/smoke/calibration-smoke.sh` is fully offline (no GPU, no router):
+it walks the synthetic pilot rows through `diagnose` ->
+`propose-calibrated` and asserts the candidate matches the BUG-3 golden
+result; the same flow is a unit test (`tests/test_calibration_smoke.py`).
 
 `tests/native_srbench_run.py` is opt-in: it drives `score-candidate` through
 the installed `recipe-lab` executable against the real sr-bench worker with

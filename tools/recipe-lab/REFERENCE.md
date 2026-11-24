@@ -21,3 +21,17 @@ bench_refs). `record-draft` produces a docs/records draft from the latest
 PASS live record for human review; drafts are never merged automatically.
 `next` exports the agent context with the untrusted-material header and the
 citable refs described in the report section above.
+
+## Speed depth receipts
+
+`recipe-lab suggest-depth` prints and saves one
+`recipe-lab-sr-bench-depth-v1` receipt: `status` (`proposed` / `keep-parent`
+/ `inconclusive`), the run and target identity (`dev_run`, `parent_target`,
+`fast_target`), `parent_sha256`, `deployed_source_sha256`,
+`parent_runtime_hash` and `output_policy`, the per-case `observations`
+(`role` `move` / `protect` / `skip`, both finish reasons, the comparable
+opening-request hash and whole-task seconds; case IDs only, never task
+text), and when a threshold separates the observations `before`, `after`,
+`candidate` and `candidate_sha256`. `report --evidence` renders the receipt
+in supplied order; the saved receipt never changes shape even when Markdown
+delivery fails (`report_error` on the receipt, evidence still on disk).

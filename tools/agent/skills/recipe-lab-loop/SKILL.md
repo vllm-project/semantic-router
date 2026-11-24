@@ -40,6 +40,11 @@ Drive the closed loop with `tools/recipe-lab/recipe_lab/cli.py` (installed as
    evaluate it with `--proposer agent:<id>` in step 5; the id is lowercase
    `[a-z0-9._-]` (e.g. `agent:claude-loop`) and is recorded verbatim in the
    ledger provenance.
+   For threshold-shaped fixes, ground the proposal in traffic first:
+   `recipe-lab diagnose --records <collect-replays --unlabeled output>
+   --config <recipe.yaml> --output-dir diag/` (no ground truth needed),
+   then `recipe-lab propose-calibrated --diagnosis diag/diagnosis.json
+   --base-config <recipe.yaml> --signal <signal> --quantiles ...`.
 4. Validate the candidate: `vllm-sr config validate` on the revision.
    Failure: fix the config; never evaluate an invalid candidate.
 5. Evaluate in the replay tier: `recipe-lab run --spec spec.yaml --split dev

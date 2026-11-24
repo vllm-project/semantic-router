@@ -2,6 +2,7 @@
 
 import math
 import re
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -216,8 +217,47 @@ def _compare(row):
     )
 
 
+def _depth(row):
+    status = _choice(row["status"], ("proposed", "keep-parent", "inconclusive"))
+    details = [
+        f"The requested development comparison uses run {_label(row['dev_run'])}, "
+        f"parent target {_label(row['parent_target'])} and fast target {_label(row['fast_target'])}."
+    ]
+    if "observations" in row:
+        roles = Counter(
+            _choice(item["role"], ("move", "protect", "skip"))
+            for item in _items(row["observations"])
+        )
+        details.append(
+            f"The recorded opening requests contained {roles['move']} possible moves, "
+            f"{roles['protect']} protected cases and {roles['skip']} skipped cases."
+        )
+    details += _hashes(row, (("parent_sha256", "Parent configuration"),))
+    if status == "proposed":
+        details += [
+            f"The {_label(row['signal'])} threshold changes from {_fmt(row['before'])} to {_fmt(row['after'])}.",
+            f"Proposed configuration SHA-256 {_hash(row['candidate_sha256'])}.",
+        ]
+        outcome = "The development evidence identified a candidate threshold."
+        step = "Deploy the identified candidate on a test endpoint and grade it against the parent."
+    elif status == "keep-parent":
+        outcome = "Keep the parent. The observed depth scores offered no separating threshold."
+        step = "Use another development sample or investigate a different routing decision."
+    else:
+        outcome = "The depth proposal is inconclusive."
+        step = "Review the diagnostic in the proposal receipt and restore the missing development evidence."
+    return Finding(
+        "Propose a depth change",
+        "Find a reasoning threshold that can move development requests to the fast backend while preserving protected requests.",
+        outcome,
+        details,
+        step,
+    )
+
+
 _RENDER = {
     "recipe-lab-sr-bench-run-v1": _bench,
+    "recipe-lab-sr-bench-depth-v1": _depth,
 }
 
 

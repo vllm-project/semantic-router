@@ -11,6 +11,7 @@ Subcommands:
   propose-thresholds      perturb one decision-signal threshold
   propose-rule-thresholds move every rule-level predicate site of one signal (C)
   propose-calibrated      rule threshold candidates at observed quantiles (D)
+  suggest-depth           propose a Speed depth threshold from development evidence
   run                     evaluate candidate configs in the replay tier -> ledger
   ledger                  inspect or append to the evidence ledger (append/show/top)
   live-verdict            compare two sr-bench runs -> PASS/FAIL/INCONCLUSIVE
@@ -69,12 +70,21 @@ from .contract import (
     check_runnable_split,
     dataset_content_hash,
 )
+from .diagnose import (
+    DEFAULT_MIN_SAMPLE,
+    DEFAULT_RARE_PCT,
+    DEFAULT_UTILIZATION_WARN,
+    build_diagnosis,
+    load_diagnosis,
+    load_diagnostic_rows,
+    write_diagnosis,
+)
 from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_refs
 from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
 from .live import live_verdict_from_runs, measurements_from_rows, verify_live
 from .next import write_next_context
-from .proposers import rule_threshold, threshold_search
+from .proposers import distribution_calibration, rule_threshold, threshold_search
 from .proposers import session_policy as session_policy_proposer
 from .provenance import promotion_candidate, write_run_manifest
 from .report import render_promotion_draft, write_run_report
@@ -510,6 +520,50 @@ def cmd_collect_replays(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_diagnose(args: argparse.Namespace) -> int:
+    """D: three no-ground-truth checks over unlabeled replay rows — decision
+    coverage (dead / rare), signal distributions (quantiles / histogram /
+    range utilization) and threshold reachability. Writes diagnosis.json
+    (recipe-lab-diagnosis-v1, input-hashed, byte-stable) and diagnosis.md."""
+    rows = load_diagnostic_rows(args.records)
+    try:
+        with Path(args.config).open("r", encoding="utf-8") as fh:
+            config = yaml.safe_load(fh)
+    except (OSError, yaml.YAMLError) as exc:
+        raise SystemExit(f"cannot read config: {exc}") from exc
+    if not isinstance(config, dict):
+        raise SystemExit(f"config is not a YAML object: {args.config}")
+    expect_rare = [
+        part.strip() for part in str(args.expect_rare).split(",") if part.strip()
+    ]
+    diagnosis = build_diagnosis(
+        rows,
+        config,
+        rows_path=str(args.records),
+        rows_hash=dataset_content_hash(args.records),
+        config_path=str(args.config),
+        config_hash=dataset_content_hash(args.config),
+        source=args.source,
+        expect_rare=expect_rare,
+        rare_pct=args.rare_pct,
+        utilization_warn=args.utilization_warn,
+        min_sample=args.min_sample,
+    )
+    json_path, md_path = write_diagnosis(diagnosis, args.output_dir)
+    _print_json(
+        {
+            "diagnosis": str(json_path),
+            "report": str(md_path),
+            "samples": len(rows),
+            "dead_decisions": diagnosis["dead_decisions"],
+            "rare_decisions": diagnosis["rare_decisions"],
+            "unreachable_sites": diagnosis["unreachable_sites"],
+            "alerts": diagnosis["alerts"],
+        }
+    )
+    return 0
+
+
 def cmd_bank(args: argparse.Namespace) -> int:
     if args.bank_action == "build":
         cases = []
@@ -665,6 +719,64 @@ def cmd_propose_rule(args: argparse.Namespace) -> int:
             "recipe": recipe.name,
             "signal": args.signal,
             "candidates": [c.summary() for c in candidates],
+            "files": [str(p) for p in paths],
+        }
+    )
+    return 0
+
+
+def cmd_propose_calibrated(args: argparse.Namespace) -> int:
+    """D: rule threshold candidates at observed distribution quantiles (or at
+    a target traffic share). The diagnosis must have been produced over the
+    same base config (hash-checked, exit 2 otherwise); each sidecar cites the
+    diagnosis it came from."""
+    if args.quantiles and args.target_share is not None:
+        raise SystemExit(
+            "propose-calibrated: --quantiles and --target-share are mutually exclusive"
+        )
+    quantiles = (
+        [float(part) for part in str(args.quantiles).split(",") if part.strip()]
+        if args.quantiles
+        else None
+    )
+    if quantiles is None and args.target_share is None:
+        raise SystemExit(
+            "propose-calibrated: one of --quantiles or --target-share is required"
+        )
+    if not args.output_dir:
+        raise SystemExit("propose-calibrated: --output-dir is required")
+    try:
+        diagnosis = load_diagnosis(args.diagnosis)
+        diagnosis_hash = dataset_content_hash(args.diagnosis)
+        config_hash = dataset_content_hash(args.base_config)
+        with Path(args.base_config).open("r", encoding="utf-8") as fh:
+            base = yaml.safe_load(fh)
+    except (OSError, yaml.YAMLError) as exc:
+        raise SystemExit(f"cannot read diagnosis or base config: {exc}") from exc
+    try:
+        proposals = distribution_calibration.propose_calibrated(
+            diagnosis,
+            base,
+            args.signal,
+            diagnosis_ref=f"diag:{args.diagnosis}@{diagnosis_hash}",
+            config_hash=config_hash,
+            quantiles=quantiles,
+            target_share=args.target_share,
+            from_value=args.from_value,
+            op=args.op,
+            lo=args.lo,
+            hi=args.hi,
+        )
+        paths = distribution_calibration.write_calibrated_candidates(
+            proposals, args.output_dir
+        )
+    except ContractError as exc:
+        raise SystemExit(f"proposer error: {exc}") from exc
+    _print_json(
+        {
+            "signal": args.signal,
+            "candidates": [p.basis for p in proposals],
+            "insight_refs": [list(p.insight_refs) for p in proposals],
             "files": [str(p) for p in paths],
         }
     )
@@ -2030,6 +2142,57 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_collect.set_defaults(func=cmd_collect_replays)
 
+    p_diag = sub.add_parser(
+        "diagnose",
+        help="decision coverage, signal distributions and threshold reachability over unlabeled rows (D)",
+        description=(
+            "Three no-ground-truth checks over replay rows: decisions that never fire (dead) "
+            "or fire rarely, per-signal quantiles / histogram / range utilization, and rule "
+            "predicate sites no traffic ever satisfies. Writes diagnosis.json "
+            "(recipe-lab-diagnosis-v1, input-hashed, byte-stable) and diagnosis.md."
+        ),
+    )
+    p_diag.add_argument(
+        "--records",
+        required=True,
+        help="unlabeled diagnostic rows JSONL (collect-replays --unlabeled output)",
+    )
+    p_diag.add_argument("--config", required=True, help="base recipe config YAML")
+    p_diag.add_argument(
+        "--output-dir",
+        required=True,
+        help="directory for diagnosis.json and diagnosis.md",
+    )
+    p_diag.add_argument(
+        "--expect-rare",
+        default="",
+        help="comma-separated decisions allowed to be rare (reported, never warned; e.g. security containment)",
+    )
+    p_diag.add_argument(
+        "--rare-pct",
+        type=float,
+        default=DEFAULT_RARE_PCT,
+        help="decisions above zero hits but under this traffic share %% are rare",
+    )
+    p_diag.add_argument(
+        "--source",
+        default="unlabeled replay rows",
+        help="traffic source note recorded in the diagnosis",
+    )
+    p_diag.add_argument(
+        "--min-sample",
+        type=int,
+        default=DEFAULT_MIN_SAMPLE,
+        help="warn when the sample count is below this",
+    )
+    p_diag.add_argument(
+        "--utilization-warn",
+        type=float,
+        default=DEFAULT_UTILIZATION_WARN,
+        help="warn when a known-range signal uses less of its range than this",
+    )
+    p_diag.set_defaults(func=cmd_diagnose)
+
     p_bank = sub.add_parser(
         "bank", help="build or apply the per-case/per-model answer bank"
     )
@@ -2171,6 +2334,75 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_recipe_selectors(p_rule)
     p_rule.set_defaults(func=cmd_propose_rule)
+
+    p_cal = sub.add_parser(
+        "propose-calibrated",
+        help="rule threshold candidates at observed distribution quantiles (D)",
+        description=(
+            "Reads one signal's observed distribution out of a diagnosis.json and proposes rule "
+            "threshold candidates at chosen quantiles (--quantiles) or at a target traffic share "
+            "(--target-share, equivalent to quantile 1 - share). Delegates to the rule-level "
+            "proposer, so sites sharing (signal, op, value) move together. Each sidecar cites the "
+            "diagnosis it came from; a diagnosis whose config hash does not match --base-config "
+            "is rejected (exit 2)."
+        ),
+    )
+    p_cal.add_argument(
+        "--diagnosis", required=True, help="diagnosis.json from 'recipe-lab diagnose'"
+    )
+    p_cal.add_argument(
+        "--base-config",
+        required=True,
+        help="base recipe config YAML the diagnosis was made over",
+    )
+    p_cal.add_argument(
+        "--signal", required=True, help="decision signal name to calibrate"
+    )
+    p_cal.add_argument(
+        "--from",
+        dest="from_value",
+        type=float,
+        default=None,
+        help="only move sites currently at this value (e.g. the 2.5 -> 1.75 BUG-3 calibration)",
+    )
+    p_cal.add_argument(
+        "--quantiles",
+        default=None,
+        help="comma-separated quantiles in (0, 1], e.g. 0.5,0.75,0.9",
+    )
+    p_cal.add_argument(
+        "--target-share",
+        type=float,
+        default=None,
+        help="fraction of traffic meant to cross the threshold; equivalent to quantile 1 - share",
+    )
+    p_cal.add_argument(
+        "--op",
+        choices=["gte", "gt", "lte", "lt"],
+        default=None,
+        help="restrict to one predicate operator",
+    )
+    p_cal.add_argument(
+        "--lo",
+        type=float,
+        default=None,
+        help="threshold lower clamp (default: inferred from the signal)",
+    )
+    p_cal.add_argument(
+        "--hi",
+        type=float,
+        default=None,
+        help="threshold upper clamp (default: inferred from the signal)",
+    )
+    p_cal.add_argument(
+        "--output-dir", default=None, help="directory for candidate config YAMLs"
+    )
+    p_cal.set_defaults(func=cmd_propose_calibrated)
+
+    sub.add_parser(
+        "suggest-depth",
+        help="propose a Speed depth threshold from development evidence",
+    )
 
     p_spp = sub.add_parser(
         "propose-session-policy",
@@ -2859,6 +3091,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "suggest-depth":
+        # the depth proposal owns its own argparse surface and receipt policy
+        from .bench_depth import main as suggest_depth  # noqa: PLC0415
+
+        return suggest_depth(argv[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

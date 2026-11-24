@@ -58,16 +58,63 @@ stderr.
   lane switch inside a conversation) and `selection_failed` (a rejected
   selection, the P1 consumption of `lifecycle_state=failed` records, which
   are never deduped away).
-- `recipe-lab collect-replays --url http://127.0.0.1:8080 --cases C
-  --output R --family d3`
+- `recipe-lab collect-replays --url http://127.0.0.1:8080
+  [--cases C | --unlabeled] --output R --family d3`
   Pulls router_replay records from the management API and joins them with
   labeled cases. Skipped rows are counted (`no_prompt`/`unlabeled`/
-  `duplicate_prompt`), never guessed.
+  `duplicate_prompt`), never guessed. `--unlabeled` skips the labeled join
+  and emits one raw diagnostic row per replay record - the `diagnose`
+  input; mutually exclusive with `--cases`.
 - `recipe-lab bank build --cases C --models M1,M2 --endpoint U --output B`
   Direct per-case/per-model queries graded by `expected_contains`.
 - `recipe-lab bank apply --bank B --records R [--output R2]`
   Joins correctness by (case_id, routed model); missing entries stay
   `no_evidence`.
+
+## Diagnosis and distribution calibration (D)
+
+Both commands need no ground truth: they turn unlabeled traffic into
+proposals.
+
+- `recipe-lab diagnose --records R --config C --output-dir D
+  [--expect-rare d1,d2] [--rare-pct P] [--min-sample N]
+  [--utilization-warn U] [--source "..."]`
+  Three checks over replay rows: decisions that never fire (dead) or fire
+  under `--rare-pct` traffic share (rare; `--expect-rare` whitelists
+  legitimately rare decisions such as security containment - reported,
+  never warned), per-signal quantiles / histogram / range utilization
+  (`--utilization-warn` flags a signal using less of its known range;
+  `--min-sample` warns when the sample count is too small), and rule
+  predicate sites no traffic ever satisfies (unreachable). `--records` is
+  the `collect-replays --unlabeled` output. Writes `diagnosis.json`
+  (recipe-lab-diagnosis-v1, input-hashed, byte-stable - the
+  `next --diagnosis` input) and `diagnosis.md`.
+- `recipe-lab propose-calibrated --diagnosis D --base-config C --signal S
+  [--from V] [--quantiles Q1,Q2 | --target-share F] [--op gte|gt|lte|lt]
+  [--lo L] [--hi H] [--output-dir D]`
+  Rule threshold candidates at the signal's observed distribution
+  quantiles, or at a target traffic share (quantile `1 - share`). Uses the
+  rule-level proposer, so all rule sites sharing (signal, op, value) move
+  together; each candidate sidecar cites the diagnosis it came from, and a
+  diagnosis whose config hash does not match `--base-config` is rejected
+  (exit 2). `--from` restricts the move to sites currently at that value
+  (the 2.5 -> 1.75 BUG-3 calibration).
+
+## Speed depth proposal
+
+- `recipe-lab suggest-depth --config P --workspace W --out C
+  --public-model M --strong S --fast F --dev-run R --parent-target T1
+  --fast-target T2 --endpoint U [--deployed-config D] [--signal depth]
+  [--vllm-sr BIN]`
+  Proposes one Speed cutoff change from a captured parent and its direct
+  fast backend over one completed development run: first comparable opening
+  requests, a native `route preview` of the parent, fast-backend
+  capability/capacity fit, observed scores, protected outcomes and atomic
+  candidate publication (`loop.publish_config`). Prints the
+  `recipe-lab-sr-bench-depth-v1` receipt; `proposed` carries
+  `before`/`after`/`candidate_sha256`, `keep-parent` keeps the parent, and
+  every protected reasoning score stays on the strong lane. Exit 0 on a
+  usable receipt, 2 when inconclusive.
 
 ## Proposal and replay tier
 

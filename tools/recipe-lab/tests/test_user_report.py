@@ -27,6 +27,19 @@ RUN = {
     },
 }
 
+DEPTH = {
+    "schema": "recipe-lab-sr-bench-depth-v1",
+    "status": "proposed",
+    "dev_run": "first",
+    "parent_target": "parent",
+    "fast_target": "fast",
+    "signal": "depth",
+    "before": 0.4,
+    "after": 0.65,
+    "candidate_sha256": CONFIG,
+    "observations": [{"role": "move", "case": "hidden-task"}],
+}
+
 
 def test_bench_report_keeps_order_limits_quality_and_provenance():
     awaiting = {
@@ -64,6 +77,39 @@ def test_service_target_names_and_generated_background():
     report = render_report([{**RUN, "candidate_target": "decision:local/fast"}])
     assert "`decision:local/fast`" in report
     assert "Check whether the candidate preserves graded task success" in report
+
+
+def test_depth_receipt_ranks_between_generation_and_grade():
+    report = render_report([DEPTH, RUN], background="Tune the service.")
+    assert report.index("Propose a depth change") < report.index("Grade a benchmark")
+    for substring in (
+        "run `first`",
+        "1 possible moves, 0 protected cases and 0 skipped cases",
+        "`depth` threshold changes from 0.4 to 0.65",
+        CONFIG,
+    ):
+        assert substring in report
+    assert "hidden-task" not in report
+
+
+def test_depth_keep_parent_and_inconclusive_outcomes():
+    keep = {
+        **DEPTH,
+        "status": "keep-parent",
+        "dev_run": "second",
+        "reason": "no separating boundary",
+    }
+    del keep["before"], keep["after"], keep["candidate_sha256"], keep["observations"]
+    report = render_report([keep])
+    assert (
+        report.count(
+            "Keep the parent. The observed depth scores offered no separating threshold."
+        )
+        == 1
+    )
+    inconclusive = {**keep, "status": "inconclusive"}
+    report = render_report([inconclusive])
+    assert "The depth proposal is inconclusive." in report
 
 
 def test_inconclusive_error_does_not_export_private_fields_or_errors():

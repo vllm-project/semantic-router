@@ -25,6 +25,34 @@ def check(condition, message):
         raise ValueError(message)
 
 
+def is_number(value):
+    """A finite int or float - the shared bounded-numeric predicate."""
+    return type(value) in (int, float) and math.isfinite(value)
+
+
+def fit_status(requested, prompt, context_limit, output_limit):
+    """Classify one request against the fast backend's token budget.
+
+    `requested` is the caller's single unambiguous output reservation (or
+    None), `prompt` the observed prompt-token estimate (or None); the two
+    limits come from the backend card. Statuses are honest about unknown
+    inputs: any missing piece yields `unknown`, never a rejection.
+    """
+    if requested is not None and output_limit is not None and requested > output_limit:
+        return "requested_output_exceeds_output_limit"
+    if (
+        requested is not None
+        and context_limit is not None
+        and requested > context_limit
+    ):
+        return "requested_output_exceeds_context"
+    if None in (requested, prompt, context_limit, output_limit):
+        return "unknown"
+    if prompt + requested > context_limit:
+        return "source_token_estimate_exceeds_context"
+    return "source_token_estimate_within_limits"
+
+
 class InvalidExecutionError(ValueError):
     """An infrastructure failure cannot establish task quality."""
 

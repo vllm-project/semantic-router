@@ -62,6 +62,50 @@ def test_explicit_evidence_order_and_safe_output(tmp_path, capsys):
     assert error.value.code == 2 and not (tmp_path / "invalid.md").exists()
 
 
+def _depth_receipt(run_id, status="keep-parent"):
+    receipt = {
+        "schema": "recipe-lab-sr-bench-depth-v1",
+        "status": status,
+        "dev_run": run_id,
+        "parent_target": "parent",
+        "fast_target": "fast",
+        "signal": "depth",
+    }
+    if status == "proposed":
+        receipt.update(
+            before=0.4,
+            after=0.65,
+            candidate_sha256=CONFIG,
+            observations=[{"role": "move", "case": "hidden-task"}],
+        )
+    return receipt
+
+
+def test_depth_receipt_renders_and_publishes_like_benchmarks(tmp_path, capsys):
+    path = tmp_path / "depth.json"
+    path.write_text(json.dumps(_depth_receipt("dev-1", "proposed")), encoding="utf-8")
+    dest = tmp_path / "depth.md"
+    assert cli.main(["report", "--evidence", str(path), "--out", str(dest)]) == 0
+    assert json.loads(capsys.readouterr().out)["evidence_count"] == 1
+    text = dest.read_text(encoding="utf-8")
+    assert "Propose a depth change" in text
+    assert "`depth` threshold changes from 0.4 to 0.65" in text
+    assert "hidden-task" not in text
+    keep = json.loads(json.dumps(_depth_receipt("dev-2")))
+    rendered = report_delivery.render_report([keep])
+    assert (
+        rendered.count(
+            "Keep the parent. The observed depth scores offered no separating threshold."
+        )
+        == 1
+    )
+    raw = _depth_receipt("dev-3")
+    saved = raw.copy()
+    srbench.save_result(tmp_path / "depth-run", saved)
+    assert "report" in saved
+    assert json.loads(Path(saved["receipt"]).read_bytes()) == raw
+
+
 def test_concurrent_studies_publish_separate_complete_snapshots(tmp_path):
     def publish(run):
         return report_delivery.snapshot(tmp_path, _awaiting_receipt(run))

@@ -302,3 +302,85 @@ SIGNAL_CASES: list[dict] = [
         signal_values={"decision:domain:code": 0.9, "decision:difficulty": 3.0},
     ),
 ]
+
+
+# ---- sub-issue 7: Speed depth cutoff fixture ----
+
+DEPTH_STRONG = "A"
+DEPTH_FAST = "B"
+DEPTH_PUBLIC = "public"
+
+
+def depth_doc(gte: float = 0.6) -> dict:
+    """A minimal v0.5 Speed-shaped configuration: three static lanes with
+    reasoning as the primary (highest-priority) lane carrying the private
+    binary depth signal, tools as the overlap lane on other evidence and
+    fast as the rule-less fallback, plus the two backend cards."""
+    recipe = {
+        "name": "speed",
+        "strategy": "priority",
+        "candidate_requirements": {
+            "context": "known_limits",
+            "capabilities": "declared",
+        },
+        "decisions": [
+            {
+                "name": "reasoning",
+                "priority": 3,
+                "algorithm": {"type": "static"},
+                "modelRefs": [{"model": DEPTH_STRONG}],
+                "rules": {
+                    "operator": "AND",
+                    "conditions": [{"type": "systemone", "name": "depth"}],
+                    "on_unknown": "match",
+                },
+            },
+            {
+                "name": "tools",
+                "priority": 2,
+                "algorithm": {"type": "static"},
+                "modelRefs": [{"model": DEPTH_STRONG}],
+                "rules": {
+                    "operator": "OR",
+                    "conditions": [{"type": "systemone", "name": "tools_intent"}],
+                    "on_unknown": "match",
+                },
+            },
+            {
+                "name": "fast",
+                "priority": 1,
+                "algorithm": {"type": "static"},
+                "modelRefs": [{"model": DEPTH_FAST}],
+            },
+        ],
+        "signals": {
+            "systemone": [
+                {
+                    "name": "depth",
+                    "question": {"type": "noul"},
+                    "predicate": {"gte": gte},
+                }
+            ]
+        },
+    }
+    return {
+        "version": "v0.5",
+        "entrypoints": [{"recipe": "speed", "model_names": [DEPTH_PUBLIC]}],
+        "recipes": [recipe],
+        "providers": {
+            "models": [
+                {
+                    "name": DEPTH_STRONG,
+                    "provider_model_id": "prov/strong",
+                    "context_window_size": 32768,
+                    "max_output_tokens": 8192,
+                },
+                {
+                    "name": DEPTH_FAST,
+                    "provider_model_id": "prov/fast",
+                    "context_window_size": 8192,
+                    "max_output_tokens": 4096,
+                },
+            ]
+        },
+    }
