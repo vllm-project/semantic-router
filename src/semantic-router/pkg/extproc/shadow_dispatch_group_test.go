@@ -224,7 +224,12 @@ func TestShadowGroupDisconnectCancelsAcceptedWork(t *testing.T) {
 			})
 			defer close(release)
 			router, primary := newShadowTestRouter(t, backend)
-			run := runShadowRequest(t, router, primary, shadowTestPluginConfig(), nil)
+			cfg := shadowTestPluginConfig()
+			var prepare func(*RequestContext)
+			if !eof {
+				prepare = configureShadowTestSpend(router, cfg)
+			}
+			run := runShadowRequest(t, router, primary, cfg, prepare)
 			select {
 			case <-started:
 			case <-time.After(time.Second):
@@ -246,8 +251,12 @@ func TestShadowGroupDisconnectCancelsAcceptedWork(t *testing.T) {
 			if !router.ShadowDispatcher.waitIdle(time.Second) {
 				t.Fatal("abandoned candidate kept running")
 			}
-			if outcomes := shadowOutcomes(t, run); len(outcomes) != 1 || outcomes[0].Verdict != shadowVerdictFailed || outcomes[0].Reason != "canceled" {
+			outcomes := shadowOutcomes(t, run)
+			if len(outcomes) != 1 || outcomes[0].Verdict != shadowVerdictFailed || outcomes[0].Reason != "canceled" {
 				t.Fatalf("outcomes=%v", outcomes)
+			}
+			if !eof {
+				assertShadowEstimatedSpend(t, outcomes[0])
 			}
 		})
 	}
@@ -520,6 +529,159 @@ func TestShadowGroupUsesReplayPolicyForUnmatchedRequests(t *testing.T) {
 				}
 			} else if ctx.RouterReplayID != "" {
 				t.Fatal("disabled Replay recorded the request")
+			}
+		})
+	}
+}
+
+func TestShadowGroupSpendBudget(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		limit          float64
+		output         int64
+		calls          int
+		reason         string
+		source         string
+		secondCurrency string
+		boundaryRates  bool
+	}{
+		{"combined estimate just exceeds limit", 0.299, 100, 0, "budget_exhausted", "", "USD", true},
+		{"combined estimate exactly fits", 0.30, 100, 2, "completed", "estimate", "USD", true},
+		{"both candidates fit", 500, 100, 2, "completed", "usage", "USD", false},
+		{"default output reserve exceeds budget", 500, 0, 0, "budget_exhausted", "", "USD", false},
+		{"usage missing after dispatch", 500, 100, 2, "completed", "estimate", "USD", false},
+		{"no budget and no output bound", 0, 0, 2, "completed", "", "USD", false},
+		{"second candidate has no price", 500, 100, 0, "budget_unpriced", "", "", false},
+		{"second candidate has a different currency", 500, 100, 0, "budget_unpriced", "", "EUR", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			if tc.source == "estimate" || tc.source == "usage" {
+				backend.setHandler(func(w http.ResponseWriter, _ []byte) {
+					response := `{"id":"shadow","object":"chat.completion","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]`
+					if tc.source == "usage" {
+						response += `,"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7,"prompt_tokens_details":{"cached_tokens":2}}`
+					}
+					_, _ = io.WriteString(w, response+"}")
+				})
+			}
+			router, primary := newShadowTestRouter(t, backend)
+			model := router.Config.ModelConfig[shadowTestModel]
+			model.Pricing = config.ModelPricing{Currency: "USD", PromptPer1M: 1e6, CachedInputPer1M: 5e5, CompletionPer1M: 1e6}
+			if tc.boundaryRates {
+				model.MaxOutputTokens = 80
+				model.Pricing = config.ModelPricing{Currency: "USD", CompletionPer1M: 1000}
+			}
+			router.Config.ModelConfig[shadowTestModel] = model
+			if tc.boundaryRates {
+				model.Pricing.CompletionPer1M = 2000
+			}
+			model.Pricing.Currency = tc.secondCurrency
+			if tc.secondCurrency == "" {
+				model.Pricing = config.ModelPricing{}
+			}
+			router.Config.ModelConfig["second"] = model
+			cfg := shadowTestPluginConfig()
+			cfg.Models = append(cfg.Models, "second")
+			if tc.limit > 0 {
+				cfg.Budget.MaxEstimatedCost = &tc.limit
+			}
+
+			setLimit := func(ctx *RequestContext) {
+				if tc.output > 0 {
+					ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(tc.output)
+				}
+			}
+			baseline := runShadowRequest(t, router, primary, nil, setLimit)
+			run := runShadowRequest(t, router, primary, cfg, setLimit)
+			waitForShadow(t, router)
+			if got := backend.requestCount(); got != tc.calls || !bytes.Equal(run.body, baseline.body) {
+				t.Fatalf("shadow requests = %d, want %d, and primary must be unchanged", got, tc.calls)
+			}
+			outcomes := shadowOutcomes(t, run)
+			if len(outcomes) != 2 {
+				t.Fatalf("outcomes = %v, want one per candidate", outcomes)
+			}
+			for _, outcome := range outcomes {
+				if outcome.Reason != tc.reason || outcome.Metadata["budget_cost_source"] != tc.source {
+					t.Fatalf("unexpected outcome: %+v", outcome)
+				}
+				switch tc.source {
+				case "usage":
+					if outcome.Metadata["budget_accounted_cost"] != "6" || outcome.Metadata["estimated_cost"] != "6" {
+						t.Fatalf("unexpected cost of cached input: %+v", outcome.Metadata)
+					}
+				case "estimate":
+					if outcome.Metadata["budget_accounted_cost"] != outcome.Metadata["budget_estimated_cost"] {
+						t.Fatalf("missing usage did not account for the estimate: %+v", outcome.Metadata)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestShadowSpendEstimatesOutputTokens(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		requestLimit  *int64
+		modelLimit    int
+		outputReserve int
+		wantEstimate  string
+	}{
+		{"explicit limit below model limit", llmprotocol.Int64(32), 64, 128, "32"},
+		{"explicit limit equals model limit", llmprotocol.Int64(64), 64, 128, "64"},
+		{"explicit limit above model limit", llmprotocol.Int64(96), 64, 128, "96"},
+		{"model limit takes precedence", nil, 64, 128, "64"},
+		{"configured reserve", nil, 0, 128, "128"},
+		{"default reserve", nil, 0, 0, "4096"},
+		{"explicit zero is unbounded", llmprotocol.Int64(0), 64, 128, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			router, primary := newShadowTestRouter(t, backend)
+			model := router.Config.ModelConfig[shadowTestModel]
+			model.MaxOutputTokens = tc.modelLimit
+			model.Pricing = config.ModelPricing{Currency: "USD", CompletionPer1M: 1e6}
+			router.Config.ModelConfig[shadowTestModel] = model
+			router.Config.Budgets.OutputReserveTokens = tc.outputReserve
+			cfg := shadowTestPluginConfig()
+			limit := 5000.0
+			cfg.Budget.MaxEstimatedCost = &limit
+
+			run := runShadowRequest(t, router, primary, cfg, func(ctx *RequestContext) {
+				ctx.SemanticRequest.Sampling.MaxOutputTokens = tc.requestLimit
+			})
+			waitForShadow(t, router)
+			outcome := singleShadowOutcome(t, run)
+			if tc.wantEstimate == "" {
+				if outcome.Reason != shadowReasonBudgetUnbounded || backend.requestCount() != 0 {
+					t.Fatalf("invalid output limit: reason %q, requests %d", outcome.Reason, backend.requestCount())
+				}
+				return
+			}
+			if outcome.Reason != shadowReasonCompleted || outcome.Metadata["budget_estimated_cost"] != tc.wantEstimate {
+				t.Fatalf("got reason %q and estimate %q, want completion with estimate %s", outcome.Reason, outcome.Metadata["budget_estimated_cost"], tc.wantEstimate)
+			}
+			backend.mu.Lock()
+			defer backend.mu.Unlock()
+			if len(backend.bodies) != 1 {
+				t.Fatalf("got %d requests, want 1", len(backend.bodies))
+			}
+			var wire map[string]json.RawMessage
+			if err := json.Unmarshal(backend.bodies[0], &wire); err != nil {
+				t.Fatal(err)
+			}
+			wireLimit := wire["max_completion_tokens"]
+			if wireLimit == nil {
+				wireLimit = wire["max_tokens"]
+			}
+			if tc.requestLimit == nil {
+				if wireLimit != nil {
+					t.Fatalf("estimate set an outgoing output limit: %s", wireLimit)
+				}
+			} else if string(wireLimit) != tc.wantEstimate {
+				t.Fatalf("outgoing output limit = %s, want %s", wireLimit, tc.wantEstimate)
 			}
 		})
 	}

@@ -168,7 +168,7 @@ func (a ListenerAPI) settingValues() []string {
 }
 
 // EffectiveAPIs are the APIs the listener serves: its apis, or without them
-// the APIs on by default (chat_completions, responses, messages and images),
+// the APIs on by default (chat_completions, responses, messages, images and speech),
 // each with no settings.
 func (l Listener) EffectiveAPIs() ListenerAPIs {
 	if l.APIs != nil {
@@ -361,7 +361,7 @@ func listenerPath(listener Listener, rest string) string {
 func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 	if listener.APIs != nil && len(listener.APIs) == 0 {
 		return CheckError(listenerPath(listener, "apis"), CodeInvalidValue,
-			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages and images")
+			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages, images and speech")
 	}
 	names := make([]string, 0, len(listener.APIs))
 	for name := range listener.APIs {
