@@ -283,6 +283,13 @@
   default: medium
   modes: [enabled]
   default_mode: enabled
+- id: gemini-flash-four-level-minimal
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high]
+  default: minimal
+  modes: [enabled]
+  default_mode: enabled
 - id: gemini-flash-three-level-medium
   type: reasoning_effort
   parameter: reasoning_effort
