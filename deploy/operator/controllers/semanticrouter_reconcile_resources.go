@@ -211,6 +211,9 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, hpa)
 		if err == nil {
+			if !metav1.IsControlledBy(hpa, sr) {
+				return nil
+			}
 			return r.Delete(ctx, hpa)
 		}
 		return nil
