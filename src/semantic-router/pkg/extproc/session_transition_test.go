@@ -239,3 +239,29 @@ func TestStoredResponseTokensCountToolOutput(t *testing.T) {
 		t.Fatalf("an 8000-byte tool output estimated %d tokens, want at least 1024", got)
 	}
 }
+
+// The signal feeds comparison operators, so the estimate must be the history's
+// real size: a session_history_tokens gate above a ceiling the estimate never
+// passed could never match.
+func TestHistoryTokensEstimateIsNotCapped(t *testing.T) {
+	result := strings.Repeat("x", 40000)
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run it"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "shell", Arguments: `{"command":"ls"}`}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: result}}}}}},
+	}
+	if got := historyTokensFromSemanticMessages(messages); got <= 8192 {
+		t.Fatalf("a 40000-byte tool result estimated %d tokens, want an uncapped count above 8192", got)
+	}
+
+	output, err := json.Marshal(strings.Repeat("x", 40000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := []*responseapi.StoredResponse{{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}}
+	if got := historyTokensFromStoredResponses(history); got <= 8192 {
+		t.Fatalf("a 40000-byte stored output estimated %d tokens, want an uncapped count above 8192", got)
+	}
+}

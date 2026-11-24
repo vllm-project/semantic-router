@@ -260,14 +260,9 @@ func historyTokensFromStoredResponses(history []*responseapi.StoredResponse) int
 		} else {
 			total += estimateStoredResponseTokens(resp)
 		}
-		if total >= historyTokensCap {
-			return historyTokensCap
-		}
 	}
 	return total
 }
-
-const historyTokensCap = 8192
 
 func estimateStoredResponseTokens(resp *responseapi.StoredResponse) int {
 	total := 0
@@ -339,29 +334,30 @@ func historyTokensFromSemanticMessages(messages []llmprotocol.Message) int {
 	}
 	total := 0
 	for _, msg := range prior {
-		total += estimateTokenLength(historyMessageText(msg))
-		if total >= historyTokensCap {
-			return historyTokensCap
-		}
+		total += historyMessageBytes(msg) / 4
 	}
 	return total
 }
 
-// historyMessageText is the text whose token size the history estimate counts
-// for one message: display text plus tool-call arguments plus the payload of
-// tool-result blocks. semanticText alone reads only display text, so an agent
-// session's tool loop — the bulk of its history — contributed nothing to the
-// estimate. For a message without tool blocks it is exactly semanticText.
-func historyMessageText(msg llmprotocol.Message) string {
-	parts := make([]string, 0, len(msg.Content))
+// historyMessageBytes counts the bytes whose token size the history estimate
+// charges to one message: display text plus tool-call arguments plus the
+// payload of tool-result blocks, joined the way semanticText joins display
+// parts. semanticText alone reads only display text, so an agent session's
+// tool loop — the bulk of its history — contributed nothing to the estimate.
+// Counting bytes rather than materialising the join keeps the now-uncapped
+// estimate allocation-free on long histories.
+func historyMessageBytes(msg llmprotocol.Message) int {
+	bytes, parts := 0, 0
 	var walk func(contents []llmprotocol.Content)
 	walk = func(contents []llmprotocol.Content) {
 		for _, content := range contents {
 			if content.Text != "" {
-				parts = append(parts, content.Text)
+				bytes += len(content.Text)
+				parts++
 			}
 			if content.ToolCall != nil && content.ToolCall.Arguments != "" {
-				parts = append(parts, content.ToolCall.Arguments)
+				bytes += len(content.ToolCall.Arguments)
+				parts++
 			}
 			if content.ToolResult != nil {
 				walk(content.ToolResult.Content)
@@ -369,7 +365,10 @@ func historyMessageText(msg llmprotocol.Message) string {
 		}
 	}
 	walk(msg.Content)
-	return strings.Join(parts, " ")
+	if parts > 1 {
+		bytes += parts - 1 // the single-space separators a join would insert
+	}
+	return bytes
 }
 
 func estimateTokenLength(text string) int {
