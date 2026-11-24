@@ -592,11 +592,6 @@ def test_runtime_health_retains_preload_labels_for_same_package(
         ]
         assert runtime.lookup(data[0]["id"]) is runtime.served[0]
 
-        shared_package_id = runtime.served[0].model.info.id
-        with pytest.raises(RuntimeServiceError) as exc_info:
-            runtime.lookup(shared_package_id)
-        assert exc_info.value.code == "model_not_found"
-
         # Now load the second copy: IDs and lookups must not mutate.
         runtime.served[1].load()
         assert runtime.served[1].model is not None
@@ -622,8 +617,63 @@ def test_runtime_health_retains_preload_labels_for_same_package(
         for item, served in zip(data, runtime.served, strict=True):
             assert runtime.lookup(item["id"]) is served
 
+        assert runtime.served[0].model is not None
+        shared_package_id = runtime.served[0].model.info.id
         with pytest.raises(RuntimeServiceError) as exc_info:
             runtime.lookup(shared_package_id)
         assert exc_info.value.code == "model_not_found"
+    finally:
+        runtime.stop()
+
+
+def test_runtime_preserves_distinct_unnamed_package_aliases(
+    qwen3_package, qwen35_package
+):
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(model=str(qwen3_package), device="cpu"),
+                ModelConfig(model=str(qwen35_package), device="cpu"),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        assert [served.label for served in runtime.served] == [
+            qwen3_package.name,
+            qwen35_package.name,
+        ]
+        assert [served.served_id for served in runtime.served] == [
+            qwen3_package.name,
+            qwen35_package.name,
+        ]
+
+        cards = runtime.model_cards()
+        assert [card["id"] for card in cards] == [
+            qwen3_package.name,
+            qwen35_package.name,
+        ]
+
+        assert runtime.served[0].model is not None
+        assert runtime.served[1].model is not None
+        qwen3_id = runtime.served[0].model.info.id
+        qwen35_id = runtime.served[1].model.info.id
+        assert qwen3_id != qwen35_id
+
+        assert runtime.lookup(qwen3_id) is runtime.served[0]
+        assert runtime.lookup(qwen35_id) is runtime.served[1]
+        assert runtime.lookup(qwen3_package.name) is runtime.served[0]
+        assert runtime.lookup(qwen35_package.name) is runtime.served[1]
+
+        client = TestClient(create_app(runtime))
+        response = client.get("/v1/models")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert [item["id"] for item in data] == [
+            qwen3_package.name,
+            qwen35_package.name,
+        ]
+        for item, served in zip(data, runtime.served, strict=True):
+            assert runtime.lookup(item["id"]) is served
     finally:
         runtime.stop()

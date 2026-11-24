@@ -360,23 +360,32 @@ class ServedModel:
 
     def names(self) -> set[str]:
         names = {self.config.name, self.config.model, name_of(self.config.model)}
-        if self.model is not None and (
-            len(self.runtime.served) == 1
-            or not any(
+        if self.model is not None:
+            if not any(
                 other is not self
                 and (
                     other.config.name == self.model.info.id
                     or other.config.model == self.config.model
-                    or (self.config.name is None and other.config.name is None)
                     or (
                         other.model is not None
                         and other.model.info.id == self.model.info.id
                     )
                 )
                 for other in self.runtime.served
-            )
-        ):
-            names |= {self.model.info.id, self.model.info.repo}
+            ):
+                names.add(self.model.info.id)
+            if self.model.info.repo and not any(
+                other is not self
+                and (
+                    other.config.name == self.model.info.repo
+                    or (
+                        other.model is not None
+                        and other.model.info.repo == self.model.info.repo
+                    )
+                )
+                for other in self.runtime.served
+            ):
+                names.add(self.model.info.repo)
         return {name for name in names if name}
 
     def accepts(self, name: str) -> bool:
