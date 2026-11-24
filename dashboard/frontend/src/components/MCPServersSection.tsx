@@ -1,457 +1,318 @@
-import React, { useEffect, useId, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Blocks, Pencil, Plug, Plus, Power, Trash2, Unplug, Wrench } from 'lucide-react'
 
-import type { RegisteredTool } from '../tools'
 import type { MCPServerConfig, MCPServerState } from '../tools/mcp'
-import styles from './MCPConfigPanel.module.css'
-import { MCPListPagination } from './MCPListPagination'
-import type { BuiltInTool, ServerFilter, ServerSort, UnifiedTool } from './mcpConfigPanelTypes'
-import { MCP_NESTED_TOOLS_PAGE_SIZE, MCP_SERVERS_PAGE_SIZE } from './mcpConfigPanelTypes'
 import {
+  Badge,
+  Button,
+  DataTable,
+  DataToolbar,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  EmptyState,
+  FilterPill,
+  IconTile,
+  StatusLabel,
+  cn,
+  type Column,
+  type DataTableSort,
+} from '../ui'
+import { MCPListPagination } from './MCPListPagination'
+import type { ServerFilters } from './mcpConfigPanelTypes'
+import { MCP_SERVERS_PAGE_SIZE } from './mcpConfigPanelTypes'
+import {
+  SERVER_STATUS_META,
+  SERVER_STATUS_RANK,
+  TRANSPORT_META,
   getMCPPageCount,
-  getTransportLabel,
   paginateMCPItems,
-  toUnifiedBuiltInTool,
-  toUnifiedMCPTool,
-  toUnifiedRegisteredTool,
+  serverTarget,
 } from './mcpConfigPanelUtils'
 
+const SORT_VALUE: Record<string, (server: MCPServerState) => string | number> = {
+  name: (server) => server.config.name.toLowerCase(),
+  status: (server) => SERVER_STATUS_RANK[server.status] ?? 9,
+  tools: (server) => server.tools?.length ?? 0,
+}
+
+function sortServers(servers: MCPServerState[], sort: DataTableSort | null): MCPServerState[] {
+  const value = sort ? SORT_VALUE[sort.id] : undefined
+  if (!sort || !value) return servers
+  return [...servers].sort((left, right) => {
+    const a = value(left)
+    const b = value(right)
+    const order =
+      typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
+    return sort.dir === 'asc' ? order : -order
+  })
+}
+
 interface MCPServersSectionProps {
-  actionLoading: string | null
-  builtInExpanded: boolean
-  expandedServers: Set<string>
-  filteredServers: MCPServerState[]
-  isReadonly: boolean
-  registryTools: RegisteredTool[]
-  serverFilter: ServerFilter
-  serverSearch: string
-  serverSort: ServerSort
   servers: MCPServerState[]
-  serversSectionExpanded: boolean
-  toolsDbExpanded: boolean
-  toolsDbLoading: boolean
-  toolsDbTools: BuiltInTool[]
-  onDeleteServer: (id: string) => void
-  onEditServer: (server: MCPServerConfig) => void
-  onSelectTool: (tool: UnifiedTool) => void
-  onServerFilterChange: (filter: ServerFilter) => void
+  filteredServers: MCPServerState[]
+  serverFilters: ServerFilters
+  serverSearch: string
+  isReadonly: boolean
+  actionLoading: string | null
+  activeServerId?: string
+  onServerFiltersChange: (filters: ServerFilters) => void
   onServerSearchChange: (value: string) => void
-  onServerSortChange: (sort: ServerSort) => void
-  onToggleBuiltInExpanded: () => void
+  onOpenServer: (id: string) => void
   onToggleConnection: (server: MCPServerState) => void
-  onToggleServerExpand: (id: string) => void
-  onToggleServersSection: () => void
-  onToggleToolsDbExpanded: () => void
+  onToggleEnabled: (server: MCPServerState) => void
+  onEditServer: (server: MCPServerConfig) => void
+  onDeleteServer: (id: string) => void
+  onAddServer: () => void
 }
 
 export const MCPServersSection: React.FC<MCPServersSectionProps> = ({
-  actionLoading,
-  builtInExpanded,
-  expandedServers,
-  filteredServers,
-  isReadonly,
-  registryTools,
-  serverFilter,
-  serverSearch,
-  serverSort,
   servers,
-  serversSectionExpanded,
-  toolsDbExpanded,
-  toolsDbLoading,
-  toolsDbTools,
-  onDeleteServer,
-  onEditServer,
-  onSelectTool,
-  onServerFilterChange,
+  filteredServers,
+  serverFilters,
+  serverSearch,
+  isReadonly,
+  actionLoading,
+  activeServerId,
+  onServerFiltersChange,
   onServerSearchChange,
-  onServerSortChange,
-  onToggleBuiltInExpanded,
+  onOpenServer,
   onToggleConnection,
-  onToggleServerExpand,
-  onToggleServersSection,
-  onToggleToolsDbExpanded,
+  onToggleEnabled,
+  onEditServer,
+  onDeleteServer,
+  onAddServer,
 }) => {
-  const contentId = useId()
-  const searchInputId = useId()
   const [page, setPage] = useState(1)
+  const [sort, setSort] = useState<DataTableSort | null>(null)
   const connectedCount = servers.filter((server) => server.status === 'connected').length
-  const pageCount = getMCPPageCount(filteredServers.length, MCP_SERVERS_PAGE_SIZE)
-  const visibleServers = paginateMCPItems(filteredServers, page, MCP_SERVERS_PAGE_SIZE)
+  const sortedServers = useMemo(() => sortServers(filteredServers, sort), [filteredServers, sort])
+  const pageCount = getMCPPageCount(sortedServers.length, MCP_SERVERS_PAGE_SIZE)
+  const visibleServers = paginateMCPItems(sortedServers, page, MCP_SERVERS_PAGE_SIZE)
+  const filtered =
+    serverSearch.trim() !== '' ||
+    serverFilters.transports.length > 0 ||
+    serverFilters.statuses.length > 0
 
-  useEffect(() => setPage(1), [serverFilter, serverSearch, serverSort])
+  useEffect(() => setPage(1), [serverFilters, serverSearch, sort])
   useEffect(() => {
     if (page > pageCount) setPage(pageCount)
   }, [page, pageCount])
 
+  const columns: Column<MCPServerState>[] = [
+    {
+      id: 'name',
+      header: 'Server',
+      sortable: true,
+      cell: (row) => {
+        const transport = TRANSPORT_META[row.config.transport] ?? TRANSPORT_META.stdio
+        return (
+          <div className="flex min-w-0 items-center gap-3">
+            <IconTile
+              icon={transport.icon}
+              tone="slate"
+              size="sm"
+              className={cn(!row.config.enabled && 'opacity-60')}
+            />
+            <div className="flex min-w-0 flex-col">
+              <span className="flex items-center gap-1.5">
+                <span className="truncate font-mono text-[12.5px] font-medium">
+                  {row.config.name}
+                </span>
+                {!row.config.enabled ? (
+                  <Badge size="sm" tone="outline">
+                    off
+                  </Badge>
+                ) : null}
+              </span>
+              <span className="max-w-[320px] truncate font-mono text-[11.5px] text-subtle-foreground">
+                {serverTarget(row.config) || row.config.description || '—'}
+              </span>
+            </div>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'transport',
+      header: 'Transport',
+      hideBelow: 'xl',
+      cell: (row) => (
+        <Badge tone="outline">
+          {TRANSPORT_META[row.config.transport]?.label ?? row.config.transport}
+        </Badge>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      sortable: true,
+      cell: (row) => {
+        const meta = SERVER_STATUS_META[row.status] ?? SERVER_STATUS_META.disconnected
+        return (
+          <StatusLabel tone={meta.tone} pulse={meta.pulse}>
+            {actionLoading === row.config.id ? 'Working…' : meta.label}
+          </StatusLabel>
+        )
+      },
+    },
+    {
+      id: 'tools',
+      header: 'Tools',
+      align: 'right',
+      sortable: true,
+      cell: (row) =>
+        row.status === 'connected' ? (
+          <span className="text-[13px] tabular">{row.tools?.length ?? 0}</span>
+        ) : (
+          <span className="text-xs text-subtle-foreground">—</span>
+        ),
+    },
+  ]
+
   return (
-    <section className={styles.mcpServersSection}>
-      <div className={styles.sectionHeader}>
-        <button
-          type="button"
-          className={styles.sectionToggle}
-          onClick={onToggleServersSection}
-          aria-expanded={serversSectionExpanded}
-          aria-controls={contentId}
-        >
-          <span className={styles.expandIcon} aria-hidden="true">
-            {serversSectionExpanded ? '▼' : '▶'}
-          </span>
-          <span>MCP Servers</span>
-          <span className={styles.serverCountBadge}>
-            {connectedCount} / {servers.length} connected
-          </span>
-        </button>
+    <section className="flex flex-col gap-3" aria-labelledby="mcp-servers-title">
+      <div className="flex flex-col gap-0.5">
+        <h3 id="mcp-servers-title" className="text-[15px] font-semibold tracking-[-0.012em]">
+          MCP servers
+        </h3>
+        <p className="text-[13px] text-muted-foreground">
+          Servers the dashboard connects to. Their tools become available to decisions.
+        </p>
       </div>
-
-      {serversSectionExpanded ? (
-        <div id={contentId} className={styles.serverCatalog}>
-          {servers.length > 0 ? (
+      <div>
+        <DataToolbar
+          search={serverSearch}
+          onSearchChange={onServerSearchChange}
+          placeholder="Search servers or tools…"
+          filters={
+            servers.length ? (
+              <>
+                <FilterPill
+                  label="Transport"
+                  selected={serverFilters.transports}
+                  onChange={(transports) => onServerFiltersChange({ ...serverFilters, transports })}
+                  options={Object.entries(TRANSPORT_META).map(([value, meta]) => ({
+                    value,
+                    label: meta.label,
+                    count: servers.filter((server) => server.config.transport === value).length,
+                  }))}
+                />
+                <FilterPill
+                  label="Status"
+                  selected={serverFilters.statuses}
+                  onChange={(statuses) => onServerFiltersChange({ ...serverFilters, statuses })}
+                  options={(['connected', 'connecting', 'error', 'disconnected'] as const).map(
+                    (value) => ({
+                      value,
+                      label: SERVER_STATUS_META[value].label,
+                      count: servers.filter((server) => server.status === value).length,
+                    }),
+                  )}
+                />
+              </>
+            ) : null
+          }
+          actions={
+            <span className="text-xs text-muted-foreground">
+              <span className="tabular">{connectedCount}</span> of{' '}
+              <span className="tabular">{servers.length}</span> connected
+            </span>
+          }
+        />
+        <DataTable
+          data={visibleServers}
+          columns={columns}
+          getRowId={(row) => row.config.id}
+          sort={sort}
+          onSortChange={setSort}
+          activeRowId={activeServerId}
+          onRowClick={(row) => onOpenServer(row.config.id)}
+          rowActions={(row) => (
             <>
-              <div className={styles.catalogControls}>
-                <div className={styles.searchField}>
-                  <label htmlFor={searchInputId}>Search servers</label>
-                  <div className={styles.toolSearchWrapper}>
-                    <input
-                      id={searchInputId}
-                      type="search"
-                      className={styles.toolSearchInput}
-                      placeholder="Name, endpoint, or tool"
-                      value={serverSearch}
-                      onChange={(event) => onServerSearchChange(event.target.value)}
-                    />
-                    {serverSearch ? (
-                      <button
-                        type="button"
-                        className={styles.clearSearchBtn}
-                        onClick={() => onServerSearchChange('')}
-                        aria-label="Clear server search"
-                      >
-                        ×
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-                <label className={styles.catalogSelect}>
-                  <span>Status</span>
-                  <select
-                    value={serverFilter}
-                    onChange={(event) => onServerFilterChange(event.target.value as ServerFilter)}
-                  >
-                    <option value="all">All statuses</option>
-                    <option value="connected">Connected</option>
-                    <option value="disconnected">Not connected</option>
-                  </select>
-                </label>
-                <label className={styles.catalogSelect}>
-                  <span>Sort</span>
-                  <select
-                    value={serverSort}
-                    onChange={(event) => onServerSortChange(event.target.value as ServerSort)}
-                  >
-                    <option value="name-asc">Name A–Z</option>
-                    <option value="status">Connection status</option>
-                    <option value="tools-desc">Most tools</option>
-                  </select>
-                </label>
-              </div>
-              <div className={styles.catalogMeta} aria-live="polite">
-                <strong>{filteredServers.length}</strong> of {servers.length} servers
-                <span>Client view · {MCP_SERVERS_PAGE_SIZE} per page</span>
-              </div>
+              <DropdownMenuItem onSelect={() => onOpenServer(row.config.id)}>
+                <Wrench />
+                View tools
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={isReadonly || Boolean(actionLoading)}
+                onSelect={() => onToggleConnection(row)}
+                aria-label={`${row.status === 'connected' ? 'Disconnect' : 'Connect'} ${row.config.name}`}
+              >
+                {row.status === 'connected' ? <Unplug /> : <Plug />}
+                {row.status === 'connected' ? 'Disconnect' : 'Connect'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={isReadonly || Boolean(actionLoading)}
+                onSelect={() => onEditServer(row.config)}
+                aria-label={`Edit ${row.config.name}`}
+              >
+                <Pencil />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={isReadonly || Boolean(actionLoading)}
+                onSelect={() => onToggleEnabled(row)}
+              >
+                <Power />
+                {row.config.enabled ? 'Turn off' : 'Turn on'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={isReadonly || Boolean(actionLoading)}
+                onSelect={() => onDeleteServer(row.config.id)}
+                aria-label={`Delete ${row.config.name}`}
+              >
+                <Trash2 />
+                Delete
+              </DropdownMenuItem>
             </>
-          ) : null}
-
-          {servers.length === 0 &&
-          registryTools.length === 0 &&
-          toolsDbTools.length === 0 &&
-          !toolsDbLoading ? (
-            <div className={styles.empty}>
-              {isReadonly
-                ? 'No MCP servers or built-in tools are configured.'
-                : 'No MCP servers are configured. Add a server to get started.'}
-            </div>
-          ) : null}
-
-          {filteredServers.length === 0 && servers.length > 0 ? (
-            <div className={styles.noServersFiltered}>
-              No servers match the current search and status filter.
-            </div>
-          ) : null}
-
-          {visibleServers.map((server) => {
-            const isExpanded = expandedServers.has(server.config.id)
-            const hasTools = server.status === 'connected' && Boolean(server.tools?.length)
-            const serverToolsId = `mcp-server-tools-${server.config.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
-            const unifiedTools = (server.tools || []).map((tool) => toUnifiedMCPTool(server, tool))
-
-            return (
-              <article key={server.config.id} className={styles.serverCard}>
-                <div className={styles.serverHeader}>
-                  <button
-                    type="button"
-                    className={styles.serverHeaderButton}
-                    onClick={() => hasTools && onToggleServerExpand(server.config.id)}
-                    disabled={!hasTools}
-                    aria-expanded={hasTools ? isExpanded : undefined}
-                    aria-controls={hasTools ? serverToolsId : undefined}
+          )}
+          empty={
+            <EmptyState
+              compact
+              icon={Blocks}
+              tone="slate"
+              title={servers.length ? 'No servers match' : 'No MCP servers yet'}
+              description={
+                servers.length
+                  ? 'Clear the search or filters to see every server.'
+                  : isReadonly
+                    ? 'No MCP servers are configured.'
+                    : 'Add a server to give decisions tools such as search, files or calendars.'
+              }
+              actions={
+                servers.length && filtered ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      onServerSearchChange('')
+                      onServerFiltersChange({ transports: [], statuses: [] })
+                    }}
                   >
-                    <span className={styles.serverInfo}>
-                      <span className={styles.expandIcon} aria-hidden="true">
-                        {hasTools ? (isExpanded ? '▼' : '▶') : '•'}
-                      </span>
-                      {renderStatusIcon(server.status)}
-                      <span className={styles.serverName}>{server.config.name}</span>
-                      <span className={styles.transportBadge}>
-                        {getTransportLabel(server.config.transport)}
-                      </span>
-                      <span className={`${styles.statusBadge} ${styles[server.status]}`}>
-                        {server.status}
-                      </span>
-                      {hasTools ? (
-                        <span className={styles.toolCount}>{server.tools?.length || 0} tools</span>
-                      ) : null}
-                    </span>
-                  </button>
-
-                  <div className={styles.serverActions}>
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => onToggleConnection(server)}
-                      disabled={isReadonly || Boolean(actionLoading)}
-                      title={server.status === 'connected' ? 'Disconnect' : 'Connect'}
-                      aria-label={`${server.status === 'connected' ? 'Disconnect' : 'Connect'} ${server.config.name}`}
-                    >
-                      {actionLoading === server.config.id
-                        ? '…'
-                        : server.status === 'connected'
-                          ? '⏹'
-                          : '▶'}
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => onEditServer(server.config)}
-                      disabled={isReadonly || Boolean(actionLoading)}
-                      title="Edit"
-                      aria-label={`Edit ${server.config.name}`}
-                    >
-                      ⚙
-                    </button>
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => onDeleteServer(server.config.id)}
-                      disabled={isReadonly || Boolean(actionLoading)}
-                      title="Delete"
-                      aria-label={`Delete ${server.config.name}`}
-                    >
-                      🗑
-                    </button>
-                  </div>
-                </div>
-
-                {server.config.description ? (
-                  <div className={styles.serverDescription}>{server.config.description}</div>
-                ) : null}
-                {server.error ? <div className={styles.serverError}>{server.error}</div> : null}
-                {server.status !== 'connected' && !server.error ? (
-                  <div className={styles.connectionHint}>
-                    Connect this server to discover its tools.
-                  </div>
-                ) : null}
-                {hasTools && isExpanded ? (
-                  <ToolCollection
-                    id={serverToolsId}
-                    label={`${server.config.name} tools`}
-                    tools={unifiedTools}
-                    onSelectTool={onSelectTool}
-                  />
-                ) : null}
-              </article>
-            )
-          })}
-
-          {filteredServers.length > 0 ? (
-            <MCPListPagination
-              itemCount={filteredServers.length}
-              itemLabel="servers"
-              page={page}
-              pageSize={MCP_SERVERS_PAGE_SIZE}
-              onPageChange={setPage}
+                    Clear filters
+                  </Button>
+                ) : !isReadonly ? (
+                  <Button size="sm" onClick={onAddServer}>
+                    <Plus />
+                    Add server
+                  </Button>
+                ) : null
+              }
             />
-          ) : null}
-
-          {registryTools.length > 0 ? (
-            <ToolSourceCard
-              title="Built-in Tools"
-              description="Executable tools registered in the dashboard frontend."
-              badge="Frontend"
-              expanded={builtInExpanded}
-              tools={registryTools.map(toUnifiedRegisteredTool)}
-              onToggle={onToggleBuiltInExpanded}
-              onSelectTool={onSelectTool}
-            />
-          ) : null}
-
-          {toolsDbLoading || toolsDbTools.length > 0 ? (
-            <ToolSourceCard
-              title="Semantic Router Tools"
-              description="Tool definitions exposed by the Semantic Router tools database."
-              badge="Backend"
-              expanded={toolsDbExpanded}
-              loading={toolsDbLoading}
-              tools={toolsDbTools.map(toUnifiedBuiltInTool)}
-              onToggle={onToggleToolsDbExpanded}
-              onSelectTool={onSelectTool}
-            />
-          ) : null}
-        </div>
+          }
+        />
+      </div>
+      {sortedServers.length > MCP_SERVERS_PAGE_SIZE ? (
+        <MCPListPagination
+          itemCount={sortedServers.length}
+          itemLabel="servers"
+          page={page}
+          pageSize={MCP_SERVERS_PAGE_SIZE}
+          onPageChange={setPage}
+        />
       ) : null}
     </section>
   )
-}
-
-interface ToolSourceCardProps {
-  badge: string
-  description: string
-  expanded: boolean
-  loading?: boolean
-  title: string
-  tools: UnifiedTool[]
-  onSelectTool: (tool: UnifiedTool) => void
-  onToggle: () => void
-}
-
-function ToolSourceCard({
-  badge,
-  description,
-  expanded,
-  loading = false,
-  title,
-  tools,
-  onSelectTool,
-  onToggle,
-}: ToolSourceCardProps) {
-  const contentId = useId()
-  return (
-    <article className={`${styles.serverCard} ${styles.builtInSection}`}>
-      <div className={styles.serverHeader}>
-        <button
-          type="button"
-          className={styles.serverHeaderButton}
-          onClick={onToggle}
-          aria-expanded={expanded}
-          aria-controls={contentId}
-        >
-          <span className={styles.serverInfo}>
-            <span className={styles.expandIcon} aria-hidden="true">
-              {expanded ? '▼' : '▶'}
-            </span>
-            <span className={styles.statusDot} data-status="connected" aria-hidden="true">
-              ●
-            </span>
-            <span className={styles.serverName}>{title}</span>
-            <span className={styles.transportBadge}>{badge}</span>
-            <span className={`${styles.statusBadge} ${styles.connected}`}>
-              {loading ? 'loading' : 'active'}
-            </span>
-            <span className={styles.toolCount}>{tools.length} tools</span>
-          </span>
-        </button>
-      </div>
-      <div className={styles.serverDescription}>{description}</div>
-      {expanded ? (
-        loading && tools.length === 0 ? (
-          <div id={contentId} className={styles.toolsLoading} role="status">
-            Loading tools…
-          </div>
-        ) : (
-          <ToolCollection
-            id={contentId}
-            label={`${title} catalog`}
-            tools={tools}
-            onSelectTool={onSelectTool}
-          />
-        )
-      ) : null}
-    </article>
-  )
-}
-
-interface ToolCollectionProps {
-  id: string
-  label: string
-  tools: UnifiedTool[]
-  onSelectTool: (tool: UnifiedTool) => void
-}
-
-function ToolCollection({ id, label, tools, onSelectTool }: ToolCollectionProps) {
-  const [page, setPage] = useState(1)
-  const pageCount = getMCPPageCount(tools.length, MCP_NESTED_TOOLS_PAGE_SIZE)
-  const visibleTools = paginateMCPItems(tools, page, MCP_NESTED_TOOLS_PAGE_SIZE)
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
-
-  return (
-    <div id={id} className={styles.toolsContainer} aria-label={label}>
-      {visibleTools.map((tool) => (
-        <button
-          type="button"
-          key={tool.id}
-          className={styles.toolCard}
-          onClick={() => onSelectTool(tool)}
-          aria-label={`View details for ${tool.name}`}
-        >
-          <span className={styles.toolHeader}>
-            <span className={styles.toolIcon} aria-hidden="true">
-              🔧
-            </span>
-            <span className={styles.toolName}>{tool.name}</span>
-          </span>
-          <span className={styles.toolDescription}>{tool.description || 'No description'}</span>
-          <span className={styles.toolParams}>
-            {tool.parameters.length} {tool.parameters.length === 1 ? 'parameter' : 'parameters'}
-          </span>
-        </button>
-      ))}
-      <MCPListPagination
-        itemCount={tools.length}
-        itemLabel="tools"
-        page={page}
-        pageSize={MCP_NESTED_TOOLS_PAGE_SIZE}
-        onPageChange={setPage}
-      />
-    </div>
-  )
-}
-
-function renderStatusIcon(status: MCPServerState['status']) {
-  switch (status) {
-    case 'connected':
-      return (
-        <span className={styles.statusDot} data-status="connected" aria-hidden="true">
-          ●
-        </span>
-      )
-    case 'connecting':
-      return (
-        <span className={styles.statusDot} data-status="connecting" aria-hidden="true">
-          ◐
-        </span>
-      )
-    case 'error':
-      return (
-        <span className={styles.statusDot} data-status="error" aria-hidden="true">
-          ●
-        </span>
-      )
-    default:
-      return (
-        <span className={styles.statusDot} data-status="disconnected" aria-hidden="true">
-          ○
-        </span>
-      )
-  }
 }

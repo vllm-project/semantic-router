@@ -196,6 +196,7 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig, skipExternalAssets boo
 		return nil, err
 	}
 	cfg.DefaultBackendTLS = cloneProviderDefaultsTLS(canonical.Providers.Defaults.TLS)
+	cfg.ReasoningMinOutputTokens = canonical.Providers.Defaults.ReasoningMinOutputTokens
 	cfg.EffectiveModelRegistry = effective
 	cfg.Evaluation = cloneCanonicalEvaluation(canonical.Evaluation)
 	if err := validateNativeRoutingConfig(&cfg); err != nil {
@@ -222,6 +223,10 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalDelegatedBackends(canonical); err != nil {
 		return err
 	}
+	if global := canonical.Global; global != nil && global.Router.StreamedBody.Enabled && global.Router.StreamedBody.MaxBytes <= 0 {
+		// The handler accumulates without a bound until this names a ceiling.
+		return fmt.Errorf("global.router.streamed_body.max_bytes: an enabled streamed body needs a positive max_bytes")
+	}
 	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
@@ -229,6 +234,9 @@ func validateCanonicalContract(canonical *CanonicalConfig) error {
 	aliases, err := canonicalProviderModelIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
+	}
+	if canonical.Providers.Defaults.ReasoningMinOutputTokens < 0 {
+		return fmt.Errorf("providers.defaults.reasoning_min_output_tokens must not be negative")
 	}
 	return validateCanonicalDefaultModel(canonical.Providers, aliases, cards)
 }

@@ -118,7 +118,12 @@ type guardScan struct {
 	responses []modelservice.Response
 	errs      []error
 	done      []bool
-	latency   float64
+	// reused are the windows whose answers an earlier request's read of the
+	// same input gave (windowVerdicts), which took no time; verdicts keys the
+	// scan's windows there, nil for a scan that keeps none.
+	reused   []bool
+	verdicts *scanVerdictKeys
+	latency  float64
 	// waiting are the re-reads that wait for the windows still unread, and
 	// rank the highest rank the scan's windows took.
 	waiting []waitingReread
@@ -187,6 +192,7 @@ func newGuardScan(deployment string, state modelservice.Request, budget scanBudg
 		size: size, grown: grown, most: most, overlap: overlap, rereadMargin: budget.rereadMargin,
 		order: scanOrder(len(windows), offset), turn: offset, windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
+		reused: make([]bool, len(windows)),
 	}
 }
 
@@ -393,7 +399,10 @@ func (scan *guardScan) windowCalls(ctx context.Context) []*systemOneCall {
 		window := scan.windows[index]
 		request := scan.windowState(window)
 		request.Window, request.Parallel = rank+1, scan.parallel
-		calls[rank] = &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index}
+		calls[rank] = &systemOneCall{
+			deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index,
+			verdict: scan.verdictKey(window),
+		}
 		scan.pace.reads[index], scan.pace.cancels[index] = context.WithCancelCause(ctx)
 	}
 	for index := range scan.cut {
@@ -475,6 +484,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 	var readers []func()
 	for _, scan := range scans {
 		scan.refusing = c.refusingRules(scan.rules)
+		scan.verdicts = c.newScanVerdictKeys(scan)
 		scan.stop = stop
 		scan.pace.stage, scan.pace.started, scan.pace.deadline = stage, started, deadline
 		calls := scan.windowCalls(ctx)
@@ -489,7 +499,11 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 			var response modelservice.Response
 			var latency float64
 			err := readCtx.Err()
+			kept := false
 			if err == nil {
+				response, kept = c.keptWindow(call)
+			}
+			if err == nil && !kept {
 				if slots != nil {
 					slots <- struct{}{}
 				}
@@ -497,6 +511,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 				if slots != nil {
 					<-slots
 				}
+				c.keepWindow(call, response, err)
 			}
 			if err != nil {
 				err = windowError(readCtx, err)
@@ -684,9 +699,13 @@ func (scan *guardScan) addWindowLocked(window scanWindow, rank int) *systemOneCa
 	scan.responses = append(scan.responses, modelservice.Response{})
 	scan.errs = append(scan.errs, nil)
 	scan.done = append(scan.done, false)
+	scan.reused = append(scan.reused, false)
 	request := scan.windowState(window)
 	request.Window, request.Parallel = rank, scan.parallel
-	return &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0}
+	return &systemOneCall{
+		deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0,
+		verdict: scan.verdictKey(window),
+	}
 }
 
 // refusingRules are the rules among rules whose match in one window refuses
@@ -808,6 +827,11 @@ func (scan *guardScan) answersTo(question string) ([]windowAnswer, int, string) 
 			reason = "missing_answer"
 		case answer.Error != "":
 			reason = answer.Error
+		case answer.InputCoverage != "complete":
+			// A window's call succeeding says nothing about how much of the
+			// window it read: the answer covers the window only when the
+			// model proved it read all of it.
+			reason = "input_coverage_unknown"
 		default:
 			answered = true
 			read = append(read, windowAnswer{answer: answer, window: index})

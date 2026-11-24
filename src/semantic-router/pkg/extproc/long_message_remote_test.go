@@ -224,6 +224,7 @@ recipes:
       jailbreak:
         - name: prompt_attack
           deployment: hosted-guard
+          input: {tool_results: true}
     decisions:
       - name: guard
         priority: 1000
@@ -283,7 +284,7 @@ func (g *windowedGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	type entry struct {
-		State     string                     `json:"state"`
+		State     json.RawMessage            `json:"state"`
 		Questions map[string]json.RawMessage `json:"questions"`
 	}
 	var body struct {
@@ -297,14 +298,43 @@ func (g *windowedGuard) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	usage := map[string]int{"input_tokens": 1, "output_tokens": 0}
 	if body.States == nil {
-		_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "answers": g.answers(body.State, body.Questions), "usage": usage})
+		_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "answers": g.answers(windowedGuardText(body.State), body.Questions), "usage": usage})
 		return
 	}
 	states := map[string]any{}
 	for name, state := range body.States {
-		states[name] = map[string]any{"answers": g.answers(state.State, state.Questions), "usage": usage}
+		states[name] = map[string]any{"answers": g.answers(windowedGuardText(state.State), state.Questions), "usage": usage}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"model": "d3", "states": states, "usage": usage})
+}
+
+// windowedGuardText is the text one guard window read: a state's text, or the
+// named parts a window of a state with parts carries, joined from the history
+// to the request turn last as the scan cuts its windows.
+func windowedGuardText(raw json.RawMessage) string {
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	var parts map[string]string
+	if err := json.Unmarshal(raw, &parts); err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(parts))
+	for name := range parts {
+		if name != "request" {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	if _, ok := parts["request"]; ok {
+		names = append(names, "request")
+	}
+	texts := make([]string, len(names))
+	for index, name := range names {
+		texts[index] = parts[name]
+	}
+	return strings.Join(texts, "\n\n")
 }
 
 func (g *windowedGuard) saw(text string) bool {

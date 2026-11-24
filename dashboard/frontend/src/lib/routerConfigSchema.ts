@@ -1,7 +1,7 @@
 import { ROUTER_CONFIG_EXTENSION, ROUTER_CONFIG_SCHEMA } from '../generated/routerConfigContract'
 import type { FieldSchema } from './dslSchemaTypes'
 
-interface JSONSchemaNode {
+export interface JSONSchemaNode {
   $ref?: string
   type?: string
   title?: string
@@ -51,6 +51,11 @@ function concreteSchema(schema: JSONSchemaNode): JSONSchemaNode {
   if (!branches) return resolved
   const concrete = branches.find((branch) => branch.type !== 'null')
   return concrete ? resolveRouterConfigSchema(concrete) : resolved
+}
+
+/** The schema node a value at this reference is validated against, with $ref and nullable unions resolved. */
+export function concreteRouterConfigSchema(schemaOrRef: JSONSchemaNode | string): JSONSchemaNode {
+  return concreteSchema(typeof schemaOrRef === 'string' ? { $ref: schemaOrRef } : schemaOrRef)
 }
 
 function arrayFieldType(items: JSONSchemaNode | undefined): FieldSchema['type'] {

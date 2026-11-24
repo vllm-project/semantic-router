@@ -86,7 +86,8 @@ func TestNativeFallbackAnswerCarriesTheRoutingFacts(t *testing.T) {
 	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 	require.NoError(t, err)
 	require.NotNil(t, step.Call)
-	session.fallback.succeeded(http.StatusOK)
+	session.fallback.beginResponse(http.StatusOK)
+	session.router.finishNativeFallbackResponse(session.ctx, "")
 
 	response, err := session.router.handleResponseHeaders(upstreamStatus("200"), ctx)
 	require.NoError(t, err)

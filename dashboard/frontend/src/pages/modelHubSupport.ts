@@ -2,25 +2,34 @@ import type {
   BuiltInModelCatalog,
   BuiltInModelMetadata,
   CatalogModelBinding,
-  CatalogIndexResult,
   CatalogProvider,
 } from '../types/modelCatalog'
 
-export type ModelHubKindFilter = 'all' | 'physical' | 'virtual'
 export type ModelHubDistributionFilter = 'all' | BuiltInModelMetadata['distribution']['type']
 export type ModelHubLifecycleFilter = 'supported' | 'all' | BuiltInModelMetadata['lifecycle']
 export type ModelHubSort = 'name' | 'released' | 'context' | 'providers'
-export type ModelHubView = 'list' | 'table'
 
 export interface ModelHubFilters {
   query: string
-  kind: ModelHubKindFilter
   distribution: ModelHubDistributionFilter
   lifecycle: ModelHubLifecycleFilter
-  publisher: string
-  provider: string
-  capability: string
+  /** Creators to keep; empty keeps all. */
+  publishers: string[]
+  /** Serving providers to keep; empty keeps all. */
+  providers: string[]
+  /** Capabilities a model must all have. */
+  capabilities: string[]
   sort: ModelHubSort
+}
+
+export const MODEL_HUB_DEFAULT_FILTERS: ModelHubFilters = {
+  query: '',
+  distribution: 'all',
+  lifecycle: 'supported',
+  publishers: [],
+  providers: [],
+  capabilities: [],
+  sort: 'released',
 }
 
 export interface ModelHubRow {
@@ -32,13 +41,8 @@ export interface ModelHubRow {
 
 export interface ModelHubStats {
   models: number
-  physicalModels: number
-  virtualModels: number
-  mappedProviders: number
-  providerContracts: number
   creators: number
-  evaluatedModels: number
-  evaluations: number
+  providers: number
 }
 
 interface ModelHubBenchmarkSelection {
@@ -52,32 +56,15 @@ const MODEL_HUB_MIN_BENCHMARK_MODELS = 10
 const benchmarkSelectionKey = (benchmark: string, profile: string, metric: string): string =>
   `${benchmark}\u0000${profile}\u0000${metric}`
 
-export interface ModelHubPagination<T> {
-  items: T[]
-  page: number
-  pageSize: number
-  totalItems: number
-  totalPages: number
-  start: number
-  end: number
-}
-
 type ModelHubEvaluationStats = Map<string, { evaluations: number; benchmarks: Set<string> }>
 type ModelHubProviderBindings = Map<string, ModelHubRow['providers']>
-
-export function resolveModelHubSelection(
-  rows: ModelHubRow[],
-  selectedID: string | null,
-): ModelHubRow | null {
-  return rows.find((row) => row.model.id === selectedID) ?? rows[0] ?? null
-}
 
 export const modelHubDistributionLabel: Record<
   BuiltInModelMetadata['distribution']['type'],
   string
 > = {
   open_weights: 'Open weights',
-  proprietary_api: 'Proprietary API',
+  proprietary_api: 'API',
   router_recipe: 'Router recipe',
 }
 
@@ -89,18 +76,6 @@ export const modelHubRelationshipLabel: Record<CatalogModelBinding['relationship
 }
 
 export const readableModelHubValue = (value: string): string => value.split('_').join(' ')
-
-export const modelHubRowElementID = (modelID: string): string =>
-  `model-hub-row-${encodeURIComponent(modelID)}`
-
-export function modelHubPageForModel<T extends { model: { id: string } }>(
-  rows: T[],
-  modelID: string,
-  pageSize: number,
-): number {
-  const index = rows.findIndex((row) => row.model.id === modelID)
-  return index < 0 ? 1 : Math.floor(index / Math.min(6, Math.max(1, Math.floor(pageSize)))) + 1
-}
 
 const modelHubPublishedConditionLabels: Record<string, string> = {
   unspecified: 'Effort not reported',
@@ -127,19 +102,10 @@ export function modelHubEvaluationConditionLabel(
 const normalizedSearch = (value: string): string => value.trim().toLocaleLowerCase()
 
 export function modelHubStats(catalog: BuiltInModelCatalog): ModelHubStats {
-  const publicEvaluations = modelHubPublicEvaluations(catalog)
-  const evaluatedModels = new Set(publicEvaluations.map((result) => result.model))
   return {
     models: catalog.models.length,
-    physicalModels: catalog.models.filter((model) => model.kind === 'physical').length,
-    virtualModels: catalog.models.filter((model) => model.kind === 'virtual').length,
-    mappedProviders: modelHubProviders(catalog).length,
-    providerContracts: catalog.providers.length,
-    creators: new Set(
-      catalog.models.filter((model) => model.kind === 'physical').map((model) => model.publisher),
-    ).size,
-    evaluatedModels: evaluatedModels.size,
-    evaluations: publicEvaluations.length,
+    creators: modelHubCreators(catalog).length,
+    providers: catalog.providers.length,
   }
 }
 
@@ -178,6 +144,7 @@ function modelHubEvaluationStats(catalog: BuiltInModelCatalog): ModelHubEvaluati
   return stats
 }
 
+/** Published evidence for benchmarks that cover enough models to be comparable. */
 export function modelHubPublicEvaluations(catalog: BuiltInModelCatalog) {
   const eligible = new Set(
     modelHubBenchmarkSelections(catalog).map((selection) =>
@@ -212,14 +179,16 @@ function matchesModelHubModel(
   filters: ModelHubFilters,
   query: string,
 ): boolean {
-  if (filters.kind !== 'all' && model.kind !== filters.kind) return false
   if (filters.distribution !== 'all' && model.distribution.type !== filters.distribution) {
     return false
   }
-  if (filters.publisher !== 'all' && model.publisher !== filters.publisher) return false
+  if (filters.publishers.length && !filters.publishers.includes(model.publisher)) return false
   if (filters.lifecycle === 'supported') {
     if (model.lifecycle !== 'active' && model.lifecycle !== 'experimental') return false
   } else if (filters.lifecycle !== 'all' && model.lifecycle !== filters.lifecycle) {
+    return false
+  }
+  if (!filters.capabilities.every((capability) => model.capabilities.includes(capability))) {
     return false
   }
   if (!query) return true
@@ -261,7 +230,7 @@ export function modelHubRows(
   const providers = modelHubProviderBindings(catalog)
   const query = normalizedSearch(filters.query)
 
-  const rows = catalog.models
+  return catalog.models
     .filter((model) => matchesModelHubModel(model, filters, query))
     .map((model) => {
       const evaluation = evaluationStats.get(model.id)
@@ -276,41 +245,16 @@ export function modelHubRows(
     })
     .filter(
       (row) =>
-        filters.provider === 'all' ||
-        row.providers.some(({ provider }) => provider.id === filters.provider),
+        !filters.providers.length ||
+        row.providers.some(({ provider }) => filters.providers.includes(provider.id)),
     )
-    .filter(
-      (row) => filters.capability === 'all' || row.model.capabilities.includes(filters.capability),
-    )
-
-  return rows.sort((left, right) => compareModelHubRows(left, right, filters.sort))
-}
-
-export function paginateModelHubRows<T>(
-  rows: T[],
-  requestedPage: number,
-  requestedPageSize: number,
-): ModelHubPagination<T> {
-  const pageSize = Math.min(6, Math.max(1, Math.floor(requestedPageSize)))
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
-  const page = Math.min(Math.max(1, Math.floor(requestedPage)), totalPages)
-  const startIndex = (page - 1) * pageSize
-  const items = rows.slice(startIndex, startIndex + pageSize)
-  return {
-    items,
-    page,
-    pageSize,
-    totalItems: rows.length,
-    totalPages,
-    start: rows.length ? startIndex + 1 : 0,
-    end: Math.min(startIndex + pageSize, rows.length),
-  }
+    .sort((left, right) => compareModelHubRows(left, right, filters.sort))
 }
 
 function modelHubBenchmarkSelections(
   catalog: BuiltInModelCatalog,
   minimumModels = MODEL_HUB_MIN_BENCHMARK_MODELS,
-): Array<ModelHubBenchmarkSelection & { modelCount: number }> {
+): ModelHubBenchmarkSelection[] {
   const modelsBySelection = new Map<string, Set<string>>()
   catalog.evaluations.forEach((evaluation) => {
     if (evaluation.status !== 'available') return
@@ -323,60 +267,10 @@ function modelHubBenchmarkSelections(
   })
   return Array.from(modelsBySelection.entries())
     .filter(([, models]) => models.size >= minimumModels)
-    .map(([key, models]) => {
+    .map(([key]) => {
       const [benchmark, profile, metric] = key.split('\u0000')
-      return { benchmark, profile, metric, modelCount: models.size }
+      return { benchmark, profile, metric }
     })
-    .sort(
-      (left, right) =>
-        right.modelCount - left.modelCount ||
-        `${left.benchmark}\u0000${left.profile}\u0000${left.metric}`.localeCompare(
-          `${right.benchmark}\u0000${right.profile}\u0000${right.metric}`,
-        ),
-    )
-}
-
-export function modelIndexResults(
-  catalog: BuiltInModelCatalog,
-  model: BuiltInModelMetadata,
-  index?: string,
-): CatalogIndexResult[] {
-  const results = catalog.index_results.filter(
-    (result) => result.model === model.id && result.index === index,
-  )
-  const family = catalog.reasoning_families.find(
-    (candidate) => candidate.id === model.reasoning_family,
-  )
-  const order = new Map(
-    (family?.levels ?? ['default']).map((effort, position) => [effort, position]),
-  )
-  return [...results].sort(
-    (left, right) =>
-      (order.get(left.reasoning_effort) ?? Number.MAX_SAFE_INTEGER) -
-        (order.get(right.reasoning_effort) ?? Number.MAX_SAFE_INTEGER) ||
-      left.reasoning_effort.localeCompare(right.reasoning_effort),
-  )
-}
-
-export function preferredIndexResult(
-  catalog: BuiltInModelCatalog,
-  model: BuiltInModelMetadata,
-  results: CatalogIndexResult[],
-): CatalogIndexResult | null {
-  const family = catalog.reasoning_families.find(
-    (candidate) => candidate.id === model.reasoning_family,
-  )
-  const preferredEffort = family?.default ?? 'default'
-  const preferred = results.find((result) => result.reasoning_effort === preferredEffort)
-  if (preferred?.status === 'available') return preferred
-  return (
-    results
-      .filter((result) => result.status === 'available')
-      .sort((left, right) => right.coverage - left.coverage)[0] ??
-    preferred ??
-    results[0] ??
-    null
-  )
 }
 
 export function formatContextWindow(tokens?: number): string {
@@ -420,18 +314,7 @@ export function modelHubParameterLabel(model: BuiltInModelMetadata): string {
   return model.distribution.type === 'proprietary_api' ? 'Undisclosed' : 'Not cataloged'
 }
 
-export function formatIntelligence(result: CatalogIndexResult | null): string {
-  if (!result || result.status !== 'available' || result.score === null) {
-    return 'Not yet measured'
-  }
-  return result.score.toFixed(1)
-}
-
-export function benchmarkName(
-  benchmarkID: string | undefined,
-  metricID: string,
-  catalog: BuiltInModelCatalog,
-): string {
-  const benchmark = catalog.benchmarks.find((candidate) => candidate.id === benchmarkID)
-  return benchmark ? `${benchmark.display_name} · ${metricID}` : metricID
+/** The backends page, with this catalog model proposed for a new backend. */
+export function modelHubBackendLink(modelId: string): string {
+  return `/models/backends?add=${encodeURIComponent(modelId)}`
 }

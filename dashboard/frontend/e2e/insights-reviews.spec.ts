@@ -151,12 +151,14 @@ test('the reviews view summarizes reviews, filters them and opens a review', asy
   page,
 }, info) => {
   const queries = await setup(page)
-  await page.goto('/insights')
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click()
-  await expect(page).toHaveURL(/view=reviews/)
+  await page.goto('/observe/requests')
+  await page.getByRole('tab', { name: /Reviews/ }).click()
+  await expect(page).toHaveURL(/tab=reviews/)
 
   const summary = page.getByRole('region', { name: 'Review summary' })
   await expect(summary).toContainText('50.0%')
+  // reviews stay live as the request list does
+  await expect(page.getByRole('button', { name: 'Live' })).toHaveAttribute('aria-pressed', 'true')
   await expect(summary).toContainText('1 allowed of 2 verdicts')
   await expect(summary).toContainText('1 of 2 requests priced')
   const rows = page.getByRole('row')
@@ -165,20 +167,22 @@ test('the reviews view summarizes reviews, filters them and opens a review', asy
   expect(queries.at(-1)?.get('request_kind')).toBe('codex_approval_review')
   await page.screenshot({ path: info.outputPath('insights-reviews.png'), fullPage: true })
 
-  await page.getByLabel('Result').selectOption('deny')
+  await page.getByRole('button', { name: 'Result' }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Denied' }).click()
+  await page.keyboard.press('Escape')
   await expect(rows.filter({ hasText: "printf 'hi' > hello.txt" })).toHaveCount(0)
   expect(queries.at(-1)?.get('review_outcome')).toBe('deny')
 
-  await page.getByPlaceholder('Filter by session ID...').fill('agent-session')
+  await page.getByPlaceholder('Filter by session ID…').fill('agent-session')
   await expect.poll(() => queries.at(-1)?.get('session_id')).toBe('agent-session')
 
   await rows.filter({ hasText: 'rm -rf build' }).getByRole('link').first().click()
-  await expect(page).toHaveURL(/\/insights\/review-deny$/)
+  await expect(page).toHaveURL(/\/observe\/requests\/review-deny$/)
   const review = page.getByRole('region', { name: 'Approval Review', exact: true })
   await expect(review).toContainText('Deletes build output the user did not ask to remove.')
   await expect(review).toContainText('/work/project')
   await page.screenshot({ path: info.outputPath('insights-review-detail.png'), fullPage: true })
   await review.getByRole('link', { name: 'agent-session' }).click()
-  await expect(page).toHaveURL(/view=reviews&session=agent-session/)
-  await expect(page.getByPlaceholder('Filter by session ID...')).toHaveValue('agent-session')
+  await expect(page).toHaveURL(/tab=reviews&session=agent-session/)
+  await expect(page.getByPlaceholder('Filter by session ID…')).toHaveValue('agent-session')
 })

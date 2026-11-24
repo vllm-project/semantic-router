@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"reflect"
@@ -227,7 +228,7 @@ func TestRouterReplayAggregateAPIStreamsTheSameCostSummary(t *testing.T) {
 		}
 	}
 	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"route": recorder}}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate")
 	var got routerreplay.AggregateResponse
 	if err := json.Unmarshal(response.GetImmediateResponse().Body, &got); err != nil {
 		t.Fatal(err)
@@ -272,7 +273,7 @@ func replayAggregateSummaryJSON(t *testing.T, records []routerreplay.RoutingReco
 		}
 	}
 	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"route": recorder}}
-	response := router.handleRouterReplayAPI("GET", "/api/v1/observability/replays/aggregate")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", "/api/v1/observability/replays/aggregate")
 	return decodeJSONBody(t, response.GetImmediateResponse().Body)["summary"].(map[string]interface{})
 }
 
