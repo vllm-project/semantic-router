@@ -399,8 +399,13 @@ def test_complete_candidate_golden(tmp_path):
     assert models[LARGE]["backend_refs"][0]["endpoint"] == "127.0.0.1:8002"
     assert models[SMALL]["pricing"] == {"prompt_per_1m": 0.1, "completion_per_1m": 0.4}
     assert "pricing" not in models[LARGE]
+<<<<<<< HEAD
     # The models' card facts ride their providers.models[] entries verbatim
     # (the removed routing.modelCards form is gone).
+=======
+    # The scaffold's model cards merge onto their providers.models[] entries
+    # (the modality keyword is a removed form and stays out).
+>>>>>>> 1946016ca (feat(recipe-lab): emit canonical v0.5 seed and candidate configs)
     assert models[SMALL]["capabilities"] == ["chat"]
     assert "modality" not in models[LARGE]
 
