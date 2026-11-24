@@ -75,6 +75,51 @@ skills:
     handoff: Give one targeted next check or an evidence-backed issue reproduction.
     support: v0.5 route preview/probe and public header contract; debug trace requires permission.
 
+  - id: vllm-sr-benchmark
+    name: vllm-sr-benchmark
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-benchmark/SKILL.md
+    published: website/static/install/agent/vllm-sr-benchmark/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Plan and run a reproducible sr-bench preview, replay, or live evaluation.
+    prerequisites: Prepared dataset, reachable targets, running sr-bench service, and live-call authorization when applicable.
+    inputs: Frozen cases, config hash, target revisions, request settings, judges, prices, and limits.
+    outputs: Frozen plan, run ID, coverage reconciliation, metrics, and provenance report.
+    handoff: Review expected calls and cost before any live run not already authorized.
+    support: sr-bench 1.0; preview and replay do not establish live answer quality.
+
+  - id: vllm-sr-compare-configurations
+    name: vllm-sr-compare-configurations
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-compare-configurations/SKILL.md
+    published: website/static/install/agent/vllm-sr-compare-configurations/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Compare paired Router configuration runs and explain pass, fail, or insufficient evidence.
+    prerequisites: Two durable sr-bench run IDs and a prespecified objective and guard floors.
+    inputs: Frozen manifests, run reports, compatibility options, config identities, and paired service result.
+    outputs: Paired coverage, metrics, limitations, and evidence-backed verdict.
+    handoff: Human reviews any candidate promotion or recipe-lab iteration.
+    support: sr-bench 1.0 live comparison contract; replay and preview remain diagnostic.
+
+  - id: vllm-sr-tune-recipe
+    name: vllm-sr-tune-recipe
+    audience: contributor
+    source: tools/agent/skills/vllm-sr-tune-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-tune-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Move from diagnosed misroute to one measured recipe change and a calibration or recipe-lab handoff.
+    prerequisites: Reproducible route evidence, canonical recipe, frozen development cases, and guard floors.
+    inputs: Baseline config/hash, trace, candidate diff, probe manifest, and paired run IDs.
+    outputs: Validated candidate, before/after evidence, and keep/revert/inconclusive explanation.
+    handoff: Human reviews promotion; recipe-lab owns its ledger when available.
+    support: Maintained v0.5 recipes; #5497 owns automated recipe-lab implementation.
+
   - id: router-contract-change
     name: router-contract-change
     audience: contributor

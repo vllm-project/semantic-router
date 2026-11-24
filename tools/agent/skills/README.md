@@ -16,7 +16,10 @@ Router behavior. Choose one by the task below. The development harness
 | Explain a selected route, fallback, or delivery failure | [Diagnose routing](vllm-sr-diagnose-routing/SKILL.md) | Pin the request and active config, then compare preview with a bounded probe. |
 | Verify a known route | [Operations: verify](vllm-sr-agent-operations/references/route-verification.md) | Preview the route, then probe the full data path. |
 | Evaluate quality, latency, and cost | [Operations: sr-bench](vllm-sr-agent-operations/references/sr-bench.md) | Freeze the workload and choose preview, live, or replay scope. |
+| Plan and run a bounded Router benchmark | [Benchmark](vllm-sr-benchmark/SKILL.md) | Freeze cases, targets, settings, prices and limits before dispatch. |
+| Compare two Router benchmark runs | [Compare configurations](vllm-sr-compare-configurations/SKILL.md) | Check paired cases and compatible settings before comparing. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
+| Turn a diagnosed misroute into one tested recipe candidate | [Tune recipe](vllm-sr-tune-recipe/SKILL.md) | Freeze development cases and guard floors, then choose manual calibration or recipe-lab. |
 | Change a request-visible Router contract | [Router contract change](router-contract-change/SKILL.md) | Read the affected change surfaces and nearest `AGENTS.md`. |
 | Review issues, PRs, or releases | [Maintainer operations](maintainer-ops/SKILL.md) | Resolve the exact target and current revision. |
 | Set up the vSR Claude Code plugin | [Plugin setup](../../../src/agent-harness/claude-code/skills/setup/SKILL.md) | Detect the machine and current runtime. |
@@ -29,6 +32,12 @@ resolves model-backed questions and traces their answers. The
 prepares a reviewable candidate. The
 [public routing-diagnosis skill](https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md)
 explains a selected route or failure. The
+[public benchmark skill](https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md)
+freezes and reports a bounded evaluation. The
+[public comparison skill](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md)
+interprets paired runs. The
+[public recipe-tuning skill](https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md)
+hands a diagnosed change to calibration or recipe-lab. The
 [public operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md)
 covers the broader lifecycle. Their authored sources are under
 `tools/agent/skills/`; `make agent-skill-sync` generates their website copies.
@@ -46,18 +55,10 @@ reviewed handoff. The configuration-planning research in
 [#4972](https://github.com/vllm-project/semantic-router/issues/4972) covers
 agent discovery of the read-and-plan API path.
 
-## Proposed additions
+## Future work
 
-These are planned under [the skills epic](https://github.com/vllm-project/semantic-router/issues/6386)
-and do not yet have standalone skill files:
-
-| Proposed skill | Bounded workflow | Current entry |
-| --- | --- | --- |
-| `vllm-sr-benchmark` | Run a bounded, reproducible sr-bench evaluation. | [sr-bench reference](vllm-sr-agent-operations/references/sr-bench.md) |
-| `vllm-sr-compare-configurations` | Compare paired runs and explain incomplete evidence. | [sr-bench reference](vllm-sr-agent-operations/references/sr-bench.md) |
-
-The recipe-lab agent loop is already tracked in [#5497](https://github.com/vllm-project/semantic-router/issues/5497).
-Link to that skill when it lands; do not create a competing tuning workflow.
+The recipe-lab agent loop remains tracked in [#5497](https://github.com/vllm-project/semantic-router/issues/5497).
+The tune-recipe skill hands diagnosed changes to the maintained calibration or recipe-lab path.
 
 ## Authoring and publication contract
 
