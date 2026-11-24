@@ -90,13 +90,22 @@ def _content_hash(path: Path) -> str:
 
 
 def _run_config_validate(config_path: Path, validate_bin: str) -> str:
-    """Run `<validate-bin> config validate` and return its output text.
+    """Run `<validate-bin> config validate --offline` and return its output text.
 
-    A failing validation is a bundle rejection, not a packaged artifact.
+    The offline gate stays deterministic: the default Router verdict depends
+    on whichever image sits on the machine. A failing validation is a bundle
+    rejection, not a packaged artifact.
     """
     try:
         proc = subprocess.run(
-            [validate_bin, "config", "validate", "--config", str(config_path)],
+            [
+                validate_bin,
+                "config",
+                "validate",
+                "--offline",
+                "--config",
+                str(config_path),
+            ],
             capture_output=True,
             text=True,
             timeout=300.0,

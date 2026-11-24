@@ -1482,10 +1482,15 @@ def _candidate_entry(
 
 
 def _validate_config(path: Path, validate_bin: str) -> str | None:
-    """C: returns None when the config validates, else the rejection reason."""
+    """C: returns None when the config validates, else the rejection reason.
+
+    --offline pins the gate to the CLI's structural rules: the default
+    Router verdict depends on whichever image happens to sit on the
+    machine, and a stale one rejects canonical configs.
+    """
     try:
         proc = subprocess.run(
-            [validate_bin, "config", "validate", "--config", str(path)],
+            [validate_bin, "config", "validate", "--offline", "--config", str(path)],
             capture_output=True,
             text=True,
             timeout=300.0,
@@ -2850,7 +2855,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_boot.add_argument(
         "--validate-bin",
         default="vllm-sr",
-        help="validator invoked as '<bin> config validate --config <path>'; a "
+        help="validator invoked as '<bin> config validate --offline --config <path>'; a "
         "rejected candidate fails the command (C5 completion criterion)",
     )
     p_boot.add_argument(
@@ -3658,7 +3663,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_boot.add_argument(
         "--validate-bin",
         default="vllm-sr",
-        help="validator invoked as '<bin> config validate --config <path>'",
+        help="validator invoked as '<bin> config validate --offline --config <path>'",
     )
     p_boot.set_defaults(func=cmd_bootstrap_agentic)
 
@@ -3784,7 +3789,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument(
         "--validate-bin",
         default="vllm-sr",
-        help="validator invoked as '<bin> config validate --config <path>' (C)",
+        help="validator invoked as '<bin> config validate --offline --config <path>' (C)",
     )
     p_run.set_defaults(func=cmd_run)
 

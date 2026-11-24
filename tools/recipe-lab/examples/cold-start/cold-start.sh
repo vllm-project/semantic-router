@@ -47,8 +47,8 @@
 #   EXCLUDE_LANES   space-separated lanes for bindings --exclude-decision
 #                   (template mode, e.g. "vision long_context")
 #   VALIDATE_BIN    config validator binary invoked as
-#                   '<bin> config validate --config <path>' by bindings/
-#                   bootstrap and bundle (default: vllm-sr)
+#                   '<bin> config validate --offline --config <path>' by
+#                   bindings/bootstrap and bundle (default: vllm-sr)
 #   BACKEND_PORT    port for the runner-spawned mock backends (default: 8010)
 #
 # model_eval driver (DRIVER=model_eval, default) additionally:

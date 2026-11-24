@@ -49,8 +49,9 @@ turned into a runnable canonical config:
   the cases fails the command (the profile's grouping premise does not
   hold for that candidate).
 - validation: each completed candidate must pass
-  ``<validate-bin> config validate --config`` (the ``run --validate``
-  path) before it is emitted; a rejected candidate fails the command.
+  ``<validate-bin> config validate --offline --config`` (the
+  ``run --validate`` path) before it is emitted; a rejected candidate
+  fails the command.
 
 Anti-leak: only calib outputs feed bootstrap; ``dev`` belongs to the
 answer bank (C6) and ``frozen_test`` is quarantined.
@@ -514,10 +515,15 @@ def complete_candidate(
 
 
 def validate_config(path: str | Path, validate_bin: str) -> str | None:
-    """None when the config validates, else the rejection reason."""
+    """None when the config validates, else the rejection reason.
+
+    --offline pins the gate to the CLI's structural rules: the default
+    Router verdict depends on whichever image happens to sit on the
+    machine, and a stale one rejects canonical configs.
+    """
     try:
         proc = subprocess.run(
-            [validate_bin, "config", "validate", "--config", str(path)],
+            [validate_bin, "config", "validate", "--offline", "--config", str(path)],
             capture_output=True,
             text=True,
             timeout=300.0,
