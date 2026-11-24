@@ -52,6 +52,13 @@ class SkillCatalogTests(unittest.TestCase):
     def test_repository_catalog_and_links_are_complete(self):
         self.assertEqual(catalog.check(self.root), [])
 
+    def test_every_public_skill_is_discoverable_in_the_website_guide(self):
+        guide = (catalog.ROOT / "website/docs/installation/agent-skills.md").read_text()
+        entries = yaml.safe_load((catalog.ROOT / catalog.CATALOG).read_text())["skills"]
+        for entry in entries:
+            if "published" in entry:
+                self.assertIn(entry["public_url"], guide, entry["id"])
+
     def test_unlisted_skill_is_rejected(self):
         extra = self.root / "tools/agent/skills/extra/SKILL.md"
         extra.parent.mkdir(parents=True)

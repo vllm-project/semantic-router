@@ -17,6 +17,12 @@ runtime, the Dashboard (8700), sr-bench (8090) and supporting services.
 This file routes you to a task. Each task names its preconditions, the
 reference that holds its steps, what success looks like, what to do when a
 step fails, and when to stop and ask the user. Every step is safe to run again.
+For a focused local first start, use the
+[Serve skill](https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md).
+For a question about which deployment answers a routing signal, use the
+[decision-model skill](https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md).
+The [skill catalog](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/README.md)
+lists the configuration, diagnosis, benchmark and tuning workflows.
 
 ## Ground rules
 
