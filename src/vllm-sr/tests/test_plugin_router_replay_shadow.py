@@ -97,6 +97,19 @@ class TestRouterReplayShadowConfig:
             cfg = RouterReplayShadowConfig(models=["m"], **{section: {field: value}})
             assert getattr(getattr(cfg, section), field) == value
 
+    def test_estimated_cost_budget(self):
+        cfg = RouterReplayShadowConfig(
+            models=["m"], budget={"max_estimated_cost": 0.01}
+        )
+        assert cfg.model_dump(exclude_unset=True)["budget"] == {
+            "max_estimated_cost": 0.01,
+        }
+        for value in [0, -0.01, True, "0.01", float("inf"), float("nan")]:
+            with pytest.raises(PydanticValidationError):
+                RouterReplayShadowConfig(
+                    models=["m"], budget={"max_estimated_cost": value}
+                )
+
     def test_budget_reserves_probe_byte_per_model(self):
         for budget in [1, 2, 3]:
             with pytest.raises(

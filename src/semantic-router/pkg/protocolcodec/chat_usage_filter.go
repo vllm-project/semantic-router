@@ -37,12 +37,15 @@ type ChatUsageStreamFilter struct {
 	// releaseHeldToolFrames sends them verbatim when the call finishes as
 	// sent, and repairHeldToolCalls closes them when the stream ends without
 	// one.
-	heldFrames      [][]byte
-	heldFirst       []byte
-	heldOrder       []heldChatToolKey
-	heldCalls       map[heldChatToolKey]*heldChatToolCall
-	maximumDepth    int
-	heldAtReadStart int
+	heldFrames   [][]byte
+	heldFirst    []byte
+	heldOrder    []heldChatToolKey
+	heldCalls    map[heldChatToolKey]*heldChatToolCall
+	maximumDepth int
+	// The public filter can release its hold before the codec rejects the
+	// same read. Keep the prior frames available until the caller decides
+	// which output to send.
+	heldBeforeRead [][]byte
 }
 
 // heldChatFinish holds a frame that ends the choice for its tool calls and the
@@ -115,7 +118,7 @@ func (filter *ChatUsageStreamFilter) Push(chunk []byte) ([]byte, error) {
 	if filter.finalized {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already finalized", nil)
 	}
-	filter.heldAtReadStart = len(filter.heldFrames)
+	filter.heldBeforeRead = filter.heldFrames
 	frames, err := filter.framer.Push(chunk)
 	if err != nil {
 		return nil, filter.poison(err)
@@ -353,7 +356,6 @@ func (filter *ChatUsageStreamFilter) releaseHeldToolFrames() [][]byte {
 	filter.heldFirst = nil
 	filter.heldCalls = nil
 	filter.heldOrder = nil
-	filter.heldAtReadStart = 0
 	return frames
 }
 
@@ -369,11 +371,8 @@ func (filter *ChatUsageStreamFilter) ReleaseHeldForAbort() []byte {
 	if filter == nil {
 		return nil
 	}
-	boundary := filter.heldAtReadStart
-	var prefix [][]byte
-	if boundary > 0 && boundary <= len(filter.heldFrames) {
-		prefix = filter.heldFrames[:boundary]
-	}
+	prefix := filter.heldBeforeRead
+	filter.heldBeforeRead = nil
 	filter.releaseHeldToolFrames()
 	return bytes.Join(prefix, nil)
 }
