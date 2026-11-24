@@ -121,6 +121,17 @@ const DefaultSessionWindowSize = 5
 // boundaries still appear together in at least one chunk.
 const DefaultSessionStride = 3
 
+// A stored turn reads "Q: <user>\nA: <assistant>", and a session chunk joins
+// its turns with sessionTurnSeparator.
+const (
+	turnQuestionPrefix   = "Q: "
+	turnAnswerPrefix     = "A: "
+	sessionTurnSeparator = "\n---\n"
+	turnChunkSource      = "conversation"
+	// Windows stored as "session_window" predate escaped turn boundaries.
+	sessionChunkSource = "session_window_v2"
+)
+
 // MemoryExtractor stores conversation turns directly in the vector store.
 // No LLM extraction is performed -- the original user question and assistant
 // response (with think tags stripped) are embedded and stored as-is, preserving
@@ -288,7 +299,7 @@ func (e *MemoryExtractor) storeTurnChunk(ctx context.Context, userMessage, assis
 		Type:       MemoryTypeEpisodic,
 		Content:    sanitized,
 		UserID:     userID,
-		Source:     "conversation",
+		Source:     turnChunkSource,
 		CreatedAt:  time.Now(),
 		Importance: 0.5,
 	}
@@ -357,7 +368,7 @@ func (e *MemoryExtractor) maybeStoreSessionChunk(
 		Type:       MemoryTypeEpisodic,
 		Content:    sanitized,
 		UserID:     userID,
-		Source:     "session_window",
+		Source:     sessionChunkSource,
 		CreatedAt:  time.Now(),
 		Importance: 0.7,
 	}
@@ -399,7 +410,7 @@ func buildSessionChunk(history []openai.ChatCompletionMessageParamUnion, userMsg
 	}
 	slices.Reverse(pairs)
 	pairs = append(pairs, formatTurnChunk(userMsg, assistantResp))
-	return strings.Join(pairs, "\n---\n")
+	return strings.Join(pairs, sessionTurnSeparator)
 }
 
 // Plain turns use the reply immediately following the user. A tool exchange
@@ -428,12 +439,18 @@ func historicalTurnAnswer(messages []openai.ChatCompletionMessageParamUnion) str
 func formatTurnChunk(userMessage, assistantResponse string) string {
 	var parts []string
 	if userMessage != "" {
-		parts = append(parts, "Q: "+userMessage)
+		parts = append(parts, turnQuestionPrefix+escapeTurnBoundaries(userMessage))
 	}
 	if assistantResponse != "" {
-		parts = append(parts, "A: "+assistantResponse)
+		parts = append(parts, turnAnswerPrefix+escapeTurnBoundaries(assistantResponse))
 	}
 	return strings.Join(parts, "\n")
+}
+
+// escapeTurnBoundaries stores a quoted "---" line followed by "Q: " with the
+// prefix escaped, so only the separators buildSessionChunk writes start a turn.
+func escapeTurnBoundaries(message string) string {
+	return strings.ReplaceAll(message, sessionTurnSeparator+turnQuestionPrefix, sessionTurnSeparator+`\`+turnQuestionPrefix)
 }
 
 // =============================================================================

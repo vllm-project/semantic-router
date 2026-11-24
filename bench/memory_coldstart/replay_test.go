@@ -66,7 +66,7 @@ func TestReplayBuiltinScenario(t *testing.T) {
 		{Phase: phaseNoMemory, tally: tally{Probes: 4, Hit: 2, Ungrounded: 4}},
 		{Phase: phaseFirstSeen, tally: tally{Probes: 4, Hit: 4, Right: 4, Top1: 4}},
 		{Phase: phaseRecurring, tally: tally{Probes: 7, Hit: 7, Right: 7, Top1: 4}},
-		{Phase: phaseStale, tally: tally{Probes: 3, Hit: 3, Right: 3, Top1: 3, Stale: 3}},
+		{Phase: phaseStale, tally: tally{Probes: 3, Hit: 3, Right: 3, Top1: 3, Stale: 1}},
 	}, rep.Phases)
 }
 
