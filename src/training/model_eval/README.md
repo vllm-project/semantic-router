@@ -180,10 +180,10 @@ in a seeded order inside the source, script, length and question-mark strata,
 and records the pinned distribution beside the kept counts in the result's
 `dataset.stratum_matched`. The dialogue act a label is read from (`subsource`)
 names the class rather than matching it. Both feedback checkpoints are scored.
-The set carries SAT and NO_FEEDBACK; WRONG_ANSWER and WANT_DIFFERENT have no
-published held-out text yet, so those classes stay unmeasured. The legacy
-checkpoint's label map predates NO_FEEDBACK, so it scores the SAT rows the
-matched selection keeps.
+The set carries SAT and NO_FEEDBACK; NEED_CLARIFICATION, WRONG_ANSWER and
+WANT_DIFFERENT have no published held-out text yet, so those classes stay
+unmeasured. The legacy checkpoint's label map predates NO_FEEDBACK, so it
+scores the SAT rows the matched selection keeps.
 
 A referenced manifest supplies the identity every number is published under, so
 it also selects the bytes: the run downloads the repository and revision the

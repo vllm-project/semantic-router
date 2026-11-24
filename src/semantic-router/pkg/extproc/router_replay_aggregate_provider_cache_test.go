@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ func TestHandleRouterReplayAggregateAPIReturnsProviderCacheSummary(t *testing.T)
 		}
 	}
 	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"agents": recorder}}
-	response := router.handleRouterReplayAPI("GET", routerReplayAggregatePath+"?model=model-b")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", routerReplayAggregatePath+"?model=model-b")
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	summary := body["provider_cache"].(map[string]interface{})
 	if summary["currency"] != "USD" || summary["priced_records"] != float64(1) || summary["excluded_records"] != float64(0) {

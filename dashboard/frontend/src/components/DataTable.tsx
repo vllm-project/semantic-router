@@ -1,8 +1,41 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronsUpDown,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 
-import styles from './DataTable.module.css'
-import ProductIcon from './ProductIcon'
-import { getPageWindow, paginateRows, updatePageSelection } from './dataTableSupport'
+import {
+  Button,
+  Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  cn,
+} from '../ui'
+import NativeSelect from './NativeSelect'
+import {
+  getPageWindow,
+  isInteractiveRowTarget,
+  paginateRows,
+  updatePageSelection,
+} from './dataTableSupport'
 
 export interface Column<T> {
   key: string
@@ -47,41 +80,11 @@ export interface DataTableProps<T> {
   selection?: DataTableSelection<T>
 }
 
-interface SelectionCheckboxProps {
-  checked: boolean
-  disabled?: boolean
-  indeterminate?: boolean
-  label: string
-  onChange: (checked: boolean) => void
-}
-
-function SelectionCheckbox({
-  checked,
-  disabled = false,
-  indeterminate = false,
-  label,
-  onChange,
-}: SelectionCheckboxProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.indeterminate = indeterminate
-    }
-  }, [indeterminate])
-
-  return (
-    <input
-      ref={inputRef}
-      type="checkbox"
-      className={styles.selectionCheckbox}
-      aria-label={label}
-      checked={checked}
-      disabled={disabled}
-      onChange={(event) => onChange(event.target.checked)}
-    />
-  )
-}
+const alignClass = {
+  left: 'text-left',
+  center: 'text-center',
+  right: 'text-right',
+} as const
 
 function getColumnValue<T>(row: T, key: string): unknown {
   if (row !== null && typeof row === 'object') {
@@ -112,6 +115,70 @@ function renderColumnValue(value: unknown): React.ReactNode {
     return value
   if (React.isValidElement(value)) return value
   return String(value)
+}
+
+interface RowActionsProps<T> {
+  row: T
+  rowKey: string
+  onView?: (row: T) => void
+  onEdit?: (row: T) => void
+  onDelete?: (row: T) => void
+}
+
+function RowActions<T>({ row, rowKey, onView, onEdit, onDelete }: RowActionsProps<T>) {
+  if (onView && !onEdit && !onDelete) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`View ${rowKey}`}
+        className="text-subtle-foreground group-hover:text-foreground"
+        onClick={() => onView(row)}
+      >
+        <ChevronRight />
+      </Button>
+    )
+  }
+
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Actions for ${rowKey}`}
+          className="text-subtle-foreground group-hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground"
+        >
+          <MoreHorizontal />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        {onView ? (
+          <DropdownMenuItem onSelect={() => onView(row)}>
+            <Eye />
+            View
+          </DropdownMenuItem>
+        ) : null}
+        {onEdit ? (
+          <DropdownMenuItem onSelect={() => onEdit(row)}>
+            <Pencil />
+            Edit
+          </DropdownMenuItem>
+        ) : null}
+        {onDelete ? (
+          <>
+            {onView || onEdit ? <DropdownMenuSeparator /> : null}
+            <DropdownMenuItem variant="destructive" onSelect={() => onDelete(row)}>
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 export function DataTable<T>({
@@ -195,264 +262,286 @@ export function DataTable<T>({
     selectablePageKeys.length > 0 && selectedPageCount === selectablePageKeys.length
   const somePageRowsSelected = selectedPageCount > 0 && !allPageRowsSelected
   const auxiliaryColumnCount = (expandable ? 1 : 0) + (selection ? 1 : 0) + (hasActions ? 1 : 0)
+  const stickyCell = stickyActions ? 'sticky right-0 z-[1]' : undefined
+
+  const openRow = (event: React.MouseEvent<HTMLTableRowElement>, row: T) => {
+    if (!onView || isInteractiveRowTarget(event.target, event.currentTarget)) return
+    if (window.getSelection()?.toString()) return
+    onView(row)
+  }
 
   return (
     <div
-      className={`${styles.tableContainer} ${stickyActions ? '' : styles.scrollingActions} ${className}`}
+      className={cn(
+        'overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-xs',
+        className,
+      )}
     >
-      <div className={styles.tableViewport}>
-        <table className={styles.table}>
-          <colgroup>
-            {selection ? <col className={styles.selectionColumn} /> : null}
-            {expandable ? <col className={styles.expandColumn} /> : null}
-            {columns.map((column) => (
-              <col key={column.key} style={{ width: column.width }} />
-            ))}
-            {hasActions ? <col className={styles.actionsColumn} /> : null}
-          </colgroup>
-          <thead className={styles.thead}>
-            <tr>
-              {selection ? (
-                <th className={styles.selectionColumn}>
-                  <SelectionCheckbox
-                    checked={allPageRowsSelected}
-                    indeterminate={somePageRowsSelected}
-                    disabled={selectablePageKeys.length === 0}
-                    label={`Select all ${selection.label ?? 'rows'} on this page`}
-                    onChange={(checked) =>
-                      selection.onChange(
-                        updatePageSelection(selection.selectedKeys, selectablePageKeys, checked),
-                      )
-                    }
-                  />
-                </th>
-              ) : null}
-              {expandable ? <th className={styles.expandColumn} aria-label="Expand row" /> : null}
-              {columns.map((column) => {
-                const activeSort = sortColumn === column.key
-                return (
-                  <th
-                    key={column.key}
-                    className={`${styles.th} ${column.sortable ? styles.sortable : ''}`}
-                    style={{
-                      width: column.width,
-                      minWidth: column.minWidth,
-                      textAlign: column.align || 'left',
-                    }}
-                    aria-sort={
-                      activeSort
-                        ? sortDirection === 'asc'
-                          ? 'ascending'
-                          : 'descending'
-                        : undefined
-                    }
-                  >
-                    {column.sortable ? (
-                      <button
-                        type="button"
-                        className={styles.sortButton}
-                        onClick={() => handleSort(column.key)}
-                      >
-                        {column.header}
-                        {activeSort ? (
-                          <span className={styles.sortIcon} aria-hidden="true">
-                            {sortDirection === 'asc' ? '↑' : '↓'}
-                          </span>
-                        ) : null}
-                      </button>
-                    ) : (
-                      column.header
-                    )}
-                  </th>
-                )
-              })}
-              {hasActions ? (
-                <th className={`${styles.th} ${styles.actionsColumn}`}>Actions</th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody className={styles.tbody}>
-            {visibleData.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length + auxiliaryColumnCount} className={styles.emptyState}>
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              visibleData.map((row) => {
-                const key = keyExtractor(row)
-                const expanded = isRowExpanded?.(row) || false
-                const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
-
-                return (
-                  <React.Fragment key={key}>
-                    <tr
-                      className={`${styles.tr} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+      <Table className="min-w-[640px]">
+        <colgroup>
+          {selection ? <col className="w-11" /> : null}
+          {expandable ? <col className="w-10" /> : null}
+          {columns.map((column) => (
+            <col key={column.key} style={{ width: column.width }} />
+          ))}
+          {hasActions ? <col className="w-14" /> : null}
+        </colgroup>
+        <TableHeader className="bg-surface-subtle/80">
+          <TableRow>
+            {selection ? (
+              <TableHead className="w-11">
+                <Checkbox
+                  aria-label={`Select all ${selection.label ?? 'rows'} on this page`}
+                  checked={
+                    allPageRowsSelected ? true : somePageRowsSelected ? 'indeterminate' : false
+                  }
+                  disabled={selectablePageKeys.length === 0}
+                  onCheckedChange={(checked) =>
+                    selection.onChange(
+                      updatePageSelection(
+                        selection.selectedKeys,
+                        selectablePageKeys,
+                        checked === true,
+                      ),
+                    )
+                  }
+                />
+              </TableHead>
+            ) : null}
+            {expandable ? (
+              <TableHead className="w-10">
+                <span className="sr-only">Expand row</span>
+              </TableHead>
+            ) : null}
+            {columns.map((column) => {
+              const activeSort = sortColumn === column.key
+              return (
+                <TableHead
+                  key={column.key}
+                  className={alignClass[column.align ?? 'left']}
+                  style={{ width: column.width, minWidth: column.minWidth }}
+                  aria-sort={
+                    activeSort ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined
+                  }
+                >
+                  {column.sortable ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(column.key)}
+                      className={cn(
+                        '-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 outline-none transition-colors hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                        activeSort && 'text-foreground',
+                        column.align === 'right' && 'flex-row-reverse',
+                      )}
                     >
-                      {selection ? (
-                        <td className={styles.selectionCell}>
-                          <SelectionCheckbox
-                            checked={selection.selectedKeys.has(key)}
-                            disabled={selectionDisabled}
-                            label={`Select ${selection.label ?? 'row'} ${key}`}
-                            onChange={(checked) =>
-                              selection.onChange(
-                                updatePageSelection(selection.selectedKeys, [key], checked),
-                              )
-                            }
-                          />
-                        </td>
-                      ) : null}
-                      {expandable ? (
-                        <td className={styles.expandCell}>
-                          <button
-                            type="button"
-                            className={styles.expandButton}
-                            onClick={() => onToggleExpand?.(row)}
-                            aria-label={`${expanded ? 'Collapse' : 'Expand'} ${key}`}
-                            aria-expanded={expanded}
-                          >
-                            <span
-                              className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`}
-                              aria-hidden="true"
-                            >
-                              <ProductIcon name="chevron-right" />
-                            </span>
-                          </button>
-                        </td>
-                      ) : null}
-                      {columns.map((column) => (
-                        <td
-                          key={column.key}
-                          className={styles.td}
-                          style={{
-                            width: column.width,
-                            minWidth: column.minWidth,
-                            textAlign: column.align || 'left',
-                          }}
-                        >
-                          {column.render
-                            ? column.render(row)
-                            : renderColumnValue(getColumnValue(row, column.key))}
-                        </td>
-                      ))}
-                      {hasActions ? (
-                        <td className={`${styles.td} ${styles.actionsCell}`}>
-                          <div className={styles.actionButtons}>
-                            {onView ? (
-                              <button
-                                type="button"
-                                className={`${styles.actionButton} ${styles.viewButton}`}
-                                onClick={() => onView(row)}
-                                aria-label={`View ${key}`}
-                              >
-                                <ProductIcon name="eye" />
-                                View
-                              </button>
-                            ) : null}
-                            {effectiveOnEdit ? (
-                              <button
-                                type="button"
-                                className={`${styles.actionButton} ${styles.editButton}`}
-                                onClick={() => effectiveOnEdit(row)}
-                                aria-label={`Edit ${key}`}
-                              >
-                                <ProductIcon name="edit" />
-                                Edit
-                              </button>
-                            ) : null}
-                            {effectiveOnDelete ? (
-                              <button
-                                type="button"
-                                className={`${styles.actionButton} ${styles.deleteButton}`}
-                                onClick={() => effectiveOnDelete(row)}
-                                aria-label={`Delete ${key}`}
-                              >
-                                <ProductIcon name="trash" />
-                                Delete
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      ) : null}
-                    </tr>
-                    {expandable && expanded && renderExpandedRow ? (
-                      <tr className={styles.expandedRow}>
-                        <td colSpan={columns.length + auxiliaryColumnCount}>
-                          {renderExpandedRow(row)}
-                        </td>
-                      </tr>
+                      {column.header}
+                      {activeSort ? (
+                        sortDirection === 'asc' ? (
+                          <ArrowUp className="size-3" aria-hidden="true" />
+                        ) : (
+                          <ArrowDown className="size-3" aria-hidden="true" />
+                        )
+                      ) : (
+                        <ChevronsUpDown className="size-3 opacity-40" aria-hidden="true" />
+                      )}
+                    </button>
+                  ) : (
+                    column.header
+                  )}
+                </TableHead>
+              )
+            })}
+            {hasActions ? (
+              <TableHead className={cn('w-14 bg-surface-subtle', stickyCell)}>
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            ) : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {visibleData.length === 0 ? (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={columns.length + auxiliaryColumnCount}
+                className="h-28 whitespace-normal text-center text-[13px] text-muted-foreground"
+              >
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : (
+            visibleData.map((row) => {
+              const key = keyExtractor(row)
+              const expanded = isRowExpanded?.(row) || false
+              const selected = selection?.selectedKeys.has(key) ?? false
+              const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
+
+              return (
+                <React.Fragment key={key}>
+                  <TableRow
+                    data-state={selected ? 'selected' : undefined}
+                    onClick={onView ? (event) => openRow(event, row) : undefined}
+                    className={cn('group', onView && 'cursor-pointer', expanded && 'border-b-0')}
+                  >
+                    {selection ? (
+                      <TableCell className="w-11">
+                        <Checkbox
+                          aria-label={`Select ${selection.label ?? 'row'} ${key}`}
+                          checked={selected}
+                          disabled={selectionDisabled}
+                          onCheckedChange={(checked) =>
+                            selection.onChange(
+                              updatePageSelection(selection.selectedKeys, [key], checked === true),
+                            )
+                          }
+                        />
+                      </TableCell>
                     ) : null}
-                  </React.Fragment>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                    {expandable ? (
+                      <TableCell className="w-10 px-2 first:pl-2.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => onToggleExpand?.(row)}
+                          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${key}`}
+                          aria-expanded={expanded}
+                        >
+                          <ChevronRight
+                            className={cn(
+                              'transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]',
+                              expanded && 'rotate-90',
+                            )}
+                          />
+                        </Button>
+                      </TableCell>
+                    ) : null}
+                    {columns.map((column) => (
+                      <TableCell
+                        key={column.key}
+                        className={cn(
+                          'whitespace-normal py-2.5',
+                          alignClass[column.align ?? 'left'],
+                        )}
+                        style={{ width: column.width, minWidth: column.minWidth }}
+                      >
+                        {column.render
+                          ? column.render(row)
+                          : renderColumnValue(getColumnValue(row, column.key))}
+                      </TableCell>
+                    ))}
+                    {hasActions ? (
+                      <TableCell
+                        className={cn(
+                          'w-14 pr-3 text-right',
+                          stickyCell &&
+                            cn(
+                              stickyCell,
+                              'bg-card transition-colors group-hover:bg-surface-subtle group-data-[state=selected]:bg-primary-soft',
+                            ),
+                        )}
+                      >
+                        <RowActions
+                          row={row}
+                          rowKey={key}
+                          onView={onView}
+                          onEdit={effectiveOnEdit}
+                          onDelete={effectiveOnDelete}
+                        />
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                  {expandable && expanded && renderExpandedRow ? (
+                    <TableRow className="bg-surface-subtle/60 hover:bg-surface-subtle/60">
+                      <TableCell
+                        colSpan={columns.length + auxiliaryColumnCount}
+                        className="h-auto whitespace-normal p-0 first:pl-0 last:pr-0"
+                      >
+                        {renderExpandedRow(row)}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </React.Fragment>
+              )
+            })
+          )}
+        </TableBody>
+      </Table>
 
       {pagination && sortedData.length > 0 ? (
         <div
-          className={styles.pagination}
+          className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-t border-border px-4 py-2 text-xs text-muted-foreground"
           role="group"
           aria-label={`${pagination.itemLabel ?? 'items'} pagination`}
         >
-          <span className={styles.paginationSummary}>
+          <span className="tabular">
             {pageWindow.start + 1}–{pageWindow.end} of {sortedData.length}{' '}
             {pagination.itemLabel ?? 'items'}
           </span>
-          <label className={styles.pageSizeControl}>
-            Rows
-            <select
-              value={pageSize}
-              onChange={(event) => {
-                setPageSize(Number(event.target.value))
-                setCurrentPage(1)
-              }}
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className={styles.paginationControls}>
-            <button
-              type="button"
-              onClick={() => setCurrentPage(1)}
-              disabled={pageWindow.page === 1}
-              aria-label="First page"
-            >
-              «
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={pageWindow.page === 1}
-              aria-label="Previous page"
-            >
-              ‹
-            </button>
-            <span>
-              Page {pageWindow.page} of {pageWindow.totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPage((page) => Math.min(pageWindow.totalPages, page + 1))}
-              disabled={pageWindow.page === pageWindow.totalPages}
-              aria-label="Next page"
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentPage(pageWindow.totalPages)}
-              disabled={pageWindow.page === pageWindow.totalPages}
-              aria-label="Last page"
-            >
-              »
-            </button>
+          <div className="flex items-center gap-5">
+            <label className="flex items-center gap-2">
+              Rows
+              <NativeSelect
+                size="sm"
+                containerClassName="w-[4.5rem]"
+                className="h-7 tabular"
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setCurrentPage(1)
+                }}
+              >
+                {pageSizeOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </NativeSelect>
+            </label>
+            <div className="flex items-center gap-0.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setCurrentPage(1)}
+                disabled={pageWindow.page === 1}
+                aria-label="First page"
+              >
+                <ChevronsLeft />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={pageWindow.page === 1}
+                aria-label="Previous page"
+              >
+                <ChevronLeft />
+              </Button>
+              <span className="min-w-[5.5rem] text-center tabular text-foreground/80">
+                Page {pageWindow.page} of {pageWindow.totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setCurrentPage((page) => Math.min(pageWindow.totalPages, page + 1))}
+                disabled={pageWindow.page === pageWindow.totalPages}
+                aria-label="Next page"
+              >
+                <ChevronRight />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setCurrentPage(pageWindow.totalPages)}
+                disabled={pageWindow.page === pageWindow.totalPages}
+                aria-label="Last page"
+              >
+                <ChevronsRight />
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

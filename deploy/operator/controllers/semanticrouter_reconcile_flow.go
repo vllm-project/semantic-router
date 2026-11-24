@@ -101,8 +101,9 @@ func (r *SemanticRouterReconciler) fetchSemanticRouter(ctx context.Context, req 
 func (r *SemanticRouterReconciler) handleFinalizerFlow(ctx context.Context, semanticrouter *vllmv1alpha1.SemanticRouter) (done bool, err error) {
 	if semanticrouter.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(semanticrouter, SemanticRouterFinalizer) {
+			base := semanticrouter.DeepCopy()
 			controllerutil.AddFinalizer(semanticrouter, SemanticRouterFinalizer)
-			if err := r.Update(ctx, semanticrouter); err != nil {
+			if err := r.patchFinalizers(ctx, semanticrouter, base); err != nil {
 				return false, err
 			}
 		}
@@ -117,11 +118,21 @@ func (r *SemanticRouterReconciler) handleFinalizerFlow(ctx context.Context, sema
 		return false, err
 	}
 
+	base := semanticrouter.DeepCopy()
 	controllerutil.RemoveFinalizer(semanticrouter, SemanticRouterFinalizer)
-	if err := r.Update(ctx, semanticrouter); err != nil {
+	if err := r.patchFinalizers(ctx, semanticrouter, base); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+// patchFinalizers writes a finalizer change as a merge patch against base, so
+// the request carries metadata.finalizers and never the spec. A full Update
+// serializes the spec from Go types, and a field the serializer drops is
+// defaulted again by the API server. The optimistic lock keeps the conflict
+// check Update had, because a merge patch replaces the whole finalizer list.
+func (r *SemanticRouterReconciler) patchFinalizers(ctx context.Context, semanticrouter, base *vllmv1alpha1.SemanticRouter) error {
+	return r.Patch(ctx, semanticrouter, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
 }
 
 func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(

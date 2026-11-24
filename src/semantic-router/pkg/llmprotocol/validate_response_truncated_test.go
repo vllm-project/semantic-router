@@ -75,14 +75,43 @@ func withAlternative(response Response, arguments string) Response {
 	return response
 }
 
-// A content filter or an output limit can end a reply before any output, as
-// when the limit went to reasoning the client asked to omit. Any other stop
-// with no output is an upstream defect.
+// A tool-call stop is the output limit's when the reply's output tokens
+// reached the limit of its request; usage that does not count them, or no
+// limit, leaves the stop as it is.
+func TestToolCallStopAtOutputLimit(t *testing.T) {
+	output := func(tokens int64) Usage {
+		return Usage{State: UsageAvailable, OutputTotal: TokenCount{Value: Int64(tokens), Provenance: UsageAuthoritative}}
+	}
+	for name, test := range map[string]struct {
+		stop  StopReason
+		usage Usage
+		limit int64
+		want  bool
+	}{
+		"at the limit":           {StopToolCall, output(50), 50, true},
+		"over the limit":         {StopToolCall, output(51), 50, true},
+		"below the limit":        {StopToolCall, output(49), 50, false},
+		"no limit":               {StopToolCall, output(50), 0, false},
+		"unknown usage":          {StopToolCall, Usage{State: UsageUnavailable}, 50, false},
+		"no output count":        {StopToolCall, Usage{State: UsageAvailable, InputTotal: TokenCount{Value: Int64(9), Provenance: UsageAuthoritative}}, 50, false},
+		"a turn that ended":      {StopEndTurn, output(50), 50, false},
+		"already the limit stop": {StopMaxTokens, output(50), 50, false},
+	} {
+		if got := ToolCallStopAtOutputLimit(test.stop, test.usage, test.limit); got != test.want {
+			t.Errorf("%s: ToolCallStopAtOutputLimit = %t, want %t", name, got, test.want)
+		}
+	}
+}
+
+// A model that ended its turn with nothing to say, a content filter or an
+// output limit can end a reply before any output, as when the limit went to
+// reasoning the client asked to omit. Any other stop with no output, such as a
+// tool call that names no call, is an upstream defect.
 func TestValidateResponseAcceptsNoOutputOnlyWhenTheStopExplainsIt(t *testing.T) {
 	limits := DefaultPolicy().Limits
 	for stop, explained := range map[StopReason]bool{
 		StopMaxTokens: true, StopContextWindow: true, StopContentFilter: true,
-		StopEndTurn: false, StopToolCall: false,
+		StopEndTurn: true, StopToolCall: false,
 	} {
 		err := ValidateResponse(Response{Generation: 1, ID: "response", StopReason: stop, Usage: Usage{State: UsageUnavailable}}, limits)
 		if !explained {

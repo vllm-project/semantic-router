@@ -107,6 +107,26 @@ func TestACallerPoolRefusesWhatWouldSendTheLoginElsewhere(t *testing.T) {
 	}
 }
 
+// An entrypoint's client key and a person's provider login would both arrive
+// as the Authorization header, so a configuration has one or the other.
+func TestACallerPoolRefusesEntrypointClientKeys(t *testing.T) {
+	cfg, err := loadCallerConfig("https://api.anthropic.com", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Entrypoints = []EntrypointMapping{{
+		ModelNames: []string{"company/claude"}, Recipe: DefaultRecipeName,
+		ClientAuth: &EntrypointClientAuth{Type: ClientAuthBearerAPIKey, APIKeyEnvs: []string{"CLAUDE_KEY"}},
+	}}
+	if err := validateCallerUpstreams(cfg); err == nil || !strings.Contains(err.Error(), "entrypoints[0].client_auth authenticates clients with the Authorization header") {
+		t.Fatalf("validateCallerUpstreams() = %v, want the client keys refused", err)
+	}
+	cfg.Entrypoints[0].ClientAuth = nil
+	if err := validateCallerUpstreams(cfg); err != nil {
+		t.Fatalf("a public entrypoint beside caller backends: %v", err)
+	}
+}
+
 func TestACallerPoolKeepsOnePayerAndOneIssuer(t *testing.T) {
 	// A model with a key of its own may sit beside the caller's models.
 	keyed := strings.Replace(callerConfig, "          auth: {credential: caller%s}\n", "          api_key: server-key%s\n", 1)

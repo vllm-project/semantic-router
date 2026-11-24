@@ -49,6 +49,9 @@ func (r *OpenAIRouter) materializePreparedProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (*preparedProviderRequest, error) {
+	if ctx != nil {
+		ctx.structuredOutputPass = planStructuredOutputPass(dispatch, ctx)
+	}
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		var protocolError *llmprotocol.ProtocolError
@@ -66,6 +69,14 @@ func (r *OpenAIRouter) materializePreparedProviderRequest(
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
 		return nil, dispatchWireError(err, ctx, "adapt provider request")
+	}
+	// The second call is encoded with the first, so a format the backend
+	// cannot carry is refused before either call.
+	if pass := ctx.structuredOutputPass; pass != nil {
+		if pass.body, err = r.encodeStructuredOutputRequest(dispatch, ctx); err != nil {
+			metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
+			return nil, dispatchWireError(err, ctx, "encode structured output request")
+		}
 	}
 	return newPreparedProviderRequest(body, preparedProviderRequestMetadata{
 		wireFormat: dispatch.targetFormat,

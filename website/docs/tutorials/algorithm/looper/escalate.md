@@ -151,7 +151,7 @@ A recipe published with `api: systemone` runs escalate with
   deciding whether to call Vega.
 - There is no separate mandatory Kai classification call, and the recipe does
   not run again after the first answer.
-- It supports `choice`, `score`, `noul` and `box` requests, and keeps the
+- It supports `choice`, `score`, `noul`, `box` and `set` requests, and keeps the
   original question bundle together. A stage runs only if its model answers
   what the request needs; see
   [Route by what each model answers](#route-by-what-each-model-answers).
@@ -364,12 +364,12 @@ for the response fields and error contract.
 
 To try it in Dashboard:
 
-1. Open **System One → Decision Playground**, and choose `vllm-sr/auto` under
-   **Automatic routes**.
+1. Open **Models → Decision models**, select the **Playground** tab, and choose
+   `vllm-sr/auto` under **Automatic routes**.
 2. Load an example your recipe supports, or enter your own questions, then
    select **Run**. Dashboard uses your signed-in management permissions, so no
    public API key is needed.
-3. Open **Decision Monitoring** for stage outcomes, request rates and latency.
+3. Open the **Monitoring** tab for stage outcomes, request rates and latency.
 
 These views describe live execution; evaluate labeled requests separately to
 measure accuracy.
@@ -435,8 +435,16 @@ global:
 A `box` answer counts as complete when its box lies within the image.
 Acceptance rules can gate it with
 `{question_type: box, field: confidence, gte: ...}`. A calibrated policy never
-accepts it, because calibration covers `choice`, `score` and `noul`. Auto does
-not route `set`, `span` or `track` questions yet: their answers are
+accepts it, because calibration covers `choice`, `score` and `noul`.
+
+Auto needs a `set` question to name its labels in `criteria`. A `set` answer
+counts as complete when `sets` gives every label a probability, selects only
+those labels, and agrees with each label's own `<question>.<label>` answer.
+Selecting no label is a complete answer. Acceptance rules can gate it with
+`{question_type: set, field: probability_margin, gte: ...}`. A calibrated
+policy never accepts it either.
+
+Auto does not route `span` or `track` questions yet: their answers are
 family-specific, so a request with one is refused with `400`.
 
 #### Add routing signals
@@ -481,7 +489,7 @@ An uncalibrated rule can inspect these observations:
 | --- | --- |
 | `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
 | `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
-| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
+| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin. For `set`, the smallest such margin among its labels |
 
 - **Bounds.** A rule bounds its field with `gt`, `gte`, `lt` or `lte`, in
   `[0, 1]`.

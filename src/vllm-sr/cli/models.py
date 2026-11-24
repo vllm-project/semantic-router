@@ -37,6 +37,7 @@ from .models_application import (
 from pydantic import (
     AfterValidator,
     BaseModel,
+    BeforeValidator,
     ConfigDict,
     Field,
     StrictBool,
@@ -48,7 +49,7 @@ from pydantic import (
 
 from .algorithms import AlgorithmConfig, ModelRef
 from .config_contract import UnknownPolicy
-from .config_schema import routing_surface_catalog, surface_types
+from .config_schema import definition_enum, routing_surface_catalog, surface_types
 from .context_bands import (
     normalize_token_count,
     references_environment,
@@ -180,6 +181,33 @@ class VSRProfile(BaseModel):
     )
 
 
+class UnservedModels(BaseModel):
+    """What an LLM API does with a request whose model it does not accept or the Router does not serve:
+    refuse it (reject, the default) or route it as if it named route_to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: Optional[Literal["reject", "route"]] = Field(
+        default=None,
+        description="reject (the default) answers 403 model_not_allowed or 404 "
+        "model_not_found; route sends the request to route_to and keeps the "
+        "name the client gave in the Replay record and the trace.",
+    )
+    route_to: Optional[str] = Field(
+        default=None,
+        description="With policy route: one of the API's models, an "
+        "entrypoint of the API, that such a request is routed as.",
+    )
+
+    @model_validator(mode="after")
+    def route_names_its_target(self):
+        if self.policy == "route" and not self.route_to:
+            raise ValueError("unserved_models.route_to is required with policy route")
+        if self.policy != "route" and self.route_to:
+            raise ValueError("unserved_models.route_to goes with policy route only")
+        return self
+
+
 class ListenerAPI(BaseModel):
     """One API a listener serves: its schema (only for a versioned API, systemone), the models it accepts
     (omitted: every model of its kind) and the API's own settings."""
@@ -196,7 +224,8 @@ class ListenerAPI(BaseModel):
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
-        "'model' value; others are rejected with HTTP 403 model_not_allowed. "
+        "'model' value; others are rejected with HTTP 403 model_not_allowed, "
+        "or 404 model_not_found when the Router serves them on no listener. "
         "Omitted, every model of the API's kind.",
     )
     max_deadline_ms: Optional[int] = Field(
@@ -212,6 +241,26 @@ class ListenerAPI(BaseModel):
         "listener turn on. The listing (GET /v1/systemone/models) hands it to "
         "them, and each field set here wins over the plugin's own option.",
     )
+    unserved_models: Optional[UnservedModels] = Field(
+        default=None,
+        description="chat_completions, responses, messages: route a request "
+        "whose model this API does not accept, or the Router does not serve, "
+        "to one of its models instead of refusing it.",
+    )
+
+    @model_validator(mode="after")
+    def route_to_is_accepted(self):
+        unserved = self.unserved_models
+        if (
+            unserved is not None
+            and unserved.route_to
+            and self.models is not None
+            and unserved.route_to not in self.models
+        ):
+            raise ValueError(
+                f"unserved_models.route_to {unserved.route_to!r} is not one of the API's models"
+            )
+        return self
 
     @field_validator("models")
     @classmethod
@@ -260,10 +309,10 @@ class Listener(BaseModel):
     apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
         description="The APIs this listener serves, by API name: "
-        "chat_completions, responses, messages, images and systemone (openai "
+        "chat_completions, responses, messages, images, speech and systemone (openai "
         "and anthropic are aliases of chat_completions and messages). Other "
         "API paths answer 404. Omitted, the listener serves chat_completions, "
-        "responses, messages and images, and not systemone. A model "
+        "responses, messages, images and speech, and not systemone. A model "
         "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
         "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
@@ -305,7 +354,7 @@ class Listener(BaseModel):
         if not apis:
             raise ValueError(
                 "apis names no API; name the APIs the listener serves, or omit apis to serve "
-                "chat_completions, responses, messages and images"
+                "chat_completions, responses, messages, images and speech"
             )
         resolved: dict[str, ListenerAPI] = {}
         named: dict[str, str] = {}
@@ -329,7 +378,7 @@ class Listener(BaseModel):
                     raise ValueError(
                         f"apis.{key}.schema: a listener serves api {name} in {' or '.join(schemas)}, not {entry.schema_!r}"
                     )
-            for setting in ("max_deadline_ms", "vsr"):
+            for setting in ("max_deadline_ms", "vsr", "unserved_models"):
                 if getattr(
                     entry, setting
                 ) is not None and setting not in API_SETTINGS.get(name, ()):
@@ -593,6 +642,9 @@ class InputModalityRule(BaseModel):
         return self
 
 
+AGENT_HARNESSES = definition_enum("AgentRule", "harness")
+
+
 class AgentRule(BaseModel):
     """Matches the agent a request belongs to, from its harness's headers."""
 
@@ -601,7 +653,7 @@ class AgentRule(BaseModel):
     name: str
     description: Optional[str] = None
     role: Optional[Literal["main", "subagent"]] = None
-    harness: Optional[Literal["claude_code", "codex"]] = None
+    harness: Optional[str] = None
     types: Optional[List[str]] = None
     request_classes: Optional[
         List[Literal["main", "subagent", "workflow", "compaction", "auxiliary"]]
@@ -615,10 +667,15 @@ class AgentRule(BaseModel):
             raise ValueError(
                 "set at least one of role, harness, types or request_classes"
             )
-        if self.request_classes and self.harness == "codex":
+        if self.harness is not None and self.harness not in AGENT_HARNESSES:
             raise ValueError(
-                "only Claude Code sends a request class, so request_classes"
-                " cannot go with harness codex"
+                f"harness must be one of {', '.join(AGENT_HARNESSES)},"
+                f" got {self.harness!r}"
+            )
+        if self.request_classes and self.harness in ("deepseek_harness", "cursor"):
+            raise ValueError(
+                f"{self.harness} calls carry no request class, so"
+                f" request_classes cannot go with harness {self.harness}"
             )
         if self.role == "main" and self.types:
             raise ValueError(
@@ -1348,9 +1405,91 @@ class RouterReplayPluginConfig(BaseModel):
     shadow: Optional["RouterReplayShadowConfig"] = None
 
 
-# Headers that carry a credential on the primary path. A shadow copy never
-# carries them and router_replay shadow.forward_headers may not list them.
-# Keep in step with the Router's shadowCredentialHeaders in pkg/config.
+def _normalize_shadow_integer(value: Any) -> Any:
+    # Structured Go payloads and JSON Schema accept integral numbers such as
+    # 1.0. Keep strict validation for booleans, strings and fractional numbers.
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
+_ShadowPositiveInt = Annotated[
+    int, Field(strict=True, gt=0), BeforeValidator(_normalize_shadow_integer)
+]
+
+
+class RouterReplayShadowExecutionConfig(BaseModel):
+    """Bounded execution; omitted numeric values use the Router defaults."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_concurrency: Optional[_ShadowPositiveInt] = Field(
+        default=None, description="Default: 2"
+    )
+    max_queue_size: Optional[_ShadowPositiveInt] = Field(
+        default=None, description="Default: 8"
+    )
+    timeout: StrictStr = Field(
+        default="30s",
+        max_length=128,
+        description="Go duration using ms, s, m combinations; 1ns to 5m, default 30s",
+    )
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, value: str) -> str:
+        # Go truncates each duration component to nanoseconds. Support its
+        # decimal syntax for ms/s/m, with a bounded authoring string length.
+        number = r"(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)"
+        if not re.fullmatch(rf"\+?(?:{number}(?:ms|s|m))+", value):
+            raise ValueError("timeout must be a Go duration using ms, s, m")
+        scales = {"ms": 1000000, "s": 1000000000, "m": 60000000000}
+        max_duration_ns = 300_000_000_000
+        nanoseconds = 0
+        for amount, unit in re.findall(rf"({number})(ms|s|m)", value):
+            whole, _, fraction = amount.partition(".")
+            scale = scales[unit]
+            component = int(whole or "0") * scale
+            component += int(fraction or "0") * scale // (10 ** len(fraction))
+            if component > max_duration_ns:
+                raise ValueError("timeout must be positive and at most 5m")
+            nanoseconds += component
+        if not 0 < nanoseconds <= max_duration_ns:
+            raise ValueError("timeout must be positive and at most 5m")
+        return value
+
+
+class RouterReplayShadowBudgetConfig(BaseModel):
+    """Total fanout budgets, defaulted by the Router from the model count."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_response_bytes: Optional[_ShadowPositiveInt] = Field(
+        default=None,
+        description="Default: max(1, len(models)) * 1048576 total response bytes",
+    )
+
+    max_estimated_cost: Optional[float] = Field(
+        default=None,
+        strict=True,
+        gt=0,
+        allow_inf_nan=False,
+        description="Maximum estimated spend per sampled Shadow group, in the configured budget currency",
+    )
+
+
+class RouterReplayShadowCaptureConfig(BaseModel):
+    """Optional bounded response capture."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: StrictBool = False
+    max_bytes: Optional[_ShadowPositiveInt] = Field(
+        default=None,
+        description="Default: 4096 * max(1, len(models))",
+    )
+
+
 SHADOW_CREDENTIAL_HEADERS = frozenset(
     {
         "authorization",
@@ -1371,60 +1510,67 @@ SHADOW_CREDENTIAL_HEADERS = frozenset(
 
 
 class RouterReplayShadowConfig(BaseModel):
-    """router_replay's shadow block.
-
-    Sends a bounded, sampled copy of the approved request to a secondary
-    configured model after the primary dispatch is finalized, and records its
-    outcome in the replay record. The primary response never waits on or
-    changes because of the shadow call.
-    """
+    """Sampled, bounded fanout to configured models after primary dispatch."""
 
     model_config = ConfigDict(extra="forbid")
 
-    model: str = Field(description="Configured logical model receiving the shadow copy")
-    sample_rate: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    max_concurrency: int = Field(default=2, ge=0)
-    max_queue_depth: int = Field(default=8, ge=0)
-    timeout_seconds: int = Field(default=30, ge=0)
-    max_response_bytes: int = Field(default=1048576, ge=0)
-    max_retries: int = Field(default=0, ge=0, le=3)
-    capture_response_body: bool = False
-    max_capture_bytes: int = Field(default=4096, ge=0)
-    tls_skip_verify: bool = False
-    forward_headers: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Decision header_mutation names the shadow copy may carry; nothing "
-            "else a decision sets for the primary backend is forwarded"
-        ),
+    models: list[StrictStr] = Field(min_length=1, max_length=8)
+    sample_rate: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        strict=True,
+        le=1.0,
+        allow_inf_nan=False,
+        description="Default: 1 (sample every approved request)",
     )
+    execution: RouterReplayShadowExecutionConfig = Field(
+        default_factory=RouterReplayShadowExecutionConfig
+    )
+    budget: RouterReplayShadowBudgetConfig = Field(
+        default_factory=RouterReplayShadowBudgetConfig
+    )
+    capture: RouterReplayShadowCaptureConfig = Field(
+        default_factory=RouterReplayShadowCaptureConfig
+    )
+
+    forward_headers: Optional[list[StrictStr]] = None
 
     @field_validator("forward_headers")
     @classmethod
-    def reject_credential_headers(cls, names: list[str]) -> list[str]:
-        # Mirrors the Router's validateShadowForwardHeaders so both admission
-        # paths refuse the same names.
-        for name in names:
-            stripped = name.strip()
-            if not stripped:
-                raise ValueError("shadow forward_headers entries cannot be empty")
-            if stripped.startswith(":"):
-                raise ValueError(
-                    f"shadow forward_headers cannot include pseudo-header {stripped!r}"
-                )
-            if stripped.lower() in SHADOW_CREDENTIAL_HEADERS:
-                raise ValueError(
-                    "shadow forward_headers cannot include credential header "
-                    f"{stripped!r}"
-                )
+    def validate_forward_headers(
+        cls, names: Optional[list[str]]
+    ) -> Optional[list[str]]:
+        for name in names or []:
+            header = name.strip()
+            if (
+                not header
+                or header.startswith(":")
+                or header.lower() in FORWARD_CREDENTIAL_HEADERS
+            ):
+                raise ValueError(f"forward_headers cannot include {name!r}")
         return names
 
-    @field_validator("model")
+    @field_validator("models")
     @classmethod
-    def require_model(cls, model: str) -> str:
-        if not model.strip():
-            raise ValueError("shadow model is required")
-        return model
+    def normalize_models(cls, names: list[str]) -> list[str]:
+        names = [name.strip() for name in names]
+        if any(not name for name in names):
+            raise ValueError("shadow models cannot contain empty names")
+        if len(set(names)) != len(names):
+            raise ValueError("shadow models cannot contain duplicates")
+        return names
+
+    @model_validator(mode="after")
+    def validate_fanout(self):
+        count = len(self.models)
+        if (
+            self.budget.max_response_bytes is not None
+            and self.budget.max_response_bytes < 2 * count
+        ):
+            raise ValueError(
+                "budget.max_response_bytes must allocate at least two bytes to each model"
+            )
+        return self
 
 
 RouterReplayPluginConfig.model_rebuild()
@@ -2645,7 +2791,7 @@ class Model(ModelFacts):
     api_format: Optional[str] = Field(
         default=None,
         description="The API the model's backends serve: chat_completions "
-        "(the default), responses, messages, images or systemone; openai and "
+        "(the default), responses, messages, images, speech or systemone; openai and "
         "anthropic are aliases of chat_completions and messages.",
     )
     schema_: Optional[str] = Field(
@@ -2850,6 +2996,9 @@ class ProviderDefaults(BaseModel):
 
     model: Optional[str] = None
     reasoning_effort: Optional[str] = None
+    # A request that states no reasoning preference and sets a smaller output
+    # limit runs with reasoning off; 0 or unset turns the rule off.
+    reasoning_min_output_tokens: Optional[int] = Field(default=None, ge=0)
     tls: Optional[ProviderDefaultsTLS] = None
 
 

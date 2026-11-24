@@ -32,7 +32,7 @@ recipes:
 
 `production` 是本地别名。Router 会从 `catalog: openai/gpt-5.6-sol` 解析 canonical card 和 OpenAI 专用映射；不要在 YAML 中重复其推理定义。
 
-在 **Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Build → Routing → Models → Add Model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
+在 **Models → Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Models → Backend models → Connect model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
 ## MiniMax M3.1 Flash
 

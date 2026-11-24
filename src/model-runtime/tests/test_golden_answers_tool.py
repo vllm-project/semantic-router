@@ -104,9 +104,13 @@ def test_later_hardware_recording_preserves_generic_and_updates_qualified(
 ):
     path = tmp_path / "goldens.json"
     generic = device.split(":")[0]
-    recorder.record(path, [entry(device, key, 0.5)])
+    # A GPU keys its own architecture alone unless asked for the class baseline.
+    baseline = generic != "cpu"
+    recorder.record(path, [entry(device, key, 0.5)], baseline)
     recorder.record(
-        path, [entry(device, key, 0.6), entry(device, "other-hardware", 0.7)]
+        path,
+        [entry(device, key, 0.6), entry(device, "other-hardware", 0.7)],
+        baseline,
     )
     expected = json.loads(path.read_text())["fixture/model"]["answers"]
     assert expected[generic] == values(0.5)
@@ -124,6 +128,20 @@ def test_later_hardware_recording_preserves_generic_and_updates_qualified(
     )
     assert result.status == "failed"
     assert result.reference == generic
+
+
+def test_a_cpu_class_bf16_reference_is_kept_at_the_generic_values(tmp_path):
+    """It is what lets ``--dtype auto`` hold BF16 on that class; an FP32 one adds nothing."""
+    path = tmp_path / "goldens.json"
+    amd = "cpu:x86_64:avx512:bf16_native:amd"
+    recorder.record(path, [entry("cpu", f"{amd}@bfloat16", 0.6, dtype="bfloat16")])
+    recorder.record(path, [entry("cpu", amd, 0.5)])
+    answers = json.loads(path.read_text())["fixture/model"]["answers"]
+    assert answers == {
+        "cpu@bfloat16": values(0.6),
+        f"{amd}@bfloat16": values(0.6),
+        "cpu": values(0.5),
+    }
 
 
 def test_new_revision_replaces_old_references_and_keeps_other_models(tmp_path):
@@ -247,15 +265,18 @@ def test_recording_replaces_references_the_model_no_longer_matches(
     assert produced["previous"]["cpu"]["matched"] == 0
 
 
+@pytest.mark.parametrize("native", [False, True])
 @pytest.mark.parametrize("dtype", ["auto", "bfloat16"])
 def test_d3_is_checked_against_the_references_recorded_at_its_dtype(
-    d3_package, monkeypatch, dtype
+    d3_package, monkeypatch, dtype, native
 ):
-    """At ``auto`` a CPU checks D3's one FP32 reference; ``--dtype bfloat16`` its CPU class's BF16 one."""
+    """At ``auto`` a CPU checks D3's one FP32 reference, or its class's BF16 one where it computes BF16 natively; ``--dtype bfloat16`` its class's BF16 one."""
     key = "cpu:fixture"
     monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: False)
     fp32 = recorder.answers(recording_args(), str(d3_package), None)
     bf16 = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: native)
     assert set(fp32["golden_answers"]) == {"cpu", key}
     assert set(bf16["golden_answers"]) == {"cpu@bfloat16", f"{key}@bfloat16"}
     assert fp32["golden_answers"]["cpu"] != bf16["golden_answers"]["cpu@bfloat16"]
@@ -281,7 +302,117 @@ def test_d3_is_checked_against_the_references_recorded_at_its_dtype(
         runtime.load()
         result = runtime.lookup(None).health.golden
         assert result.status == "matched" and result.checked == result.matched > 0
-        assert result.reference == ("cpu" if dtype == "auto" else f"{key}@bfloat16")
+        assert result.reference == (
+            "cpu" if dtype == "auto" and not native else f"{key}@bfloat16"
+        )
+        held = runtime.lookup(None).card([])["dtype"]
+        if dtype == "bfloat16":
+            assert held == "bfloat16"
+        elif native:
+            assert held.startswith("bf16/")
+        else:
+            assert held == "fp32"
+    finally:
+        runtime.stop()
+
+
+def test_auto_serves_fp32_where_the_bf16_answers_differ_from_the_class_reference(
+    d3_package, monkeypatch
+):
+    """A CPU that shares a class's key but rounds BF16 otherwise falls back to FP32 at ``auto``; ``--dtype bfloat16`` still fails."""
+    key = "cpu:fixture"
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: False)
+    fp32 = recorder.answers(recording_args(), str(d3_package), None)
+    bf16 = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
+    expected = {
+        "cpu": fp32["golden_answers"]["cpu"],
+        f"{key}@bfloat16": shifted(bf16["golden_answers"][f"{key}@bfloat16"]),
+    }
+    golden = Decision3Family.golden
+    monkeypatch.setattr(
+        Decision3Family,
+        "golden",
+        lambda self, package: [
+            {**request, "expected": expected} for request in golden(self, package)
+        ],
+    )
+    runtime = Runtime(
+        ServeConfig(models=(ModelConfig(model=str(d3_package), device="cpu"),))
+    )
+    try:
+        runtime.load()
+        served = runtime.lookup(None)
+        assert served.health.golden.status == "matched"
+        assert served.health.golden.reference == "cpu"
+        card = served.card([])
+        assert card["dtype"] == "fp32"
+        assert card["reason"] == (
+            "BF16 golden answers differ from the reference "
+            f"({key}@bfloat16); computes in FP32"
+        )
+    finally:
+        runtime.stop()
+    runtime = Runtime(
+        ServeConfig(
+            models=(ModelConfig(model=str(d3_package), device="cpu", dtype="bfloat16"),)
+        )
+    )
+    try:
+        with pytest.raises(VerificationError, match="differ from the reference"):
+            runtime.load()
+    finally:
+        runtime.stop()
+
+
+def test_auto_serves_fp32_where_the_bf16_answers_are_not_deterministic(
+    d3_package, monkeypatch
+):
+    """A BF16 run whose two golden answers differ falls back to FP32 at ``auto``, and the reason says why."""
+    key = "cpu:fixture"
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: False)
+    fp32 = recorder.answers(recording_args(), str(d3_package), None)
+    bf16 = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
+    # The BF16 reference matches, so only the drift between runs fails the check.
+    expected = {
+        "cpu": fp32["golden_answers"]["cpu"],
+        f"{key}@bfloat16": bf16["golden_answers"][f"{key}@bfloat16"],
+    }
+    golden = Decision3Family.golden
+    monkeypatch.setattr(
+        Decision3Family,
+        "golden",
+        lambda self, package: [
+            {**request, "expected": expected} for request in golden(self, package)
+        ],
+    )
+
+    def drifting(run, *args):
+        """``golden_check`` whose BF16 runs answer differently each time."""
+        if args[-1] != "bfloat16":
+            return golden_check(run, *args)
+        calls = iter(range(1_000_000))
+        return golden_check(
+            lambda surface, body: {**run(surface, body), "run": next(calls)}, *args
+        )
+
+    monkeypatch.setattr("vllm_srun.runtime.golden_check", drifting)
+    runtime = Runtime(
+        ServeConfig(models=(ModelConfig(model=str(d3_package), device="cpu"),))
+    )
+    try:
+        runtime.load()
+        served = runtime.lookup(None)
+        assert served.health.golden.status == "matched"
+        assert served.health.golden.reference == "cpu"
+        card = served.card([])
+        assert card["dtype"] == "fp32"
+        assert card["reason"] == (
+            "BF16 golden answers are not deterministic; computes in FP32"
+        )
     finally:
         runtime.stop()
 
@@ -315,3 +446,24 @@ def test_explicit_model_still_attempts_the_unserved_package(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["golden_answers.py", "vllm-sr/vela3-fast-vision"])
     recorder.main()
     assert seen == [("vllm-sr/vela3-fast-vision", None)]
+
+
+@pytest.mark.parametrize(
+    "device,key", [("cuda:0", "cuda:sm_89"), ("rocm:0", "rocm:gfx942")]
+)
+def test_a_gpu_records_its_hardware_key_alone(tmp_path, device, key):
+    """A class reference is compared with every other architecture of that class."""
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [entry(device, key, 0.5)])
+    recorded = json.loads(path.read_text())["fixture/model"]["answers"]
+    assert set(recorded) == {key}
+
+
+def test_a_gpu_re_recording_keeps_the_hardware_key_it_answers_as(tmp_path):
+    """Its answers match the class baseline, which must not displace the entry again."""
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [entry("cuda:0", "cuda:sm_89", 0.5)], True)
+    assert set(json.loads(path.read_text())["fixture/model"]["answers"]) == {"cuda"}
+    recorder.record(path, [entry("cuda:0", "cuda:sm_89", 0.5)])
+    recorded = json.loads(path.read_text())["fixture/model"]["answers"]
+    assert recorded == {"cuda": values(0.5), "cuda:sm_89": values(0.5)}

@@ -12,7 +12,7 @@ import {
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
 
-function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
+export function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
   const common = {
     label: field.label,
     description: field.description,
@@ -67,7 +67,7 @@ function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
   }
 }
 
-function mergeStructuredSchema(
+export function mergeStructuredSchema(
   generated: RouterStructuredSchema,
   curated: RouterStructuredSchema,
 ): RouterStructuredSchema {
