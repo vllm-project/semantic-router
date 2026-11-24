@@ -39,22 +39,15 @@ from recipe_lab.observe_labels import (
 from recipe_lab.runner import RunnerEnv
 
 # The shared classification source (a minimal stand-in for the maintained
-# config/config.yaml): both sections the Y2 same-source rule requires.
+# config/config.yaml): the section the Y2 same-source rule requires, in its
+# canonical v0.5 form - the embeddings block names the deployment that
+# embeds for the shared classification machinery.
 CLASSIFICATION_SOURCE_YAML = """\
 global:
   model_catalog:
     embeddings:
-      semantic:
-        use_cpu: true
-        embedding_config:
-          model_type: mmbert
-    modules:
-      classifier:
-        domain:
-          enabled: true
-          fallback_category: other
-      prompt_guard:
-        enabled: true
+      default:
+        deployment: primary
 """
 
 
@@ -62,7 +55,7 @@ def _write_classification_source(tmp_path: Path, *, drop: str = "") -> str:
     text = CLASSIFICATION_SOURCE_YAML
     if drop == "embeddings":
         text = text.replace(
-            "    embeddings:\n      semantic:\n        use_cpu: true\n        embedding_config:\n          model_type: mmbert\n",
+            "    embeddings:\n      default:\n        deployment: primary\n",
             "",
         )
     path = tmp_path / "classification-source.yaml"
@@ -206,7 +199,11 @@ def _observe_env(tmp_path: Path, work_dir: str) -> RunnerEnv:
 
 def test_seed_config_structure_pins_everything_the_observe_needs():
     config = build_seed_config()
-    decisions = config["routing"]["decisions"]
+    decisions = config["recipes"][0]["decisions"]
+    # the recipe declares the domains its decisions' conditions name
+    assert {
+        domain["name"] for domain in config["recipes"][0]["signals"]["domains"]
+    } == set(SUPPORTED_ROUTING_DOMAINS)
     by_name = {decision["name"]: decision for decision in decisions}
     # 14 domain decisions + the catch-all, nothing else.
     assert set(by_name) == set(SUPPORTED_ROUTING_DOMAINS) | {FALLBACK_DECISION_NAME}
@@ -228,8 +225,9 @@ def test_seed_config_structure_pins_everything_the_observe_needs():
     assert config["global"]["model_catalog"]["system"]["decision_model"] == {
         "deployment": "primary"
     }
-    # labels must come from live routing decisions, never from the cache
-    assert config["global"]["stores"]["response_cache"]["enabled"] is False
+    # labels must come from live routing decisions, never from the cache:
+    # canonical v0.5 runs no response_cache plugin unless a decision mounts one
+    assert config["global"]["stores"]["response_cache"] == {"backend_type": "memory"}
 
 
 def test_seed_config_is_byte_deterministic(tmp_path):
@@ -244,13 +242,12 @@ def test_seed_config_is_byte_deterministic(tmp_path):
 
 
 def test_seed_config_injects_shared_classification_sections(tmp_path):
-    # Y2: the seed classifies with the same modules/embeddings every bootstrap
+    # Y2: the seed classifies with the same embeddings every bootstrap
     # candidate will carry; the seed's own deployments/system pinning survives.
     classification = load_classification_source(_write_classification_source(tmp_path))
     config = build_seed_config(classification=classification)
     catalog = config["global"]["model_catalog"]
     assert catalog["embeddings"] == classification["embeddings"]
-    assert catalog["modules"] == classification["modules"]
     assert catalog["deployments"] == {
         "primary": {"provider": "model_runtime", "artifact": "vllm-sr/d3-lite"}
     }
@@ -258,7 +255,6 @@ def test_seed_config_injects_shared_classification_sections(tmp_path):
     # without a source the seed would classify with the router's defaults -
     # exactly the divergence Y2 closes against the scaffold-derived candidates
     bare = build_seed_config()
-    assert "modules" not in bare["global"]["model_catalog"]
     assert "embeddings" not in bare["global"]["model_catalog"]
     # the injected document stays byte-deterministic
     assert seed_config_yaml(
@@ -266,13 +262,10 @@ def test_seed_config_injects_shared_classification_sections(tmp_path):
     ) == seed_config_yaml(config)
 
 
-def test_load_classification_source_requires_both_sections(tmp_path):
+def test_load_classification_source_requires_the_shared_sections(tmp_path):
     sections = load_classification_source(_write_classification_source(tmp_path))
-    assert set(sections) == {"modules", "embeddings"}
-    assert (
-        sections["embeddings"]["semantic"]["embedding_config"]["model_type"] == "mmbert"
-    )
-    assert sections["modules"]["classifier"]["domain"]["fallback_category"] == "other"
+    assert set(sections) == {"embeddings"}
+    assert sections["embeddings"]["default"]["deployment"] == "primary"
     # an incomplete source would silently reintroduce the default-vs-scaffold
     # divergence Y2 closes
     broken = _write_classification_source(tmp_path, drop="embeddings")
@@ -555,10 +548,8 @@ def test_observe_labels_cli_writes_labels_and_summary(tmp_path, capsys):
     # ... and the written seed config carries the injected sections
     seeded = yaml.safe_load((out / "seed-config.yaml").read_text(encoding="utf-8"))
     catalog = seeded["global"]["model_catalog"]
-    assert (
-        catalog["embeddings"]["semantic"]["embedding_config"]["model_type"] == "mmbert"
-    )
-    assert catalog["modules"]["classifier"]["domain"]["fallback_category"] == "other"
+    assert catalog["embeddings"]["default"]["deployment"] == "primary"
+    assert "modules" not in catalog
 
 
 def test_observe_labels_cli_allows_frozen_test(tmp_path, capsys):

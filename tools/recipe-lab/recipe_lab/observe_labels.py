@@ -147,12 +147,12 @@ def build_seed_config(
     if classification:
         model_catalog.update(classification)
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {"name": "http-seed", "address": "0.0.0.0", "port": 8899, "timeout": "300s"}
         ],
         "global": {
-            "stores": {"response_cache": {"enabled": False, "backend_type": "memory"}},
+            "stores": {"response_cache": {"backend_type": "memory"}},
             "model_catalog": model_catalog,
         },
         "providers": {
@@ -160,6 +160,9 @@ def build_seed_config(
             "models": [
                 {
                     "name": model_name,
+                    "context_window_size": 131072,
+                    "description": "Seed observation backend; answers are irrelevant.",
+                    "capabilities": ["chat", "text"],
                     "provider_model_id": model_name,
                     "api_format": "openai",
                     "backend_refs": [
@@ -174,28 +177,30 @@ def build_seed_config(
                 }
             ],
         },
-        "routing": {
-            "modelCards": [
-                {
-                    "name": model_name,
-                    "context_window_size": 131072,
-                    "description": "Seed observation backend; answers are irrelevant.",
-                    "capabilities": ["chat", "text"],
-                    "modality": "text",
-                }
-            ],
-            "decisions": [
-                *domain_decisions,
-                {
-                    "name": FALLBACK_DECISION_NAME,
-                    "description": "Catch-all: no domain decision matched.",
-                    "priority": 100,
-                    "tier": 2,
-                    "modelRefs": [{"model": model_name, "use_reasoning": False}],
-                    "plugins": [dict(REPLAY_PLUGIN)],
+        "recipes": [
+            {
+                "name": "default",
+                # Bare domain entries: the canonical declaration the decisions'
+                # domain conditions require. The router classifies with its own
+                # defaults; the seed observes the labels it assigns.
+                "signals": {
+                    "domains": [
+                        {"name": domain} for domain in SUPPORTED_ROUTING_DOMAINS
+                    ]
                 },
-            ],
-        },
+                "decisions": [
+                    *domain_decisions,
+                    {
+                        "name": FALLBACK_DECISION_NAME,
+                        "description": "Catch-all: no domain decision matched.",
+                        "priority": 100,
+                        "tier": 2,
+                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
+                        "plugins": [dict(REPLAY_PLUGIN)],
+                    },
+                ],
+            }
+        ],
         "entrypoints": [{"model_names": [ROUTER_MODEL], "recipe": "default"}],
     }
 

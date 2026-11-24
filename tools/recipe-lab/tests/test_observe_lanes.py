@@ -112,10 +112,16 @@ def test_observation_providers_config_declares_no_decision_model():
     )
     names = [model["name"] for model in config["providers"]["models"]]
     assert names == [f"{ol.PLACEHOLDER_PREFIX}-1", f"{ol.PLACEHOLDER_PREFIX}-2"]
-    # The response cache is off (a warm cache would swallow repeated cases).
-    assert config["global"]["stores"]["response_cache"]["enabled"] is False
-    # modelCards exist (candidate_requirements: capabilities declared).
-    assert {card["name"] for card in config["routing"]["modelCards"]} == set(names)
+    # The response cache is off (a warm cache would swallow repeated cases):
+    # canonical v0.5 runs no response_cache plugin unless a decision mounts one.
+    assert config["global"]["stores"]["response_cache"] == {"backend_type": "memory"}
+    # The placeholder models carry their card facts themselves
+    # (candidate_requirements: capabilities declared).
+    assert {
+        model["name"]
+        for model in config["providers"]["models"]
+        if "capabilities" in model
+    } == set(names)
     # No decision model here: init copies the bundle's pinned deployment.
     assert "model_catalog" not in config["global"]
 

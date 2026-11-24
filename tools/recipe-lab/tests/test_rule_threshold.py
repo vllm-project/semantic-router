@@ -571,7 +571,7 @@ def test_run_sidecar_provenance_and_partial_rejection(monkeypatch, tmp_path, cap
     (cands / "candidate-002.yaml").write_text("routing: {}\n", encoding="utf-8")
     validator = tmp_path / "validator.sh"
     validator.write_text(
-        '#!/bin/sh\ncase "$4" in *candidate-002*) exit 1;; esac\nexit 0\n',
+        '#!/bin/sh\ncase "$*" in *candidate-002*) exit 1;; esac\nexit 0\n',
         encoding="utf-8",
     )
     validator.chmod(0o755)

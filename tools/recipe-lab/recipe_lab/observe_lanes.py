@@ -223,18 +223,31 @@ def observation_providers_config(
 ) -> dict[str, Any]:
     """The synthetic provider config ``recipe builtin init --config`` consumes.
 
-    Canonical v0.3 shape (mirrors the proven seed config): one listener,
-    the placeholder models, explicit modelCards (the recipe's
-    ``candidate_requirements`` demand declared capabilities), and the
-    response cache disabled - a warm cache would swallow repeated cases
+    Canonical v0.5 shape (mirrors the proven seed config): one listener,
+    the placeholder models with their model-card facts carried on the
+    ``providers.models[]`` entries (the recipe's ``candidate_requirements``
+    demand declared capabilities), and the response cache on its
+    plugin-based default - a warm cache would swallow repeated cases
     before any decision fires and lose their lane observation. The decision
     model is deliberately NOT declared: init copies the bundle's pinned
     deployment, which is the point of the template path (sub-issue-8 §2.2
     step 3).
     """
     models = placeholder_models(placeholder_count, backend_endpoint)
+    for model in models:
+        model.update(
+            {
+                "context_window_size": 262144,
+                "max_output_tokens": 8192,
+                "description": (
+                    "Lane observation placeholder; answers are irrelevant."
+                ),
+                "capabilities": ["chat", "text"],
+                "modality": "text",
+            }
+        )
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "http-observe",
@@ -244,23 +257,8 @@ def observation_providers_config(
             }
         ],
         "providers": {"defaults": {"model": models[0]["name"]}, "models": models},
-        "routing": {
-            "modelCards": [
-                {
-                    "name": model["name"],
-                    "context_window_size": 262144,
-                    "max_output_tokens": 8192,
-                    "description": (
-                        "Lane observation placeholder; answers are irrelevant."
-                    ),
-                    "capabilities": ["chat", "text"],
-                    "modality": "text",
-                }
-                for model in models
-            ]
-        },
         "global": {
-            "stores": {"response_cache": {"enabled": False, "backend_type": "memory"}},
+            "stores": {"response_cache": {"backend_type": "memory"}},
             "services": {"router_replay": {"store_backend": "memory"}},
         },
     }

@@ -368,8 +368,8 @@ def complete_candidate(
 
     ``classification`` (Y2) is the shared classification source sections
     (``load_classification_source``): they replace the scaffold's own
-    modules/embeddings copies so the candidate classifies exactly like the
-    observe seed did, and the scaffold can never override the seed's
+    embeddings copy so the candidate classifies exactly like the observe
+    seed did, and the scaffold can never override the seed's
     deployments/system pinning.
     """
     domains = _scaffold_domains(scaffold)
@@ -471,11 +471,26 @@ def complete_candidate(
     scaffold_catalog.pop("deployments", None)
     scaffold_catalog.pop("system", None)
     model_catalog = {**seed_catalog, **scaffold_catalog}
+    # Canonical v0.5 emission (the form `vllm-sr config validate` and the
+    # Router accept): the scaffold's model cards merge onto their
+    # providers.models[] entries, the top-level routing block becomes the
+    # default recipe, and the response-cache/tools switches become their
+    # plugin-based defaults.
+    models = _provider_models(scaffold, spec)
+    entries = {model["name"]: model for model in models}
+    for card in (scaffold.get("routing") or {}).get("modelCards") or []:
+        entry = entries.get(card.get("name"))
+        if entry is None:
+            entry = {"name": card["name"]}
+            entries[card["name"]] = entry
+            models.append(entry)
+        for field, value in card.items():
+            # modality is a removed keyword form in every case; the router
+            # reads a model's media facts from capabilities/modalities.
+            if field not in ("name", "modality") and field not in entry:
+                entry[field] = value
     config: dict[str, Any] = {
-        # The emitted candidate keeps the legacy routing form the loader
-        # accepts (the landed observe_labels seed uses the same shape); the
-        # version tag must name that form, not the scaffold's own.
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "http-gateway",
@@ -489,17 +504,18 @@ def complete_candidate(
                 **((scaffold.get("providers") or {}).get("defaults") or {}),
                 "model": default_model,
             },
-            "models": _provider_models(scaffold, spec),
+            "models": models,
         },
-        "routing": {
-            "modelCards": (scaffold.get("routing") or {}).get("modelCards") or [],
-            "signals": {"domains": list(domains.values())},
-            "decisions": decisions,
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {"domains": list(domains.values())},
+                "decisions": decisions,
+            }
+        ],
         "entrypoints": [{"model_names": [ROUTER_MODEL], "recipe": "default"}],
         "global": {
-            "stores": {"response_cache": {"enabled": False, "backend_type": "memory"}},
-            "integrations": {"tools": {"enabled": False}},
+            "stores": {"response_cache": {"backend_type": "memory"}},
             "model_catalog": model_catalog,
         },
     }

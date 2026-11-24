@@ -56,16 +56,10 @@ TOKENS = {SMALL: 100.0, LARGE: 500.0}
 LABEL_COUNTS = {"math": 40, "business": 30, "history": 20}
 
 # Y2: the shared classification source sections. A minimal stand-in for the
-# maintained config/config.yaml classification machinery.
-CLASSIFICATION = {
-    "modules": {
-        "classifier": {"domain": {"enabled": True, "fallback_category": "other"}},
-        "prompt_guard": {"enabled": True},
-    },
-    "embeddings": {
-        "semantic": {"use_cpu": True, "embedding_config": {"model_type": "mmbert"}}
-    },
-}
+# maintained config/config.yaml classification machinery (canonical v0.5
+# catalogs carry no classifier modules; the embeddings block names the
+# deployment that embeds for the shared machinery).
+CLASSIFICATION = {"embeddings": {"default": {"deployment": "primary"}}}
 
 # The dev split the Y2 label-agreement check observes.
 DEV_PAYLOAD = (
@@ -226,7 +220,7 @@ def _golden_scaffold() -> dict:
     the scaffold's pure-accuracy LARGE to SMALL.
     """
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [],
         "providers": {
             "defaults": {"model": LARGE, "reasoning_effort": "medium"},
@@ -356,7 +350,7 @@ def test_complete_candidate_golden(tmp_path):
 
     # Decisions grouped by first place, priorities by calib traffic share
     # (business+other=50 beats math=40), fallback last.
-    decisions = config["routing"]["decisions"]
+    decisions = config["recipes"][0]["decisions"]
     assert [d["name"] for d in decisions] == [
         "route-mock-small",
         "route-mock-large",
@@ -406,6 +400,10 @@ def test_complete_candidate_golden(tmp_path):
     assert models[LARGE]["backend_refs"][0]["endpoint"] == "127.0.0.1:8002"
     assert models[SMALL]["pricing"] == {"prompt_per_1m": 0.1, "completion_per_1m": 0.4}
     assert "pricing" not in models[LARGE]
+    # The scaffold's model cards merge onto their providers.models[] entries
+    # (the modality keyword is a removed form and stays out).
+    assert models[SMALL]["capabilities"] == ["chat"]
+    assert "modality" not in models[LARGE]
 
     # Listeners, entrypoints and the Y2 shared classification catalog merge.
     assert config["listeners"] == [
@@ -423,14 +421,9 @@ def test_complete_candidate_golden(tmp_path):
     }
     assert catalog["system"] == {"decision_model": {"deployment": "primary"}}
     assert catalog["embeddings"] == CLASSIFICATION["embeddings"]
-    assert catalog["modules"] == CLASSIFICATION["modules"]
 
-    # Cache and tools are disabled for evaluation.
-    assert config["global"]["stores"]["response_cache"] == {
-        "enabled": False,
-        "backend_type": "memory",
-    }
-    assert config["global"]["integrations"]["tools"] == {"enabled": False}
+    # Cache and tools run on their plugin-based v0.5 defaults.
+    assert config["global"]["stores"]["response_cache"] == {"backend_type": "memory"}
     assert selection["disabled"]["response_cache"]
     assert selection["disabled"]["tools"]
 
@@ -525,17 +518,18 @@ def test_bootstrap_runs_real_result_to_config(tmp_path):
 
     # C5: decisions per first-place group (+ fallback), traffic order.
     candidate0 = _load_candidate(out, 0)
-    names0 = [d["name"] for d in candidate0["routing"]["decisions"]]
+    names0 = [d["name"] for d in candidate0["recipes"][0]["decisions"]]
     assert names0 == ["route-mock-large", "route-mock-small", FALLBACK_DECISION_NAME]
     candidate1 = _load_candidate(out, 1)
-    names1 = [d["name"] for d in candidate1["routing"]["decisions"]]
+    names1 = [d["name"] for d in candidate1["recipes"][0]["decisions"]]
     assert names1 == ["route-mock-small", "route-mock-large", FALLBACK_DECISION_NAME]
     # lambda-adjusted mean default (large wins under both lambdas here).
     assert candidate1["providers"]["defaults"]["model"] == LARGE
 
-    # Cache/tools off; endpoints and pricing from the contract.
-    assert candidate1["global"]["stores"]["response_cache"]["enabled"] is False
-    assert candidate1["global"]["integrations"]["tools"] == {"enabled": False}
+    # Cache/tools on their plugin-based defaults; endpoints from the contract.
+    assert candidate1["global"]["stores"]["response_cache"] == {
+        "backend_type": "memory"
+    }
     refs = {
         m["name"]: m["backend_refs"][0]["endpoint"]
         for m in candidate1["providers"]["models"]
@@ -545,10 +539,9 @@ def test_bootstrap_runs_real_result_to_config(tmp_path):
     assert pricing[SMALL] == {"prompt_per_1m": 0.1, "completion_per_1m": 0.4}
     assert pricing[LARGE] == {"prompt_per_1m": 0.1, "completion_per_1m": 0.4}
     # Y2: the candidate classifies with the shared source's sections, not the
-    # scaffold's canonical_modules copies.
+    # scaffold's own catalog copies.
     catalog1 = candidate1["global"]["model_catalog"]
     assert catalog1["embeddings"] == CLASSIFICATION["embeddings"]
-    assert catalog1["modules"] == CLASSIFICATION["modules"]
     assert catalog1["system"] == {"decision_model": {"deployment": "primary"}}
 
     # Sidecar: proposer, lambda, per-label table, hashes, command.
