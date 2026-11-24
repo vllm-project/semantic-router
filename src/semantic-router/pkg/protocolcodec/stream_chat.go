@@ -994,7 +994,7 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	if decoder.deferredToolCompletion {
+	if decoder.deferredToolCompletion && !decoder.terminal {
 		// A finish reason without the terminal sentinel is not confirmation
 		// that the response completed; do not repair a held empty call.
 		failure := streamFinalizationError(reason, "upstream stream ended before completion")

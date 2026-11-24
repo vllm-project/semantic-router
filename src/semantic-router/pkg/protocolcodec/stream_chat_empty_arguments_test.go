@@ -226,6 +226,64 @@ func TestChatResponsesNullArgumentPlaceholder(t *testing.T) {
 	}
 }
 
+func TestChatResponsesDeferredToolCompletionUpstreamError(t *testing.T) {
+	for _, split := range []bool{false, true} {
+		for _, flushAtEOF := range []bool{false, true} {
+			t.Run(fmt.Sprintf("split=%t/flushAtEOF=%t", split, flushAtEOF), func(t *testing.T) {
+				stream, err := engineWithRequestOutputLimit(t, 3).NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1, llmprotocol.StreamContext{Context: t.Context()})
+				if err != nil {
+					t.Fatal(err)
+				}
+				decoder := stream.decoder.(*chatStreamDecoder)
+				chunks := emptyArgumentsChatStream(nil, "tool_calls", false, 2)
+				chunks = chunks[:len(chunks)-2] // finish_reason, but no usage or [DONE]
+				chunks = append(chunks, "data: {\"error\":{\"type\":\"server_error\",\"code\":\"provider_failure\",\"message\":\"original upstream failure\"}}\n\n")
+				if flushAtEOF {
+					chunks[len(chunks)-1] = strings.TrimRight(chunks[len(chunks)-1], "\n")
+				}
+				if split {
+					chunks = splitGoldenChunksByByte(chunks)
+				}
+				var frames [][]byte
+				var events []llmprotocol.Event
+				for _, chunk := range chunks {
+					output, decoded, _, pushErr := stream.Push([]byte(chunk))
+					if pushErr != nil {
+						t.Fatal(pushErr)
+					}
+					frames = append(frames, output...)
+					events = append(events, decoded...)
+				}
+				if !decoder.deferredToolCompletion {
+					t.Fatal("test did not exercise deferred tool completion")
+				}
+				final, decoded, _, finalErr := stream.Finalize(nil)
+				if finalErr != nil {
+					t.Fatalf("EOF after upstream error: %v", finalErr)
+				}
+				frames = append(frames, final...)
+				events = append(events, decoded...)
+				failures := 0
+				for _, event := range events {
+					if event.Type == llmprotocol.EventResponseFailed {
+						failures++
+						if event.Error == nil || event.Error.Code != "provider_failure" || event.Error.Message != "original upstream failure" {
+							t.Fatalf("original error changed: %+v", event.Error)
+						}
+					}
+				}
+				body := string(bytes.Join(frames, nil))
+				if failures != 1 || strings.Count(body, `"type":"error"`) != 1 || strings.Contains(body, `"type":"response.completed"`) || strings.Contains(body, "stream_terminal") {
+					t.Fatalf("upstream error not handled exactly once: failures=%d body=%s", failures, body)
+				}
+				if remaining, _, finalizeErr := decoder.Finalize(nil); finalizeErr != nil || len(remaining) != 0 {
+					t.Fatalf("terminal decoder did not finalize cleanly: events=%v err=%v", remaining, finalizeErr)
+				}
+			})
+		}
+	}
+}
+
 func TestChatResponsesEmptyArgumentsBoundaries(t *testing.T) {
 	for name, arguments := range map[string][]string{"null": {"null"}, "array": {"[]"}, "scalar": {"1"}, "malformed": {"{bad}"}, "cut object": {`{"q":`}} {
 		t.Run(name, func(t *testing.T) {
