@@ -109167,6 +109167,22 @@ const builtInCatalogJSON = `{
     },
     {
       "capabilities": [
+        "speech_generation"
+      ],
+      "default_base_path": "/v1",
+      "display_name": "OpenAI Speech",
+      "id": "openai/audio-speech@1",
+      "operations": [
+        {
+          "id": "create",
+          "method": "POST",
+          "path": "/v1/audio/speech"
+        }
+      ],
+      "wire_format": "openai.speech.v1"
+    },
+    {
+      "capabilities": [
         "chat",
         "streaming",
         "tools",
@@ -113430,6 +113446,34 @@ const builtInCatalogJSON = `{
       "support_tier": "native",
       "supported_operations": [
         "openai/chat-completions@1#create"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "private_runtime",
+      "conformance": {
+        "status": "fixture_verified",
+        "verified_at": "2026-11-17"
+      },
+      "default_protocol": "openai/audio-speech@1",
+      "description": "Connect a private vLLM-Omni endpoint. vLLM-Omni serves text-to-speech on POST /v1/audio/speech. Plain vLLM does not, so this protocol is not listed on the vllm provider.",
+      "display_name": "vLLM-Omni",
+      "id": "vllm-omni",
+      "presentation": {
+        "logo": "package:vllm",
+        "monochrome": false,
+        "monogram": "O"
+      },
+      "protocols": [
+        "openai/audio-speech@1"
+      ],
+      "support_tier": "runtime",
+      "supported_operations": [
+        "openai/audio-speech@1#create"
       ]
     },
     {
