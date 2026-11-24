@@ -5,16 +5,24 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
-from cli import local_stack_config, runtime_service_status
+from cli import (
+    container_backend,
+    core,
+    local_stack_config,
+    runtime_lifecycle,
+    runtime_service_status,
+)
 from cli.commands import config_management
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
-from cli.pending_activation import ORIGIN_CLI, read_pending_activation
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation, record_file
 from cli.router_management_client import RouterManagementError, RouterResponse
 from cli.runtime_stack import resolve_runtime_stack
 from click.testing import CliRunner
@@ -491,6 +499,103 @@ def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):
     # serve of the same file finds the document it would write, so it applies it.
     receipt = runtime_config.with_suffix(".provenance.json")
     assert receipt.is_file()
+
+
+@pytest.mark.parametrize(
+    ("outcome", "start_calls", "readiness_calls"),
+    [("host-port", 0, 0), ("start", 1, 0), ("readiness", 1, 1), ("success", 1, 1)],
+)
+def test_serve_clears_staged_restart_only_after_readiness(
+    monkeypatch, stack, tmp_path, caplog, outcome, start_calls, readiness_calls
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-pending-restart")
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "500")
+    stack = replace(stack, layout=resolve_runtime_stack())
+    source = tmp_path / "config.yaml"
+    document = yaml.safe_load(SOURCE)
+    document["listeners"][0].update(
+        name="public", port=65100 if outcome == "host-port" else MOVED_PORT
+    )
+    document["global"] = {
+        "services": {"observability": {"tracing": {"enabled": False}}}
+    }
+    source.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    reason = "listeners[public].port changes"
+    runtime_config = save_pending_restart(stack, source, reason)
+    pending_file = record_file(runtime_config)
+    pending_bytes = pending_file.read_bytes()
+    staged_bytes = runtime_config.read_bytes()
+
+    start = Mock(
+        return_value=(
+            (1, "", "port already allocated") if outcome == "start" else (0, "", "")
+        )
+    )
+    ready = Mock(side_effect=SystemExit(1) if outcome == "readiness" else None)
+    monkeypatch.setattr(container_backend, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_backend, "acquire_runtime_lifecycle_lock", lambda **_: nullcontext()
+    )
+    monkeypatch.setattr(container_backend, "attach_controller", lambda *_: None)
+    monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _: None)
+    monkeypatch.setattr(
+        core, "_prepare_runtime_network", lambda *a, **k: ("net", str(tmp_path))
+    )
+    monkeypatch.setattr(core, "_start_support_services", lambda *a, **k: (set(), "net"))
+    monkeypatch.setattr(core, "container_start_vllm_sr", start)
+    monkeypatch.setattr(core, "connect_runtime_container", lambda *_: None)
+    monkeypatch.setattr(runtime_lifecycle, "wait_for_router_health", ready)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda *a, **k: "running"
+    )
+    monkeypatch.setattr(core, "container_status", lambda _: "running")
+    monkeypatch.setattr(
+        core,
+        "inspect_container_mounts",
+        lambda _: [{"Source": str(stack.state_dir), "Destination": "/app/.vllm-sr"}],
+    )
+    monkeypatch.setattr(core, "report_service_status", lambda *_: None)
+
+    runner = CliRunner()
+    status_args = ["status", "router", "--target", "docker"]
+    before = runner.invoke(main, status_args)
+    assert before.exit_code == 0, before.output
+    assert "Restart required" in before.output and reason in before.output
+
+    result = runner.invoke(
+        main,
+        [
+            "serve",
+            "--target",
+            "docker",
+            "--gateway",
+            "standalone",
+            "--config",
+            str(source),
+        ],
+    )
+    succeeded = outcome == "success"
+    assert result.exit_code == (0 if succeeded else 1), result.output
+    assert start.call_count == start_calls
+    assert ready.call_count == readiness_calls
+    if outcome == "host-port":
+        assert "invalid listener public host port 65600" in caplog.text
+    if start_calls:
+        assert Path(start.call_args.kwargs["runtime_config_file"]) == runtime_config
+    assert runtime_config.read_bytes() == staged_bytes
+
+    after = runner.invoke(main, status_args)
+    assert after.exit_code == 0, after.output
+    if succeeded:
+        assert not pending_file.exists()
+        assert "Restart required" not in after.output
+    else:
+        assert (
+            pending_file.is_file()
+        ), "failed serve discarded the pending restart record"
+        assert pending_file.read_bytes() == pending_bytes
+        assert "Restart required" in after.output and reason in after.output
 
 
 @pytest.mark.parametrize("running_port", [8080, 9095])
