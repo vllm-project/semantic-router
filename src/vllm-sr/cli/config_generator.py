@@ -293,7 +293,9 @@ def generate_envoy_config_from_user_config(
             if listener.apis is not None:
                 served = listener.served_apis()
                 gate = {
-                    "served_path_regex": served_path_regex(served),
+                    "served_path_regex": served_path_regex(
+                        served, listener.api_prefixes()
+                    ),
                     "unserved_body": json.dumps(
                         {
                             "detail": f"listener {json.dumps(listener.name)} does not serve "
