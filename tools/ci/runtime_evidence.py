@@ -46,6 +46,7 @@ def models_evidence(directory: Path) -> dict:
             "Model evidence case inventory differs from the required inventory"
         )
     cases, expected = [], []
+    seen_process = set()
     for suite in report["suites"]:
         prefix = suite["package"] + ":"
         expected.extend(prefix + name for name in suite["expected"])
@@ -53,9 +54,13 @@ def models_evidence(directory: Path) -> dict:
             cases.extend(
                 {"id": prefix + name, "status": field} for name in suite[field]
             )
-        # A crashed Go process can lack a terminal test event.
-        if suite["exit_code"] and not suite["failed"]:
-            cases.append({"id": prefix + "process", "status": "failed"})
+        if suite["exit_code"] and (
+            not suite["failed"] or suite.get("package_failed", False)
+        ):
+            process_id = prefix + "process"
+            if process_id not in seen_process:
+                seen_process.add(process_id)
+                cases.append({"id": process_id, "status": "failed"})
     return {
         "runtime": "model-runtime",
         "device": "cpu",
@@ -63,6 +68,7 @@ def models_evidence(directory: Path) -> dict:
         "models": report["models"],
         "cases": cases,
         "expected_cases": expected,
+        "discovered_cases": [case["id"] for case in cases],
     }
 
 
