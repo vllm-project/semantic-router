@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -517,9 +518,24 @@ func (state *semanticResponseStreamState) delivered() bool {
 	return state != nil && state.failed == nil && state.terminal
 }
 
+// streamFailureSummary renders a protocol failure with its diagnostic cause
+// chain. The cause never reaches the client frame, so the Router log can name
+// the evidence — for example the arguments a provider sent when the codec
+// rejected them — while the client keeps the failure it always saw.
+func streamFailureSummary(err *llmprotocol.ProtocolError) string {
+	summary := err.Error()
+	for cause := errors.Unwrap(err); cause != nil; cause = errors.Unwrap(cause) {
+		summary += "; " + cause.Error()
+	}
+	return summary
+}
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if !state.delivered() {
+		if state != nil && state.failed != nil {
+			return nil, fmt.Errorf("semantic stream did not complete successfully: %s", streamFailureSummary(state.failed))
+		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
