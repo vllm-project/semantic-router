@@ -21,6 +21,7 @@ describe('model form backend targets', () => {
       | 'messages'
       | 'images'
       | 'videos'
+      | 'speech'
       | 'systemone'
       | 'openai'
       | 'anthropic'

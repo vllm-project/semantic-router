@@ -169,6 +169,8 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 	case isVideosPath(path):
 		ctx.SourceFormat = llmprotocol.OpenAIVideosV1
 		ctx.videosCreate = normalizeRequestPath(path) == videosCollectionPath
+	case normalizeRequestPath(path) == audioSpeechPath:
+		ctx.SourceFormat = llmprotocol.OpenAISpeechV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}

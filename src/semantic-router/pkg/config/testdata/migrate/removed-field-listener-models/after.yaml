@@ -10,6 +10,7 @@ listeners:
       messages: {models: [vllm-sr/auto]}
       images: {models: [vllm-sr/auto]}
       videos: {models: [vllm-sr/auto]}
+      speech: {models: [vllm-sr/auto]}
 providers:
   defaults: {model: m}
   models:

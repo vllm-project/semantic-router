@@ -911,6 +911,7 @@
             "messages",
             "images",
             "videos",
+            "speech",
             "systemone",
             "openai",
             "anthropic"
@@ -3475,6 +3476,7 @@
               "messages",
               "images",
               "videos",
+              "speech",
               "systemone",
               "openai",
               "anthropic"
@@ -6667,6 +6669,17 @@
           "oneOf": [
             {
               "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_estimated_cost": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
             },
             {
               "type": "null"

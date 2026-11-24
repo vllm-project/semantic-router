@@ -70,6 +70,10 @@ const (
 	// CapabilityServerTools covers tools the provider runs or defines itself
 	// and the blocks they leave in a reply, such as Anthropic's web search.
 	CapabilityServerTools
+	// CapabilitySpeechGeneration covers the Speech API text-to-speech
+	// operation (POST /v1/audio/speech). It is not interchangeable with
+	// audio input or audio output.
+	CapabilitySpeechGeneration
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -100,7 +104,7 @@ func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 // modality, so model capability declarations are compared against this mask.
 var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
 	CapabilityVideoGeneration |
-	CapabilityAudioInput | CapabilityAudioOutput |
+	CapabilityAudioInput | CapabilityAudioOutput | CapabilitySpeechGeneration |
 	CapabilityVideoInput | CapabilityVideoOutput |
 	CapabilityFileInput | CapabilityFileOutput
 
@@ -163,6 +167,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
 		{CapabilityDeveloperRole, "developer_role"},
 		{CapabilityServerTools, "server_tools"},
+		{CapabilitySpeechGeneration, "speech_generation"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -184,6 +189,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 	}
 	if request.VideoGeneration != nil {
 		required.bits |= CapabilityVideoGeneration
+	}
+	if request.SpeechGeneration != nil {
+		required.bits |= CapabilitySpeechGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
@@ -553,6 +561,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
 		"video_generation":      CapabilityVideoGeneration,
+		"speech_generation":     CapabilitySpeechGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,

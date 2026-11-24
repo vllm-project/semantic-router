@@ -2,7 +2,6 @@ package classification
 
 import (
 	"context"
-	"strings"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -85,9 +84,7 @@ func (c *Classifier) buildApplicationSignalDispatchers(input SignalEvaluationInp
 	guard.history = safetyPriorUserMessages(input.PriorUserMessages, facts.RoutingInput)
 	jailbreak := guard
 	if guardInput := facts.JailbreakInput; guardInput != nil {
-		jailbreak.request = strings.Join(jailbreakInputTexts(guardInput.Current, "user"), "\n\n")
-		jailbreak.history = jailbreakInputTexts(guardInput.History, "user")
-		jailbreak.toolResults = jailbreakInputTexts(guardInput.Current, "tool")
+		jailbreak = guard.withJailbreakInput(guardInput)
 	}
 	dispatch := func(signalType, name string, reading systemOneReading) signalDispatch {
 		return signalDispatch{signalType, name, func(ctx context.Context) {

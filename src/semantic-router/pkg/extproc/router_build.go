@@ -83,6 +83,7 @@ func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
 		return nil, err
 	}
 
+	router.commitReplayFileRetention()
 	config.Replace(cfg)
 	publishRouterLearningStateStore(router)
 	logLoadedRouterConfig(configPath, cfg)

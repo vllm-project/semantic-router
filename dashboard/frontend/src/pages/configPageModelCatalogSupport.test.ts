@@ -70,6 +70,7 @@ describe('effective model API format', () => {
       'messages',
       'images',
       'videos',
+      'speech',
       'systemone',
     ])
   })
@@ -125,9 +126,18 @@ describe('effective model API format', () => {
     expect(effectiveModelAPIFormat({ ...model, backend_refs: [] }, catalog).error).toMatch(
       /backend/,
     )
-    expect(effectiveModelAPIFormat({ ...model, api_format: 'speech' }, catalog).error).toMatch(
-      /Unsupported/,
-    )
+    expect(
+      effectiveModelAPIFormat({ ...model, api_format: 'not-an-api' as 'speech' }, catalog).error,
+    ).toMatch(/Unsupported/)
+    expect(
+      effectiveModelAPIFormat({ ...model, api_format: 'speech' }, fixture([chat])).error,
+    ).toMatch(/cannot create/)
+    const speaking = fixture(['openai/audio-speech@1'])
+    speaking.providers[0].protocols = ['openai/audio-speech@1']
+    speaking.providers[0].supported_operations = ['openai/audio-speech@1#create']
+    expect(effectiveModelAPIFormat({ ...model, api_format: 'speech' }, speaking)).toEqual({
+      format: 'speech',
+    })
     const noCreate = fixture([chat])
     noCreate.providers[0].supported_operations = []
     expect(effectiveModelAPIFormat(model, noCreate).error).toMatch(/cannot create/)

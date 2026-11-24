@@ -51,6 +51,9 @@ const (
 	APIFormatImages = string(apiregistry.Images)
 	// APIFormatVideos selects the OpenAI Videos job dialect (/v1/videos).
 	APIFormatVideos = string(apiregistry.Videos)
+	// APIFormatSpeech selects the OpenAI Speech API dialect
+	// (POST /v1/audio/speech) served by TTS backends such as vLLM-Omni.
+	APIFormatSpeech = string(apiregistry.Speech)
 	// APIFormatOpenAI and APIFormatAnthropic are aliases of
 	// APIFormatChatCompletions and APIFormatMessages.
 	APIFormatOpenAI    = "openai"
@@ -244,8 +247,8 @@ type Listener struct {
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,
-	// responses, messages and images with their default schemas, and not
-	// systemone.
+	// responses, messages, images and speech with their default schemas, and
+	// not systemone.
 	APIs ListenerAPIs `yaml:"apis,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`

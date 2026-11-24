@@ -33,7 +33,9 @@ func replayRuntimeRouter(t *testing.T, cfg *config.RouterConfig) *OpenAIRouter {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = closeReplayRecorders(fallback, recorders, shared) })
-	return &OpenAIRouter{Config: cfg, ReplayRecorders: recorders, ReplayRecorder: fallback, ReplayStoreShared: shared}
+	router := &OpenAIRouter{Config: cfg, ReplayRecorders: recorders, ReplayRecorder: fallback, ReplayStoreShared: shared}
+	router.commitReplayFileRetention()
+	return router
 }
 
 func replayDecision(values map[string]interface{}) *config.Decision {

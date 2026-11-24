@@ -154,7 +154,14 @@ export interface SafetySignal {
 // LISTENERS - Network configuration
 // =============================================================================
 
-export type APIName = 'chat_completions' | 'responses' | 'messages' | 'images' | 'videos' | 'systemone'
+export type APIName =
+  | 'chat_completions'
+  | 'responses'
+  | 'messages'
+  | 'images'
+  | 'videos'
+  | 'speech'
+  | 'systemone'
 export type APIAlias = 'openai' | 'anthropic'
 
 // One API a listener serves: its schema (systemone only), the models it

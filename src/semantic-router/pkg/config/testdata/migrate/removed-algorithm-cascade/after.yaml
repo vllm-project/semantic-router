@@ -11,6 +11,7 @@ listeners:
       messages: {}
       images: {}
       videos: {}
+      speech: {}
       systemone:
         schema: vllm-sr/4.0
         models: [vllm-sr/auto]

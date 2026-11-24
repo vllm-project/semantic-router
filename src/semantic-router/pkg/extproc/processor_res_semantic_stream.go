@@ -120,15 +120,14 @@ type semanticStreamBuffers struct {
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
-		return
-	}
 	if ctx.PublicChatUsageFilter != nil {
+		// An empty final read still marks the boundary for a codec failure
+		// discovered while finalizing an unterminated frame.
 		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
 		buffers.public = append(buffers.public, filtered...)
 		buffers.recordError(ctx, err, true)
 	}
-	if ctx.ProtocolResponseStream != nil {
+	if len(responseBody) != 0 && ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		if frame := failureFrame(frames, events); frame != nil {

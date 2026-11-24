@@ -45,7 +45,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 
-	// ServiceAccount configuration
+	// ServiceAccount configuration. When omitted it defaults to an empty object,
+	// so create still takes its default.
+	// +kubebuilder:default={}
 	// +optional
 	ServiceAccount ServiceAccountSpec `json:"serviceAccount,omitempty"`
 
@@ -57,7 +59,10 @@ type SemanticRouterSpec struct {
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
-	// Persistence configuration
+	// Persistence configuration. When omitted it defaults to an empty object,
+	// so enabled, storageClassName, accessMode and size still take their
+	// defaults.
+	// +kubebuilder:default={}
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
@@ -450,7 +455,7 @@ type StreamedBodyConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=10485760
 	// +optional
-	MaxBytes int64 `json:"max_bytes,omitempty"`
+	MaxBytes *int64 `json:"max_bytes,omitempty"`
 
 	// TimeoutSec caps how long body accumulation may take. A slower body is
 	// rejected and the ExtProc stream ends; the downstream response follows the
@@ -467,7 +472,7 @@ type SemanticCacheConfig struct {
 	// it turns the decisions' response_cache plugins off.
 	// +kubebuilder:default=true
 	// +optional
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 
 	// BackendType specifies the cache backend to use
 	// Options: "memory" (default), "redis", "valkey", "milvus", "qdrant", "hybrid"
@@ -486,12 +491,12 @@ type SemanticCacheConfig struct {
 	// MaxEntries is the maximum number of cache entries (for memory/hybrid backends)
 	// +kubebuilder:default=1000
 	// +optional
-	MaxEntries int `json:"max_entries,omitempty"`
+	MaxEntries *int `json:"max_entries,omitempty"`
 
 	// TTLSeconds is the time-to-live for cache entries in seconds
 	// +kubebuilder:default=3600
 	// +optional
-	TTLSeconds int `json:"ttl_seconds,omitempty"`
+	TTLSeconds *int `json:"ttl_seconds,omitempty"`
 
 	// EvictionPolicy for in-memory cache ("fifo", "lru", "lfu")
 	// +kubebuilder:default="fifo"
@@ -584,7 +589,7 @@ type RedisCacheConnection struct {
 	// +kubebuilder:default=30
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	Timeout int `json:"timeout,omitempty"`
+	Timeout *int `json:"timeout,omitempty"`
 
 	// TLS configuration for secure Redis connections
 	// +optional
@@ -696,7 +701,7 @@ type RedisCacheDevelopment struct {
 	// AutoCreateIndex automatically creates the index if it doesn't exist
 	// +kubebuilder:default=true
 	// +optional
-	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
+	AutoCreateIndex *bool `json:"auto_create_index,omitempty"`
 }
 
 // ValkeyCacheConfig defines Valkey cache backend configuration.
@@ -752,7 +757,7 @@ type ValkeyCacheConnection struct {
 	// +kubebuilder:default=30
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	Timeout int `json:"timeout,omitempty"`
+	Timeout *int `json:"timeout,omitempty"`
 
 	// TLS configuration for secure Valkey connections
 	// +optional
@@ -864,7 +869,7 @@ type ValkeyCacheDevelopment struct {
 	// AutoCreateIndex automatically creates the index if it doesn't exist
 	// +kubebuilder:default=true
 	// +optional
-	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
+	AutoCreateIndex *bool `json:"auto_create_index,omitempty"`
 }
 
 // MilvusCacheConfig defines Milvus cache backend configuration.
@@ -918,7 +923,7 @@ type QdrantCacheConfig struct {
 	// ConnectTimeout is the timeout in seconds for Qdrant connection
 	// +kubebuilder:default=10
 	// +optional
-	ConnectTimeout int `json:"connect_timeout,omitempty"`
+	ConnectTimeout *int `json:"connect_timeout,omitempty"`
 }
 
 // MilvusCacheConnection defines Milvus connection parameters.
@@ -943,7 +948,7 @@ type MilvusCacheConnection struct {
 	// +kubebuilder:default=30
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	Timeout int `json:"timeout,omitempty"`
+	Timeout *int `json:"timeout,omitempty"`
 
 	// Auth configuration for Milvus authentication
 	// +optional
@@ -1103,7 +1108,7 @@ type MilvusCacheDevelopment struct {
 	// AutoCreateCollection automatically creates the collection if it doesn't exist
 	// +kubebuilder:default=true
 	// +optional
-	AutoCreateCollection bool `json:"auto_create_collection,omitempty"`
+	AutoCreateCollection *bool `json:"auto_create_collection,omitempty"`
 }
 
 // HNSWCacheConfig defines HNSW index configuration for hybrid/in-memory backends.
@@ -1129,7 +1134,7 @@ type HNSWCacheConfig struct {
 	// +kubebuilder:default=1000
 	// +kubebuilder:validation:Minimum=0
 	// +optional
-	MaxMemoryEntries int `json:"max_memory_entries,omitempty"`
+	MaxMemoryEntries *int `json:"max_memory_entries,omitempty"`
 }
 
 // EmbeddingBinding names the deployment that embeds a store's vectors, and
@@ -1440,7 +1445,7 @@ type APIConfig struct {
 type BatchClassificationConfig struct {
 	// +kubebuilder:default=100
 	// +optional
-	MaxBatchSize int `json:"max_batch_size,omitempty"`
+	MaxBatchSize *int `json:"max_batch_size,omitempty"`
 	// +optional
 	Metrics *BatchMetricsConfig `json:"metrics,omitempty"`
 }
@@ -1449,10 +1454,10 @@ type BatchClassificationConfig struct {
 type BatchMetricsConfig struct {
 	// +kubebuilder:default=true
 	// +optional
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled *bool `json:"enabled,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
-	DetailedGoroutineTracking bool `json:"detailed_goroutine_tracking,omitempty"`
+	DetailedGoroutineTracking *bool `json:"detailed_goroutine_tracking,omitempty"`
 	// +kubebuilder:default=false
 	// +optional
 	HighResolutionTiming bool `json:"high_resolution_timing,omitempty"`
@@ -1501,7 +1506,7 @@ type ExporterConfig struct {
 	Endpoint string `json:"endpoint,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
-	Insecure bool `json:"insecure,omitempty"`
+	Insecure *bool `json:"insecure,omitempty"`
 }
 
 // SamplingConfig defines sampling configuration
@@ -1704,7 +1709,7 @@ type VLLMEndpointSpec struct {
 	// Weight for load balancing (default: 1)
 	// +optional
 	// +kubebuilder:default=1
-	Weight int `json:"weight,omitempty"`
+	Weight *int `json:"weight,omitempty"`
 }
 
 // ModelReasoningSpec selects a catalog reasoning family or defines the request
