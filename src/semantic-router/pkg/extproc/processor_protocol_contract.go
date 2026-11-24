@@ -123,6 +123,7 @@ func (r *OpenAIRouter) protocolEngineForReply(vendor llmprotocol.ResponseVendor,
 	}
 	if r.Config != nil {
 		policy.AllowedLossyFields = r.Config.AllowLossyTranslation
+		policy.AllowedRequestExtensions = r.Config.AllowRequestExtensionFields
 	}
 	return protocolcodec.NewEngine(registry, policy)
 }
@@ -157,6 +158,11 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	}
 	if err != nil {
 		return nil, r.ingressDecodeErrorResponse(ctx, err)
+	}
+	// Admission takes the model decoding parsed, which routing uses too,
+	// before any observer, stored object or session reads the request.
+	if refused := r.clientAdmissionRefusal(ctx, request.Model); refused != nil {
+		return nil, refused
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
 	request.Trusted.CorrelationID = ctx.RequestID
@@ -444,6 +450,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "anthropic/messages@1"
 	case llmprotocol.OpenAIImagesV1:
 		return "openai/images@1"
+	case llmprotocol.OpenAISpeechV1:
+		return "openai/audio-speech@1"
 	default:
 		return "openai/chat-completions@1"
 	}

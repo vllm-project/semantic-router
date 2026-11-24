@@ -4,15 +4,17 @@ import copy
 import hashlib
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from manual_ci import ManualCIError
+from manual_ci import MERGIFY_BOT_ID, ManualCIError
 from pr_ci_status import (
     APP_ID,
     CAPABILITIES,
@@ -47,6 +49,7 @@ class Client:
         self.pull = {
             "number": 3,
             "state": "open",
+            "draft": False,
             "merge_commit_sha": MERGE,
             "head": {
                 "sha": HEAD,
@@ -57,6 +60,7 @@ class Client:
         }
         self.plan = {
             "schema_version": 1,
+            "draft": False,
             "source_sha": MERGE,
             "base_sha": BASE,
             "expected_verification_ids": ["quality"],
@@ -69,6 +73,8 @@ class Client:
             for name in ["CI / Gate", "CI Execution", "Quality"]
         ]
         self.checks, self.comments, self.writes = [], [], []
+        self.commit_statuses = []
+        self.status_writes = []
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
@@ -93,7 +99,7 @@ class Client:
             ]
         }
         self.report.update(
-            run_id=101,
+            run_id=self.run["id"],
             run_attempt=self.run["run_attempt"],
             errors=[],
             status=(
@@ -107,6 +113,7 @@ class Client:
         prefix = f"repos/{REPO}/"
         self.assert_prefix(endpoint, prefix)
         path = endpoint[len(prefix) :]
+        run_path = f"actions/runs/{self.run['id']}"
         if path == "git/ref/heads/main":
             return {
                 "ref": "refs/heads/main",
@@ -116,7 +123,7 @@ class Client:
             if self.compare_error is not None:
                 raise self.compare_error
             return {"merge_base_commit": {"sha": self.base_ancestor}}
-        if path == "actions/runs/101":
+        if path == run_path:
             return copy.deepcopy(self.run)
         if path == "actions/workflows/pr.yml":
             return {"id": 2}
@@ -125,10 +132,20 @@ class Client:
             if self.newer_run:
                 runs.append({**self.run, "id": 102})
             return {"workflow_runs": runs}
-        if path.startswith("pulls?state=open&base=main&head=contributor%3Afeature"):
+        source_owner = self.run["head_repository"]["full_name"].split("/")[0]
+        pull_query = urlencode(
+            {
+                "state": "open",
+                "base": "main",
+                "head": f"{source_owner}:{self.run['head_branch']}",
+            }
+        )
+        if path.startswith(f"pulls?{pull_query}"):
             return [copy.deepcopy(self.pull)]
         if path == "pulls/3":
             return copy.deepcopy(self.pull)
+        if path.startswith(f"commits/{HEAD}/statuses?"):
+            return copy.deepcopy(self.commit_statuses)
         if path.startswith("check-runs/"):
             identity = int(path.rsplit("/", 1)[1])
             return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
@@ -142,7 +159,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             return {"check_runs": copy.deepcopy(checks)}
-        if path.startswith("actions/runs/101/attempts/"):
+        if path.startswith(f"{run_path}/attempts/"):
             return {
                 "jobs": [
                     copy.deepcopy(item)
@@ -151,7 +168,7 @@ class Client:
                     == self.run["run_attempt"]
                 ]
             }
-        if path.startswith("actions/runs/101/artifacts?"):
+        if path.startswith(f"{run_path}/artifacts?"):
             gate = "name=ci-gate" in path
             if gate and self.missing_report:
                 return {"artifacts": []}
@@ -195,6 +212,15 @@ class Client:
         return buffer.getvalue()
 
     def write(self, endpoint, payload, **kwargs):
+        if endpoint == f"repos/{REPO}/statuses/{HEAD}":
+            self.status_writes.append(payload)
+            status = {
+                **payload,
+                "id": 70 + len(self.commit_statuses),
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+            self.commit_statuses.insert(0, status)
+            return copy.deepcopy(status)
         self.writes.append((endpoint, payload, kwargs))
         if endpoint.endswith("/check-runs"):
             check = {
@@ -222,6 +248,188 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_commit_status_uses_the_current_qualification_verdict(self):
+        for case, expected in (
+            ("waiting", "pending"),
+            ("partial", "pending"),
+            ("failure", "failure"),
+            ("success", "success"),
+        ):
+            with self.subTest(case=case):
+                client = Client()
+                if case != "waiting":
+                    client.run["run_attempt"] = 2
+                if case == "partial":
+                    client.plan["expected_verification_ids"].append("local.cli")
+                    client.plan["required_verification_ids"].append("local.cli")
+                if case == "failure":
+                    client.run["conclusion"] = "failure"
+                if case == "success":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                self.assertEqual(result["check"]["name"], "PR Gate")
+                self.assertEqual(result["check"].get("conclusion", "pending"), expected)
+                self.assertEqual(len(client.status_writes), 1)
+                status = client.status_writes[0]
+                self.assertEqual(status["context"], "PR Qualification")
+                self.assertEqual(status["state"], expected)
+                self.assertEqual(
+                    status["target_url"],
+                    f"https://github.com/{REPO}/actions/runs/101/attempts/{client.run['run_attempt']}",
+                )
+
+    def test_reconciliation_preserves_legacy_checks_and_reuses_the_commit_status(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for _ in range(2):
+            reconcile(client, REPO, 101)
+        self.assertEqual(len(client.checks), 1)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.checks[0]["conclusion"], "success")
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.status_writes[0]["context"], "PR Qualification")
+
+    def test_commit_status_ignores_a_superseded_attempt_before_publishing(self):
+        class ConcurrentRerun(Client):
+            def request(self, endpoint, **kwargs):
+                if endpoint.startswith(f"repos/{REPO}/commits/{HEAD}/statuses?"):
+                    self.run["run_attempt"] = 2
+                return super().request(endpoint, **kwargs)
+
+        client = ConcurrentRerun()
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+    def test_commit_status_waits_for_the_attempt_named_in_the_pending_fence(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        client.commit_statuses = [
+            {
+                "context": "PR Qualification",
+                "state": "pending",
+                "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/2",
+                "description": "Waiting for authorized CI rerun",
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+        ]
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes, [])
+
+        client.run["run_attempt"] = 2
+        client.refresh_report()
+        reconcile(client, REPO, 101)
+        statuses = [payload["state"] for payload in client.status_writes]
+        self.assertEqual(statuses, ["success"])
+
+    def test_commit_status_timeout_preserves_legacy_gate_and_guidance(self):
+        class StatusTimeout(Client):
+            def write(self, endpoint, payload, **kwargs):
+                if "/statuses/" in endpoint:
+                    raise subprocess.TimeoutExpired(["gh", "api"], 20)
+                return super().write(endpoint, payload, **kwargs)
+
+        client = StatusTimeout()
+        result = reconcile(client, REPO, 101)
+        self.assertIn("qualification_status_error", result)
+        self.assertEqual(client.checks[0]["name"], "PR Gate")
+        self.assertEqual(client.writes[-1][0], f"repos/{REPO}/issues/3/comments")
+
+    def test_draft_receipt_cannot_qualify_the_same_head_after_ready(self):
+        client = Client()
+        ready_plan = client.plan.copy()
+        client.plan.update(
+            draft=True,
+            expected_verification_ids=[],
+            required_verification_ids=[],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        for draft in (True, False):
+            with self.subTest(draft=draft):
+                client.pull["draft"] = draft
+                self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+                self.assertEqual(client.writes, [])
+
+        client.run["id"] = 102  # ready_for_review run on the same head and base.
+        client.plan = ready_plan
+        client.refresh_report()
+        waiting = reconcile(client, REPO, 102)
+        self.assertEqual(waiting["state"], "awaiting-approval")
+        self.assertEqual(waiting["check"]["status"], "in_progress")
+        self.assertIn("/ci run", waiting["comment"])
+
+        client.run["run_attempt"] = 2  # Completed attempt after authorized /ci run.
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        green = reconcile(client, REPO, 102)["check"]
+        self.assertEqual(green["external_id"], f"{PREFIX}3:102:2")
+        self.assertEqual(green["head_sha"], HEAD)
+        self.assertEqual(green["conclusion"], "success")
+
+    def test_completed_draft_check_requires_trusted_mergify_identity(self):
+        for author_id in (MERGIFY_BOT_ID, 42):
+            with self.subTest(author_id=author_id):
+                client = Client()
+                ref = "mergify/merge-queue/test"
+                client.run.update(head_branch=ref, head_repository={"full_name": REPO})
+                client.pull["head"].update(ref=ref, repo={"full_name": REPO})
+                client.pull.update(
+                    draft=True,
+                    user={"id": author_id, "login": "mergify[bot]", "type": "Bot"},
+                )
+                client.plan.update(
+                    expected_verification_ids=client.plan["required_verification_ids"],
+                    deferred_verifications=[],
+                    deferred_images=[],
+                )
+                client.refresh_report()
+                result = reconcile(client, REPO, 101)
+                if author_id == MERGIFY_BOT_ID:
+                    self.assertEqual(result["check"]["conclusion"], "success")
+                    self.assertEqual(client.status_writes[0]["state"], "success")
+                else:
+                    self.assertIsNone(result.get("check"))
+                    self.assertEqual(client.writes, [])
+                    self.assertEqual(client.status_writes, [])
+
+    def test_publish_rechecks_draft_before_marking_success(self):
+        class ConvertedToDraft(Client):
+            def request(self, endpoint, **kwargs):
+                result = super().request(endpoint, **kwargs)
+                if endpoint.startswith(f"repos/{REPO}/issues/3/comments?"):
+                    self.pull["draft"] = True
+                return result
+
+        client = ConvertedToDraft()
+        client.plan.update(
+            expected_verification_ids=client.plan["required_verification_ids"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        self.assertIsNone(reconcile(client, REPO, 101).get("check"))
+        self.assertEqual(client.writes, [])
+
     def test_fork_waiting_is_pending_with_actionable_comment(self):
         client = Client()
         result = reconcile(client, REPO, 101)

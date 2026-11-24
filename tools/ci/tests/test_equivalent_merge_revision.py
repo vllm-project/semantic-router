@@ -189,7 +189,11 @@ class EquivalentAuthorizationTests(unittest.TestCase):
         )
         manual_ci.rerun(self.client, record, wait_seconds=0)
         self.assertEqual(
-            self.client.posts, [f"repos/{authorization.REPO}/actions/runs/123/rerun"]
+            self.client.posts,
+            [
+                f"repos/{authorization.REPO}/statuses/{authorization.HEAD}",
+                f"repos/{authorization.REPO}/actions/runs/123/rerun",
+            ],
         )
 
     def test_replacement_cannot_bypass_plan_digest(self):

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"gopkg.in/yaml.v3"
+	"k8s.io/utils/ptr"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -23,13 +24,22 @@ func TestOperatorStreamedBodyReachesParsedRouterConfig(t *testing.T) {
 		{name: "omitted keeps buffered handling"},
 		{
 			name:        "enabled with limits",
-			spec:        &vllmv1alpha1.StreamedBodyConfig{Enabled: true, MaxBytes: 10485760, TimeoutSec: 30},
+			spec:        &vllmv1alpha1.StreamedBodyConfig{Enabled: true, MaxBytes: ptr.To[int64](10485760), TimeoutSec: 30},
 			wantEnabled: true, wantBytes: 10485760, wantTimeout: 30,
 		},
 		{
-			name:        "enabled without limits",
+			// An explicit 0 stays in the CR, but it names no ceiling either, so
+			// the Router still gets the declared default.
+			name:        "enabled with a zero ceiling",
+			spec:        &vllmv1alpha1.StreamedBodyConfig{Enabled: true, MaxBytes: ptr.To[int64](0)},
+			wantEnabled: true, wantBytes: defaultStreamedBodyMaxBytes,
+		},
+		{
+			// The Router refuses an enabled streamed body without a ceiling, so
+			// the CR that names none gets the declared default.
+			name:        "enabled without a ceiling",
 			spec:        &vllmv1alpha1.StreamedBodyConfig{Enabled: true},
-			wantEnabled: true,
+			wantEnabled: true, wantBytes: defaultStreamedBodyMaxBytes,
 		},
 	}
 	for _, tc := range cases {

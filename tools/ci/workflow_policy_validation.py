@@ -118,13 +118,20 @@ def validate_status_publisher(
         errors.append(
             "ci-status.yml must observe PR reruns and completions and Community"
         )
-    trusted = (
-        "github.event_name == 'workflow_run' || (github.event_name == "
-        "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    workflow_run = "github.event_name == 'workflow_run'"
+    trusted_dispatch = (
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    )
+    community_filter = (
+        "(github.event.workflow_run.path != '.github/workflows/community.yml' "
+        "|| (github.event.action == 'completed' "
+        "&& github.event.workflow_run.conclusion == 'success' "
+        "&& (github.event.workflow_run.event == 'pull_request' "
+        "|| github.event.workflow_run.event == 'pull_request_review')))"
     )
     expected_conditions = {
-        "resolve": trusted,
-        "publish": "needs.resolve.outputs.run_id != '' && (" + trusted + ")",
+        "resolve": f"({workflow_run} && {community_filter}) || {trusted_dispatch}",
+        "publish": f"needs.resolve.outputs.run_id != '' && ({workflow_run} || {trusted_dispatch})",
     }
     commands = {
         "resolve": 'python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"',
@@ -136,6 +143,7 @@ def validate_status_publisher(
             "contents": "read",
             "actions": "read",
             "checks": "write",
+            "statuses": "write",
             "issues": "write",
             "pull-requests": "write",
         },
@@ -143,7 +151,9 @@ def validate_status_publisher(
     for name in ("resolve", "publish"):
         job = publisher.jobs.get(name, {})
         if " ".join(job.get("if", "").split()) != expected_conditions[name]:
-            errors.append("ci-status.yml dispatch must execute only trusted main code")
+            errors.append(
+                f"ci-status.yml {name} must enforce its event filter to execute only trusted main code"
+            )
         if job.get("permissions") != permissions[name]:
             errors.append(
                 "ci-status.yml must limit resolver and publisher token permissions"

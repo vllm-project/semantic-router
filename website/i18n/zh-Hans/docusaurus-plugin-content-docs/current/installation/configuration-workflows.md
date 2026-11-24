@@ -45,6 +45,8 @@ vllm-sr serve --config config.yaml
 
 **Routing → Config editor** 拥有路由语义。它在替换其路由表面时保留 listeners、providers、全局设置和设置状态。多配方生命周期变更从 **Routing → Recipes** 或管理 API 管理，以免编辑器中的变更悄悄丢弃另一个配方。
 
+在 Dashboard 保存完整配置时，如果配置中包含未知字段，Dashboard 会指出字段路径，并保留原有配置。
+
 ## Helm {#helm}
 
 直接 Helm 部署将完整的 canonical 文档放在 `configOverride` 下。这会在 chart 应用显式 Kubernetes 集成重写之前，将 chart 的示例配置作为一份文档替换；它不会将示例模型或决策合并到你的策略中。将 canonical 文档编写并校验为 `config.yaml`，然后将该文档放在 Helm values 文件的 `configOverride` 下。

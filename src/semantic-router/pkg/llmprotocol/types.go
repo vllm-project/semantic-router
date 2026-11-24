@@ -28,6 +28,11 @@ const (
 	// to /v1/images/generations, and the generated image is decoded back into
 	// the protocol-neutral GeneratedImage output item.
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
+	// OpenAISpeechV1 is the OpenAI Speech API dialect (POST /v1/audio/speech)
+	// served by TTS backends such as vLLM-Omni. It is a sink dialect: the
+	// router reads the input text and forwards the other request fields, and
+	// the audio response bypasses the neutral response.
+	OpenAISpeechV1 WireFormat = "openai.speech.v1"
 )
 
 // APIName is the API a wire format serves, as clients and operators call it;
@@ -316,13 +321,16 @@ type TrustedMetadata struct {
 }
 
 type Request struct {
-	Generation        uint64
-	Model             string
-	Instructions      []InstructionBlock
-	Messages          []Message
-	Tools             []Tool
-	ImageGeneration   *ImageGenerationOptions
-	AudioOutput       *AudioOutputOptions
+	Generation      uint64
+	Model           string
+	Instructions    []InstructionBlock
+	Messages        []Message
+	Tools           []Tool
+	ImageGeneration *ImageGenerationOptions
+	AudioOutput     *AudioOutputOptions
+	// SpeechGeneration is set for a Speech API request. Its presence requires
+	// CapabilitySpeechGeneration. The text to speak is the last user message.
+	SpeechGeneration  *SpeechGenerationOptions
 	ToolChoice        ToolChoice
 	ParallelToolCalls *bool
 	CandidateCount    *int64
@@ -368,6 +376,14 @@ type Request struct {
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ExtensionFields holds operator-whitelisted top-level request members
+	// the wire format does not declare (Policy.AllowedRequestExtensions),
+	// captured opaquely at ingress. Same-format dispatch merges them back;
+	// crossing formats drops them with a diagnostic. The Router never
+	// interprets their values.
+	ExtensionFields map[string]json.RawMessage
+	// ExtensionFieldsFormat is the wire format the members were captured from.
+	ExtensionFieldsFormat WireFormat
 	// ToolNameOrigins is decode state that no wire carries. A request that
 	// flattened a Responses namespace keeps where each tool name came from, so
 	// retained history prepended later is checked against the same names.

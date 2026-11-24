@@ -49,6 +49,9 @@ const (
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
 	APIFormatImages = string(apiregistry.Images)
+	// APIFormatSpeech selects the OpenAI Speech API dialect
+	// (POST /v1/audio/speech) served by TTS backends such as vLLM-Omni.
+	APIFormatSpeech = string(apiregistry.Speech)
 	// APIFormatOpenAI and APIFormatAnthropic are aliases of
 	// APIFormatChatCompletions and APIFormatMessages.
 	APIFormatOpenAI    = "openai"
@@ -242,8 +245,8 @@ type Listener struct {
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,
-	// responses, messages and images with their default schemas, and not
-	// systemone.
+	// responses, messages, images and speech with their default schemas, and
+	// not systemone.
 	APIs ListenerAPIs `yaml:"apis,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`
@@ -285,18 +288,19 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	RouterEnabled          *bool                `yaml:"router_enabled,omitempty"`
-	ListBackendModels      bool                 `yaml:"list_backend_models,omitempty"`
-	ClearRouteCache        bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode       bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes   int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing         SkipProcessingConfig `yaml:"skip_processing,omitempty"`
-	AllowLossyTranslation  []string             `yaml:"allow_lossy_translation,omitempty"`
-	RoutingInput           RoutingInputConfig   `yaml:"routing_input,omitempty"`
-	Headers                RouterHeadersConfig  `yaml:"headers,omitempty"`
-	ContextWindow          ContextWindowConfig  `yaml:"context_window,omitempty"`
-	DrainTimeoutSeconds    *int                 `yaml:"drain_timeout_seconds,omitempty"`
+	RouterEnabled               *bool                `yaml:"router_enabled,omitempty"`
+	ListBackendModels           bool                 `yaml:"list_backend_models,omitempty"`
+	ClearRouteCache             bool                 `yaml:"clear_route_cache"`
+	StreamedBodyMode            bool                 `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes        int64                `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec      int                  `yaml:"streamed_body_timeout_sec,omitempty"`
+	SkipProcessing              SkipProcessingConfig `yaml:"skip_processing,omitempty"`
+	AllowLossyTranslation       []string             `yaml:"allow_lossy_translation,omitempty"`
+	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	RoutingInput                RoutingInputConfig   `yaml:"routing_input,omitempty"`
+	Headers                     RouterHeadersConfig  `yaml:"headers,omitempty"`
+	ContextWindow               ContextWindowConfig  `yaml:"context_window,omitempty"`
+	DrainTimeoutSeconds         *int                 `yaml:"drain_timeout_seconds,omitempty"`
 }
 
 // RoutingEnabled controls the recipe pipeline independently of the frontend

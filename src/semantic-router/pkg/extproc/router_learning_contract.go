@@ -55,6 +55,9 @@ type routerLearningIdentity struct {
 	conversationHeader  string
 	agentID             string
 	agentHeader         string
+	// sideClass is the request class of a side request, held apart from
+	// the agent it belongs to.
+	sideClass string
 }
 
 // declaredConversationID is the conversation id the client sent, if any. A
