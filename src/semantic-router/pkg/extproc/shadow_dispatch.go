@@ -60,6 +60,7 @@ const (
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
 	shadowReasonBudgetExhausted      = "budget_exhausted"
+	shadowReasonTokenExhausted       = "budget_tokens_exhausted" //nolint:gosec // outcome reason code
 	shadowReasonBudgetUnpriced       = "budget_unpriced"
 	shadowReasonBudgetUnbounded      = "budget_unbounded_output"
 
@@ -528,7 +529,8 @@ func (d *shadowDispatcher) enqueueGroup(key string, jobs []*shadowJob, cancel co
 			}
 		}
 		defer func() { <-lane.groups }()
-		if limit := first.cfg.Budget.MaxEstimatedCost; limit != nil && !d.admitShadowGroup(jobs, *limit) {
+		budget := first.cfg.Budget
+		if (budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil) && !d.admitShadowGroup(jobs, budget) {
 			return
 		}
 		var workers sync.WaitGroup
