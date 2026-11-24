@@ -67,7 +67,8 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 		// A cut call's arguments stop inside an object; the stream state decides it at the terminal event.
 		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) &&
 			!isTruncatedJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
-			return invalidProviderResponse("invalid_stream_tool_arguments", "Responses function-call done arguments must be a JSON object")
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments",
+				"Responses function-call done arguments must be a JSON object", boundedArgumentEvidence([]byte(complete)))
 		}
 		decoder.toolArguments[index] = []byte(complete)
 		decoder.toolArgumentsDone[index] = true

@@ -1,9 +1,11 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math"
+	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -210,18 +212,39 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
-			return nil, nonObjectToolArgumentsError()
+			return nil, nonObjectToolArgumentsError(arguments)
 		}
 		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
 		// then send the partial call with a max_tokens or length stop. Its stop
 		// reason arrives after the item ends, so the terminal event decides.
 		state.cutToolArguments = true
+		state.cutToolArgumentsEvidence = arguments
 	}
 	return arguments, nil
 }
 
-func nonObjectToolArgumentsError() error {
-	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+// boundedArgumentEvidence returns a bounded, escaped summary of rejected tool
+// arguments for logs. It never reaches a client error frame: those encode only
+// type/code/message/param. Truncation is marked so an operator can tell a
+// summary from the whole payload.
+func boundedArgumentEvidence(arguments []byte) error {
+	const maxSummaryBytes = 256
+	trimmed := arguments
+	if len(trimmed) > maxSummaryBytes {
+		trimmed = trimmed[:maxSummaryBytes]
+	}
+	// Quote makes control characters and newlines visible and keeps the value
+	// on one log line. ToValidUTF8 avoids emitting invalid UTF-8 into JSON logs.
+	summary := strconv.Quote(string(bytes.ToValidUTF8(trimmed, nil)))
+	if len(arguments) > maxSummaryBytes {
+		summary += "..." // truncated
+	}
+	return errors.New("rejected tool arguments: " + summary)
+}
+
+func nonObjectToolArgumentsError(arguments []byte) error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments",
+		"upstream streamed tool arguments are not a JSON object", boundedArgumentEvidence(arguments))
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -292,7 +315,7 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 		return llmprotocol.Event{}, err
 	}
 	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsError(state.cutToolArgumentsEvidence)
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {

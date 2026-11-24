@@ -47,6 +47,9 @@ type streamState struct {
 	// the streamed arguments a close replaced when a stream ended mid-call,
 	// kept for the encoders that already sent the fragments as deltas
 	closedToolArguments map[int]string
+	// cutToolArgumentsEvidence keeps a bounded copy of the arguments that
+	// looked cut, so a later malformed-stream rejection can name them in logs.
+	cutToolArgumentsEvidence []byte
 }
 
 // appendStreamUnknownFields reports each unknown upstream member once per
@@ -264,7 +267,7 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 	if state.cutToolArguments && isOutputItemEvent(event.Type) {
 		// A limit cuts only the final output, so a later item means the call's
 		// arguments were malformed rather than cut.
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsError(state.cutToolArgumentsEvidence)
 	}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:

@@ -498,3 +498,62 @@ func TestAnthropicStreamFinalizeUsesCanonicalErrorType(t *testing.T) {
 		t.Fatalf("Anthropic final error = %q, want %q", frames, golden)
 	}
 }
+
+// A rejected streamed tool call must carry a bounded, escaped summary of the
+// offending arguments on the error's cause, so an operator can attribute the
+// rejection in logs. The cause is internal: the client frame only encodes
+// type/code/message/param. See issue #7302.
+func TestNonObjectToolArgumentsErrorCarriesBoundedEvidence(t *testing.T) {
+	t.Run("plain arguments are quoted in full", func(t *testing.T) {
+		err := nonObjectToolArgumentsError([]byte(`not json at all`))
+		var protocolError *llmprotocol.ProtocolError
+		if !errors.As(err, &protocolError) || protocolError.Code != "invalid_stream_tool_arguments" {
+			t.Fatalf("error = %v, want invalid_stream_tool_arguments", err)
+		}
+		cause := errors.Unwrap(protocolError)
+		if cause == nil || !strings.Contains(cause.Error(), `not json at all`) {
+			t.Fatalf("cause = %v, want the offending arguments", cause)
+		}
+	})
+
+	t.Run("control characters are escaped and stay on one line", func(t *testing.T) {
+		cause := errors.Unwrap(nonObjectToolArgumentsError([]byte("bad\n\tvalue")))
+		got := cause.Error()
+		if strings.ContainsAny(got, "\n\t") || !strings.Contains(got, `\n`) {
+			t.Fatalf("cause = %q, want escaped newlines/tabs on one line", got)
+		}
+	})
+
+	t.Run("long arguments are truncated and marked", func(t *testing.T) {
+		long := strings.Repeat("A", 1024)
+		cause := errors.Unwrap(nonObjectToolArgumentsError([]byte(long)))
+		got := cause.Error()
+		if strings.Contains(got, strings.Repeat("A", 512)) || !strings.Contains(got, "...") {
+			t.Fatalf("cause = %q, want bounded and marked as truncated", got)
+		}
+	})
+
+	t.Run("client error frame is unchanged by the cause", func(t *testing.T) {
+		// The wire encoder must not read Cause: two errors that differ only in
+		// cause must encode to the same bytes.
+		engine := NewBuiltinEngine()
+		plain, err := engine.EncodeError(llmprotocol.OpenAIChatV1,
+			llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments",
+				"upstream streamed tool arguments are not a JSON object", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		withCauseErr := nonObjectToolArgumentsError([]byte(`not json at all`))
+		var withCauseProtocol *llmprotocol.ProtocolError
+		if !errors.As(withCauseErr, &withCauseProtocol) {
+			t.Fatalf("nonObjectToolArgumentsError returned %T", withCauseErr)
+		}
+		withCause, err := engine.EncodeError(llmprotocol.OpenAIChatV1, withCauseProtocol)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(plain, withCause) {
+			t.Fatalf("Cause leaked into the client frame: %q vs %q", plain, withCause)
+		}
+	})
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -520,6 +521,12 @@ func (state *semanticResponseStreamState) delivered() bool {
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if !state.delivered() {
+		// Surface the stream's own protocol failure, with its cause chain, so
+		// logs can attribute it. A stream with no failure keeps the generic
+		// message; see issue #7302.
+		if state != nil && state.failed != nil {
+			return nil, state.failed
+		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
@@ -655,10 +662,18 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 
 	if responseErr != nil {
 		observeStreamedApprovalReviewFailure(ctx)
-		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", map[string]interface{}{
+		fields := map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
-		})
+		}
+		var protocolErr *llmprotocol.ProtocolError
+		if errors.As(responseErr, &protocolErr) {
+			fields["error_code"] = protocolErr.Code
+			if cause := errors.Unwrap(protocolErr); cause != nil {
+				fields["cause"] = cause.Error()
+			}
+		}
+		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", fields)
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return nil
 	}
