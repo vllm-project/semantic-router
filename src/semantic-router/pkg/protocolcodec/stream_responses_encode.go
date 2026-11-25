@@ -309,7 +309,7 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolProgress(
 		if strings.TrimSpace(allArguments[emitted:]) == "" {
 			return nil, nil
 		}
-		return nil, nonObjectToolArgumentsError()
+		return nil, nonObjectToolArgumentsErrorWithShape([]byte(allArguments))
 	}
 	frames, key, err := encoder.openResponsesOutput(event, responsesOutputTool)
 	if err != nil {

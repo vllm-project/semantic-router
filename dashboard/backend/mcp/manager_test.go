@@ -131,38 +131,58 @@ func TestManagerCloseWaitsForInFlightConnection(t *testing.T) {
 func TestManagerRetiresConnectionsSupersededDuringConnect(t *testing.T) {
 	t.Parallel()
 
-	mutations := map[string]func(*testing.T, *Manager, *ServerConfig){
-		"disconnect": func(t *testing.T, manager *Manager, config *ServerConfig) {
-			t.Helper()
-			if err := manager.Disconnect(config.ID); err != nil {
-				t.Fatal(err)
-			}
+	type mutation struct {
+		apply   func(t *testing.T, manager *Manager, config *ServerConfig)
+		wantErr error
+	}
+
+	mutations := map[string]mutation{
+		"disconnect": {
+			wantErr: errConnectionSuperseded,
+			apply: func(t *testing.T, manager *Manager, config *ServerConfig) {
+				t.Helper()
+				if err := manager.Disconnect(config.ID); err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
-		"update": func(t *testing.T, manager *Manager, config *ServerConfig) {
-			t.Helper()
-			updated := *config
-			updated.Name = "Updated"
-			if err := manager.UpdateServer(&updated); err != nil {
-				t.Fatal(err)
-			}
+		"update": {
+			wantErr: errConnectionSuperseded,
+			apply: func(t *testing.T, manager *Manager, config *ServerConfig) {
+				t.Helper()
+				updated := *config
+				updated.Name = "Updated"
+				if err := manager.UpdateServer(&updated); err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
-		"upsert": func(t *testing.T, manager *Manager, config *ServerConfig) {
-			t.Helper()
-			updated := *config
-			updated.Name = "Upserted"
-			if err := manager.UpsertServer(&updated); err != nil {
-				t.Fatal(err)
-			}
+		"upsert": {
+			wantErr: errConnectionSuperseded,
+			apply: func(t *testing.T, manager *Manager, config *ServerConfig) {
+				t.Helper()
+				updated := *config
+				updated.Name = "Upserted"
+				if err := manager.UpsertServer(&updated); err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
-		"delete": func(t *testing.T, manager *Manager, config *ServerConfig) {
-			t.Helper()
-			if err := manager.DeleteServer(config.ID); err != nil {
-				t.Fatal(err)
-			}
+		// A deletion removes the config entirely, so the superseded Connect
+		// should report ErrServerNotFound like any other operation on a
+		// server that no longer exists, not the generic supersession error.
+		"delete": {
+			wantErr: ErrServerNotFound,
+			apply: func(t *testing.T, manager *Manager, config *ServerConfig) {
+				t.Helper()
+				if err := manager.DeleteServer(config.ID); err != nil {
+					t.Fatal(err)
+				}
+			},
 		},
 	}
 
-	for name, mutate := range mutations {
+	for name, m := range mutations {
 		t.Run(name, func(t *testing.T) {
 			manager, err := NewManager(nil)
 			if err != nil {
@@ -202,11 +222,11 @@ func TestManagerRetiresConnectionsSupersededDuringConnect(t *testing.T) {
 			}()
 			<-connectStarted
 
-			mutate(t, manager, config)
+			m.apply(t, manager, config)
 			<-cancelObserved
 			close(releaseConnect)
-			if err := <-connectDone; !errors.Is(err, errConnectionSuperseded) {
-				t.Fatalf("Connect() error = %v, want %v", err, errConnectionSuperseded)
+			if err := <-connectDone; !errors.Is(err, m.wantErr) {
+				t.Fatalf("Connect() error = %v, want %v", err, m.wantErr)
 			}
 
 			if got := len(disconnected); got != 2 {

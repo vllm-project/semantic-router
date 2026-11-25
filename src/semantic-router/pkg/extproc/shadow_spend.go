@@ -17,14 +17,18 @@ type shadowSpend struct {
 	dispatched bool
 }
 
-func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, limit float64) bool {
+func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, budget config.ShadowBudgetConfig) bool {
 	if jobs[0].context.Err() != nil {
 		for _, job := range jobs {
 			d.recordUnstarted(job)
 		}
 		return false
 	}
-	total := 0.0
+	var remainingTokens int64
+	if budget.MaxEstimatedTokens != nil {
+		remainingTokens = int64(*budget.MaxEstimatedTokens)
+	}
+	totalCost := 0.0
 	for _, job := range jobs {
 		prepared, reason, err := d.prepareShadowCall(job)
 		if err != nil {
@@ -36,16 +40,29 @@ func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, limit float64) bo
 			d.recordShadowBudgetRefusal(jobs, shadowReasonBudgetUnbounded, err)
 			return false
 		}
-		spend, ok := estimateShadowSpend(job, tokens)
-		if !ok {
-			d.recordShadowBudgetRefusal(jobs, shadowReasonBudgetUnpriced, nil)
-			return false
+		if tokens.output == 0 {
+			tokens.output = defaultSpendOutputTokens(job.routerConfig, job.model)
+		}
+		if budget.MaxEstimatedTokens != nil {
+			input := int64(tokens.input)
+			if tokens.output > remainingTokens-input {
+				d.recordShadowBudgetRefusal(jobs, shadowReasonTokenExhausted, nil)
+				return false
+			}
+			remainingTokens -= input + tokens.output
 		}
 		job.prepared = prepared
-		job.spend = spend
-		total += spend.estimate
+		if budget.MaxEstimatedCost != nil {
+			spend, ok := estimateShadowSpend(job, tokens)
+			if !ok {
+				d.recordShadowBudgetRefusal(jobs, shadowReasonBudgetUnpriced, nil)
+				return false
+			}
+			job.spend = spend
+			totalCost += spend.estimate
+		}
 	}
-	if spendbudget.Round(limit-total) < 0 {
+	if limit := budget.MaxEstimatedCost; limit != nil && spendbudget.Round(*limit-totalCost) < 0 {
 		d.recordShadowBudgetRefusal(jobs, shadowReasonBudgetExhausted, nil)
 		return false
 	}
@@ -58,11 +75,7 @@ func estimateShadowSpend(job *shadowJob, tokens shadowTokenEstimate) (*shadowSpe
 	if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
 		return nil, false
 	}
-	output := tokens.output
-	if output == 0 {
-		output = defaultSpendOutputTokens(job.routerConfig, job.model)
-	}
-	estimate := estimateDispatchCost(tokens.input, output, pricing)
+	estimate := estimateDispatchCost(tokens.input, tokens.output, pricing)
 	if math.IsInf(estimate, 1) {
 		return nil, false
 	}

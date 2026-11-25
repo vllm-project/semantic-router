@@ -663,6 +663,7 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 		Error: &llmprotocol.ProtocolError{
 			Category: decodeProviderErrorCategory(wire.Type, string(wire.Code)),
 			Code:     string(wire.Code), Message: wire.Message, Parameter: wire.Param,
+			ProviderFramed: true,
 		},
 		StopReason: llmprotocol.StopError,
 		Failure:    llmprotocol.FailureTransport,
@@ -972,7 +973,9 @@ func (decoder *chatStreamDecoder) completeActiveChatItems() ([]llmprotocol.Event
 	for _, itemIndex := range active {
 		if decoder.nullToolArguments[itemIndex] && len(bytes.TrimSpace(decoder.toolArguments[itemIndex])) == 0 &&
 			(decoder.stop == llmprotocol.StopToolCall || decoder.stop == llmprotocol.StopEndTurn || decoder.stop == llmprotocol.StopSequence) {
-			return nil, nonObjectToolArgumentsError()
+			// A finished null placeholder is still not an object. Name it by
+			// length and shape, the same evidence other non-object rejections keep.
+			return nil, nonObjectToolArgumentsErrorWithShape(decoder.toolArguments[itemIndex])
 		}
 		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: itemIndex, StopReason: decoder.stop})
 		if err != nil {

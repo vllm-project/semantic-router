@@ -1,8 +1,10 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -224,12 +226,13 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
-			return nil, nonObjectToolArgumentsError()
+			return nil, nonObjectToolArgumentsErrorWithShape(arguments)
 		}
 		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
 		// then send the partial call with a max_tokens or length stop. Its stop
 		// reason arrives after the item ends, so the terminal event decides.
 		state.cutToolArguments = true
+		state.cutToolArgumentsEvidence = toolArgumentsEvidence(arguments)
 	}
 	return arguments, nil
 }
@@ -239,8 +242,46 @@ func (state *streamState) normalizesEmptyChatToolArguments(event llmprotocol.Eve
 		(event.StopReason == llmprotocol.StopToolCall || event.StopReason == llmprotocol.StopEndTurn || event.StopReason == llmprotocol.StopSequence)
 }
 
-func nonObjectToolArgumentsError() error {
-	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+// nonObjectToolArgumentsErrorWithCause rejects a completed tool call whose
+// arguments are not a JSON object. The cause never reaches the client frame;
+// it is the diagnostic the stream-failure log keeps.
+func nonObjectToolArgumentsErrorWithCause(cause error) error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", cause)
+}
+
+// nonObjectToolArgumentsErrorWithShape describes what was rejected without
+// recording it: tool arguments can carry file contents, commands or user data
+// headed to a tool, so the failure keeps their length and shape only, matching
+// the stream-failure logging contract that keeps payloads out of the log. The
+// cause never reaches the client frame; it tells a model-generation anomaly
+// (prose, leaked markup) from a codec splice one (a JSON fragment).
+func nonObjectToolArgumentsErrorWithShape(arguments []byte) error {
+	return nonObjectToolArgumentsErrorWithCause(toolArgumentsEvidence(arguments))
+}
+
+// toolArgumentsEvidence names rejected arguments by length and shape only.
+func toolArgumentsEvidence(arguments []byte) error {
+	return llmprotocol.ErrorDiagnostic(fmt.Sprintf("arguments length %d, shape %s", len(arguments), toolArgumentsShape(arguments)))
+}
+
+// toolArgumentsShape classifies the first non-space byte of the rejected
+// arguments, which separates the likely origins without retaining the text.
+func toolArgumentsShape(arguments []byte) string {
+	trimmed := bytes.TrimLeft(arguments, " \t\r\n")
+	if len(trimmed) == 0 {
+		return "empty"
+	}
+	switch trimmed[0] {
+	case '{':
+		return "object fragment"
+	case '[':
+		return "array fragment"
+	case '"', '\'':
+		return "quoted text"
+	case '<':
+		return "markup"
+	}
+	return "plain text"
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -311,7 +352,7 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 		return llmprotocol.Event{}, err
 	}
 	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsErrorWithCause(state.cutToolArgumentsEvidence)
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {

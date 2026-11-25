@@ -30,6 +30,7 @@ const (
 	Responses       Name = "responses"
 	Messages        Name = "messages"
 	Images          Name = "images"
+	Speech          Name = "speech"
 	SystemOne       Name = "systemone"
 )
 
@@ -123,6 +124,12 @@ var registry = []API{
 		Name: Images, Summary: "OpenAI Images", Paths: []string{"/v1/images/generations"}, Kind: KindLLM,
 		Pattern:         `^/v1/images/generations$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIImagesV1}},
+		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
+	},
+	{
+		Name: Speech, Summary: "OpenAI Speech", Paths: []string{"/v1/audio/speech"}, Kind: KindLLM,
+		Pattern:         `^/v1/audio/speech$`,
+		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAISpeechV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
 	},
 	{
@@ -292,6 +299,20 @@ var patterns = func() map[Name]*regexp.Regexp {
 func (a API) Serves(path string) bool {
 	pattern, ok := patterns[a.Name]
 	return ok && pattern.MatchString(normalizePath(path))
+}
+
+// Unprefixed is the path of the API's request under a listener's prefix for
+// the API, as the API answers it without the prefix; false when the path
+// is not the API's under that prefix.
+func (a API) Unprefixed(prefix, path string) (string, bool) {
+	if prefix == "" {
+		return "", false
+	}
+	rest, ok := strings.CutPrefix(normalizePath(path), prefix)
+	if !ok || !a.Serves(rest) {
+		return "", false
+	}
+	return rest, true
 }
 
 func normalizePath(path string) string {
