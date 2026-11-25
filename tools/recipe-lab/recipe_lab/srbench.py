@@ -103,7 +103,7 @@ class SrBench:
         self.executable = executable
 
     def command(self, command, *arguments):
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: PLW1510 - the wrapper checks the code
             [self.executable, "benchmark", command, *arguments],
             capture_output=True,
             encoding="utf-8",
@@ -727,8 +727,8 @@ class SrbenchCli:
         if not target_list:
             raise SrbenchError("candidate-plan requires at least one target id")
         args = ["candidate-plan", baseline_run_id]
-        for target in target_list:
-            args += ["--target", target]
+        for tgt in target_list:
+            args += ["--target", tgt]
         args += ["--mode", mode]
         if name:
             args += ["--name", name]
