@@ -587,14 +587,6 @@ def cases_to_srbench_rows(
     return rows
 
 
-def subject(manifest, identity):
-    subjects = [item for item in manifest["targets"] if item["id"] == identity]
-    check(
-        len(subjects) == 1, f"target {identity} missing or ambiguous in the frozen run"
-    )
-    return subjects[0]
-
-
 @dataclass
 class SrbenchCli:
     bin: str = "vllm-sr"
