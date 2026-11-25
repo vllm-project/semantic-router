@@ -286,7 +286,7 @@ func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testin
 		if !strings.Contains(raw, `"reason"`) {
 			t.Fatalf("raw body is missing the reason key: %s", raw)
 		}
-		// The rest of the payload is unavailable, so it must be empty.
+		// The listeners block is malformed too, so the rest of the payload is empty.
 		if resp.ListenerPort != 0 || resp.Models != 0 || resp.Decisions != 0 || resp.CanActivate {
 			t.Fatalf("expected an empty payload alongside the reason, got %+v", resp)
 		}
@@ -320,6 +320,38 @@ func TestSetupStateHandlerReportsResolvedStateWhenCanonicalDecodeFails(t *testin
 			}
 		}
 	})
+}
+
+// A bootstrap config the full schema rejects, such as one written by an older
+// CLI under a removed schema version, still names the listener the Router will
+// serve on. The wizard builds the client base URL from it (#7373).
+func TestSetupStateHandlerReportsListenerPortWhenCanonicalDecodeFails(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	body := "version: v0.3\n" +
+		"listeners:\n" +
+		"  - name: http-8899\n" +
+		"    address: 0.0.0.0\n" +
+		"    port: 8899\n" +
+		"    timeout: 300s\n" +
+		"setup:\n  mode: true\n  state: bootstrap\n"
+	if err := os.WriteFile(configPath, []byte(body), 0o644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	if _, err := readSetupConfigFile(configPath); err == nil {
+		t.Fatalf("precondition failed: the full schema must reject this config")
+	}
+
+	resp, raw := getSetupState(t, configPath, setupmode.New(configPath, true))
+
+	if resp.Reason != unreadableConfigReason {
+		t.Fatalf("reason = %q, want %q", resp.Reason, unreadableConfigReason)
+	}
+	if resp.ListenerPort != 8899 {
+		t.Fatalf("listenerPort = %d, want 8899 from the listeners block; body=%s", resp.ListenerPort, raw)
+	}
+	if resp.Models != 0 || resp.Decisions != 0 || resp.CanActivate {
+		t.Fatalf("expected empty counts alongside the reason, got %+v", resp)
+	}
 }
 
 // The write endpoints gate first, then read. When the gate passes but the read
