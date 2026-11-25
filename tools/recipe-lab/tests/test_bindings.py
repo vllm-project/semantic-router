@@ -358,6 +358,48 @@ def test_long_context_requires_declared_window(tmp_path):
     }
 
 
+def test_tools_lane_never_binds_a_model_without_tool_capability(tmp_path):
+    # The Speed and Cost recipes route tool traffic to their `tools` lane.
+    # Model A scores higher there but cannot call tools: it must not be
+    # picked, measured or not.
+    profile_dir = write_profile(
+        tmp_path,
+        lane_stats={
+            "tools": {
+                "n": 50,
+                "local/model-a": {"accuracy": 1.0, "cost_per_question": 0.001},
+                "local/model-b": {"accuracy": 0.8, "cost_per_question": 0.001},
+            }
+        },
+        overall={
+            "local/model-a": {"accuracy": 1.0, "cost_per_question": 0.001},
+            "local/model-b": {"accuracy": 0.8, "cost_per_question": 0.001},
+        },
+    )
+    spec_path = write_spec(
+        tmp_path,
+        capabilities={
+            "local/model-a": {"context_window": 262144},
+            "local/model-b": {"tools": True, "context_window": 262144},
+        },
+    )
+    from recipe_lab.contract import ExperimentSpec
+
+    template = {
+        "recipe": "speed",
+        "lanes": {"tools": {"immediate": False, "minimum_candidates": 1}},
+    }
+    result = bindings_mod.plan_bindings(
+        spec=ExperimentSpec.from_yaml(spec_path),
+        profile=json.loads((profile_dir / "profile.json").read_text(encoding="utf-8")),
+        template=template,
+        lam=0.0,
+    )
+    plan = result["plans"]["tools"]
+    assert plan["measured"] is True
+    assert plan["selected"] == ["local/model-b"]
+
+
 def test_no_routing_space_report_and_no_candidates(tmp_path, monkeypatch):
     # Degenerate: model B is better everywhere by far and A is never within
     # 5pp -> routing degenerates to one model.

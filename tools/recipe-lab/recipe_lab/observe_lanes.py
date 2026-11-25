@@ -68,6 +68,8 @@ PLACEHOLDER_PREFIX = "rl-observe-placeholder"
 # template does not declare are ignored (validated in bindings planning).
 LANE_CAPABILITY_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "vision": {"capabilities": ("vision",), "min_context_window": None},
+    # the Speed and Cost recipes route tool traffic to their `tools` lane
+    "tools": {"capabilities": ("tools",), "min_context_window": None},
     "agentic": {"capabilities": ("tools",), "min_context_window": None},
     "long_context": {
         "capabilities": (),
