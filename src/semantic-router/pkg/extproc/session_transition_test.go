@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -237,6 +238,66 @@ func TestStoredResponseTokensCountToolOutput(t *testing.T) {
 	}}
 	if got := estimateStoredResponseTokens(resp); got < 1024 {
 		t.Fatalf("an 8000-byte tool output estimated %d tokens, want at least 1024", got)
+	}
+}
+
+// The signal must match the post-routing record: a Responses continuation
+// counts the retained responses' billed usage instead of re-estimating the
+// projection the object store prepended to the request.
+func TestSessionPositionFactsPreferRetainedUsage(t *testing.T) {
+	history := contextcompression.CaptureHistory(&llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", 4000)}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "next"}}},
+	}})
+	ctx := &RequestContext{
+		OriginalContextHistory: history,
+		ResponseObjectState: &ResponseObjectState{ConversationHistory: []*responseapi.StoredResponse{
+			{Usage: &responseapi.Usage{InputTokens: 12, OutputTokens: 3}},
+		}},
+	}
+	if _, tokens := sessionPositionFacts(ctx); tokens != 15 {
+		t.Fatalf("history tokens = %d, want the retained usage 15", tokens)
+	}
+}
+
+// Instructions are resent with every request and belong to the history the gate
+// measures; reading only messages dropped the system and developer text.
+func TestHistoryTokensIncludeOriginalInstructions(t *testing.T) {
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "do it"}}},
+	}
+	ctx := &RequestContext{OriginalContextHistory: contextcompression.CaptureHistory(&llmprotocol.Request{
+		Instructions: []llmprotocol.InstructionBlock{{
+			Role:    llmprotocol.RoleSystem,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", 4000)}},
+		}},
+		Messages: messages,
+	})}
+	_, withInstructions := sessionPositionFacts(ctx)
+
+	withoutInstructions := &RequestContext{
+		OriginalContextHistory: contextcompression.CaptureHistory(&llmprotocol.Request{Messages: messages}),
+	}
+	_, messagesOnly := sessionPositionFacts(withoutInstructions)
+	if withInstructions < 1000 || withInstructions <= messagesOnly {
+		t.Fatalf("instructions estimated %d tokens, messages only %d", withInstructions, messagesOnly)
+	}
+}
+
+// An official function_call_output array uses input_text parts; the output-side
+// extractor reads only output_text, which dropped the whole payload.
+func TestStoredResponseTokensCountInputTextOutput(t *testing.T) {
+	output, err := json.Marshal([]map[string]string{
+		{"type": "input_text", "text": strings.Repeat("x", 4000)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := &responseapi.StoredResponse{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}
+	if got := estimateStoredResponseTokens(resp); got < 1000 {
+		t.Fatalf("a 4000-byte input_text output estimated %d tokens, want at least 1000", got)
 	}
 }
 

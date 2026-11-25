@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -71,7 +72,7 @@ func populateSessionTransitionFields(ctx *RequestContext) {
 	populateSemanticSessionIDIfNeeded(ctx)
 
 	ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionMessages(ctx.SemanticRequest.Messages)) - 1
-	ctx.HistoryTokenCount = historyTokensFromSemanticMessages(ctx.SemanticRequest.Messages)
+	ctx.HistoryTokenCount = historyTokensFromConversation(originalConversation(ctx))
 	// Populate PreviousModel for Chat Completions from the in-memory last-model
 	// store, recorded at response time of the previous turn in this session.
 	// (Response API derives PreviousModel from the conversation chain above.)
@@ -216,25 +217,41 @@ func setSessionIDFromRequestIDFallback(ctx *RequestContext) {
 // sessionPositionFacts derives the trajectory-position facts the conversation
 // signal family exposes: the zero-based user turn index (tool continuations
 // grouped with the user message that started them, matching the router-replay
-// TurnIndex semantics) and the estimated token size of the conversation history
-// the request carries. Both mirror the session-transition fields the router
-// records after routing, computed from the original request snapshot so routing
-// edits cannot renumber turns, and both stay available at decision time —
+// TurnIndex semantics) and the token size of the conversation history the
+// request carries. Both mirror the session-transition fields the router records
+// after routing, computed from the original request snapshot so routing edits
+// cannot renumber turns, and both stay available at decision time —
 // populateSessionTransitionFields runs later in the request path.
 func sessionPositionFacts(ctx *RequestContext) (turnIndex int, historyTokens int) {
 	if ctx == nil {
 		return 0, 0
 	}
-	var messages []llmprotocol.Message
-	if ctx.OriginalContextHistory != nil {
-		messages = ctx.OriginalContextHistory.Conversation().Messages
-	} else if ctx.SemanticRequest != nil {
-		messages = ctx.SemanticRequest.Messages
+	// A Responses continuation carries the retained responses' billed usage.
+	// Counting it matches the post-routing record instead of re-estimating the
+	// projection the object store prepended to the request.
+	if state := ctx.ResponseObjectState; state != nil && len(state.ConversationHistory) > 0 {
+		return replayUserTurnIndex(ctx), historyTokensFromStoredResponses(state.ConversationHistory)
 	}
-	if len(messages) == 0 {
+	history := originalConversation(ctx)
+	if len(history.Messages) == 0 && len(history.Instructions) == 0 {
 		return 0, 0
 	}
-	return replayUserTurnIndex(ctx), historyTokensFromSemanticMessages(messages)
+	return replayUserTurnIndex(ctx), historyTokensFromConversation(history)
+}
+
+// originalConversation returns the request's pre-routing conversation with the
+// instructions the client sent alongside it.
+func originalConversation(ctx *RequestContext) contextcompression.ConversationHistory {
+	if ctx.OriginalContextHistory != nil {
+		return ctx.OriginalContextHistory.Conversation()
+	}
+	if ctx.SemanticRequest != nil {
+		return contextcompression.ConversationHistory{
+			Instructions: ctx.SemanticRequest.Instructions,
+			Messages:     ctx.SemanticRequest.Messages,
+		}
+	}
+	return contextcompression.ConversationHistory{}
 }
 
 // sessionTransitionMessages converts neutral messages for turn counting.
@@ -319,34 +336,66 @@ func toolOutputText(raw string) string {
 	}
 	var parts []responseapi.ContentPart
 	if err := json.Unmarshal([]byte(raw), &parts); err == nil {
-		return extractTextFromContentParts(parts)
+		return contentPartsText(parts)
 	}
 	return raw
 }
 
+// contentPartsText joins the text of the content parts that legally carry it:
+// an official function_call_output uses input_text parts, an output item uses
+// output_text, and some providers send bare text. The output-side extractor
+// reads only output_text, so reusing it here dropped every valid tool output
+// sent as an input_text array.
+func contentPartsText(parts []responseapi.ContentPart) string {
+	var text strings.Builder
+	for _, part := range parts {
+		switch part.Type {
+		case "text", "input_text", "output_text":
+			text.WriteString(part.Text)
+		}
+	}
+	return text.String()
+}
+
 func historyTokensFromSemanticMessages(messages []llmprotocol.Message) int {
-	if len(messages) == 0 {
-		return 0
-	}
-	prior := messages
-	if messages[len(messages)-1].Role == llmprotocol.RoleUser {
-		prior = messages[:len(messages)-1]
-	}
 	total := 0
-	for _, msg := range prior {
-		total += historyMessageBytes(msg) / 4
+	for _, msg := range historyMessagesBeforeCurrentTurn(messages) {
+		total += contentBytes(msg.Content) / 4
 	}
 	return total
 }
 
-// historyMessageBytes counts the bytes whose token size the history estimate
-// charges to one message: display text plus tool-call arguments plus the
-// payload of tool-result blocks, joined the way semanticText joins display
-// parts. semanticText alone reads only display text, so an agent session's
-// tool loop — the bulk of its history — contributed nothing to the estimate.
-// Counting bytes rather than materialising the join keeps the now-uncapped
-// estimate allocation-free on long histories.
-func historyMessageBytes(msg llmprotocol.Message) int {
+// historyTokensFromConversation estimates the history a request carries: the
+// instructions plus every message except the current user turn. Instructions
+// live outside the message list, so reading messages alone dropped the system
+// and developer text every turn resends.
+func historyTokensFromConversation(history contextcompression.ConversationHistory) int {
+	total := 0
+	for _, instruction := range history.Instructions {
+		total += contentBytes(instruction.Content) / 4
+	}
+	return total + historyTokensFromSemanticMessages(history.Messages)
+}
+
+// historyMessagesBeforeCurrentTurn drops the current user message: the history
+// the session signals measure ends before the turn being routed.
+func historyMessagesBeforeCurrentTurn(messages []llmprotocol.Message) []llmprotocol.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	if messages[len(messages)-1].Role == llmprotocol.RoleUser {
+		return messages[:len(messages)-1]
+	}
+	return messages
+}
+
+// contentBytes counts the bytes whose token size the history estimate charges
+// to one content list: display text plus tool-call arguments plus the payload
+// of tool-result blocks. semanticText alone reads only display text, so an
+// agent session's tool loop — the bulk of its history — contributed nothing to
+// the estimate. Counting bytes rather than materialising the join keeps the
+// uncapped estimate allocation-free on long histories.
+func contentBytes(contents []llmprotocol.Content) int {
 	bytes, parts := 0, 0
 	var walk func(contents []llmprotocol.Content)
 	walk = func(contents []llmprotocol.Content) {
@@ -364,7 +413,7 @@ func historyMessageBytes(msg llmprotocol.Message) int {
 			}
 		}
 	}
-	walk(msg.Content)
+	walk(contents)
 	if parts > 1 {
 		bytes += parts - 1 // the single-space separators a join would insert
 	}
