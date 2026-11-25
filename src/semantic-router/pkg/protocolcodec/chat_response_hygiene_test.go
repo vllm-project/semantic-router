@@ -37,7 +37,7 @@ func chatServerMembers(t *testing.T, body []byte) []string {
 
 func publicChatStream(t *testing.T, body []byte) []byte {
 	t.Helper()
-	filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true)
+	filter := NewChatPublicStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, true, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 	public, err := filter.Push(body)
 	if err != nil {
 		t.Fatal(err)

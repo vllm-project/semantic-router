@@ -1,0 +1,21 @@
+id: vllm-omni
+display_name: vLLM-Omni
+description: Connect a private vLLM-Omni endpoint. vLLM-Omni serves text-to-speech on POST /v1/audio/speech. Plain vLLM does not, so this protocol is not listed on the vllm provider.
+category: private_runtime
+support_tier: runtime
+protocols:
+- openai/audio-speech@1
+default_protocol: openai/audio-speech@1
+supported_operations:
+- openai/audio-speech@1#create
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: package:vllm
+  monogram: O
+  monochrome: false
+conformance:
+  status: fixture_verified
+  verified_at: 2026-11-17

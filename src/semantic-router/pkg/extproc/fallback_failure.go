@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 
@@ -13,8 +14,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // failedAttempt is a fallback candidate's failed upstream answer.
@@ -34,12 +37,27 @@ func failedCandidateAttempt(dispatch *providerDispatch, status int, body []byte,
 	attempt := &failedAttempt{status: status, body: body, format: dispatch.targetFormat}
 	if status == 0 {
 		attempt.transport, attempt.body = true, nil
-		attempt.status = http.StatusServiceUnavailable
+		attempt.status, attempt.failure = http.StatusServiceUnavailable, candidateFailure(callErr)
 		if errors.Is(callErr, context.DeadlineExceeded) {
 			attempt.status, attempt.failure = http.StatusGatewayTimeout, "timeout"
 		}
 	}
 	return attempt
+}
+
+// candidateFailure names why a candidate the Router called itself did not
+// answer, as pkg/upstream names a native call's: a connection that could not
+// be opened, or one that broke after the request went out.
+func candidateFailure(err error) string {
+	var connErr *connector.Error
+	if !errors.As(err, &connErr) || connErr.Kind != connector.KindTransport {
+		return ""
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) && opErr.Op == "dial" {
+		return string(upstream.KindConnectFailure)
+	}
+	return string(upstream.KindReset)
 }
 
 // failedOutcomeAttempt describes a native candidate call that failed, from
@@ -61,6 +79,7 @@ func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *faile
 	if attempt == nil {
 		return nil
 	}
+	r.releaseFailedSpend(ctx)
 	return r.answerFailedCall(ctx, attempt.status, r.failedAttemptError(ctx, attempt), attempt.replayReason())
 }
 

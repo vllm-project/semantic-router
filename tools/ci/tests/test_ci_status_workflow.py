@@ -71,6 +71,24 @@ class CIStatusWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(job)
         self.assertEqual(set(job["permissions"].values()), {"read"})
 
+    def test_commit_status_rerun_shares_the_publisher_lock_for_the_authorized_run(self):
+        rerun = self.workflows["manual-ci.yml"].jobs["rerun"]
+        group = self.publisher.jobs["publish"]["concurrency"]["group"]
+        self.assertEqual(
+            rerun["concurrency"]["group"],
+            "ci-status-${{ needs.authorize.outputs.pr_run_id }}",
+        )
+        self.assertEqual(
+            group.replace("${{ needs.resolve.outputs.run_id }}", "123"),
+            "ci-status-123",
+        )
+        self.assertFalse(rerun["concurrency"]["cancel-in-progress"])
+        self.assertEqual(rerun["concurrency"]["queue"], "max")
+        self.assertEqual(rerun["permissions"]["statuses"], "write")
+        self.assertEqual(
+            self.publisher.jobs["publish"]["permissions"]["statuses"], "write"
+        )
+
     def test_resolver_cannot_admit_every_community_event(self):
         self.publisher.jobs["resolve"]["if"] = (
             "github.event_name == 'workflow_run' || (github.event_name == "
@@ -102,7 +120,6 @@ class CIStatusWorkflowTests(unittest.TestCase):
         self.assertTrue(any("resolver" in error for error in errors), errors)
 
     def test_normal_and_community_publication_share_serialized_pending_state(self):
-
         client = PendingClient()
         sibling = client.event()
         normal = {"action": "completed", "workflow_run": copy.deepcopy(client.run)}
@@ -120,7 +137,10 @@ class CIStatusWorkflowTests(unittest.TestCase):
             start.wait(timeout=5)
             with locks[keys[index]]:
                 if index == 0:
-                    return recover_pending(client, REPO, sibling, 101)
+                    before = len(client.status_writes)
+                    result = recover_pending(client, REPO, sibling, 101)
+                    self.assertEqual(len(client.status_writes), before)
+                    return result
                 return reconcile(client, REPO, 101)
 
         with (
@@ -129,6 +149,7 @@ class CIStatusWorkflowTests(unittest.TestCase):
         ):
             results = list(pool.map(execute, (0, 1)))
         self.assertEqual(len(results), 2)
+        self.assertEqual([row["state"] for row in client.status_writes], ["pending"])
         self.assertEqual(client.post_attempts, 1)
         self.assertEqual(
             len([c for c in client.checks if c["status"] == "in_progress"]), 1

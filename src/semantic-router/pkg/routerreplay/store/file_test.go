@@ -3,12 +3,16 @@ package store
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
-	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // A file store writes a record once, when it ends, and keeps what arrives
@@ -64,9 +68,8 @@ func TestFileStoreKeepsEndedRecordsAcrossReopen(t *testing.T) {
 	if _, err := store.Add(ctx, Record{ID: "open", Timestamp: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	if lines := fileLines(t, path); lines != 2 {
-		t.Fatalf("file holds %d lines, want one for each ended record", lines)
-	}
+	require.NoError(t, store.UpdateLifecycle(ctx, "kept", LifecycleFailed, time.Now(), 7, "duplicate"))
+	require.Eventually(t, func() bool { return fileHasLines(path, 2) }, 3*time.Second, 10*time.Millisecond)
 	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
 		t.Fatalf("the leftover temporary file is still there: %v", err)
 	}
@@ -116,13 +119,43 @@ func TestFileStoreKeepsEndedRecordsAcrossReopen(t *testing.T) {
 	}
 }
 
-func fileLines(t *testing.T, path string) int {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+func TestFileStorePreservesRecordJSONLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "router-replay.jsonl")
+	store, err := OpenFileStore(path, 10, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	records := []Record{
+		{
+			ID: "unknown", LifecycleState: LifecycleCompleted, ConfidenceScore: 0.75,
+			Prompt: "<tool>&\n\u2028", SignalValues: map[string]float64{"sample": 1},
+		},
+		{
+			ID: "zero", LifecycleState: LifecycleFailed, ConfidenceScoreAvailable: true,
+			JailbreakScoreAvailable: true,
+		},
 	}
-	return bytes.Count(data, []byte{'\n'})
+	var want bytes.Buffer
+	for _, record := range records {
+		require.NoError(t, json.NewEncoder(&want).Encode(record))
+		_, addErr := store.Add(context.Background(), record)
+		require.NoError(t, addErr)
+	}
+
+	// Compare the appended lines and the final checkpoint to the public record encoding.
+	require.Eventually(t, func() bool { return fileHasLines(path, len(records)) }, 3*time.Second, 10*time.Millisecond)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want.String(), string(data))
+	require.NoError(t, store.Close())
+	data, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want.String(), string(data))
+}
+
+func fileHasLines(path string, n int) bool {
+	data, err := os.ReadFile(path)
+	return err == nil && bytes.Count(data, []byte{'\n'}) == n
 }
 
 func appendCutLine(t *testing.T, path string) {
@@ -186,29 +219,85 @@ func TestFileStoreRefusesAFileAnotherProcessHolds(t *testing.T) {
 	}
 }
 
-// A rewrite that fails is tried again only after maxRecords more lines, not
-// at every record's end.
-func TestFileStoreWaitsAfterAFailedRewrite(t *testing.T) {
+func TestFileStoreKeepsRecordingDuringABlockedWrite(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "router-replay.jsonl")
-	store, err := OpenFileStore(path, 2, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
+	store, err := OpenFileStore(path, 3, 0)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
-	// A directory at the path fails every rename onto it, for root as well.
-	if err = os.Remove(path); err != nil {
-		t.Fatal(err)
+	reader, pipe, err := os.Pipe()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = reader.Close() })
+	require.NoError(t, store.file.Close())
+	store.file = pipe
+	deadline := time.Now().Add(5 * time.Second)
+	require.NoError(t, reader.SetReadDeadline(deadline))
+	require.NoError(t, pipe.SetWriteDeadline(deadline))
+	_, err = store.Add(ctx, Record{ID: "blocked", LifecycleState: LifecycleCompleted, RequestBody: strings.Repeat("x", 1<<20)})
+	require.NoError(t, err)
+	_, err = io.ReadFull(reader, make([]byte, 1))
+	require.NoError(t, err)
+
+	for _, id := range []string{"evicted", "a", "b", "c"} {
+		_, err = store.Add(ctx, Record{ID: id})
+		require.NoError(t, err)
+		require.NoError(t, store.UpdateLifecycle(ctx, id, LifecycleCompleted, time.Now(), 1, "done"))
 	}
-	if err = os.Mkdir(path, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 5; i++ {
-		if _, err = store.Add(ctx, Record{ID: strconv.Itoa(i), Timestamp: time.Now(), LifecycleState: LifecycleCompleted}); err != nil {
-			t.Fatal(err)
+	require.NoError(t, store.AppendOutcome(ctx, "b", Outcome{Verdict: "late"}))
+	records, err := store.List(ctx)
+	require.NoError(t, err)
+	require.Len(t, records, 3)
+	require.Equal(t, "c", records[0].ID)
+	require.Equal(t, LifecycleCompleted, records[0].LifecycleState)
+	require.True(t, time.Now().Before(deadline), "live operations waited for disk I/O")
+	require.NoError(t, reader.SetReadDeadline(time.Time{}))
+	go func() { _, _ = io.Copy(io.Discard, reader) }()
+
+	require.Eventually(t, func() bool { return fileHasLines(path, 3) }, 5*time.Second, 10*time.Millisecond)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	for i, line := range bytes.Split(bytes.TrimSpace(data), []byte{'\n'}) {
+		var record Record
+		require.NoError(t, json.Unmarshal(line, &record))
+		require.Equal(t, []string{"a", "b", "c"}[i], record.ID)
+		if record.ID == "b" {
+			require.Len(t, record.Outcomes, 1)
+			require.Equal(t, "late", record.Outcomes[0].Verdict)
 		}
 	}
-	if store.lines != 3 {
-		t.Fatalf("line count = %d after a failed rewrite at 4 and one more line, want 3", store.lines)
-	}
+	require.NoError(t, store.UpdateLifecycle(ctx, "c", LifecycleFailed, time.Now(), 2, "duplicate"))
+	_, err = store.Add(ctx, Record{ID: "d", LifecycleState: LifecycleAborted})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		data, err := os.ReadFile(path)
+		rows := bytes.Split(bytes.TrimSpace(data), []byte{'\n'})
+		var last Record
+		return err == nil && len(rows) == 4 && json.Unmarshal(rows[3], &last) == nil &&
+			last.ID == "d" && last.LifecycleState == LifecycleAborted
+	}, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestFileStoreRetriesFailedAppendWhileIdle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "router-replay.jsonl")
+	store, err := OpenFileStore(path, 2, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	require.NoError(t, store.file.Close())
+	store.file, err = os.Open(path)
+	require.NoError(t, err)
+	_, err = store.Add(context.Background(), Record{ID: "retry", LifecycleState: LifecycleFailed})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return fileHasLines(path, 1) }, 5*time.Second, 10*time.Millisecond)
+}
+
+func TestFileStoreReportsFinalRewriteFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "router-replay.jsonl")
+	store, err := OpenFileStore(path, 2, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	require.NoError(t, os.Remove(path))
+	require.NoError(t, os.Mkdir(path, 0o700))
+	require.Error(t, store.Close())
+	_, err = store.Add(context.Background(), Record{})
+	require.ErrorIs(t, err, ErrStorageClosed)
 }

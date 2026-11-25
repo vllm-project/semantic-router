@@ -42,6 +42,10 @@ type providerDispatch struct {
 	targetFormat   llmprotocol.WireFormat
 	decisionName   string
 	useReasoning   bool
+	// reasoningMode and reasoningEffort are the reasoning the adapted provider
+	// request carries; the mode is empty where the Router wrote none.
+	reasoningMode   string
+	reasoningEffort string
 }
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
@@ -303,6 +307,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIResponsesV1, nil
 	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
 		return llmprotocol.OpenAIImagesV1, nil
+	case config.APIFormatSpeech, "openai.speech", string(llmprotocol.OpenAISpeechV1):
+		return llmprotocol.OpenAISpeechV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
@@ -414,6 +420,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, prepared.byteLength())
+	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = dispatch.reasoningMode, dispatch.reasoningEffort
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
 	}

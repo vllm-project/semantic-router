@@ -13,6 +13,7 @@ func TestProtocolMarkerNamesUsePublicWireTokens(t *testing.T) {
 		llmprotocol.OpenAIResponsesV1:   "responses",
 		llmprotocol.AnthropicMessagesV1: "anthropic",
 		llmprotocol.OpenAIImagesV1:      "images",
+		llmprotocol.OpenAISpeechV1:      "speech",
 		"":                              "openai",
 	}
 	for format, want := range tests {

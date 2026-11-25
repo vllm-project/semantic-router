@@ -18,6 +18,22 @@ const Contributing: React.FC = () => {
         description={<Translate id="contributing.subtitle">We welcome contributions from the community! Here's how you can help make vLLM Semantic Router better.</Translate>}
       >
         <div className={styles.main}>
+          <aside className={styles.guideCallout}>
+            <div>
+              <h2>
+                <Translate id="contributing.guide.title">New here? Start with the Contributor Guide.</Translate>
+              </h2>
+              <p>
+                <Translate id="contributing.guide.description">
+                  Thirteen pages on how vLLM Semantic Router works, where you can help, and how to grow from your first pull request to maintainer.
+                </Translate>
+              </p>
+            </div>
+            <Link className={styles.guideLink} to="/community/contributor-guide">
+              <Translate id="contributing.guide.link">Read the guide →</Translate>
+            </Link>
+          </aside>
+
           <section className={styles.section}>
             <h2>
               <Translate id="contributing.waysToContribute">Ways to Contribute</Translate>

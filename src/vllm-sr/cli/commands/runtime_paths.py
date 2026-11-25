@@ -11,6 +11,7 @@ import stat
 import tempfile
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -534,6 +535,36 @@ def _load_provenance(path: Path) -> dict[str, str] | None:
     return document
 
 
+@dataclass(frozen=True)
+class ConfigSourceRevision:
+    stat: os.stat_result
+    data: bytes
+
+    @classmethod
+    def capture(cls, path: Path) -> ConfigSourceRevision:
+        with path.open("rb") as source:
+            return cls(os.fstat(source.fileno()), source.read())
+
+
+def read_config_source(path: Path, expected: ConfigSourceRevision | None) -> bytes:
+    """Read the source, refusing a revision different from the one planned."""
+    if expected is None:
+        return path.read_bytes()
+    current = ConfigSourceRevision.capture(path)
+    original = expected.stat
+    if (
+        not os.path.samestat(current.stat, original)
+        or current.stat.st_mtime_ns != original.st_mtime_ns
+        or current.stat.st_ctime_ns != original.st_ctime_ns
+        or current.data != expected.data
+    ):
+        raise ValueError(
+            f"Config source changed while applying {path}. "
+            "Run `vllm-sr config apply` again to plan the current file."
+        )
+    return current.data
+
+
 def materialize_runtime_config(
     source_config_path: Path,
     effective_data: bytes,
@@ -543,6 +574,7 @@ def materialize_runtime_config(
     replace_active: bool = False,
     preserve_unchanged_source: bool = False,
     before_replace: Callable[[], None] | None = None,
+    expected_source: ConfigSourceRevision | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
@@ -559,10 +591,13 @@ def materialize_runtime_config(
     ``preserve_unchanged_source`` retains resolved startup resources when the
     authored source bytes are unchanged. Any source edit selects a fresh source
     document; this does not merge old overrides into new authoring.
+
+    ``expected_source`` checks the file revision used by a prior plan before
+    publishing a replacement or updating provenance.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
-    source_data = source_config_path.read_bytes()
+    source_data = read_config_source(source_config_path, expected_source)
     runtime_config_path = _runtime_config_output_path(
         source_config_path,
         state_root_dir=state_root_dir,

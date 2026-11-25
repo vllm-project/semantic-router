@@ -8,6 +8,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -66,6 +67,11 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 	if isUpstreamTransportError(ctx) {
 		return r.handleUpstreamTransportError(responseBody, ctx)
 	}
+	// Speech audio has no neutral response. Forward the bytes before recovery,
+	// JSON decoding, response policy or the response cache can rewrite them.
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return r.handleSpeechResponseBody(ctx, completionLatency)
+	}
 
 	if ctx.IsStreamingResponse {
 		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
@@ -98,6 +104,16 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 		completionLatency,
 		!bytes.Equal(responseBody, incomingBody),
 	)
+}
+
+// handleSpeechResponseBody forwards Speech API audio to the client unchanged.
+// Audio has no neutral response, so it skips decoding, the response cache and
+// response policy. The request still completes with zero token usage, which
+// releases its in-flight slot, and the replay record closes without the audio.
+func (r *OpenAIRouter) handleSpeechResponseBody(ctx *RequestContext, completionLatency time.Duration) *ext_proc.ProcessingResponse {
+	r.reportNonStreamingUsage(ctx, completionLatency, responseUsageMetrics{})
+	r.attachRouterReplayResponse(ctx, nil, true)
+	return buildResponseBodyContinueResponse(nil, nil)
 }
 
 func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {
