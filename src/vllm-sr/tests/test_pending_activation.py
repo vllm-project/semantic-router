@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from cli import core, pending_activation, runtime_lifecycle
+from cli.container_mounts import ContainerMountsUnavailableError
 from cli.runtime_config_lock import (
     RuntimeConfigLockError,
     acquire_runtime_config_lock,
@@ -314,6 +315,34 @@ def test_status_reports_a_change_that_waits_for_a_restart(monkeypatch, tmp_path)
     assert (
         pending_activation.read_pending_activation(runtime_config).reason == "restart"
     )
+
+
+def test_status_reports_a_restart_on_a_stack_without_a_dashboard(monkeypatch, tmp_path):
+    stack = resolve_runtime_stack()
+    runtime_config = tmp_path / "runtime-config.yaml"
+    statuses = {stack.router_container_name: "running"}
+
+    def mounts(name):
+        if name != stack.router_container_name:
+            raise ContainerMountsUnavailableError(name, container_absent=True)
+        return [{"Source": str(tmp_path), "Destination": "/app/.vllm-sr"}]
+
+    monkeypatch.setattr(core, "container_status", lambda name: statuses[name])
+    monkeypatch.setattr(core, "inspect_container_mounts", mounts)
+    pending_activation.record_pending_activation(
+        runtime_config,
+        b"",
+        pending_activation.REASON_RESTART,
+        "tracing configuration changed",
+    )
+
+    assert core._activation_state(stack) == (
+        "Restart required: a change saved with `vllm-sr config apply` needs "
+        "`vllm-sr serve` to apply it (tracing configuration changed)."
+    )
+    pending_activation.clear_pending_activation(runtime_config)
+    statuses[stack.router_container_name] = "created"
+    assert core._activation_state(stack) is None
 
 
 def test_a_record_the_cli_cannot_read_counts_as_setup(tmp_path):
