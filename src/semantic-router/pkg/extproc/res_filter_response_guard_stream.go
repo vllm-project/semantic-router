@@ -264,8 +264,9 @@ func (r *OpenAIRouter) streamedFallbackRefusal(ctx *RequestContext, refusal *llm
 // request whose stream fails, and Claude Code merges the next prompt into a
 // turn that has no answer, so a block would refuse that prompt too. The
 // answer reports the usage of the model call it replaces, which was made and
-// paid for and which harnesses count in their cost and context. It is empty
-// when the refusal cannot be encoded, so the answer stays refused.
+// paid for and which harnesses count in their cost and context, and it is
+// stored as the turn's Responses object in place of the refused one. It is
+// empty when the refusal cannot be encoded, so the answer stays refused.
 func (r *OpenAIRouter) encodeStreamRefusal(ctx *RequestContext, protocolError *llmprotocol.ProtocolError) []byte {
 	response := llmprotocol.Response{
 		Generation: 1, ID: heldStreamResponseID(ctx), CreatedAt: time.Now().UTC(),
@@ -285,6 +286,10 @@ func (r *OpenAIRouter) encodeStreamRefusal(ctx *RequestContext, protocolError *l
 			"error":      err.Error(),
 		})
 		return nil
+	}
+	if ctx.ResponsePath == headers.ResponsePathBlocked {
+		// A Responses client with store on continues from the block's answer.
+		r.persistResponse(ctx, &response)
 	}
 	return body
 }

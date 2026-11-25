@@ -65,12 +65,20 @@ func (r *OpenAIRouter) persistImmediateResponseObject(response *ext_proc.Process
 
 // persistResponseObject retains the final neutral Responses result. Retention
 // is optional and never changes an otherwise successful inference response.
+func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
+	if ctx != nil {
+		r.persistResponse(ctx, ctx.SemanticResponse)
+	}
+}
+
+// persistResponse retains answer as the turn's Responses object: the
+// client's answer, which a block replaces with its own.
 //
 //nolint:cyclop // Persistence maps the complete neutral response lifecycle into one stored object transaction.
-func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
+func (r *OpenAIRouter) persistResponse(ctx *RequestContext, answer *llmprotocol.Response) {
 	if r == nil || r.ResponseAPIFilter == nil || !r.ResponseAPIFilter.IsEnabled() ||
 		ctx == nil || ctx.SourceFormat != llmprotocol.OpenAIResponsesV1 ||
-		ctx.ResponseObjectState == nil || ctx.SemanticResponse == nil {
+		ctx.ResponseObjectState == nil || answer == nil {
 		return
 	}
 	state := ctx.ResponseObjectState
@@ -83,8 +91,8 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	}
 	// A decision can tighten the client's store preference. Like store:false,
 	// drop suppresses this turn's write without changing generation or lineage.
-	if !state.ShouldStore || retentionDropsResponseContent(ctx) || ctx.SemanticResponse.Error != nil ||
-		strings.TrimSpace(ctx.SemanticResponse.ID) == "" {
+	if !state.ShouldStore || retentionDropsResponseContent(ctx) || answer.Error != nil ||
+		strings.TrimSpace(answer.ID) == "" {
 		return
 	}
 
@@ -95,7 +103,7 @@ func (r *OpenAIRouter) persistResponseObject(ctx *RequestContext) {
 	}
 	encoded, err := engine.EncodeResponse(
 		llmprotocol.OpenAIResponsesV1,
-		*ctx.SemanticResponse,
+		*answer,
 		llmprotocol.Envelope{},
 	)
 	if err != nil {

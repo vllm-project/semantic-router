@@ -136,7 +136,9 @@ receives one of:
   replaces: that call ran and is paid for, and a harness counts the usage it
   is told in its cost and context. The usage is the model's whole answer,
   though the client receives only the message. Router Replay records the
-  call's cost either way;
+  call's cost either way. With `store` on, the Responses object a
+  `previous_response_id` continues from holds the message, not the blocked
+  answer;
 - the protocol's stream error (a Chat `error` chunk, a Responses
   `response.failed` event or a Messages `error` event) when a deployment the
   guard asks takes the delegated credential and the request carries none: a
