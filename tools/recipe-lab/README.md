@@ -255,6 +255,14 @@ support a keep-or-rollback decision:
 5. **Promotion evidence replay.** `verify_promotion_evidence` re-checks a
    recorded PASS verdict from its ledger record alone, so a promotion claim
    can be audited without re-running anything.
+6. **`score-candidate`** is the agent's own channel: it scores one deployed
+   candidate against a saved sr-bench baseline run through the installed
+   `vllm-sr benchmark` worker. The candidate plan must reproduce the frozen
+   baseline (same cases, profile, seed and subject protocol) and match the
+   expected active runtime hash before anything is dispatched. The receipt
+   (`recipe-lab-sr-bench-run-v1`) is printed as one JSON line and saved
+   under `<workspace>/sr-bench`. Exit codes follow the verdict: 0 PASS,
+   1 FAIL, 2 INCONCLUSIVE.
 
 ## Scope of this slice
 
@@ -269,4 +277,12 @@ context export and provenance manifests arrive with
 
 ```bash
 pytest
+```
+
+`tests/native_srbench_run.py` is opt-in: it drives `score-candidate` through
+the installed `recipe-lab` executable against the real sr-bench worker with
+local HTTP fixtures, so it needs the Recipe Lab wheel on `PATH`:
+
+```bash
+pytest tests/native_srbench_run.py
 ```

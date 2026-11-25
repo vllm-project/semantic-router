@@ -84,6 +84,7 @@ from .splitting import (
     write_splits,
 )
 from .srbench import SrbenchCli, cases_to_srbench_rows
+from .srbench import evaluate as srbench_evaluate
 
 
 def _print_json(value: object) -> None:
@@ -1225,6 +1226,18 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return verdict_exit_code(result["verdict"])
 
 
+def cmd_score_candidate(args: argparse.Namespace) -> int:
+    """Score one deployed candidate against a saved sr-bench baseline.
+
+    The channel a coding agent uses to submit its own proposal: the receipt
+    (schema ``recipe-lab-sr-bench-run-v1``) is printed as one JSON line and
+    saved under ``<workspace>/sr-bench``. The exit code follows the verdict.
+    """
+    receipt = srbench_evaluate(args)
+    print(json.dumps(receipt, ensure_ascii=False, sort_keys=True, allow_nan=False))
+    return verdict_exit_code(receipt["verdict"])
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="recipe-lab",
@@ -1776,6 +1789,60 @@ def build_parser() -> argparse.ArgumentParser:
     p_verify.add_argument("--timeout", type=float, default=3600.0)
     p_verify.add_argument("--round", type=int, default=1)
     p_verify.set_defaults(func=cmd_verify)
+
+    # The agent's own proposal: one deployed candidate against a saved
+    # baseline, through the installed sr-bench worker (sub-issue 3).
+    p_score = sub.add_parser(
+        "score-candidate",
+        help="score one deployed candidate against a saved sr-bench baseline",
+    )
+    p_score.add_argument("--workspace", required=True, type=Path)
+    p_score.add_argument(
+        "--candidate", required=True, type=Path, help="authored v0.5 source YAML"
+    )
+    p_score.add_argument(
+        "--deployed-config",
+        type=Path,
+        help="CLI-owned runtime-config[.STACK].yaml and adjacent provenance",
+    )
+    p_score.add_argument(
+        "--proposer", required=True, help="agent:<id> identifying the proposer"
+    )
+    p_score.add_argument("--baseline-run", required=True)
+    p_score.add_argument(
+        "--baseline-target", required=True, help="explicit target in the baseline run"
+    )
+    p_score.add_argument(
+        "--candidate-target",
+        required=True,
+        help="registered MoM with capture_recipe enabled",
+    )
+    p_score.add_argument(
+        "--active-runtime-hash", required=True, help="expected active runtime SHA-256"
+    )
+    p_score.add_argument("--candidate-run", help="reuse a saved run without dispatch")
+    p_score.add_argument(
+        "--guard-case",
+        action="append",
+        default=[],
+        help="protected case ID; default protects every case",
+    )
+    p_score.add_argument(
+        "--min-speedup-pct",
+        type=float,
+        default=0,
+        help="minimum reduction in summed common-success case time",
+    )
+    p_score.add_argument(
+        "--wait-seconds",
+        type=float,
+        default=3600,
+        help="time to wait for an active candidate",
+    )
+    p_score.add_argument(
+        "--vllm-sr", default="vllm-sr", help="installed vllm-sr executable"
+    )
+    p_score.set_defaults(func=cmd_score_candidate)
 
     p_ledger = sub.add_parser("ledger", help="inspect or append to the evidence ledger")
     ledger_sub = p_ledger.add_subparsers(dest="ledger_action", required=True)

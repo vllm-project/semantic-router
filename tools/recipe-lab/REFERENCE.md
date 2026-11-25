@@ -649,3 +649,21 @@ verdict even when the objective metric wins; PASS requires the objective
 improvement, every declared guard pass, every cost constraint within its
 bound, and enough paired samples. `verify_promotion_evidence` replays a
 recorded PASS from its ledger record for audit.
+
+### Score one deployed candidate
+
+`score-candidate` scores an authored v0.5 source YAML that is already
+deployed against a saved baseline run. A coding agent submits its own
+proposal through it (`--proposer agent:<id>`); no spec is needed.
+
+```bash
+recipe-lab score-candidate --workspace lab/ \
+  --candidate config.yaml --proposer agent:claude-loop \
+  --baseline-run baseline-id --baseline-target single \
+  --candidate-target recipe --active-runtime-hash <sha256> \
+  --guard-case case-17 --min-speedup-pct 5
+```
+
+The receipt is one JSON line and is saved under `<workspace>/sr-bench`.
+`--candidate-run <id>` re-opens a submitted run instead of dispatching it
+again. The exit code is 0 PASS, 1 FAIL, 2 INCONCLUSIVE.
