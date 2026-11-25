@@ -304,8 +304,15 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             )
             saved = self._cli_json("config", "apply", "--config", "config.yaml")
             self.assertEqual(saved["status"], "restart_required", saved)
-            runtime_config = Path(saved["saved"])
-            staged = runtime_config.read_bytes()
+            runtime_config = (
+                Path(self.test_dir)
+                / ".vllm-sr"
+                / _runtime_config_filename(self.runtime_stack.stack_name)
+            )
+            staged_file = Path(saved["saved"])
+            self.assertEqual(staged_file, pending_restart_path(runtime_config), saved)
+            active = runtime_config.read_bytes()
+            staged = staged_file.read_bytes()
             pending_file = record_file(runtime_config)
             pending = pending_file.read_bytes()
 
@@ -333,7 +340,8 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             self.assertRegex(status, r"Router\s+Running")
             self.assertIn("Restart required", status)
             self.assertEqual(pending_file.read_bytes(), pending)
-            self.assertEqual(runtime_config.read_bytes(), staged)
+            self.assertEqual(runtime_config.read_bytes(), active)
+            self.assertEqual(staged_file.read_bytes(), staged)
         finally:
             self.run_cli(["stop"], timeout=120)
 

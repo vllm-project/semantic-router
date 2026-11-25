@@ -747,7 +747,9 @@ def promote_pending_restart(
     *expected_sha256* is the digest the pending activation recorded for it.
     Returns whether the source changed after the apply, so that the source
     replaces the active document instead. The caller removes the staged file
-    once its reconciliation succeeds, so a serve that fails promotes it again.
+    once the active document holds the change, so a serve that fails before
+    then promotes it again; after it, the pending activation waits for
+    readiness instead.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
