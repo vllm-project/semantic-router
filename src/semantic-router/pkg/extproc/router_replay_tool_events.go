@@ -35,8 +35,10 @@ func openReplayToolEvents(cfg *config.RouterConfig, recorder *routerreplay.Recor
 		ttl = time.Duration(cfg.RouterReplay.TTLSeconds) * time.Second
 	}
 	path := ""
-	if file, ok := replayFileStore(recorder); ok {
-		path = filepath.Join(filepath.Dir(file.Path()), "router-tool-events.jsonl")
+	if records, ok := replayFilePath(recorder); ok {
+		path = filepath.Join(filepath.Dir(records), "router-tool-events.jsonl")
+	} else {
+		logging.Warnf("Router replay keeps no records in a file, so tool events stay in memory and are lost on restart.")
 	}
 	events, err := store.OpenToolEventStore(path, replayToolEventLimit, ttl)
 	if err == nil {
@@ -65,14 +67,19 @@ func (r *OpenAIRouter) RecordToolEvents(events []store.ToolEvent) error {
 	return r.toolEvents.Add(events)
 }
 
-// replayFileStore is the file store a recorder keeps its records in, where it
-// is one: the file store is shared, so the global recorder names it.
-func replayFileStore(recorder *routerreplay.Recorder) (*store.FileStore, bool) {
+// replayFilePath is the file a recorder keeps its records in, where it keeps
+// them in one: the file store is shared, so the global recorder names it. The
+// store may be wrapped, as a prepared generation's is, so this asks for the
+// path rather than the type.
+func replayFilePath(recorder *routerreplay.Recorder) (string, bool) {
 	if recorder == nil {
-		return nil, false
+		return "", false
 	}
-	file, ok := recorder.Reader().(*store.FileStore)
-	return file, ok
+	file, ok := recorder.Reader().(interface{ Path() string })
+	if !ok {
+		return "", false
+	}
+	return file.Path(), true
 }
 
 // joinReplayToolReports gives each of a run's tool calls what a harness

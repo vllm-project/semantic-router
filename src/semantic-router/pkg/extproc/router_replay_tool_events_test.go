@@ -22,9 +22,10 @@ func TestReplayToolEventsLiveBesideTheRecords(t *testing.T) {
 	require.Nil(t, openReplayToolEvents(cfg, nil, nil))
 	require.ErrorIs(t, (&OpenAIRouter{}).RecordToolEvents(nil), errReplayToolEventsOff)
 
-	dir := t.TempDir()
-	file, err := store.OpenFileStore(filepath.Join(dir, "router-replay.jsonl"), 10, 0)
-	require.NoError(t, err)
+	// The file store the Router builds, wrapped until its config activates.
+	project := t.TempDir()
+	fileCfg := parseReplayConfig(t, project, replayDefaultConfig)
+	file := createReplayFileStore(fileCfg, fileCfg.EffectiveRouterReplayConfig(nil))
 	t.Cleanup(func() { _ = file.Close() })
 	onFile := openReplayToolEvents(cfg, routerreplay.NewRecorder(file), nil)
 	router := &OpenAIRouter{toolEvents: onFile}
@@ -33,7 +34,7 @@ func TestReplayToolEventsLiveBesideTheRecords(t *testing.T) {
 		SessionID: "s", ToolCallID: "toolu_1", Tool: "Bash", Status: store.ToolEventSucceeded, EndedAt: &ended, ReceivedAt: ended,
 	}}))
 	require.NoError(t, onFile.Close())
-	kept, err := os.ReadFile(filepath.Join(dir, "router-tool-events.jsonl"))
+	kept, err := os.ReadFile(filepath.Join(project, ".vllm-sr", "router-tool-events.jsonl"))
 	require.NoError(t, err)
 	require.Contains(t, string(kept), `"tool_call_id":"toolu_1"`)
 
