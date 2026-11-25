@@ -18,6 +18,17 @@ import run_model_tests
 import runtime_evidence
 
 SHA = "a" * 40
+
+
+def model_evidence(report_value: dict, directory: Path) -> dict:
+    """Run runtime_evidence.models_evidence against an in-memory report."""
+    (directory / "results.json").write_text(json.dumps(report_value))
+    with mock.patch.object(
+        runtime_evidence.subprocess, "check_output", return_value=SHA
+    ):
+        return runtime_evidence.models_evidence(directory)
+
+
 # A runtime that records its arguments and answers /health until it is killed.
 FAKE_RUNTIME = """
 import http.server, json, sys
@@ -227,11 +238,7 @@ class ModelContractTests(unittest.TestCase):
             path = Path(directory)
 
             def evidence(value):
-                (path / "results.json").write_text(json.dumps(value))
-                with mock.patch.object(
-                    runtime_evidence.subprocess, "check_output", return_value=SHA
-                ):
-                    return runtime_evidence.models_evidence(path)
+                return model_evidence(value, path)
 
             result = evidence(report())
             self.assertEqual(result["runtime"], "model-runtime")
@@ -260,6 +267,122 @@ class ModelContractTests(unittest.TestCase):
                 mutate(candidate)
                 with self.subTest(candidate=candidate), self.assertRaises(ValueError):
                     evidence(candidate)
+
+    def test_crashed_suite_declares_synthetic_process_case(self):
+        crashed = report()
+        crashed["suites"][0]["exit_code"] = 2
+        with tempfile.TemporaryDirectory() as directory:
+            result = model_evidence(crashed, Path(directory))
+        case_ids = {case["id"] for case in result["cases"]}
+        process_id = crashed["suites"][0]["package"] + ":process"
+        self.assertIn(process_id, case_ids)
+        # Evidence inventory contract: executed cases must equal discovery.
+        self.assertEqual(set(result["discovered_cases"]), case_ids)
+        # expected_cases remains the real-test inventory across all suites.
+        self.assertEqual(
+            set(result["expected_cases"]),
+            {
+                suite["package"] + ":" + name
+                for suite in crashed["suites"]
+                for name in suite["expected"]
+            },
+        )
+
+    def test_crashed_suites_sharing_package_emit_one_process_case(self):
+        crashed = report()
+        for suite in crashed["suites"]:
+            if suite["package"] == "./pkg/classification":
+                suite["exit_code"] = 2
+        with tempfile.TemporaryDirectory() as directory:
+            result = model_evidence(crashed, Path(directory))
+        process_ids = [
+            case["id"] for case in result["cases"] if case["id"].endswith(":process")
+        ]
+        self.assertEqual(process_ids, ["./pkg/classification:process"])
+        self.assertEqual(
+            result["discovered_cases"].count("./pkg/classification:process"), 1
+        )
+
+    def test_subtests_are_included_in_discovered_cases(self):
+        # Vela tests use t.Run; Go reports subtests as passed cases whose
+        # IDs are not in the top-level expected inventory. They must appear
+        # in discovered_cases so the inventory guard does not reject a
+        # passing run.
+        with_subtest = report()
+        top = with_subtest["suites"][0]["passed"][0]
+        subtest_id = with_subtest["suites"][0]["package"] + ":" + top + "/support-pii"
+        with_subtest["suites"][0]["passed"].append(top + "/support-pii")
+        with tempfile.TemporaryDirectory() as directory:
+            result = model_evidence(with_subtest, Path(directory))
+        case_ids = {case["id"] for case in result["cases"]}
+        self.assertIn(subtest_id, case_ids)
+        self.assertEqual(set(result["discovered_cases"]), case_ids)
+        # Top-level expected inventory must not contain the subtest ID.
+        self.assertNotIn(subtest_id, set(result["expected_cases"]))
+
+    def test_package_level_init_panic_is_not_a_test_failure(self):
+        events = [
+            {
+                "Package": "example.com/project/pkg",
+                "Action": "fail",
+                "Elapsed": 0.01,
+            }
+        ]
+
+        result = run_model_tests.validate_results(events, {"TestA", "TestB"})
+
+        self.assertTrue(result["package_failed"])
+        self.assertEqual(result["failed"], [])
+        self.assertEqual(result["missing"], ["TestA", "TestB"])
+        self.assertFalse(result["success"])
+
+    def test_package_summary_failure_does_not_mean_init_panic(self):
+        events = [
+            {
+                "Package": "example.com/project/pkg",
+                "Test": "TestA",
+                "Action": "fail",
+            },
+            {
+                "Package": "example.com/project/pkg",
+                "Action": "fail",
+                "Elapsed": 0.01,
+            },
+        ]
+
+        result = run_model_tests.validate_results(events, {"TestA"})
+
+        self.assertFalse(result["package_failed"])
+        self.assertEqual(result["failed"], ["TestA"])
+        self.assertFalse(result["success"])
+
+    def test_init_panics_in_shared_package_emit_one_process_case(self):
+        crashed = report()
+
+        for suite in crashed["suites"]:
+            if suite["package"] == "./pkg/classification":
+                suite["exit_code"] = 2
+                suite["package_failed"] = True
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = model_evidence(crashed, Path(directory))
+
+        process_ids = [
+            case["id"] for case in result["cases"] if case["id"].endswith(":process")
+        ]
+
+        self.assertEqual(
+            process_ids,
+            ["./pkg/classification:process"],
+        )
+        self.assertEqual(
+            result["discovered_cases"].count("./pkg/classification:process"),
+            1,
+        )
+        self.assertNotIn(
+            "./pkg/classification:./pkg/classification",
+            result["discovered_cases"],
+        )
 
 
 if __name__ == "__main__":

@@ -221,6 +221,14 @@ class ListenerAPI(BaseModel):
         "systemone, vllm-sr/5.0 (the default) or vllm-sr/4.0, which also "
         "accepts the earlier contract's request forms.",
     )
+    prefix: Optional[str] = Field(
+        default=None,
+        pattern=r"^(/[A-Za-z0-9._~-]+)+$",
+        description="A path root this API is also served under, as a gateway "
+        "registers a provider's endpoints (/anthropic serves "
+        "/anthropic/v1/messages as /v1/messages). The upstream request never "
+        "carries it. Omitted, the API is served at its own paths only.",
+    )
     models: Optional[List[str]] = Field(
         default=None,
         description="The only request models this API accepts, by exact "
@@ -309,10 +317,10 @@ class Listener(BaseModel):
     apis: Optional[Dict[str, ListenerAPI]] = Field(
         default=None,
         description="The APIs this listener serves, by API name: "
-        "chat_completions, responses, messages, images and systemone (openai "
+        "chat_completions, responses, messages, images, speech and systemone (openai "
         "and anthropic are aliases of chat_completions and messages). Other "
         "API paths answer 404. Omitted, the listener serves chat_completions, "
-        "responses, messages and images, and not systemone. A model "
+        "responses, messages, images and speech, and not systemone. A model "
         "allow-list is enforced in standalone mode; --gateway extproc rejects it. "
         "Standalone mode serves systemone; --gateway extproc rejects it.",
     )
@@ -354,7 +362,7 @@ class Listener(BaseModel):
         if not apis:
             raise ValueError(
                 "apis names no API; name the APIs the listener serves, or omit apis to serve "
-                "chat_completions, responses, messages and images"
+                "chat_completions, responses, messages, images and speech"
             )
         resolved: dict[str, ListenerAPI] = {}
         named: dict[str, str] = {}
@@ -394,6 +402,14 @@ class Listener(BaseModel):
         if self.apis is None:
             return DEFAULT_LISTENER_APIS
         return tuple(name for name in API_NAMES if name in self.apis)
+
+    def api_prefixes(self) -> dict[str, str]:
+        """The path root each served API is also mounted under, by API name."""
+        return {
+            name: entry.prefix
+            for name, entry in (self.apis or {}).items()
+            if entry.prefix
+        }
 
     def systemone_models(self) -> Optional[List[str]]:
         """The models the listener's systemone API names; None when it serves systemone for every model, or
@@ -1467,6 +1483,20 @@ class RouterReplayShadowBudgetConfig(BaseModel):
     max_response_bytes: Optional[_ShadowPositiveInt] = Field(
         default=None,
         description="Default: max(1, len(models)) * 1048576 total response bytes",
+    )
+
+    max_estimated_tokens: Optional[_ShadowPositiveInt] = Field(
+        default=None,
+        le=9_007_199_254_740_991,
+        description="Maximum total estimated input and reserved output tokens per sampled Shadow group",
+    )
+
+    max_estimated_cost: Optional[float] = Field(
+        default=None,
+        strict=True,
+        gt=0,
+        allow_inf_nan=False,
+        description="Maximum estimated spend per sampled Shadow group, in the configured budget currency",
     )
 
 
@@ -2783,7 +2813,7 @@ class Model(ModelFacts):
     api_format: Optional[str] = Field(
         default=None,
         description="The API the model's backends serve: chat_completions "
-        "(the default), responses, messages, images or systemone; openai and "
+        "(the default), responses, messages, images, speech or systemone; openai and "
         "anthropic are aliases of chat_completions and messages.",
     )
     schema_: Optional[str] = Field(

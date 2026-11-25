@@ -71,10 +71,11 @@ func decodeOpenAITransportError(
 		parameter = *wire.Error.Param
 	}
 	return llmprotocol.TransportError{Error: &llmprotocol.ProtocolError{
-		Category:  decodeProviderErrorCategory(wire.Error.Type, code),
-		Code:      code,
-		Message:   wire.Error.Message,
-		Parameter: parameter,
+		Category:       decodeProviderErrorCategory(wire.Error.Type, code),
+		Code:           code,
+		Message:        wire.Error.Message,
+		Parameter:      parameter,
+		ProviderFramed: true,
 	}}, diagnostics, nil
 }
 

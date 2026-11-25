@@ -62,7 +62,8 @@ class ShadowState:
 class ShadowControl:
     def __init__(self) -> None:
         self.states: dict[str, ShadowState] = {
-            scenario: ShadowState() for scenario in ("timeout", "malformed", "queue")
+            scenario: ShadowState()
+            for scenario in ("timeout", "malformed", "queue", "budget-a", "budget-b")
         }
 
     def state(self, scenario: str) -> ShadowState:

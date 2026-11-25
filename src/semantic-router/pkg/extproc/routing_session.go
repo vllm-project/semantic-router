@@ -245,6 +245,10 @@ func (s *routingSession) end(err error) {
 	s.router.finishRequestSpend(s.ctx)
 	releaseStreamedBody(s.ctx)
 	finishRequestWork(s.ctx)
+	// Native HTTP requests end here instead of Process's defer, so the cache
+	// lookup's singleflight lease is released here too: a request that will
+	// not store must not hold its key for the full lease window.
+	s.router.responseCacheService().ReleaseLease(s.ctx.CacheLease)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {
 		s.release()

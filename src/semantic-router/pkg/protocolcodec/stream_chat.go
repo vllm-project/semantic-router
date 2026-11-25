@@ -614,6 +614,7 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 		Error: &llmprotocol.ProtocolError{
 			Category: decodeProviderErrorCategory(wire.Type, string(wire.Code)),
 			Code:     string(wire.Code), Message: wire.Message, Parameter: wire.Param,
+			ProviderFramed: true,
 		},
 		StopReason: llmprotocol.StopError,
 		Failure:    llmprotocol.FailureTransport,

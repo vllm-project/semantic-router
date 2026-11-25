@@ -161,12 +161,13 @@ async function renderCommunityRail() {
 }
 
 const NAV_ITEMS = [
+  ['contributor-guide', '/community/contributor-guide', '贡献者指南'],
   ['team', '/community/team', '开源团队'],
   ['steering-committee', '/community/steering-committee', '指导委员会'],
   ['work-groups', '/community/work-groups', '工作组'],
   ['leaderboard', '/community/contributors', '排行榜'],
   ['governance', '/community/governance', '治理'],
-  ['contributing', '/community/contributing', '贡献指南'],
+  ['contributing', '/community/contributing', '参与贡献'],
   ['code-of-conduct', '/community/code-of-conduct', '行为准则'],
 ]
 
@@ -179,8 +180,10 @@ test('Team shell and shared navigation declare their translation IDs', () => {
   for (const id of [
     'community.layout.eyebrow',
     'community.layout.sidebarLabel',
+    'community.nav.group.startHere',
     'community.nav.group.people',
     'community.nav.group.howWeWork',
+    'community.nav.item.contributorGuide',
     'community.nav.item.codeOfConduct',
     'community.team.pageTitle',
     'community.team.pageDescription',
@@ -221,7 +224,7 @@ test('the rendered rail shows the Chinese group headings and link labels', { ski
 
   assert.deepEqual(
     rail.groupLabels,
-    ['人员', '协作方式'],
+    ['从这里开始', '人员', '协作方式'],
     'the rail must render the zh-Hans group headings',
   )
 
