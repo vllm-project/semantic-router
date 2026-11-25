@@ -22,6 +22,8 @@ interface ReadonlyContextType {
   platform: string
   envoyUrl: string
   routerEvalEndpoint: string
+  /** Memory the container runtime gives the dashboard, or 0 when unknown. */
+  hostMemoryBytes: number
 }
 
 const ReadonlyContext = createContext<ReadonlyContextType>({
@@ -35,6 +37,7 @@ const ReadonlyContext = createContext<ReadonlyContextType>({
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
+  hostMemoryBytes: 0,
 })
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -58,6 +61,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
   const [platform, setPlatform] = useState('')
   const [envoyUrl, setEnvoyUrl] = useState('')
   const [routerEvalEndpoint, setRouterEvalEndpoint] = useState('')
+  const [hostMemoryBytes, setHostMemoryBytes] = useState(0)
 
   const refreshSettings = useCallback(() => {
     setIsReadonly(true)
@@ -78,6 +82,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       setPlatform('')
       setEnvoyUrl('')
       setRouterEvalEndpoint('')
+      setHostMemoryBytes(0)
       setSettingsError(null)
       setIsLoading(false)
       return undefined
@@ -118,6 +123,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         setPlatform(platformValue)
         setEnvoyUrl(data.envoyUrl)
         setRouterEvalEndpoint(data.routerEvalEndpoint)
+        setHostMemoryBytes(data.hostMemoryBytes)
         preloadPlatformAssets(platformValue)
       } catch (error) {
         if (!controller.signal.aborted) {
@@ -146,6 +152,7 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
         platform,
         envoyUrl,
         routerEvalEndpoint,
+        hostMemoryBytes,
       }}
     >
       {children}

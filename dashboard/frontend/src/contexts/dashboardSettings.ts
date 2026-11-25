@@ -7,6 +7,8 @@ export interface DashboardSettings {
   platform: string
   envoyUrl: string
   routerEvalEndpoint: string
+  /** Memory the container runtime gives the dashboard, or 0 when unknown. */
+  hostMemoryBytes: number
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -40,6 +42,14 @@ export const decodeDashboardSettings = (value: unknown): DashboardSettings => {
     }
   }
 
+  if (
+    typeof value.hostMemoryBytes !== 'number' ||
+    !Number.isFinite(value.hostMemoryBytes) ||
+    value.hostMemoryBytes < 0
+  ) {
+    throw new Error('Dashboard settings field hostMemoryBytes must be a non-negative number')
+  }
+
   return {
     readonlyMode: value.readonlyMode as boolean,
     serverReadonly: value.serverReadonly as boolean,
@@ -49,5 +59,6 @@ export const decodeDashboardSettings = (value: unknown): DashboardSettings => {
     platform: value.platform as string,
     envoyUrl: value.envoyUrl as string,
     routerEvalEndpoint: value.routerEvalEndpoint as string,
+    hostMemoryBytes: value.hostMemoryBytes,
   }
 }

@@ -6,6 +6,8 @@ import {
   filterSetupModels,
   getModelDraftFieldErrors,
   getStepOneErrors,
+  decisionModelFits,
+  hostMemoryGiB,
   isCpuOnlyPlatform,
   maskedSetupYaml,
   paginateSetupModels,
@@ -260,6 +262,37 @@ describe('setup decision model recommendation', () => {
     expect(
       recommendedDecisionModels(catalog, true, 'vela3-fast').map((entry) => entry.name),
     ).toEqual(['vela3-fast'])
+  })
+
+  it('recommends only the CPU models that fit the host memory, largest first', () => {
+    const sized = [
+      { ...option('vela3-fast', 'Vela 3.0 fast'), minMemoryGiB: 12 },
+      { ...option('vela3.1-fast', 'Vela 3.1 fast'), minMemoryGiB: 15 },
+      { ...option('vela3.1-pico-150m', 'Vela 3.1 pico 150M'), minMemoryGiB: 2 },
+      { ...option('vela3.1-pico-380m', 'Vela 3.1 pico 380M'), minMemoryGiB: 3 },
+    ]
+    const names = (memoryGiB: number | null) =>
+      recommendedDecisionModels(sized, true, 'vela3-fast', memoryGiB).map((entry) => entry.name)
+    // A 7.7 GiB Docker host cannot run Vela 3.1 fast (15 GiB).
+    expect(names(hostMemoryGiB(8_268_021_760))).toEqual(['vela3.1-pico-380m', 'vela3.1-pico-150m'])
+    expect(names(16)).toEqual(['vela3.1-fast', 'vela3.1-pico-380m', 'vela3.1-pico-150m'])
+    // Unknown memory keeps the catalog order; nothing fitting keeps every CPU model.
+    expect(names(null)).toEqual(['vela3.1-fast', 'vela3.1-pico-150m', 'vela3.1-pico-380m'])
+    expect(names(1)).toEqual(['vela3.1-fast', 'vela3.1-pico-150m', 'vela3.1-pico-380m'])
+    // GPU deployments are not compared against host memory.
+    expect(
+      recommendedDecisionModels(sized, false, 'vela3-fast', 4).map((entry) => entry.name),
+    ).toEqual(['vela3-fast'])
+  })
+
+  it('reads unknown host memory as fitting every model', () => {
+    expect(hostMemoryGiB(0)).toBeNull()
+    expect(hostMemoryGiB(undefined)).toBeNull()
+    expect(hostMemoryGiB(2 * 1024 ** 3)).toBe(2)
+    expect(decisionModelFits({ minMemoryGiB: 15 }, null)).toBe(true)
+    expect(decisionModelFits({ minMemoryGiB: null }, 4)).toBe(true)
+    expect(decisionModelFits({ minMemoryGiB: 15 }, 7.7)).toBe(false)
+    expect(decisionModelFits({ minMemoryGiB: 3 }, 7.7)).toBe(true)
   })
 
   it('lists the Vela 3.1 models the catalog announces before the runtime serves them', () => {

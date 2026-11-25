@@ -29,6 +29,9 @@ type SettingsResponse struct {
 	Platform              string `json:"platform"`
 	EnvoyURL              string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
 	RouterEvalURL         string `json:"routerEvalEndpoint"`
+	// HostMemoryBytes is the memory the container runtime gives the dashboard,
+	// or 0 when it cannot be read. Setup compares decision models against it.
+	HostMemoryBytes int64 `json:"hostMemoryBytes"`
 }
 
 // SettingsHandler returns dashboard settings for frontend consumption.
@@ -59,6 +62,7 @@ func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http
 			Platform:              cfg.Platform,
 			EnvoyURL:              cfg.EnvoyURL,
 			RouterEvalURL:         defaultRouterEvalEndpoint(cfg.RouterAPIURL),
+			HostMemoryBytes:       hostMemoryBytes(),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
