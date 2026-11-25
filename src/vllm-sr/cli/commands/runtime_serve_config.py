@@ -44,6 +44,7 @@ from cli.commands.runtime_support import (
 )
 from cli.commands.validate import ask_router, router_refusal
 from cli.container_images import pulled_this_run
+from cli.container_management_listener import resolve_managed_management_listener
 from cli.container_services import container_status_strict
 from cli.decision_model import (
     decision_model_deployment,
@@ -88,6 +89,11 @@ def _prepare_runtime_config_replacement(
         if errors:
             raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
         validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
+    resolve_managed_management_listener(prepared, stack_layout)
+    for listener in prepared.listeners:
+        stack_layout.host_port(
+            listener.port, name=f"listener {listener.name} host port"
+        )
     stop_runtime_before_config_replacement(stack_layout)
 
 

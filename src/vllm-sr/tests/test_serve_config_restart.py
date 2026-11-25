@@ -173,6 +173,42 @@ def test_a_semantic_error_does_not_stop_or_publish(tmp_path, monkeypatch):
     assert stopped == []
 
 
+@pytest.mark.parametrize(
+    ("listener_port", "management_api", "error"),
+    [
+        (65100, None, "listener main host port 65600"),
+        (8899, {"bind_address": "0.0.0.0", "port": 65100}, "API host port 65600"),
+        (8899, {"port": 8085}, "requires management_api.bind_address 0.0.0.0"),
+        (8899, {"bind_address": "0.0.0.0", "port": 9190}, "a Router service port"),
+    ],
+    ids=["listener-host-port", "management-host-port", "bind-address", "service-port"],
+)
+def test_a_listener_the_start_refuses_does_not_stop_or_publish(
+    tmp_path, monkeypatch, listener_port, management_api, error
+):
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "500")
+    source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
+    document = yaml.safe_load(candidate)
+    document["listeners"][0]["port"] = listener_port
+    if management_api is not None:
+        document["global"]["services"]["management_api"] = management_api
+    monkeypatch.setattr(
+        runtime_serve_config,
+        "build_effective_config_bytes",
+        lambda *args: yaml.safe_dump(document).encode(),
+    )
+    stopped = []
+    monkeypatch.setattr(
+        runtime_serve_config, "stop_runtime_before_config_replacement", stopped.append
+    )
+    with pytest.raises(ValueError, match=error):
+        runtime_serve_config._prepare_docker_runtime_config(
+            source, None, False, None, (), True
+        )
+    assert active.read_bytes() == old
+    assert stopped == []
+
+
 @pytest.mark.parametrize("flag", ["minimal", "readonly"])
 def test_setup_flag_conflict_does_not_stop_or_publish(tmp_path, monkeypatch, flag):
     source, active, old, candidate = prepare_replacement(tmp_path, monkeypatch)
