@@ -22,7 +22,7 @@ smoke run to start from.
 - The Router returns a MoM call's receipts (`config_hash`, `inference_calls`,
   `model_usage`) as `x-vsr-trace` members, so the worker's requests need debug
   access (`global.router.headers.debug: any` on a loopback stack). Without it
-  the run fails with `Frozen runtime identity verification failed`.
+  the run fails with `Router withheld its receipts`.
 - Size `limits.max_output_tokens` above the longest answer: a longer one fails
   the case with `Output token cap exceeded`.
 

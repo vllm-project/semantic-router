@@ -13,12 +13,14 @@ import requests
 from cli.sr_bench import adapters
 from cli.sr_bench.contracts import SESSION_AWARE, STATELESS, catalog, digest, plan
 from cli.sr_bench.engine import Engine
+from cli.sr_bench.failures import failure_reason
 from cli.sr_bench.grading import basic_grade
 from cli.sr_bench.offline import export_training, regrade, replay
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import TERMINAL, Store
 from cli.sr_bench.transport import (
+    RECEIPTS_WITHHELD,
     CallFailure,
     chat,
     final_content,
@@ -649,7 +651,17 @@ def test_mom_runtime_identity_is_mandatory(tmp_path, target):
     store = Store(tmp_path)
     run = Engine(store).start(m)
     assert wait_run(store, run["id"])["status"] == "failed"
-    assert "identity" in store.results(run["id"])[0]["error"]
+    # No x-vsr-trace at all: the Router withheld its receipts from a caller
+    # its debug-header policy does not allow.
+    error = store.results(run["id"])[0]["error"]
+    assert error == RECEIPTS_WITHHELD
+    assert "global.router.headers.debug" in failure_reason(error)
+    target.ack = "other"
+    run = Engine(store).start(m)
+    assert wait_run(store, run["id"])["status"] == "failed"
+    error = store.results(run["id"])[0]["error"]
+    assert "identity" in error
+    assert failure_reason(error) == "Frozen runtime identity verification failed"
     target.ack = "fixed"
     run = Engine(store).start(m)
     assert wait_run(store, run["id"])["status"] == "completed"
