@@ -249,7 +249,7 @@ def test_reduced_batches_run_the_copy_of_their_stack(tmp_path):
 
 @pytest.mark.parametrize("kind", ["bfloat16", "float32-packed"])
 def test_a_copy_the_cpu_cannot_run_is_skipped_not_fatal(tmp_path, monkeypatch, kind):
-    monkeypatch.setattr(copies.onednn, "available", lambda: False)
+    monkeypatch.setattr(torch.backends.mkldnn, "is_available", lambda: False)
     device = replace(CPUAccelerator().devices()[0], bf16=False)
     engine = vela_engine(tmp_path, kind, device)
     assert engine.reduced == {} and engine.memory_bytes() > 0
