@@ -535,7 +535,9 @@ func applyRecipeRuntime(configPath string, configDir string) (string, error) {
 		}
 		return effectiveConfigPath, nil
 	}
-	if err := propagateConfigToRuntime(configPath, configDir); err != nil {
+	// The activation verifies the Router itself, so a verdict that has not
+	// come yet is left to that check.
+	if err := propagateConfigToRuntime(configPath, configDir); err != nil && !errors.Is(err, errRouterVerdictUnconfirmed) {
 		return "", err
 	}
 	return effectiveConfigPath, nil

@@ -635,7 +635,11 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       }
 
       const warnings = configSaveWarnings(data)
-      if (data.status === 'persisted' || data.status === 'restart_required') {
+      if (
+        data.status === 'persisted' ||
+        data.status === 'restart_required' ||
+        data.status === 'unconfirmed'
+      ) {
         set({
           deploying: false,
           deployStep: 'done',
@@ -644,7 +648,12 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
             version: data.version,
             message:
               data.message || 'Configuration saved. Roll out Router and Envoy to activate it.',
-            outcome: data.status === 'persisted' ? 'persisted' : 'restart-required',
+            outcome:
+              data.status === 'persisted'
+                ? 'persisted'
+                : data.status === 'unconfirmed'
+                  ? 'reload-unknown'
+                  : 'restart-required',
             warnings,
           },
           savedSource: dslSource,
@@ -751,7 +760,11 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
         return
       }
 
-      if (data.status === 'persisted' || data.status === 'restart_required') {
+      if (
+        data.status === 'persisted' ||
+        data.status === 'restart_required' ||
+        data.status === 'unconfirmed'
+      ) {
         set({
           deploying: false,
           deployStep: 'done',

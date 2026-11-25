@@ -49,6 +49,14 @@ func (e *runtimeConfigApplyError) Unwrap() error {
 	return e.applyErr
 }
 
+// pendingApply is a saved config the runtime has not applied: restart_required
+// waits for `vllm-sr serve`, and unconfirmed got no verdict from the Router in
+// time. The zero value is an applied config.
+type pendingApply struct {
+	status  string
+	message string
+}
+
 // applyWrittenConfig propagates a written config to the runtime. When the
 // running containers can't take it, the config stays saved as a pending
 // activation and the returned message says how it gets applied.
@@ -56,22 +64,33 @@ func (e *runtimeConfigApplyError) Unwrap() error {
 // simulate what the running containers answer.
 var propagateConfig = propagateConfigToRuntime
 
-func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) (string, error) {
+func applyWrittenConfig(configPath string, configDir string, previousData []byte, restoreOnFailure bool) (pendingApply, error) {
 	err := propagateConfig(configPath, configDir)
 	if restart, ok := asRestartNeeded(err); ok {
-		return recordRestart(configPath, restart.detail)
+		message, recordErr := recordRestart(configPath, restart.detail)
+		if recordErr != nil {
+			return pendingApply{}, recordErr
+		}
+		return pendingApply{status: "restart_required", message: message}, nil
+	}
+	if errors.Is(err, errRouterVerdictUnconfirmed) {
+		// The Router may still take or refuse it, and putting the previous
+		// config back now could replace a newer save, so the config stays.
+		return pendingApply{status: "unconfirmed", message: fmt.Sprintf(
+			"Saved, but the Router did not confirm the configuration within %s. It may still apply or refuse it, so check the Router's logs before you route traffic to the change.",
+			routerVerdictTimeout)}, nil
 	}
 	if err != nil {
 		if !restoreOnFailure || len(previousData) == 0 {
-			return "", err
+			return pendingApply{}, err
 		}
 		if restoreErr := restorePreviousRuntimeConfig(configPath, configDir, previousData); restoreErr != nil {
-			return "", &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
+			return pendingApply{}, &runtimeConfigApplyError{applyErr: err, restoreErr: restoreErr}
 		}
-		return "", &runtimeConfigApplyError{applyErr: err}
+		return pendingApply{}, &runtimeConfigApplyError{applyErr: err}
 	}
 
-	return "", nil
+	return pendingApply{}, nil
 }
 
 // savedConfigWarnings are the Router's warnings about a configuration its
@@ -94,10 +113,10 @@ func writeConfigSavedResponse(w http.ResponseWriter, warnings []routerconfig.Con
 	}
 }
 
-// writeRestartRequiredResponse answers a saved change that waits for
-// `vllm-sr serve`, with the Router's warnings about it.
-func writeRestartRequiredResponse(w http.ResponseWriter, version string, message string, warnings []routerconfig.ConfigWarning) {
-	response := map[string]any{"status": "restart_required", "message": message}
+// writePendingResponse answers a saved change the runtime has not applied,
+// with the Router's warnings about it.
+func writePendingResponse(w http.ResponseWriter, version string, pending pendingApply, warnings []routerconfig.ConfigWarning) {
+	response := map[string]any{"status": pending.status, "message": pending.message}
 	if version != "" {
 		response["version"] = version
 	}
@@ -318,8 +337,8 @@ func restorePreviousRuntimeConfig(configPath string, configDir string, previousD
 		return err
 	}
 	err := propagateConfig(configPath, configDir)
-	if _, restart := asRestartNeeded(err); restart {
-		// The running containers kept the config restored here.
+	if _, restart := asRestartNeeded(err); restart || errors.Is(err, errRouterVerdictUnconfirmed) {
+		// The previous config is back on disk for the running containers.
 		return nil
 	}
 	return err

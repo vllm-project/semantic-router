@@ -127,8 +127,10 @@ A Dashboard save waits up to 15 seconds for the Router its Router API names to
 activate or reject the saved document. A rejection for any code but
 `restart_required` fails the save: the Dashboard puts the previous file back
 and answers with the Router's messages. A Router that gives no verdict in that
-time, and a Dashboard that saves to a Kubernetes ConfigMap, which the Router
-reads only after a rollout, leave the save reported as applied.
+time leaves the file saved and the save answered `unconfirmed`, since the
+Router may still apply or refuse it, so check its logs before you rely on the
+change. A Dashboard that saves to a Kubernetes ConfigMap, which the Router
+reads only after a rollout, leaves the save reported as applied.
 
 A configuration mutation through the management API waits for the result. It
 returns `config_version` when the change activated. When the change is

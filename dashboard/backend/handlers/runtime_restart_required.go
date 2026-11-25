@@ -54,7 +54,11 @@ func recordRestart(configPath string, detail string) (string, error) {
 }
 
 // How long the Dashboard waits for the Router to judge a saved document.
-const routerVerdictTimeout = 15 * time.Second
+var routerVerdictTimeout = 15 * time.Second
+
+// errRouterVerdictUnconfirmed is a saved document the Router neither took nor
+// refused within routerVerdictTimeout. It may still do either.
+var errRouterVerdictUnconfirmed = errors.New("the Router did not judge the saved document in time")
 
 var routerVerdict struct {
 	sync.RWMutex
@@ -79,8 +83,8 @@ func ConfigureRouterVerdict(routerAPIURL string, provider routerauth.CredentialP
 // waitForRouterVerdict waits for the Router to take or refuse the document with
 // this SHA-256, written at writtenAt. A refusal is a restartNeededError when a
 // restart is the only reason, and an error with the Router's reasons
-// otherwise. Without a Router, or without its verdict in time, the document
-// counts as applied.
+// otherwise. Without a Router the document counts as applied, and without its
+// verdict in time the answer is errRouterVerdictUnconfirmed.
 func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt time.Time) error {
 	routerVerdict.RLock()
 	endpoint, client, provider := routerVerdict.endpoint, routerVerdict.client, routerVerdict.provider
@@ -103,7 +107,7 @@ func waitForRouterVerdict(ctx context.Context, documentSHA256 string, writtenAt 
 		}
 		select {
 		case <-ctx.Done():
-			return nil
+			return errRouterVerdictUnconfirmed
 		case <-time.After(250 * time.Millisecond):
 		}
 	}

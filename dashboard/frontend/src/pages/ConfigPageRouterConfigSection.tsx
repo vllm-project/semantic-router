@@ -584,6 +584,8 @@ export default function ConfigPageRouterConfigSection({
       toast('Saved to the ConfigMap', {
         description: message ?? 'Roll out the Router and Envoy deployments to apply it.',
       })
+    } else if (status === 'unconfirmed') {
+      toast.warning('Saved, but the Router has not confirmed it', { description: message })
     } else {
       toast.success('Router settings saved', {
         description: `${count} ${count === 1 ? 'change' : 'changes'} applied with hot reload.`,

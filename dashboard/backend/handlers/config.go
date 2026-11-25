@@ -161,7 +161,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+		pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 		if applyErr != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
@@ -181,8 +181,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			DSLSnapshot: readArchivedDSL(configDir),
 		})
 
-		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage, warnings)
+		if pending.status != "" {
+			writePendingResponse(w, "", pending, warnings)
 			return
 		}
 		writeConfigSavedResponse(w, warnings)
@@ -286,7 +286,7 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+		pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 		if applyErr != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
@@ -299,8 +299,8 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage, warnings)
+		if pending.status != "" {
+			writePendingResponse(w, "", pending, warnings)
 			return
 		}
 		writeConfigSavedResponse(w, warnings)
