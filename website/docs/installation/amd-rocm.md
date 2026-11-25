@@ -264,6 +264,37 @@ onnx/model_rocm_32k.onnx`) and MIGraphX compilation caches here.
 `vllm-sr config migrate` removes those settings; see
 [Migrate from the native bindings](../model-runtime/deploy/migrate.md).
 
+### Reduce allocator fragmentation for long Decision 3.0 inputs
+
+For a standalone [d3-ultra model runtime](../model-runtime/supported-models/decision-3/d3-ultra.md)
+on PyTorch 2.12 with ROCm 7.2, opt in to expandable allocator segments before
+starting the model runtime:
+
+```bash
+PYTORCH_HIP_ALLOC_CONF=expandable_segments:True \
+  vllm-srun serve vllm-sr/d3-ultra --device rocm:0 --port 8100
+```
+
+When running in a container, pass the variable to the container that runs
+`vllm-srun`. Expandable segments let the PyTorch caching allocator grow a
+segment by mapping physical GPU memory as needed. This can reduce the
+amount of VRAM held in gaps between live allocations.
+See the [PyTorch 2.12 ROCm notes](https://pytorch.org/blog/pytorch-2-12-release-blog/).
+
+A single AMD Instinct MI300X running BF16 d3-ultra at 130,962 input tokens
+gave these medians across three sequential requests after one warmup per
+setting:
+
+| Allocator setting | PyTorch allocated peak | PyTorch reserved peak | Device VRAM sampled peak |
+| --- | ---: | ---: | ---: |
+| Default | 73.89 GiB | 86.65 GiB | 88.37 GiB |
+| Expandable segments | 73.88 GiB | 75.25 GiB | 77.17 GiB |
+
+The measurement sampled the device's VRAM usage approximately every 20 ms
+and recorded PyTorch allocator peaks separately. Choice labels and scores
+matched for all three inputs. Size deployments using the peaks measured with
+their own model precision, input lengths, and concurrency.
+
 ## Compare with the 98x paper setup
 
 The [98x routing paper](https://arxiv.org/abs/2603.12646) benchmarks one
