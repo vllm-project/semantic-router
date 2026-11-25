@@ -195,11 +195,16 @@ stderr.
   AG5: aggregate per-model single-target sr-bench run reports into the
   agentic profile (per-model task success / cost / turns / truncation).
 - `recipe-lab bootstrap-agentic --spec S --profile P [--template T] --client C
-  [--lambda X] [--local-model M] --out D [--validate]`
+  [--recipe R | --public-model M] [--lambda X] [--local-model M] --out D
+  [--validate]`
   AG5: generate the agentic candidate from the agent recipe template, the
   profile and the client identity contract; every lane's choice rides a
   sidecar with its rule and evidence (unmeasured-lane default rule when the
-  profile has no lane data).
+  profile has no lane data). The template is the canonical v0.5 document
+  (default: `config/recipes/agent/config.yaml`); the rewrite edits one recipe
+  in `recipes[]` - its decisions take the lane models and the recipe carries
+  `candidate_requirements`. A document with several recipes takes `--recipe
+  <name>` or `--public-model <name>` to name the one to rewrite.
 - `recipe-lab propose-session-policy --config C [--diagnosis D]
   [--replay-summary S] --output-dir D`
   AG6: cause-keyed one-variable session-protection candidates (identity

@@ -364,6 +364,8 @@ def cmd_bootstrap_agentic(args: argparse.Namespace) -> int:
             client=args.client,
             local_models=local_models,
             lam=args.lam,
+            recipe=args.recipe,
+            public_model=args.public_model,
         )
     except ValueError as exc:
         raise ContractError(str(exc)) from exc
@@ -389,6 +391,7 @@ def cmd_bootstrap_agentic(args: argparse.Namespace) -> int:
             "config": str(config_path),
             "sidecar": str(sidecar_path),
             "client": args.client,
+            "recipe": sidecar["recipe"],
             "lanes": {lane["decision"]: lane["model"] for lane in sidecar["lanes"]},
             "validated": args.validate and rejection is None,
         }
@@ -2226,6 +2229,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="agent recipe config.yaml to rewrite (default: config/recipes/agent/config.yaml "
         "next to the package)",
     )
+    _add_recipe_selectors(p_boot)
     p_boot.add_argument(
         "--client",
         required=True,

@@ -42,6 +42,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from .bindings import plan_lane
+from .layout import select_recipe
 
 PROFILE_KIND = "recipe-lab-agentic-profile-v1"
 BOOTSTRAP_KIND = "recipe-lab-agentic-bootstrap-v1"
@@ -247,6 +248,8 @@ def bootstrap_agentic_config(
     client: str,
     local_models: Sequence[str] = (),
     lam: float = 0.0,
+    recipe: str | None = None,
+    public_model: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Rewrite the agent recipe template from the profile (pure function).
 
@@ -256,24 +259,30 @@ def bootstrap_agentic_config(
     client identity contract and the protection settings, so the
     candidate's provenance can answer "why is this model on this lane"
     without re-deriving anything.
+
+    The rewrite edits one recipe of the canonical v0.5 document
+    (``recipes[]``): its decisions take the lane models and the recipe
+    carries the candidate requirements. ``recipe`` names it and
+    ``public_model`` selects the recipe its entrypoint serves; a document
+    with a single recipe needs neither.
     """
     if client not in CLIENTS:
         raise ValueError(f"client must be one of {list(CLIENTS)}, got {client!r}")
     stats = _binding_stats(profile)
     candidates = _profile_models(profile)
     config = copy.deepcopy(dict(template))
-    decisions, decisions_parent = _decisions_of(config)
+    ref = select_recipe(config, recipe=recipe, public_model=public_model)
+    recipe_doc = ref.get(config)
+    decisions = recipe_doc.get("decisions")
     if not isinstance(decisions, list):
-        raise ValueError("template carries no decisions list")
+        raise ValueError(f"recipe {ref.name!r} carries no decisions list")
     reasons: dict[str, Any] = {}
-    rewritten = []
     for decision in decisions:
         if not isinstance(decision, dict):
             continue
         name = str(decision.get("name") or "")
         lane = LANE_DECISIONS.get(name)
         if lane is None:
-            rewritten.append(decision)
             continue
         if lane == "local":
             model = _pin_local_model(local_models)
@@ -305,9 +314,7 @@ def bootstrap_agentic_config(
                 adaptations = {}
             adaptations["mode"] = "bypass"
             decision["adaptations"] = adaptations
-        rewritten.append(decision)
         reasons[name] = {"lane": lane, **reason}
-    decisions_parent["decisions"] = rewritten
 
     identity = CLIENT_IDENTITY_HEADERS[client]
     headers: dict[str, str] = {"session": identity["session"]}
@@ -350,14 +357,13 @@ def bootstrap_agentic_config(
     protection["tuning"] = tuning
     learning["protection"] = protection
 
-    routing = config.get("routing")
-    if not isinstance(routing, dict):
-        raise ValueError("template carries no routing section")
-    routing["candidate_requirements"] = {"capabilities": "declared"}
+    # the candidate requirements belong to the recipe, like its decisions
+    recipe_doc["candidate_requirements"] = {"capabilities": "declared"}
 
     sidecar = {
         "kind": BOOTSTRAP_KIND,
         "client": client,
+        "recipe": ref.name,
         "scope": identity["scope"],
         "identity_headers": headers,
         "lanes": [
@@ -384,24 +390,6 @@ def _decision_model_of(config: dict[str, Any]) -> Any:
             if isinstance(system, dict):
                 return system.get("decision_model")
     return None
-
-
-def _decisions_of(config: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
-    """The template's decisions list and the mapping that owns it.
-
-    The canonical layout carries ``routing.decisions`` (the shipped agent
-    recipe); the synthetic test templates carry a top-level ``decisions``.
-    The rewrite mutates the owning mapping so either layout round-trips.
-    """
-    decisions = config.get("decisions")
-    if isinstance(decisions, list):
-        return decisions, config
-    routing = config.get("routing")
-    if isinstance(routing, dict):
-        decisions = routing.get("decisions")
-        if isinstance(decisions, list):
-            return decisions, routing
-    return None, config
 
 
 def _pin_local_model(local_models: Sequence[str]) -> str:

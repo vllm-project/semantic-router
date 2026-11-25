@@ -6,6 +6,7 @@ claude-code identity headers and the privacy lane's bypass."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import yaml
@@ -14,6 +15,8 @@ from recipe_lab.agentic_bootstrap import (
     bootstrap_agentic_config,
     profile_from_reports,
 )
+
+MAINTAINED_RECIPES = Path(__file__).resolve().parents[3] / "config" / "recipes"
 
 
 def _report(model: str, *, rate: float, cost: float, tasks: int = 10) -> dict:
@@ -109,7 +112,7 @@ def _bootstrap_sidecar(profile, **kwargs):
 
 def _template():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "router": {
                 "learning": {
@@ -119,11 +122,21 @@ def _template():
             }
         },
         "model_catalog": {"system": {"decision_model": {"deployment": "p"}}},
-        "routing": {"modelCards": []},
-        "decisions": [
-            {"name": "domain_code_complex", "modelRefs": [{"model": "template/a"}]},
-            {"name": "simple_general", "modelRefs": [{"model": "template/a"}]},
-            {"name": "local_privacy_policy", "modelRefs": [{"model": "template/a"}]},
+        "recipes": [
+            {
+                "name": "agent",
+                "decisions": [
+                    {
+                        "name": "domain_code_complex",
+                        "modelRefs": [{"model": "template/a"}],
+                    },
+                    {"name": "simple_general", "modelRefs": [{"model": "template/a"}]},
+                    {
+                        "name": "local_privacy_policy",
+                        "modelRefs": [{"model": "template/a"}],
+                    },
+                ],
+            }
         ],
     }
 
@@ -158,41 +171,86 @@ def test_unpriced_models_rank_as_free_only_at_lambda_zero(three_model_profile):
 # ---- golden test: template rewrite ----
 
 
-def test_bootstrap_consumes_the_canonical_layout(three_model_profile):
-    # the shipped agent recipe carries routing.decisions and
-    # global.model_catalog; the rewrite must consume that layout, not only
-    # the synthetic top-level one (V6's cold-start caught this)
-    canonical = {
-        "version": "v0.3",
-        "global": {
-            "router": {"learning": {"adaptation": {"enabled": True}}},
-            "model_catalog": {"system": {"decision_model": {"deployment": "primary"}}},
-        },
-        "routing": {
-            "modelCards": [],
-            "decisions": [
-                {
-                    "name": "domain_code_complex",
-                    "modelRefs": [{"model": "template/a"}],
-                }
-            ],
-        },
-    }
-    config, sidecar = bootstrap_agentic_config(
-        canonical, three_model_profile, client="generic"
+def test_bootstrap_rewrites_the_shipped_agent_recipe(three_model_profile):
+    # the CLI's default template is the canonical v0.5 agent recipe: the
+    # rewrite edits that recipe in place and every other section rides along
+    template = yaml.safe_load(
+        (MAINTAINED_RECIPES / "agent" / "config.yaml").read_text(encoding="utf-8")
     )
-    assert config["routing"]["decisions"][0]["modelRefs"][0]["model"] == "local/strong"
-    assert "decisions" not in config
+    config, sidecar = bootstrap_agentic_config(
+        template, three_model_profile, client="generic", local_models=["local/private"]
+    )
+    assert len(config["recipes"]) == len(template["recipes"]) == 1
+    recipe = config["recipes"][0]
+    by_name = {d["name"]: d for d in recipe["decisions"]}
+    assert by_name["domain_code_complex"]["modelRefs"][0]["model"] == "local/strong"
+    assert by_name["local_privacy_policy"]["modelRefs"][0]["model"] == "local/private"
+    assert by_name["omni"]["modelRefs"][0]["model"] == "local/omni"
+    # the candidate requirements sit on the recipe, next to its decisions
+    assert recipe["candidate_requirements"] == {"capabilities": "declared"}
+    assert recipe["signals"] == template["recipes"][0]["signals"]
+    assert config["entrypoints"] == template["entrypoints"]
+    assert config["providers"] == template["providers"]
+    assert sidecar["recipe"] == "default"
     assert sidecar["decision_model"] == {"deployment": "primary"}
     # the protection bootstrap enables is dead under a learning-disabled
     # template - the rewrite forces learning on
     assert config["global"]["router"]["learning"]["enabled"] is True
 
 
+def test_bootstrap_selects_the_recipe_a_public_model_serves(three_model_profile):
+    # a document may ship one recipe per public model: without a selection
+    # the rewrite is ambiguous, --public-model names the recipe to rewrite
+    template = _template()
+    template["recipes"].append(
+        {
+            "name": "agent-fast",
+            "decisions": [
+                {"name": "simple_general", "modelRefs": [{"model": "template/a"}]}
+            ],
+        }
+    )
+    template["entrypoints"] = [
+        {"model_names": ["vllm-sr/agent"], "recipe": "agent"},
+        {"model_names": ["vllm-sr/agent-flash"], "recipe": "agent-fast"},
+    ]
+    with pytest.raises(ValueError, match="--recipe"):
+        bootstrap_agentic_config(
+            template,
+            three_model_profile,
+            client="generic",
+            local_models=["local/private"],
+        )
+    config, sidecar = bootstrap_agentic_config(
+        template,
+        three_model_profile,
+        client="generic",
+        local_models=["local/private"],
+        public_model="vllm-sr/agent-flash",
+    )
+    assert sidecar["recipe"] == "agent-fast"
+    assert [lane["decision"] for lane in sidecar["lanes"]] == ["simple_general"]
+    assert sidecar["lanes"][0]["model"] == "local/strong"
+    untouched, rewritten = config["recipes"]
+    assert rewritten["decisions"][0]["modelRefs"][0]["model"] == "local/strong"
+    assert rewritten["candidate_requirements"] == {"capabilities": "declared"}
+    assert untouched == template["recipes"][0]
+    assert "candidate_requirements" not in untouched
+
+
+def test_bootstrap_rejects_a_template_outside_the_canonical_layout(
+    three_model_profile,
+):
+    with pytest.raises(ValueError, match=r"v0\.5 'recipes'"):
+        bootstrap_agentic_config(
+            {"decisions": []}, three_model_profile, client="generic"
+        )
+
+
 @pytest.fixture()
 def agent_template():
     return {
-        "version": "v0.3",
+        "version": "v0.5",
         "global": {
             "router": {
                 "learning": {
@@ -212,30 +270,34 @@ def agent_template():
             }
         },
         "model_catalog": {"system": {"decision_model": {"deployment": "primary"}}},
-        "routing": {"modelCards": []},
-        "decisions": [
+        "recipes": [
             {
-                "name": "domain_code_complex",
-                "modelRefs": [{"model": "template/a", "use_reasoning": False}],
-            },
-            {
-                "name": "medium_general",
-                "modelRefs": [{"model": "template/a", "use_reasoning": False}],
-            },
-            {
-                "name": "simple_general",
-                "modelRefs": [{"model": "template/a", "use_reasoning": False}],
-            },
-            {
-                "name": "local_privacy_policy",
-                "modelRefs": [{"model": "template/a", "use_reasoning": False}],
-                "adaptations": {"mode": "apply"},
-            },
-            {
-                "name": "local_security_containment",
-                "modelRefs": [{"model": "template/a", "use_reasoning": False}],
-            },
-            {"name": "omni", "modelRefs": [{"model": "local/omni"}]},
+                "name": "agent",
+                "decisions": [
+                    {
+                        "name": "domain_code_complex",
+                        "modelRefs": [{"model": "template/a", "use_reasoning": False}],
+                    },
+                    {
+                        "name": "medium_general",
+                        "modelRefs": [{"model": "template/a", "use_reasoning": False}],
+                    },
+                    {
+                        "name": "simple_general",
+                        "modelRefs": [{"model": "template/a", "use_reasoning": False}],
+                    },
+                    {
+                        "name": "local_privacy_policy",
+                        "modelRefs": [{"model": "template/a", "use_reasoning": False}],
+                        "adaptations": {"mode": "apply"},
+                    },
+                    {
+                        "name": "local_security_containment",
+                        "modelRefs": [{"model": "template/a", "use_reasoning": False}],
+                    },
+                    {"name": "omni", "modelRefs": [{"model": "local/omni"}]},
+                ],
+            }
         ],
     }
 
@@ -249,7 +311,8 @@ def test_golden_bootstrap_writes_lanes_identity_and_bypass(
         client="claude-code",
         local_models=["local/private"],
     )
-    by_name = {d["name"]: d for d in config["decisions"]}
+    recipe = config["recipes"][0]
+    by_name = {d["name"]: d for d in recipe["decisions"]}
     # the ranked lanes all take the shared ranking's winner at lambda 0
     assert by_name["domain_code_complex"]["modelRefs"][0]["model"] == "local/strong"
     assert by_name["medium_general"]["modelRefs"][0]["model"] == "local/strong"
@@ -275,7 +338,8 @@ def test_golden_bootstrap_writes_lanes_identity_and_bypass(
     learning = config["global"]["router"]["learning"]
     assert learning["adaptation"]["enabled"] is False
     assert protection["tuning"]["progress_gate"] == {"mode": "observe"}
-    assert config["routing"]["candidate_requirements"] == {"capabilities": "declared"}
+    assert recipe["candidate_requirements"] == {"capabilities": "declared"}
+    assert sidecar["recipe"] == "agent"
     # the decision model stays pinned to the template's deployment
     assert (
         config["model_catalog"]["system"]["decision_model"]["deployment"] == "primary"
@@ -342,6 +406,45 @@ def _write_spec(tmp_path):
     return spec_path
 
 
+def _write_template(path, *recipes):
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.5",
+                "global": {
+                    "router": {
+                        "learning": {
+                            "adaptation": {"enabled": True},
+                            "protection": {"enabled": True, "scope": "conversation"},
+                        }
+                    }
+                },
+                "model_catalog": {"system": {"decision_model": {"deployment": "p"}}},
+                "recipes": list(recipes),
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_profile(tmp_path):
+    path = tmp_path / "profile.json"
+    path.write_text(
+        json.dumps(
+            profile_from_reports(
+                [
+                    _report("local/cheap", rate=0.60, cost=0.5),
+                    _report("local/mid", rate=0.86, cost=2.0),
+                    _report("local/strong", rate=0.90, cost=5.0),
+                ]
+            )
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_cli_profile_and_bootstrap_end_to_end(tmp_path, capsys):
     from recipe_lab.cli import main
 
@@ -373,34 +476,18 @@ def test_cli_profile_and_bootstrap_end_to_end(tmp_path, capsys):
     )
     assert json.loads(profile_path.read_text(encoding="utf-8"))["kind"] == PROFILE_KIND
 
-    template = tmp_path / "template.yaml"
-    template.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "global": {
-                    "router": {
-                        "learning": {
-                            "adaptation": {"enabled": True},
-                            "protection": {"enabled": True, "scope": "conversation"},
-                        }
-                    }
+    template = _write_template(
+        tmp_path / "template.yaml",
+        {
+            "name": "agent",
+            "decisions": [
+                {"name": "domain_code_complex", "modelRefs": [{"model": "template/a"}]},
+                {
+                    "name": "local_privacy_policy",
+                    "modelRefs": [{"model": "template/a"}],
                 },
-                "model_catalog": {"system": {"decision_model": {"deployment": "p"}}},
-                "routing": {"modelCards": []},
-                "decisions": [
-                    {
-                        "name": "domain_code_complex",
-                        "modelRefs": [{"model": "template/a"}],
-                    },
-                    {
-                        "name": "local_privacy_policy",
-                        "modelRefs": [{"model": "template/a"}],
-                    },
-                ],
-            }
-        ),
-        encoding="utf-8",
+            ],
+        },
     )
     out = tmp_path / "cands"
     capsys.readouterr()
@@ -424,6 +511,7 @@ def test_cli_profile_and_bootstrap_end_to_end(tmp_path, capsys):
     )
     payload = json.loads(capsys.readouterr().out)
     assert payload["validated"] is False
+    assert payload["recipe"] == "agent"
     assert payload["lanes"]["local_privacy_policy"] == "local/private"
     config = yaml.safe_load((out / "agentic-config.yaml").read_text(encoding="utf-8"))
     protection = config["global"]["router"]["learning"]["protection"]
@@ -432,3 +520,72 @@ def test_cli_profile_and_bootstrap_end_to_end(tmp_path, capsys):
         (out / "agentic-config.bootstrap.json").read_text(encoding="utf-8")
     )
     assert sidecar["identity_headers"]["agent"] == "x-claude-code-agent-id"
+
+
+def test_cli_bootstrap_defaults_to_the_shipped_agent_recipe(tmp_path, capsys):
+    # without --template the command rewrites config/recipes/agent/config.yaml,
+    # so the canonical document itself must round-trip
+    from recipe_lab.cli import main
+
+    out = tmp_path / "cands"
+    assert (
+        main(
+            [
+                "bootstrap-agentic",
+                "--spec",
+                str(_write_spec(tmp_path)),
+                "--profile",
+                str(_write_profile(tmp_path)),
+                "--client",
+                "generic",
+                "--out",
+                str(out),
+            ]
+        )
+        == 0
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["recipe"] == "default"
+    assert payload["lanes"]["domain_code_complex"] == "local/strong"
+    config = yaml.safe_load((out / "agentic-config.yaml").read_text(encoding="utf-8"))
+    assert config["recipes"][0]["candidate_requirements"] == {
+        "capabilities": "declared"
+    }
+
+
+def test_cli_bootstrap_names_the_recipe_to_rewrite(tmp_path, capsys):
+    from recipe_lab.cli import main
+
+    template = _write_template(
+        tmp_path / "template.yaml",
+        {
+            "name": "agent",
+            "decisions": [
+                {"name": "domain_code_complex", "modelRefs": [{"model": "a"}]}
+            ],
+        },
+        {
+            "name": "agent-fast",
+            "decisions": [{"name": "medium_general", "modelRefs": [{"model": "a"}]}],
+        },
+    )
+    args = [
+        "bootstrap-agentic",
+        "--spec",
+        str(_write_spec(tmp_path)),
+        "--profile",
+        str(_write_profile(tmp_path)),
+        "--template",
+        str(template),
+        "--client",
+        "generic",
+        "--out",
+        str(tmp_path / "cands"),
+    ]
+    # several recipes and no selection: a contract error, the reason on stderr
+    assert main(args) == 2
+    assert "--recipe" in capsys.readouterr().err
+    assert main([*args, "--recipe", "agent-fast"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["recipe"] == "agent-fast"
+    assert list(payload["lanes"]) == ["medium_general"]

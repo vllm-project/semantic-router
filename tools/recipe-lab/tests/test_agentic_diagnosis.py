@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from recipe_lab.adapters.router_replay import records_to_rows
+from recipe_lab.contract import ContractError
 from recipe_lab.diagnose import (
     agent_separation,
     build_diagnosis,
@@ -15,15 +17,30 @@ from recipe_lab.diagnose import (
 )
 
 CONFIG = {
-    "decisions": [
+    "recipes": [
         {
-            "name": "domain_code",
-            "rules": [
+            "name": "default",
+            "signals": {
+                "systemone": [
+                    {
+                        "name": "difficulty",
+                        "question": {"type": "score", "levels": [0, 1, 2, 3, 4]},
+                    }
+                ]
+            },
+            "decisions": [
                 {
-                    "operator": "difficulty",
-                    "type": "score",
-                    "predicate": "gte",
-                    "value": 2,
+                    "name": "domain_code",
+                    "rules": {
+                        "operator": "AND",
+                        "conditions": [
+                            {
+                                "type": "systemone",
+                                "name": "difficulty",
+                                "predicate": {"gte": 2},
+                            }
+                        ],
+                    },
                 }
             ],
         }
@@ -339,3 +356,38 @@ def test_build_diagnosis_legacy_rows_keep_their_shape():
     diagnosis = build_diagnosis(rows, CONFIG)
     assert "agentic" not in diagnosis
     assert "Agentic session evidence" not in render_markdown(diagnosis)
+
+
+def test_build_diagnosis_reads_one_recipe_of_the_document():
+    # a document may ship one recipe per public model: the diagnosis reads
+    # the selected recipe and names it in the artifact
+    rows = [
+        {
+            "matched_decision": "fallback",
+            "signal_values": {"decision:difficulty": 3.0},
+        }
+    ]
+    config = {
+        "recipes": [
+            {
+                "name": "balanced",
+                "decisions": [{"name": "domain_code"}, {"name": "fallback"}],
+            },
+            {"name": "speed-first", "decisions": [{"name": "fast"}]},
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/mom-blend"], "recipe": "balanced"},
+            {"model_names": ["vllm-sr/mom-flash"], "recipe": "speed-first"},
+        ],
+    }
+    with pytest.raises(ContractError, match="pass --recipe"):
+        build_diagnosis(rows, config)
+    diagnosis = build_diagnosis(rows, config, recipe="balanced")
+    assert diagnosis["inputs"]["recipe"] == "balanced"
+    assert diagnosis["decision_coverage"]["total_decisions"] == 2
+    assert diagnosis["dead_decisions"] == ["domain_code"]
+    assert "- recipe: `balanced`" in render_markdown(diagnosis)
+    diagnosis = build_diagnosis(rows, config, public_model="vllm-sr/mom-flash")
+    assert diagnosis["inputs"]["recipe"] == "speed-first"
+    # the row matched a decision of the other recipe: this one is all dead
+    assert diagnosis["dead_decisions"] == ["fast"]

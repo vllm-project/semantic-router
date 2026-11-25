@@ -2,8 +2,9 @@
 
 Three defect classes a recipe can carry without any ground truth (sub-issue 7):
 
-- decision coverage: every config decision with its hit count and traffic
-  share; zero hits => dead (BUG-3's strong lanes), low share => rare.
+- decision coverage: every decision of the recipe with its hit count and
+  traffic share; zero hits => dead (BUG-3's strong lanes), low share =>
+  rare.
   Decisions listed in expect_rare (e.g. security containment) are reported
   but never warned about: a security lane firing on 0.2% of traffic is the
   design working, not a defect.
@@ -13,7 +14,7 @@ Three defect classes a recipe can carry without any ground truth (sub-issue 7):
   figure ((p95 - p05) / (hi - lo)) that flags compressed score scales before
   any decision goes dead. The sorted sample is stored on the entry, so the
   calibration proposer can recompute any quantile from exactly the evidence
-  the diagnosis saw. Signals unknown to the config fall back to their
+  the diagnosis saw. Signals unknown to the recipe fall back to their
   observed range and report no utilization.
 - threshold reachability: for every decision-rule predicate site
   (rule_threshold.find_threshold_sites), the traffic share satisfying the
@@ -33,7 +34,10 @@ evaluated against the strongest choice's confidence.
 
 Output: build_diagnosis returns a `recipe-lab-diagnosis-v1` dict;
 write_diagnosis renders it byte-stably to diagnosis.json + diagnosis.md. The
-top-level dead_decisions / rare_decisions / unreachable_sites arrays carry
+diagnosis reads one recipe of the canonical v0.5 document
+(``recipes[].decisions`` and ``recipes[].signals``): a document with
+several recipes needs the recipe selected (see :mod:`recipe_lab.layout`).
+The top-level dead_decisions / rare_decisions / unreachable_sites arrays carry
 the alerting subset (expect_rare decisions excluded) in the exact shape
 rl/04's `next --diagnosis` context consumes, so the two layers converge
 without a second format.
@@ -52,6 +56,7 @@ from pathlib import Path
 from typing import Any
 
 from .contract import ContractError
+from .layout import RecipeRef, select_recipe
 from .proposers import rule_threshold
 
 DIAGNOSIS_KIND = "recipe-lab-diagnosis-v1"
@@ -130,16 +135,24 @@ def decision_coverage(
     config: dict[str, Any],
     expect_rare: tuple[str, ...] | list[str] = (),
     rare_pct: float = DEFAULT_RARE_PCT,
+    *,
+    recipe: RecipeRef | None = None,
 ) -> dict[str, Any]:
-    """Every config decision with its hit count and traffic share.
+    """Every decision of the recipe with its hit count and traffic share.
 
     status is dead (0 hits), rare (share below rare_pct percent) or ok.
     Entries carry expected_rare for decisions listed in expect_rare; the
     alerting subsets (dead_decisions / rare_decisions) exclude them.
+
+    The decisions are the selected recipe's (``recipes[].decisions``).
+    Without ``recipe`` a document with a single candidate recipe is assumed;
+    several are a contract error.
     """
+    if recipe is None:
+        recipe = select_recipe(config)
     decisions = [
         decision
-        for decision in config.get("routing", {}).get("decisions", [])
+        for decision in recipe.get(config).get("decisions") or []
         if isinstance(decision, dict)
     ]
     expected = set(expect_rare)
@@ -193,15 +206,20 @@ def _histogram(sample: list[float], lo: float, hi: float) -> dict[str, Any]:
 
 
 def signal_distribution(
-    rows: list[dict[str, Any]], config: dict[str, Any]
+    rows: list[dict[str, Any]],
+    config: dict[str, Any],
+    *,
+    recipe: RecipeRef | None = None,
 ) -> dict[str, Any]:
     """Per signal_values key: quantiles, histogram and range utilization.
 
     One entry per key actually present in the rows (choice signals list one
-    entry per choice key). The range comes from rule_threshold.signal_range;
-    signals the config does not declare fall back to their observed range and
-    carry range: null / range_utilization: null.
+    entry per choice key). The range comes from rule_threshold.signal_range
+    over the selected recipe; signals that recipe does not declare fall back
+    to their observed range and carry range: null / range_utilization: null.
     """
+    if recipe is None:
+        recipe = select_recipe(config)
     keys: set[str] = set()
     for row in rows:
         values = row.get("signal_values")
@@ -221,7 +239,7 @@ def signal_distribution(
         lo = hi = None
         known = False
         try:
-            lo, hi = rule_threshold.signal_range(config, name)
+            lo, hi = rule_threshold.signal_range(config, name, recipe)
             known = True
         except ContractError:
             lo, hi = sample[0], sample[-1]
@@ -258,16 +276,22 @@ def signal_distribution(
 
 
 def threshold_reachability(
-    rows: list[dict[str, Any]], config: dict[str, Any]
+    rows: list[dict[str, Any]],
+    config: dict[str, Any],
+    *,
+    recipe: RecipeRef | None = None,
 ) -> dict[str, Any]:
     """Traffic share satisfying every decision-rule predicate site.
 
-    Sites are grouped by (signal, op, value): the set a rule-threshold
-    candidate moves together. A group is unreachable only when every site in
-    it is; a site whose signal never appears in the traffic is unobserved and
-    never makes a group unreachable.
+    Sites are the selected recipe's rule sites, grouped by (signal, op,
+    value): the set a rule-threshold candidate moves together. A group is
+    unreachable only when every site in it is; a site whose signal never
+    appears in the traffic is unobserved and never makes a group unreachable.
+
+    Without ``recipe`` a document with a single candidate recipe is assumed;
+    several are a contract error.
     """
-    sites = rule_threshold.find_threshold_sites(config)
+    sites = rule_threshold.find_threshold_sites(config, recipe)
     records: list[dict[str, Any]] = []
     for site in sites:
         satisfied = evaluated = 0
@@ -677,6 +701,8 @@ def build_diagnosis(
     utilization_warn: float = DEFAULT_UTILIZATION_WARN,
     min_sample: int = DEFAULT_MIN_SAMPLE,
     agent_requests: list[Any] | None = None,
+    recipe: str | None = None,
+    public_model: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the full diagnosis dict (pure function, byte-stable output).
 
@@ -686,12 +712,16 @@ def build_diagnosis(
     sub-issue 7 §2.4: quantiles are only as good as the traffic behind them).
     `agent_requests` is the client-side sub-agent manifest (Z9) feeding the
     separation join.
+
+    `recipe` names the recipe diagnosed; `public_model` selects the recipe
+    its entrypoint serves. A single-recipe document needs neither.
     """
+    ref = select_recipe(config, recipe=recipe, public_model=public_model)
     coverage = decision_coverage(
-        rows, config, expect_rare=expect_rare, rare_pct=rare_pct
+        rows, config, expect_rare=expect_rare, rare_pct=rare_pct, recipe=ref
     )
-    distribution = signal_distribution(rows, config)
-    reachability = threshold_reachability(rows, config)
+    distribution = signal_distribution(rows, config, recipe=ref)
+    reachability = threshold_reachability(rows, config, recipe=ref)
     agentic = _agentic_evidence(rows, agent_requests=agent_requests)
 
     alerts: list[dict[str, Any]] = []
@@ -746,6 +776,7 @@ def build_diagnosis(
             "rows_hash": rows_hash,
             "config": config_path,
             "config_hash": config_hash,
+            "recipe": ref.name,
             "source": source,
             "samples": len(rows),
         },
@@ -829,6 +860,7 @@ def render_markdown(diagnosis: dict[str, Any]) -> str:
         f"- kind: `{diagnosis.get('kind', '')}`",
         f"- rows: `{inputs.get('rows', '')}` ({inputs.get('rows_hash') or 'n/a'})",
         f"- config: `{inputs.get('config', '')}` ({inputs.get('config_hash') or 'n/a'})",
+        f"- recipe: `{inputs.get('recipe', '')}`",
         f"- source: {inputs.get('source', '')}",
         f"- samples: {inputs.get('samples', 0)}",
         "",
