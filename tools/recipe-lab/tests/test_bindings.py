@@ -728,8 +728,7 @@ def test_bindings_checks_rendered_strict_model_cards(tmp_path, monkeypatch, bad_
                     "capabilities": "declared",
                 },
                 "decisions": [
-                    {"name": name, "modelRefs": refs}
-                    for name, refs in assigned.items()
+                    {"name": name, "modelRefs": refs} for name, refs in assigned.items()
                 ],
             }
         ]
