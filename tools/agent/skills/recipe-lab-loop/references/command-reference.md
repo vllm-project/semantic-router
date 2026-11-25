@@ -6,6 +6,12 @@ stdin. Exit codes: `0` success (for `live-verdict`: PASS), `1` FAIL verdict
 (`live-verdict` only), `2` usage, contract or tool error, and INCONCLUSIVE
 for `live-verdict`.
 
+A usage error (unknown command, missing or conflicting argument) is itself a
+JSON receipt on stdout, so there is always a document to parse:
+`{"schema": "recipe-lab-cli-error-v1", "verdict": "INCONCLUSIVE",
+"reason": "..."}`, exit 2. Contract and tool errors exit 2 with the reason on
+stderr.
+
 ## Contract
 
 - `recipe-lab plan --spec S`
@@ -56,12 +62,17 @@ for `live-verdict`.
 ## Proposal and replay tier
 
 - `recipe-lab propose-thresholds --base-config C --signal S --deltas=-0.1,0.1
-  --output-dir D`
+  [--recipe R | --public-model M] --output-dir D`
   Deterministic single-variable threshold candidates (baseline dropped,
-  clamped to [--lo, --hi]).
+  clamped to [--lo, --hi]). Both proposers read the canonical v0.5 layout
+  (`recipes[].signals`, `recipes[].decisions`). A document with several
+  recipes (the multi-objective ones) needs `--recipe <name>` or
+  `--public-model <name>` to name the one to edit; without either, a
+  single-recipe document is assumed and several are a usage error.
 - `recipe-lab propose-rule-thresholds --base-config C --signal S
   [--from V] --values V1,V2 --output-dir D [--decisions D1,D2
-  --allow-partial --op gte --lo L --hi H --list-sites]`
+  --allow-partial --op gte --lo L --hi H --list-sites]
+  [--recipe R | --public-model M]`
   Moves every rule-level predicate site of one signal to each target value,
   including sites under NOT branches (C; the BUG-3 golden case moves four
   `difficulty gte 2.5` sites to 1.75 in one shot). Each candidate config
@@ -114,6 +125,17 @@ for `live-verdict`.
   follow the verdict (0 PASS / 1 FAIL / 2 INCONCLUSIVE or error). Repeated
   invocations reuse cached reference-arm run IDs (M4). `frozen_test` and
   transfer workloads require `--final` (M5).
+- `recipe-lab score-candidate --workspace W --candidate C --proposer P
+  --baseline-run A --baseline-target T --candidate-target U
+  --active-runtime-hash H [--candidate-run R] [--guard-case ID]
+  [--min-speedup-pct X] [--wait-seconds S] [--vllm-sr BIN]`
+  Scores one deployed candidate against a saved sr-bench baseline run
+  through the installed `vllm-sr benchmark` worker: the agent's own
+  proposal, submitted as `--proposer agent:<id>`, with no spec. The plan must
+  reproduce the frozen baseline and match the active runtime hash before
+  anything is dispatched. Prints one JSON receipt
+  (`recipe-lab-sr-bench-run-v1`, also saved under `<workspace>/sr-bench`);
+  the exit code follows the verdict.
 - Guards (A3): floors come only from `spec.gates`. `--guard-measurements`
   is a JSONL of measurements only - `{"name": "pii-recall-floor",
   "candidate": 0.97, "baseline": 0.96}`; a `floor` key in the file is a

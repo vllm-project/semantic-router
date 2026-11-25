@@ -34,6 +34,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 import yaml
 
@@ -1314,8 +1315,31 @@ def cmd_score_candidate(args: argparse.Namespace) -> int:
     return verdict_exit_code(receipt["verdict"])
 
 
+class CommandParser(argparse.ArgumentParser):
+    """Report a usage error in the JSON contract that agents consume.
+
+    Every command prints one JSON document on stdout; argparse's default
+    (prose on stderr) would leave a driving agent with nothing to parse. The
+    receipt is INCONCLUSIVE, like any other run that could not be evaluated.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        print(
+            json.dumps(
+                {
+                    "schema": "recipe-lab-cli-error-v1",
+                    "verdict": "INCONCLUSIVE",
+                    "reason": message,
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+        )
+        raise SystemExit(2)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = CommandParser(
         prog="recipe-lab",
         description="Closed-loop experiments for semantic-router routing recipes (RSI workbench).",
     )

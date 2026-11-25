@@ -571,7 +571,8 @@ def test_run_proposer_rejects_invalid_tags(tag, capsys):
     with pytest.raises(SystemExit) as exc:
         main(["run", "--proposer", tag, "--spec", "s.yaml"])
     assert exc.value.code == EXIT_CONTRACT_ERROR
-    assert "invalid --proposer" in capsys.readouterr().err
+    # The tag is validated by the argument parser, so the refusal is a receipt.
+    assert "invalid --proposer" in json.loads(capsys.readouterr().out)["reason"]
 
 
 def test_run_agent_proposer_lands_in_ledger_provenance(monkeypatch, tmp_path):
@@ -887,10 +888,25 @@ def test_missing_spec_exits_2_with_stderr_message(tmp_path, capsys):
     assert "contract error" in capsys.readouterr().err
 
 
-def test_argparse_usage_error_exits_2():
+def test_argparse_usage_error_exits_2(capsys):
+    # A usage error is a recipe-lab-cli-error-v1 receipt on stdout: the agent
+    # always has a document to parse and nothing lands on stderr.
     with pytest.raises(SystemExit) as exc:
         main(["no-such-command"])
     assert exc.value.code == EXIT_CONTRACT_ERROR
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    receipt = json.loads(captured.out)
+    assert receipt["schema"] == "recipe-lab-cli-error-v1"
+    assert receipt["verdict"] == "INCONCLUSIVE"
+    assert "invalid choice: 'no-such-command'" in receipt["reason"]
+
+
+def test_missing_subcommand_is_a_json_receipt_too(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == EXIT_CONTRACT_ERROR
+    assert "command" in json.loads(capsys.readouterr().out)["reason"]
 
 
 def _top_level_parser_map() -> dict:

@@ -341,9 +341,19 @@ def test_equal_observed_time_cannot_advance(experiment):
     assert code == 1 and result["metrics"]["speedup_pct"] == 0
 
 
-def test_usage_error_exits_2(capsys):
-    # The structured error receipt lands with the harness-grade CLI (PR 5).
+def test_usage_error_is_json(capsys):
+    # A driving agent parses stdout; a usage error is a receipt, not prose.
     with pytest.raises(SystemExit) as stopped:
         cli.main(["score-candidate"])
     assert stopped.value.code == 2
-    assert "--workspace" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert json.loads(captured.out) == {
+        "schema": "recipe-lab-cli-error-v1",
+        "verdict": "INCONCLUSIVE",
+        "reason": (
+            "the following arguments are required: --workspace, --candidate, "
+            "--proposer, --baseline-run, --baseline-target, --candidate-target, "
+            "--active-runtime-hash"
+        ),
+    }
