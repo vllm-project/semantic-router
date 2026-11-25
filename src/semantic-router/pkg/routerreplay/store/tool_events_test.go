@@ -1,11 +1,21 @@
 package store
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func fileLines(t *testing.T, path string) int {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return bytes.Count(data, []byte{'\n'})
+}
 
 func toolEvent(session, call string, received time.Time) ToolEvent {
 	return ToolEvent{SessionID: session, ToolCallID: call, Tool: "Bash", Status: ToolEventSucceeded, ReceivedAt: received}
