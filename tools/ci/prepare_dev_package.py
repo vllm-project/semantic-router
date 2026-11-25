@@ -70,6 +70,46 @@ def record_source_revision(project: Path, revision: str) -> None:
     )
 
 
+def checkout_revision(repository: Path) -> str:
+    """The commit a git checkout has checked out, or "" without one.
+
+    An sdist or a downloaded tree has no `.git` and records nothing.
+    """
+    if not (repository / ".git").exists():
+        return ""
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            check=True,
+            cwd=repository,
+            text=True,
+            timeout=30,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return revision if COMMIT.fullmatch(revision) else ""
+
+
+def record_checkout_revision(project: Path, repository: Path) -> None:
+    """Pin a source install's default images to its checkout's commit.
+
+    Without a commit the CLI runs the moving `latest` images, which can
+    already reject the config this checkout writes. Main publishes images for
+    its commits, so a checkout of one runs the images built from the same
+    source; a commit without published images fails at the pull, before
+    anything starts. The package build calls this on its build output, so the
+    checkout keeps its empty SOURCE_REVISION, and a package that already
+    recorded its commit keeps that one.
+    """
+    path = project / "cli" / "source_revision.py"
+    if not path.is_file() or not REVISION_LINE.search(path.read_text("utf-8")):
+        return
+    revision = checkout_revision(repository)
+    if revision:
+        record_source_revision(project, revision)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, default=Path("src/vllm-sr"))
