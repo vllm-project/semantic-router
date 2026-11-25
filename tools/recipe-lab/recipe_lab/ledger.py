@@ -18,7 +18,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import tempfile
 from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -254,42 +256,88 @@ def compute_record_id(raw: dict) -> str:
 
 
 class Ledger:
-    """Append-only JSONL ledger at a fixed path."""
+    """Append-only JSONL ledger at a fixed path.
+
+    Appends are serialized by a lock file next to the ledger, idempotent (the
+    same content is stored once) and published atomically: a writer killed
+    mid-append leaves the previous file intact, including its last line.
+    """
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
+
+    @contextmanager
+    def _locked(self, *, create: bool):
+        """Hold the writer lock. Readers lock an existing lock file only: a
+        ledger without one has never been appended to. A ledger whose lock
+        cannot be taken cannot be appended to either, so reads proceed."""
+        from .loop import writer_lock  # noqa: PLC0415
+
+        lock_path = self.path.with_suffix(".lock")
+        with ExitStack() as stack:
+            if create or lock_path.exists():
+                with suppress(OSError):
+                    stack.enter_context(writer_lock(lock_path))
+            yield
 
     def append(self, record: LedgerRecord | dict) -> dict:
         raw = record.to_dict() if isinstance(record, LedgerRecord) else dict(record)
         validate_record(raw)
         raw["record_id"] = compute_record_id(raw)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(raw, ensure_ascii=False, allow_nan=False)
-        with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(line + "\n")
-            fh.flush()
-            os.fsync(fh.fileno())
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self._locked(create=True):
+            prefix = self.path.read_bytes() if self.path.is_file() else b""
+            for existing in self._read_rows(prefix):
+                if existing["record_id"] != raw["record_id"]:
+                    continue
+                if existing != raw:
+                    raise ContractError(
+                        f"ledger record ID collision: {raw['record_id']} already "
+                        "names a different record"
+                    )
+                return existing  # a duplicate append stores nothing new
+            if prefix and not prefix.endswith(b"\n"):
+                prefix += b"\n"
+            staged: Path | None = None
+            try:
+                with tempfile.NamedTemporaryFile(
+                    dir=self.path.parent, delete=False
+                ) as tmp:
+                    staged = Path(tmp.name)
+                with staged.open("wb") as output:
+                    output.write(prefix)
+                    output.write(line.encode("utf-8") + b"\n")
+                    output.flush()
+                    os.fsync(output.fileno())
+                os.replace(staged, self.path)
+            finally:
+                if staged is not None:
+                    staged.unlink(missing_ok=True)
         return raw
 
     def read(self) -> list[dict]:
         if not self.path.is_file():
             return []
+        with self._locked(create=False):
+            return self._read_rows(self.path.read_bytes())
+
+    def _read_rows(self, data: bytes) -> list[dict]:
         records: list[dict] = []
-        with self.path.open("r", encoding="utf-8") as fh:
-            for lineno, raw_line in enumerate(fh, 1):
-                line = raw_line.strip()
-                if not line:
-                    continue
-                try:
-                    raw = json.loads(line)
-                except json.JSONDecodeError as exc:
-                    raise ContractError(
-                        f"ledger {self.path} line {lineno} is not valid JSON: {exc}"
-                    ) from exc
-                # G1: pre-record_id ledgers get the same id rule applied on read
-                if "record_id" not in raw:
-                    raw["record_id"] = compute_record_id(raw)
-                records.append(raw)
+        for lineno, raw_line in enumerate(data.split(b"\n"), 1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ContractError(
+                    f"ledger {self.path} line {lineno} is not valid JSON: {exc}"
+                ) from exc
+            # G1: pre-record_id ledgers get the same id rule applied on read
+            if "record_id" not in raw:
+                raw["record_id"] = compute_record_id(raw)
+            records.append(raw)
         return records
 
     def iter_records(self) -> Iterator[dict]:

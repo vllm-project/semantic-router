@@ -78,7 +78,10 @@ reimplementation, and no generation is invoked. The workflow:
 4. **Proposals.** `propose-thresholds` perturbs a single decision-signal
    threshold (bounded, clamped, baseline dropped); `propose-rule-thresholds`
    moves all predicate sites of one signal within a decision rule in one
-   calibrated step. Every candidate YAML is accompanied by a
+   calibrated step. Both read the canonical v0.5 layout (signals and decisions
+   live in `recipes[]`); a document with several recipes takes `--recipe
+   <name>` or `--public-model <name>` to name the one to edit. Every
+   candidate YAML is accompanied by a
    `<stem>.candidate.json` sidecar (kind / ref / change_summary /
    provenance / sites).
 5. **Replay evaluation (`run`).** Each candidate boots the real router with
@@ -93,7 +96,9 @@ reimplementation, and no generation is invoked. The workflow:
    `ledger top --spec` prints the best replay candidate by the spec's
    objective metric. Records are append-only, fingerprinted with stable
    content-derived IDs, and publication is atomic (a killed writer leaves
-   the previous ledger intact).
+   the previous ledger intact). Appending the same content again stores
+   nothing new, and writers are serialized by a `<ledger>.lock` file next to
+   the ledger.
 
 ```bash
 # cut the frozen dataset into splits (same dataset + args => byte-identical output)
@@ -102,6 +107,11 @@ recipe-lab split --cases labeled.jsonl --output-dir splits/
 # calibrate a rule-level gate in one step (all difficulty sites 2.5 -> 1.75)
 recipe-lab propose-rule-thresholds --base-config config.yaml \
   --signal difficulty --from 2.5 --values 1.75 --output-dir cands/
+
+# a document with several recipes: edit the one a public model serves
+recipe-lab propose-thresholds --base-config config.yaml \
+  --public-model vllm-sr/mom-v1-blend --signal verification --deltas 0.1 \
+  --output-dir cands/
 
 # replay evaluation over the dev split with pre-flight validation
 recipe-lab run --spec spec.yaml --split dev --cases splits/dev.jsonl \

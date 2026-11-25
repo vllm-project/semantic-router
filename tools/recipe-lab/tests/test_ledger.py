@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from recipe_lab.contract import ContractError, ExperimentSpec
@@ -285,3 +286,65 @@ def test_constraint_warning_absent_by_default(tmp_path):
     ledger = Ledger(tmp_path / "ledger.jsonl")
     stored = ledger.append(base_record())
     assert "constraint_warning" not in stored
+
+
+# ---- idempotent, serialized and atomic publication ----
+
+
+def test_duplicate_append_stores_once_and_returns_the_stored_row(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path)
+    first = ledger.append(base_record())
+    again = ledger.append(dict(first))
+    assert again == first
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0]) == first
+    # a different record is still appended
+    ledger.append(base_record(round=4))
+    assert [r["round"] for r in ledger.read()] == [3, 4]
+
+
+def test_record_id_collision_is_rejected(tmp_path, monkeypatch):
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path)
+    monkeypatch.setattr("recipe_lab.ledger.compute_record_id", lambda raw: "rec-same")
+    ledger.append(base_record())
+    with pytest.raises(ContractError, match="collision"):
+        ledger.append(base_record(round=4))
+    assert [r["round"] for r in ledger.read()] == [3]
+
+
+def test_failed_publication_leaves_the_ledger_intact(tmp_path, monkeypatch):
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path)
+    ledger.append(base_record())
+    before = path.read_bytes()
+
+    def refuse(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("recipe_lab.ledger.os.replace", refuse)
+    with pytest.raises(OSError, match="disk full"):
+        ledger.append(base_record(round=4))
+    assert path.read_bytes() == before
+    # the staged copy is gone: only the ledger and its lock file remain
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["ledger.jsonl", "ledger.lock"]
+
+
+def test_append_after_an_unterminated_line_keeps_the_old_record(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    path.write_text(json.dumps(base_record()), encoding="utf-8")
+    Ledger(path).append(base_record(round=4))
+    rows = Ledger(path).read()
+    assert [r["round"] for r in rows] == [3, 4]
+
+
+def test_appends_from_several_writers_all_land(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.jsonl")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(ledger.append, (base_record(round=r) for r in range(24))))
+    assert sorted(r["round"] for r in ledger.read()) == list(range(24))
+    raw = (tmp_path / "ledger.jsonl").read_text(encoding="utf-8")
+    assert raw.endswith("\n")
+    assert len([json.loads(line) for line in raw.splitlines()]) == 24
