@@ -12,6 +12,7 @@ from . import (
     messages,
     provider_boundary,
     responses,
+    speech,
     systemone,
 )
 from .cache import SessionCacheTracker
@@ -40,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         responses.router,
         messages.router,
         images.router,
+        speech.router,
     ):
         instance.include_router(router)
     if settings.shadow_control:

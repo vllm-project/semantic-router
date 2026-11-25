@@ -85,10 +85,11 @@ func TestOllamaShadowRequestCarriesOutputLimitAsMaxTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 	encode := router.shadowRequestEncoder(ctx, dispatch, engine)
-	body, err := encode(*request, &shadowTarget{
+	target := &shadowTarget{
 		logicalModel: model, upstreamModel: "shadow-model", format: llmprotocol.OpenAIChatV1,
 		profile: &config.ProviderProfile{Type: "ollama"},
-	})
+	}
+	body, err := encode(*request, target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,5 +102,10 @@ func TestOllamaShadowRequestCarriesOutputLimitAsMaxTokens(t *testing.T) {
 	}
 	if _, ok := fields["max_completion_tokens"]; ok {
 		t.Fatal("Ollama shadow request still carries max_completion_tokens")
+	}
+	prepared := preparedShadowCall{target: target, body: body}
+	tokens, err := prepared.estimateTokens(engine)
+	if err != nil || tokens.input != 9 || tokens.output != 8 {
+		t.Fatalf("estimated tokens = %+v, err = %v, want 9 input and 8 output", tokens, err)
 	}
 }

@@ -22,6 +22,7 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 | `POST /v1/responses` | Responses, buffered and SSE, including image-generation events |
 | `POST /v1/messages` | Messages, buffered and SSE, tools, stop sequences and cache counters |
 | `POST /v1/images/generations` | Buffered Images with deterministic valid 1×1 PNGs |
+| `POST /v1/audio/speech` | Buffered Speech API with a deterministic valid WAV |
 | `GET /health` | Readiness |
 | `GET /v1/models` | Configured model metadata |
 | `POST /v1/systemone` | System One decisions for the Router's `systemone` deployments |
@@ -32,6 +33,11 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 Images accept `response_format: b64_json` and `n` from 1 to 4. Images streaming,
 URL results, image editing and unsupported fields fail explicitly. The fixed PNG
 exercises response framing and image decoding; it does not simulate image quality.
+
+Speech accepts the OpenAI Speech fields plus the vLLM-Omni TTS extensions, and
+returns 0.1 seconds of 16-bit mono silence at 24 kHz. Streaming, a non-WAV
+`response_format`, an empty `input` and unknown fields fail explicitly. The WAV
+exercises audio framing; it does not synthesize speech.
 
 `provider_mocker/schema_contract.json` keeps the pinned OpenAI/Anthropic field
 inventories and provider extensions. Unknown fields return the native protocol's

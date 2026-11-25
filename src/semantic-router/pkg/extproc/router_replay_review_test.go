@@ -186,7 +186,7 @@ func TestApprovalReviewVerdictIsRecorded(t *testing.T) {
 // cut through the token cannot leave a prefix redaction misses.
 func TestApprovalReviewRedactsTheLoginBeforeBoundingTheRationale(t *testing.T) {
 	router, ctx := startReviewReplay(t, config.PromptCaptureRaw, false)
-	token := "sk-login-0123456789abcdef"
+	token := "caller-login-0123456789abcdef"
 	ctx.callerCredential = callerCredential{header: "authorization", value: "Bearer " + token}
 	rationale := strings.Repeat("x", 2048-10) + token + strings.Repeat("y", 50)
 	runBufferedReply(t, router, ctx, 200, chatAnswer(`{"outcome":"deny","rationale":"`+rationale+`"}`), "")
