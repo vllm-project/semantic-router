@@ -7,6 +7,7 @@ deterministic and platform-independent.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -120,7 +121,7 @@ def write_spec(
     (tmp_path / "providers.yaml").write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.5",
                 "listeners": [
                     {
                         "name": "gw",
@@ -136,6 +137,9 @@ def write_spec(
                             "name": alias,
                             "provider_model_id": alias,
                             "api_format": "openai",
+                            # the provider entry is the model's own card
+                            "context_window_size": 131072,
+                            "capabilities": ["chat", "text"],
                             "backend_refs": [
                                 {
                                     "name": alias + "-backend",
@@ -149,22 +153,7 @@ def write_spec(
                         for alias in ("local/model-a", "local/model-b")
                     ],
                 },
-                "routing": {
-                    "modelCards": [
-                        {
-                            "name": alias,
-                            "context_window_size": 131072,
-                            "capabilities": ["chat", "text"],
-                            "modality": "text",
-                        }
-                        for alias in ("local/model-a", "local/model-b")
-                    ]
-                },
-                "global": {
-                    "stores": {
-                        "response_cache": {"enabled": True, "backend_type": "memory"}
-                    }
-                },
+                "global": {"stores": {"response_cache": {"backend_type": "memory"}}},
             }
         ),
         encoding="utf-8",
@@ -450,14 +439,14 @@ def test_run_bindings_generates_and_validates_candidates(tmp_path, monkeypatch):
             argv[argv.index("--catalog-version") + 1]
             == result["template"]["catalog_version"]
         )
-    # The eval copy disabled the bundle's response cache.
+    # A canonical provider config rides into the eval copy verbatim: the
+    # response cache store has no switch (a decision mounts the plugin or it
+    # does not), so nothing is written to turn it off.
     eval_copy = yaml.safe_load(
         (tmp_path / "cands" / "providers-eval.yaml").read_text(encoding="utf-8")
     )
-    assert eval_copy["global"]["stores"]["response_cache"]["enabled"] is False
-    # The input provider config is untouched (endpoints come only from there).
     original = yaml.safe_load((tmp_path / "providers.yaml").read_text(encoding="utf-8"))
-    assert original["global"]["stores"]["response_cache"]["enabled"] is True
+    assert eval_copy == original
     # Bindings are the raw {lane: refs} mapping init consumes.
     bindings_doc = yaml.safe_load(
         (tmp_path / "cands" / "bindings-lambda-0.yaml").read_text(encoding="utf-8")
@@ -716,13 +705,13 @@ def test_bindings_checks_rendered_strict_model_cards(tmp_path, monkeypatch, bad_
     profile = golden_profile(tmp_path)
     providers_path = tmp_path / "providers.yaml"
     providers = yaml.safe_load(providers_path.read_text())
-    cards = providers["routing"]["modelCards"]
-    for card in cards:
-        card["max_output_tokens"] = 8192
-        card["context_window_size"] = 262144
-        card["capabilities"] = ["chat", "tool_use", "image_input"]
+    models = providers["providers"]["models"]
+    for model in models:
+        model["max_output_tokens"] = 8192
+        model["context_window_size"] = 262144
+        model["capabilities"] = ["chat", "tool_use", "image_input"]
     if bad_card:
-        del cards[1][bad_card]
+        del models[1][bad_card]
     providers_path.write_text(yaml.safe_dump(providers))
     template = fake_template()
     monkeypatch.setattr(bindings_mod, "template_info", lambda **kw: template)
@@ -734,16 +723,14 @@ def test_bindings_checks_rendered_strict_model_cards(tmp_path, monkeypatch, bad_
         doc["recipes"] = [
             {
                 "name": template["recipe"],
-                "routing": {
-                    "candidate_requirements": {
-                        "context": "known_limits",
-                        "capabilities": "declared",
-                    },
-                    "decisions": [
-                        {"name": name, "modelRefs": refs}
-                        for name, refs in assigned.items()
-                    ],
+                "candidate_requirements": {
+                    "context": "known_limits",
+                    "capabilities": "declared",
                 },
+                "decisions": [
+                    {"name": name, "modelRefs": refs}
+                    for name, refs in assigned.items()
+                ],
             }
         ]
         Path(argv[argv.index("--output") + 1]).write_text(yaml.safe_dump(doc))
@@ -781,19 +768,16 @@ def test_card_preflight_allows_inherited_catalog_metadata_and_external_id(tmp_pa
                         },
                     ]
                 },
-                "routing": {"modelCards": []},
                 "recipes": [
                     {
                         "name": "balance",
-                        "routing": {
-                            "candidate_requirements": {
-                                "context": "known_limits",
-                                "capabilities": "declared",
-                            },
-                            "decisions": [
-                                {"name": "vision", "modelRefs": [{"model": "served"}]}
-                            ],
+                        "candidate_requirements": {
+                            "context": "known_limits",
+                            "capabilities": "declared",
                         },
+                        "decisions": [
+                            {"name": "vision", "modelRefs": [{"model": "served"}]}
+                        ],
                     }
                 ],
             }
@@ -802,10 +786,10 @@ def test_card_preflight_allows_inherited_catalog_metadata_and_external_id(tmp_pa
     bindings_mod._check_bound_model_cards(candidate, fake_template())
 
 
-def test_card_preflight_reads_v05_recipe_level_requirements(tmp_path):
-    """v0.5 candidates (the current recipe builtin init output) carry
+def test_card_preflight_reads_recipe_level_requirements(tmp_path):
+    """Candidates (the current recipe builtin init output) carry
     candidate_requirements and decisions at the recipe level; the preflight
-    must read them there, not only under the donor-era recipe.routing nest."""
+    reads them there and treats the provider entry as the model's own card."""
     candidate = tmp_path / "candidate.yaml"
     candidate.write_text(
         yaml.safe_dump(
@@ -818,7 +802,6 @@ def test_card_preflight_reads_v05_recipe_level_requirements(tmp_path):
                         },
                     ]
                 },
-                "routing": {"modelCards": []},
                 "recipes": [
                     {
                         "name": "balance",
@@ -838,6 +821,53 @@ def test_card_preflight_reads_v05_recipe_level_requirements(tmp_path):
         bindings_mod._check_bound_model_cards(candidate, fake_template())
     assert "vision" in str(exc.value)
     assert "context_window_size" in str(exc.value)
+
+
+def test_card_preflight_reads_facts_from_the_provider_entries(tmp_path):
+    # the provider entry is the model's own card: declared limits and
+    # capabilities on it satisfy a strict recipe without any card table
+    candidate = tmp_path / "candidate.yaml"
+    candidate.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "models": [
+                        {
+                            "name": "local/model-a",
+                            "capabilities": ["chat", "tools", "vision"],
+                            "context_window_size": 262144,
+                            "max_output_tokens": 8192,
+                        },
+                        {
+                            "name": "local/model-b",
+                            "capabilities": ["chat", "tools", "vision"],
+                            "context_window_size": 262144,
+                            "max_output_tokens": 8192,
+                        },
+                    ]
+                },
+                "recipes": [
+                    {
+                        "name": "balance",
+                        "candidate_requirements": {
+                            "context": "known_limits",
+                            "capabilities": "declared",
+                        },
+                        "decisions": [
+                            {
+                                "name": "frontier",
+                                "modelRefs": [
+                                    {"model": "local/model-a"},
+                                    {"model": "local/model-b"},
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    bindings_mod._check_bound_model_cards(candidate, fake_template())
 
 
 def test_bindings_validates_and_hashes_effective_replay_store(tmp_path, monkeypatch):
@@ -938,7 +968,7 @@ def test_explicit_replay_storage_is_preserved_or_diagnosed(
     assert candidate.read_text() == initial
 
 
-@pytest.mark.parametrize("scope", ["default", "named"])
+@pytest.mark.parametrize("scope", ["only", "later"])
 @pytest.mark.parametrize("enabled", [None, False, True])
 def test_disabled_global_store_with_decision_replay(tmp_path, scope, enabled):
     plugin = {"type": "router_replay"}
@@ -948,10 +978,10 @@ def test_disabled_global_store_with_decision_replay(tmp_path, scope, enabled):
     document = {
         "global": {"services": {"router_replay": {"store_backend": "postgres"}}}
     }
-    if scope == "default":
-        document["routing"] = routing
+    if scope == "only":
+        document["recipes"] = [routing]
     else:
-        document["recipes"] = [{"name": "named", "routing": routing}]
+        document["recipes"] = [{"name": "other", "decisions": []}, routing]
     initial = yaml.safe_dump(document)
     candidate = tmp_path / "candidate.yaml"
     candidate.write_text(initial)
@@ -967,3 +997,23 @@ def test_disabled_global_store_with_decision_replay(tmp_path, scope, enabled):
     else:
         assert not overrides
         assert candidate.read_text() == initial
+
+
+@pytest.mark.parametrize(
+    "store, expected, disabled",
+    [
+        (None, {"backend_type": "memory"}, True),
+        ({"backend_type": "redis"}, {"backend_type": "redis"}, False),
+        # the store has no switch: a stale key is dropped, never written back
+        ({"enabled": True, "ttl_seconds": 3600}, {"ttl_seconds": 3600}, True),
+    ],
+)
+def test_eval_provider_copy_writes_no_store_switch(store, expected, disabled):
+    providers = {"global": {"stores": {}}}
+    if store is not None:
+        providers["global"]["stores"]["response_cache"] = store
+    before = copy.deepcopy(providers)
+    eval_copy, cache_disabled = bindings_mod._derived_eval_providers(providers)
+    assert eval_copy["global"]["stores"]["response_cache"] == expected
+    assert cache_disabled is disabled
+    assert providers == before  # the input is never edited in place

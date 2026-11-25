@@ -462,28 +462,27 @@ def _derived_eval_providers(
 
     Returns ``(config, cache_disabled)``; everything else is preserved
     verbatim (endpoints and credentials come only from the user's file).
+    The response cache store has no switch (a decision mounts the plugin or
+    it does not), so a stale ``enabled`` key is dropped, never written: the
+    canonical loader rejects unknown fields.
     """
     config = copy.deepcopy(providers)
     global_section = config.setdefault("global", {})
     stores = global_section.setdefault("stores", {})
     cache = stores.get("response_cache")
     disabled = False
-    if isinstance(cache, dict) and cache.get("enabled"):
-        cache["enabled"] = False
+    if isinstance(cache, dict) and cache.pop("enabled", None):
         disabled = True
     elif not isinstance(cache, dict):
-        stores["response_cache"] = {"enabled": False, "backend_type": "memory"}
+        stores["response_cache"] = {"backend_type": "memory"}
         disabled = True
     return config, disabled
 
 
 def _decision_enables_replay(document: dict[str, Any]) -> bool:
     """A decision can opt in when the global replay recorder is disabled."""
-    for profile in [document, *(document.get("recipes") or [])]:
-        # v0.5 recipes hold decisions at the recipe level; donor-era
-        # documents nest them under routing.
-        decisions = (profile.get("routing") or {}).get("decisions") or []
-        for decision in decisions or profile.get("decisions") or []:
+    for recipe in document.get("recipes") or []:
+        for decision in recipe.get("decisions") or []:
             for plugin in decision.get("plugins") or []:
                 if plugin.get("type") == "router_replay":
                     if (plugin.get("configuration") or {}).get("enabled") is True:
@@ -549,23 +548,15 @@ def _check_bound_model_cards(candidate: Path, template: dict[str, Any]) -> None:
         (r for r in doc.get("recipes", []) if r.get("name") == template["recipe"]),
         {},
     )
-    # v0.5 recipes carry candidate_requirements and decisions at the recipe
-    # level; donor-era candidates nest both under the recipe's routing.
-    legacy_routing = recipe.get("routing") or {}
-    strict = (
-        recipe.get("candidate_requirements")
-        or legacy_routing.get("candidate_requirements")
-        or {}
-    )
+    strict = recipe.get("candidate_requirements") or {}
     limits = strict.get("context") == "known_limits"
     declared = strict.get("capabilities") == "declared"
     if not (limits or declared):
         return
 
     providers = {p["name"]: p for p in doc["providers"]["models"]}
-    cards = {c["name"]: c for c in (doc.get("routing") or {}).get("modelCards", [])}
     issues = []
-    for decision in recipe.get("decisions") or legacy_routing.get("decisions") or []:
+    for decision in recipe.get("decisions") or []:
         lane = decision["name"]
         metadata = template["lanes"].get(lane)
         if not metadata or metadata["immediate"]:
@@ -588,7 +579,9 @@ def _check_bound_model_cards(candidate: Path, template: dict[str, Any]) -> None:
                 provider = matches[0] if len(matches) == 1 else {}
             catalog = provider.get("catalog")
             card_id = catalog or provider.get("name", alias)
-            card = cards.get(card_id, {})
+            # The provider entry is the model's own card. A catalog-backed
+            # model inherits what the catalog supplies and is not checked here.
+            card = {} if catalog else provider
             missing = []
             if limits:
                 for field in ("context_window_size", "max_output_tokens"):
@@ -625,8 +618,9 @@ def _check_bound_model_cards(candidate: Path, template: dict[str, Any]) -> None:
             )
     if issues:
         raise ContractError(
-            "bound models cannot serve this recipe; correct providers_config "
-            "routing.modelCards or change the lane bindings: " + "; ".join(issues)
+            "bound models cannot serve this recipe; correct the model "
+            "capabilities in providers_config or change the lane bindings: "
+            + "; ".join(issues)
         )
 
 
