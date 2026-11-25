@@ -1,4 +1,11 @@
-{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+{{- /* A release that mounts its own model volume must not also render a claim
+       nothing mounts: an unbound claim on a WaitForFirstConsumer class stays
+       Pending, and a --wait install times out on it. An upgrade of a release
+       that already has the claim keeps rendering it, so Helm does not delete
+       the bound claim along with the models on it. */ -}}
+{{- $existingClaim := lookup "v1" "PersistentVolumeClaim" .Release.Namespace (include "semantic-router.pvcName" .) -}}
+{{- $claimExists := ne (dig "metadata" "name" "" $existingClaim) "" -}}
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) (or (ne (include "semantic-router.customModelMount" .) "true") $claimExists) }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

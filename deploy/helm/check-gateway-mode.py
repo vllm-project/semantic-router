@@ -138,6 +138,36 @@ def check_extproc(chart: str) -> None:
     assert service_ports(documents, f"{ROUTER}-headless") == {"grpc": (50051, 50051)}
 
 
+def check_custom_model_mount_renders_no_claim(chart: str) -> None:
+    # A release that mounts its own models must not also render a claim nothing
+    # mounts: on a WaitForFirstConsumer class that claim stays Pending, and a
+    # --wait install times out on it.
+    custom = {
+        "persistence": {"storageClassName": "delayed-binding"},
+        "extraVolumes": [
+            {
+                "name": "preloaded",
+                "persistentVolumeClaim": {"claimName": "preloaded-models"},
+            }
+        ],
+        "extraVolumeMounts": [{"name": "preloaded", "mountPath": "/app/models"}],
+    }
+    documents = render(chart, custom)
+    assert (
+        find(documents, "PersistentVolumeClaim", f"{ROUTER}-models") is None
+    ), "a custom model mount must not also render the chart's model claim"
+    mounts = [
+        mount
+        for mount in router_container(documents)["volumeMounts"]
+        if mount["mountPath"] == "/app/models"
+    ]
+    assert [mount["name"] for mount in mounts] == ["preloaded"], mounts
+
+    # Without the custom mount the chart still manages its own claim.
+    documents = render(chart)
+    assert find(documents, "PersistentVolumeClaim", f"{ROUTER}-models")
+
+
 def check_listener_ports_fail_closed(chart: str) -> None:
     def config_with(*listeners: dict) -> dict:
         return {"config": {"listeners": list(listeners)}}
@@ -296,6 +326,7 @@ def check_config_override_version(chart: str) -> None:
 CHECKS = (
     check_standalone_default,
     check_extproc,
+    check_custom_model_mount_renders_no_claim,
     check_listener_ports_fail_closed,
     check_listener_tls,
     check_cli_kubernetes_values,
