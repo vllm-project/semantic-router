@@ -172,8 +172,11 @@ evidence failures, and success only for complete passing evidence. Waiting
 does not reserve a runner. A genuine failure takes precedence when other work
 also awaits authorization. Contributors without repository write permission
 do not need to authorize CI and cannot approve these runs.
-The short **CI Execution** job still summarizes the work that ran; its success
-alone does not satisfy the separately published PR Gate.
+When the tested base supports strict **CI Execution**, the job passes only
+after complete qualification with a Plan and Gate from the current run and
+attempt. A job-only rerun without a fresh Plan cannot satisfy it. Older bases
+keep their existing behavior so the trusted publisher can still report waiting
+for approval correctly.
 
 A committer with current repository write, maintain, or admin permission can
 comment `/ci run` on a PR to authorize all affected work. `/ci run models`,
@@ -201,8 +204,8 @@ a human-created branch with the same prefix gets no exemption.
 
 The Mergify queue requires both `PR Qualification` and `CI Execution` from
 GitHub Actions. The trusted publisher reports `PR Qualification` for the
-verified PR run and attempt. `CI Execution` records the native workflow outcome
-and must also pass on the incoming PR and on the queue draft.
+verified PR run and attempt. The native `CI Execution` check must also pass on
+the incoming PR and on the queue draft.
 
 The publisher is installed on main. During its introduction, branches based on
 the old entrypoint retain the strict legacy PR Gate; missing qualification

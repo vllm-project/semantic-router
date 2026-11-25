@@ -409,25 +409,50 @@ class PullRequestGateContractTests(unittest.TestCase):
         self.assertEqual(
             step["env"]["PUBLISHER_READY"], "${{ needs.ci.outputs.publisher_ready }}"
         )
-        for publisher, draft_plan, result, expected_exit in (
-            ("true", "true", "success", 0),  # CI Execution is separate from PR Gate.
-            ("true", "false", "skipped", 1),
-            ("true", "false", "failure", 1),
-            ("true", "false", "cancelled", 1),
-            ("false", "true", "success", 1),  # Legacy PR Gate rejects draft Plans.
-            ("false", "null", "success", 1),
-            ("false", "false", "success", 0),
-        ):
+        head, source = "a" * 40, "b" * 40
+        qualified = f"{head}:{source}:10:2"
+        strict_cases = (
+            ("true", "false", "success", qualified, 0),
+            ("true", "false", "success", "", 1),  # Pending or partial approval.
+            ("true", "true", "success", "", 1),  # Ordinary draft plan.
+            ("true", "false", "success", f"{head}:{source}:10:1", 1),
+            ("true", "false", "success", f"{head}:{source}:11:2", 1),
+            ("true", "false", "success", f"{source}:{source}:10:2", 1),
+            ("true", "false", "success", f"{head}:{head}:10:2", 1),
+            ("true", "false", "skipped", qualified, 1),
+            ("true", "false", "failure", qualified, 1),
+            ("true", "false", "cancelled", qualified, 1),
+            ("false", "true", "success", "", 1),  # Legacy PR Gate rejects draft plans.
+            ("false", "null", "success", "", 1),
+            ("false", "false", "success", "", 0),
+        )
+        cases = [(case[0], *case) for case in strict_cases]
+        cases += [
+            ("false", "true", "false", "success", "", 0),  # Older publisher, pending.
+            ("false", "true", "true", "success", "", 0),
+            ("false", "true", "false", "failure", "", 1),
+        ]
+        for strict, publisher, draft_plan, result, revision, expected_exit in cases:
             with self.subTest(
-                publisher=publisher, draft_plan=draft_plan, result=result
+                strict=strict,
+                publisher=publisher,
+                draft_plan=draft_plan,
+                result=result,
+                revision=revision,
             ):
                 actual = subprocess.run(
                     ["bash", "-e", "-c", step["run"]],
                     env={
                         **os.environ,
                         "PUBLISHER_READY": publisher,
+                        "STRICT_CI_EXECUTION": strict,
                         "DRAFT_PLAN": draft_plan,
                         "RESULT": result,
+                        "PR_HEAD_SHA": head,
+                        "GITHUB_SHA": source,
+                        "GITHUB_RUN_ID": "10",
+                        "GITHUB_RUN_ATTEMPT": "2",
+                        "QUALIFIED_REVISION": revision,
                     },
                     capture_output=True,
                     text=True,

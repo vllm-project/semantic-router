@@ -51,6 +51,22 @@ def invoke(client, event=None, *, resolve=False, arguments=()):
 
 
 class PendingRecoveryTests(unittest.TestCase):
+    def test_pending_recovery_accepts_only_the_expected_execution_guard_failure(self):
+        for reconciliation in ("success", "failure"):
+            with self.subTest(reconciliation=reconciliation):
+                client = PendingClient()
+                client.run["conclusion"] = "failure"
+                for job in client.jobs:
+                    if job["name"] == "CI Execution":
+                        job["conclusion"] = "failure"
+                    elif job["name"] == "CI / Gate":
+                        job["conclusion"] = reconciliation
+                result = invoke(client)
+                if reconciliation == "success":
+                    self.assertEqual(result.get("recovery"), "restored")
+                else:
+                    self.assertEqual(client.writes, [])
+
     def test_nullable_output_text_is_not_recovery_provenance(self):
         for visible in (False, True):
             with self.subTest(visible=visible):

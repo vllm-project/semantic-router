@@ -450,9 +450,10 @@ def main() -> int:
             tuple(deferred) if valid_inventory(deferred) else (),
             tuple(deferred_images) if valid_inventory(deferred_images) else (),
         )
+    report = gate_report(plan, verdict)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(gate_report(plan, verdict), indent=2) + "\n")
+        args.output.write_text(json.dumps(report, indent=2) + "\n")
     if path := os.environ.get("GITHUB_OUTPUT"):
         outputs = {
             "status": verdict.status,
@@ -461,6 +462,18 @@ def main() -> int:
             "deferred_verification_count": str(len(verdict.deferred_verifications)),
             "deferred_image_count": str(len(verdict.deferred_images)),
         }
+        pr_head = os.environ.get("PR_HEAD_SHA")
+        run_identity = f"{report['run_id']}:{report['run_attempt']}"
+        # A job-only rerun can keep the original Plan job's outputs and artifacts.
+        if (
+            pr_head
+            and plan.get("draft") is False
+            and verdict.passed
+            and os.environ.get("CI_PLAN_RUN") == run_identity
+        ):
+            outputs["qualified_revision"] = (
+                f"{pr_head}:{report['source_sha']}:{run_identity}"
+            )
         with Path(path).open("a") as stream:
             stream.writelines(f"{key}={value}\n" for key, value in outputs.items())
     summary = render_summary(verdict)

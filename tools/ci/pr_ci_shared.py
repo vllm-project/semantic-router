@@ -124,16 +124,28 @@ def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
         raise ManualCIError("Qualification inventories do not partition the plan.")
 
 
+# Supports strict CI Execution qualification.
+# The CI Plan workflow reads this capability from the tested base.
 def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
     """A successful automatic workflow is not necessarily full qualification."""
-    if run.get("conclusion") != "success" or any(
-        job.get("conclusion") not in {"success", "skipped"} for job in jobs
+    by_name = {job.get("name"): job for job in jobs}
+    execution = by_name.get("CI Execution", {})
+    waiting = bool(plan["deferred_verifications"] or plan["deferred_images"])
+    # The native check rejects incomplete qualification even when every
+    # dispatched check passed. The receipt still determines the published state.
+    execution_blocked = (waiting or plan.get("draft") is True) and execution.get(
+        "conclusion"
+    ) == "failure"
+    expected_conclusion = "failure" if execution_blocked else "success"
+    if run.get("conclusion") != expected_conclusion or any(
+        job.get("conclusion") not in {"success", "skipped"}
+        for job in jobs
+        if not (execution_blocked and job is execution)
     ):
         return "failure"
-    by_name = {job.get("name"): job for job in jobs}
-    if any(
-        by_name.get(name, {}).get("conclusion") != "success"
-        for name in ("CI / Gate", "CI Execution")
+    if (
+        by_name.get("CI / Gate", {}).get("conclusion") != "success"
+        or execution.get("conclusion") != expected_conclusion
     ):
         raise ManualCIError("Required CI reconciliation jobs did not succeed.")
     expected = {
@@ -154,7 +166,6 @@ def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
         raise ManualCIError(
             "CI reconciliation receipt is missing, stale or inconsistent."
         )
-    waiting = bool(plan["deferred_verifications"] or plan["deferred_images"])
     expected_status = "awaiting-approval" if waiting else "success"
     if report.get("status") != expected_status:
         raise ManualCIError("CI receipt does not match the remaining qualification.")

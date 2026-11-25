@@ -248,6 +248,55 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_execution_guard_preserves_pending_for_the_current_deferred_receipt(self):
+        for case, expected in (
+            ("waiting", "pending"),
+            ("partial", "pending"),
+            ("other-job-failure", "failure"),
+            ("stale-receipt", "failure"),
+            ("cancelled", "failure"),
+            ("complete-receipt", "failure"),
+        ):
+            with self.subTest(case=case):
+                client = Client()
+                client.run.update(run_attempt=2, conclusion="failure")
+                client.commit_statuses = [
+                    {
+                        "context": "PR Qualification",
+                        "state": "success",
+                        "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/1",
+                        "creator": {"id": 41898282, "login": "github-actions[bot]"},
+                    }
+                ]
+                next(job for job in client.jobs if job["name"] == "CI Execution")[
+                    "conclusion"
+                ] = "failure"
+                if case == "partial":
+                    client.plan["expected_verification_ids"].append("local.cli")
+                    client.plan["required_verification_ids"].append("local.cli")
+                elif case == "other-job-failure":
+                    next(job for job in client.jobs if job["name"] == "Quality")[
+                        "conclusion"
+                    ] = "failure"
+                elif case == "cancelled":
+                    client.run["conclusion"] = "cancelled"
+                elif case == "complete-receipt":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                if case == "stale-receipt":
+                    client.report["run_attempt"] = 1
+                result = reconcile(client, REPO, 101)
+                status = client.status_writes[-1]
+                self.assertEqual(status["state"], expected)
+                self.assertTrue(status["target_url"].endswith("/attempts/2"))
+                if expected == "pending":
+                    self.assertEqual(result["state"], "awaiting-approval")
+                    self.assertIn("/ci run", result["comment"])
+
     def test_commit_status_uses_the_current_qualification_verdict(self):
         for case, expected in (
             ("waiting", "pending"),
@@ -360,8 +409,14 @@ class PRStatusTests(unittest.TestCase):
             deferred_images=[],
         )
         client.refresh_report()
-        for draft in (True, False):
-            with self.subTest(draft=draft):
+        execution = next(job for job in client.jobs if job["name"] == "CI Execution")
+        for draft, conclusion in (
+            (True, "success"),
+            (True, "failure"),
+            (False, "failure"),
+        ):
+            with self.subTest(draft=draft, conclusion=conclusion):
+                client.run["conclusion"] = execution["conclusion"] = conclusion
                 client.pull["draft"] = draft
                 self.assertIsNone(reconcile(client, REPO, 101).get("check"))
                 self.assertEqual(client.writes, [])
@@ -375,6 +430,7 @@ class PRStatusTests(unittest.TestCase):
         self.assertIn("/ci run", waiting["comment"])
 
         client.run["run_attempt"] = 2  # Completed attempt after authorized /ci run.
+        client.run["conclusion"] = execution["conclusion"] = "success"
         client.plan.update(
             expected_verification_ids=client.plan["required_verification_ids"],
             deferred_verifications=[],

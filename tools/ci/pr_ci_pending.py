@@ -142,7 +142,6 @@ def collect(client, repo, run_id):
         or run.get("event") != "pull_request"
         or (run.get("repository") or {}).get("full_name") != repo
         or run.get("status") != "completed"
-        or run.get("conclusion") != "success"
         or type(run.get("run_attempt")) is not int
         or run["run_attempt"] <= 0
         or not latest_run(client, repo, run)

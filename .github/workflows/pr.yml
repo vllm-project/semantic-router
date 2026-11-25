@@ -46,9 +46,17 @@ jobs:
         env:
           RESULT: ${{ needs.ci.result }}
           PUBLISHER_READY: ${{ needs.ci.outputs.publisher_ready }}
+          STRICT_CI_EXECUTION: ${{ needs.ci.outputs.strict_ci_execution }}
           DRAFT_PLAN: ${{ toJSON(fromJSON(needs.ci.outputs.plan || '{}').draft) }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          QUALIFIED_REVISION: ${{ needs.ci.outputs.qualified_revision }}
         run: |
-          if [[ "$PUBLISHER_READY" != true && "$DRAFT_PLAN" != false ]]; then
+          if [[ "$STRICT_CI_EXECUTION" == true ]]; then
+            if [[ "$QUALIFIED_REVISION" != "$PR_HEAD_SHA:$GITHUB_SHA:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT" ]]; then
+              echo "This revision and attempt have not completed qualification. See CI / Gate."
+              exit 1
+            fi
+          elif [[ "$PUBLISHER_READY" != true && "$DRAFT_PLAN" != false ]]; then
             echo "Draft CI does not qualify this revision for merge."
             exit 1
           fi

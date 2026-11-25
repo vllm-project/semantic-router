@@ -22,6 +22,10 @@ on:
     outputs:
       publisher_ready:
         value: ${{ jobs.plan.outputs.publisher_ready }}
+      strict_ci_execution:
+        value: ${{ jobs.plan.outputs.strict_ci_execution }}
+      plan_run:
+        value: ${{ jobs.plan.outputs.plan_run }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
       dispatch:
@@ -93,6 +97,8 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       publisher_ready: ${{ steps.publisher.outputs.ready }}
+      strict_ci_execution: ${{ steps.publisher.outputs.strict }}
+      plan_run: ${{ steps.plan.outputs.plan_run }}
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
       worker_labels: ${{ steps.plan.outputs.worker_labels }}
@@ -148,14 +154,20 @@ jobs:
         name: Check whether the trusted base can publish PR status
         run: |
           ready=false
+          strict=false
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
             base="$(git rev-parse --verify "$GITHUB_SHA^1")"
             if git cat-file -e "$base:.github/workflows/ci-status.yml" 2>/dev/null \
               && git cat-file -e "$base:tools/ci/pr_ci_status.py" 2>/dev/null; then
               ready=true
+              # Only the tested base can opt in to the new waiting-state contract.
+              if git grep -q '^# Supports strict CI Execution qualification\.$' "$base" -- tools/ci/pr_ci_shared.py; then
+                strict=true
+              fi
             fi
           fi
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
+          echo "strict=$strict" >> "$GITHUB_OUTPUT"
       - name: Resolve committer authorization for this exact PR source
         if: github.event_name == 'pull_request'
         env:
@@ -187,6 +199,7 @@ jobs:
           python3 tools/ci/ci_plan.py --profile "$PROFILE" \
             --base "$BASE_SHA" --head "$GITHUB_SHA" "${flags[@]}" \
             --output .agent-harness/ci/plan.json --github-output "$GITHUB_OUTPUT"
+          printf 'plan_run=%s:%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
           overwrite: true

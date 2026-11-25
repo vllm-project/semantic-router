@@ -40,6 +40,54 @@ class CIStatusWorkflowTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.publisher = self.workflows["ci-status.yml"]
 
+    def test_ci_execution_reads_only_the_current_reconciled_revision(self):
+        shared = self.workflows["ci.yml"]
+        gate = shared.jobs["gate"]
+        reconcile_step = next(
+            step for step in gate["steps"] if "check_ci_gate.py" in step.get("run", "")
+        )
+        execution = self.workflows["pr.yml"].jobs["pr-gate"]["steps"][0]
+        planner = self.workflows["ci-changes.yml"]
+        plan_job = planner.jobs["plan"]
+        self.assertEqual(
+            plan_job["outputs"]["plan_run"], "${{ steps.plan.outputs.plan_run }}"
+        )
+        for output in ("plan_run", "strict_ci_execution"):
+            self.assertEqual(
+                planner.events["workflow_call"]["outputs"][output]["value"],
+                "${{ jobs.plan.outputs." + output + " }}",
+            )
+        self.assertEqual(
+            reconcile_step["env"]["CI_PLAN_RUN"], "${{ needs.plan.outputs.plan_run }}"
+        )
+        self.assertEqual(
+            shared.events["workflow_call"]["outputs"]["strict_ci_execution"]["value"],
+            "${{ jobs.plan.outputs.strict_ci_execution }}",
+        )
+        self.assertEqual(
+            execution["env"]["STRICT_CI_EXECUTION"],
+            "${{ needs.ci.outputs.strict_ci_execution }}",
+        )
+        head = "${{ github.event.pull_request.head.sha }}"
+        self.assertEqual(reconcile_step["env"]["PR_HEAD_SHA"], head)
+        self.assertEqual(
+            gate["outputs"]["qualified_revision"],
+            "${{ steps." + reconcile_step["id"] + ".outputs.qualified_revision }}",
+        )
+        self.assertEqual(
+            shared.events["workflow_call"]["outputs"]["qualified_revision"]["value"],
+            "${{ jobs.gate.outputs.qualified_revision }}",
+        )
+        self.assertEqual(execution["env"]["PR_HEAD_SHA"], head)
+        self.assertEqual(
+            execution["env"]["QUALIFIED_REVISION"],
+            "${{ needs.ci.outputs.qualified_revision }}",
+        )
+        self.assertIn(
+            '"$PR_HEAD_SHA:$GITHUB_SHA:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"',
+            execution["run"],
+        )
+
     def test_event_resolution_precedes_one_shared_qualification_lock(self):
 
         client = PendingClient()
