@@ -94,6 +94,13 @@ def test_micro_batches_split_longest_first_and_keep_request_order():
         micro_batches([100], 64)
 
 
+def test_micro_batches_batches_a_zero_cost_tail_instead_of_dividing_by_it():
+    """A zero-padded row sorts last (longest first); dividing the budget by its
+    padded length of zero must not raise, and every zero-cost row still gets a
+    batch of its own rather than being dropped."""
+    assert micro_batches([30, 30, 0, 0], 32) == [[0], [1], [2, 3]]
+
+
 def test_over_budget_rows_of_one_state_share_a_batch_when_the_family_splits():
     """Equal-content over-budget rows pack: the family encodes their shared content once."""
     jobs = [job([item(f"j{i}", 300)]) for i in range(3)]  # padded 304 > budget 256
@@ -1043,6 +1050,14 @@ def test_inputs_without_token_ids_count_by_their_cost():
     batches = merged([images, text], cap=512)
     assert [names(batch) for batch in batches] == [["t"], ["i1"], ["i2"]]
     assert cost(Media("i1")) == 300 and cost(item("t", 8)) == 8
+
+
+def test_cost_keeps_an_explicitly_declared_zero():
+    """A state-once question whose share of its state and own block both come
+    out to zero still has real token IDs (the shared state's); only an unset
+    cost should fall back to len(ids)."""
+    assert cost(Media("q", ids=(1, 2, 3, 4, 5), cost=0)) == 0
+    assert cost(Media("q", ids=(1, 2, 3, 4, 5))) == 300
 
 
 class GatedModel(FakeModel):

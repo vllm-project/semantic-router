@@ -77,6 +77,10 @@ type CostAccounting struct {
 	CallerLogin bool `json:"caller_login,omitempty"`
 	// UnpricedReason says why ActualCost is missing.
 	UnpricedReason string `json:"unpriced_reason,omitempty"`
+	// PartialUsage marks usage a stream reported before it was cut short,
+	// such as by the client: its input in full, its output only as far as the
+	// stream had counted it. ActualCost prices that much.
+	PartialUsage bool `json:"partial_usage,omitempty"`
 	// BaselineSource is how the baseline was chosen. BaselineUnavailable says
 	// why a priced record has no baseline.
 	BaselineSource      string `json:"baseline_source,omitempty"`
@@ -98,6 +102,9 @@ const (
 	BudgetSettledEstimate = "estimate"
 	// BudgetSettledReleased charged nothing: no provider answered the call.
 	BudgetSettledReleased = "released"
+	// BudgetSettledPartialUsage charged the priced usage a stream reported
+	// before it was cut short (CostAccounting.PartialUsage).
+	BudgetSettledPartialUsage = "partial_usage"
 )
 
 // BudgetAccounting is a request's view of the tightest spend budget it

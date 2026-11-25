@@ -340,7 +340,7 @@ func buildReplayRoutingRecord(
 		// Tool definitions are operator-authored, not user content, so they
 		// are kept even when the prompt is suppressed.
 		record.ToolDefinitions = toolDefinitions
-		record.ReasoningEffort = ctx.SemanticRequest.ReasoningEffort
+		record.ReasoningEffort = replayReasoningEffort(ctx)
 		if !suppressBody {
 			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
 				record.RequestBody = string(requestBody)
@@ -380,11 +380,16 @@ func replayDecisionMetadata(ctx *RequestContext) (int, int) {
 	return ctx.VSRSelectedDecision.Tier, ctx.VSRSelectedDecision.Priority
 }
 
+// replayReasoningMode and replayReasoningEffort are the reasoning the request
+// was sent with, as its provider dispatch carried it: no mode where the Router
+// wrote no reasoning for the model, and no effort for a request the Router
+// answered itself or turned reasoning off for.
 func replayReasoningMode(ctx *RequestContext) string {
-	if ctx.VSRReasoningMode == "" {
-		return "off"
-	}
-	return ctx.VSRReasoningMode
+	return ctx.dispatchReasoningMode
+}
+
+func replayReasoningEffort(ctx *RequestContext) string {
+	return ctx.dispatchReasoningEffort
 }
 
 func replaySelectedModel(selectedModel string) string {
@@ -535,10 +540,12 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 // terminal response, which would otherwise read as a client abort. A record
 // the Router already ended keeps what it holds.
 func (r *OpenAIRouter) failAnsweredRouterReplay(ctx *RequestContext, status int, body []byte, reason string) {
-	if status < 400 || !r.routerReplayInProgress(ctx) {
+	if status < 400 {
 		return
 	}
-	r.updateRouterReplayStatus(ctx, status, false)
+	if r.routerReplayInProgress(ctx) {
+		r.updateRouterReplayStatus(ctx, status, false)
+	}
 	r.failStreamedRouterReplay(ctx, body, reason)
 }
 

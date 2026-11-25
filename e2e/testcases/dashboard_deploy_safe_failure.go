@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	"k8s.io/client-go/kubernetes"
 
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
@@ -17,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-deploy-safe-failure", pkgtestcases.TestCase{
-		Description: "Verify a semantically invalid deploy is rejected without disturbing the active config (issue #3233)",
+		Description: "Verify invalid deploys and full config updates are rejected without disturbing the active config",
 		Tags:        []string{"dashboard", "deploy", "validation", "safe-failure"},
 		Fn:          testDashboardDeploySafeFailure,
 	})
@@ -92,6 +93,9 @@ func testDashboardDeploySafeFailure(ctx context.Context, client *kubernetes.Clie
 	if err != nil {
 		return err
 	}
+	if updateErr := postRejectedDashboardUnknownFieldUpdate(ctx, httpClient, baseURL, token, configBefore); updateErr != nil {
+		return updateErr
+	}
 
 	if err := assertDashboardConfigUnchanged(ctx, httpClient, baseURL, token, configBefore, versionsBefore); err != nil {
 		return err
@@ -105,6 +109,7 @@ func testDashboardDeploySafeFailure(ctx context.Context, client *kubernetes.Clie
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"rejection_error":               rejectionError,
+			"unknown_field_update_rejected": true,
 			"config_bytes":                  len(configBefore),
 			"config_unchanged":              true,
 			"versions":                      versionsBefore,
@@ -166,6 +171,41 @@ func postRejectedDashboardDeploy(
 	return rejection.Error, nil
 }
 
+func postRejectedDashboardUnknownFieldUpdate(ctx context.Context, client *http.Client, baseURL, token string, config []byte) error {
+	const unknownField = "e2e_unknown_config_field"
+	var candidate map[string]any
+	if err := yaml.Unmarshal(config, &candidate); err != nil {
+		return fmt.Errorf("decode the current config for update: %w", err)
+	}
+	if candidate == nil {
+		return fmt.Errorf("the current config for update is empty")
+	}
+	candidate[unknownField] = true
+	payload, err := json.Marshal(candidate)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/router/config/update", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setDashboardAuth(req, token)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("config update request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), fmt.Sprintf("unknown field %q", unknownField)) {
+		return fmt.Errorf("expected 400 with a diagnostic for %s, got %d: %s", unknownField, resp.StatusCode, truncateString(string(body), 300))
+	}
+	return nil
+}
+
 // assertDashboardConfigUnchanged is the invariant the case exists to protect.
 func assertDashboardConfigUnchanged(
 	ctx context.Context,
@@ -177,19 +217,19 @@ func assertDashboardConfigUnchanged(
 ) error {
 	configAfter, err := fetchDashboardConfigYAML(ctx, client, baseURL, token)
 	if err != nil {
-		return fmt.Errorf("read config after deploy: %w", err)
+		return fmt.Errorf("read config after rejected change: %w", err)
 	}
 	if !bytes.Equal(configBefore, configAfter) {
-		return fmt.Errorf("a rejected deploy must not modify the active config (before %d bytes, after %d bytes)",
+		return fmt.Errorf("a rejected config change must not modify the active config (before %d bytes, after %d bytes)",
 			len(configBefore), len(configAfter))
 	}
 
 	versionsAfter, err := countDashboardConfigVersions(ctx, client, baseURL, token)
 	if err != nil {
-		return fmt.Errorf("read versions after deploy: %w", err)
+		return fmt.Errorf("read versions after rejected change: %w", err)
 	}
 	if versionsAfter != versionsBefore {
-		return fmt.Errorf("a rejected deploy must not create a backup version (before %d, after %d)",
+		return fmt.Errorf("a rejected config change must not create a backup version (before %d, after %d)",
 			versionsBefore, versionsAfter)
 	}
 	return nil

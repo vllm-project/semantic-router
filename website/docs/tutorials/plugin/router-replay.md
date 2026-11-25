@@ -28,18 +28,22 @@ capture limits that match the data you are allowed to keep.
 ### Keep records across restarts
 
 Without a store in `global.services.router_replay`, Replay uses the `file`
-store. It writes each record once, when the request ends (completed, failed or
-aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
-directory, a file only its owner can read, and reads the records back when the
-Router starts, so the **Requests** page keeps its history across restarts and
-configuration reloads. `vllm-sr serve` mounts that directory from the host, so the file
-outlives the Router container.
+store. Requests appear immediately on the **Requests** page. When a request
+ends (completed, failed or aborted), a background writer batches it into
+`.vllm-sr/router-replay.jsonl` beside the configuration file. Only the file's
+owner can read it. Router generations share this store across configuration
+reloads. `vllm-sr serve` mounts the directory from the host, so the next Router
+can read the history when it starts.
 
-- **In progress.** A request still in progress when the Router crashes is not
-  in the file. What reaches a record after its request ends, such as a late
-  outcome or a review, is written when the file is next rewritten: when the
-  Router stops, and whenever the file reaches twice as many lines as the
-  records it keeps.
+- **Persistence.** A graceful shutdown writes the retained, ended records,
+  including late outcomes and reviews. A crash can lose in-progress requests,
+  recent completions still waiting to be written, and updates since the last
+  rewrite.
+- **Slow or unavailable storage.** Requests continue recording in memory.
+  When the pending batch fills, the writer replaces the file with a snapshot
+  of the retained, ended records. Records evicted before that snapshot can
+  be lost. The writer also rewrites at twice the retention limit and retries
+  from memory after a write error.
 - **Size.** The file keeps at most 1,000 records, or `max_records` when that
   is lower. A record of routing data takes about 8 KB, so the file stays near
   8 MB and reaches about 16 MB just before a rewrite. The `memory` backend
@@ -547,6 +551,8 @@ plugins:
           timeout: 30s
         budget:
           max_response_bytes: 2097152
+          # max_estimated_tokens: 16384
+          # max_estimated_cost: 0.01
         capture:
           enabled: false
           max_bytes: 8192
@@ -562,17 +568,22 @@ Here `N` is the number of configured models. All integer bounds must be positive
 | `execution.max_queue_size` | `8` | Pending request groups for the same recipe and decision, shared across requests. Counts groups, not candidates. |
 | `execution.timeout` | `30s` | Shared group deadline, including queue wait and all candidate calls. Positive duration, at most `5m`. |
 | `budget.max_response_bytes` | `N × 1048576` | Aggregate response byte budget, divided before dispatch among effective candidates. Minimum `2 × N`: each candidate reserves one byte to detect an oversized response. |
+| `budget.max_estimated_tokens` | — | Optional. Maximum total estimated input and reserved output tokens for the sampled Shadow group. |
+| `budget.max_estimated_cost` | — | Optional. Maximum estimated spend for the sampled Shadow group, in `global.services.budgets.currency` (USD by default). |
 | `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
 | `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
 | `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
+
+For either limit, the Router estimates input tokens and reserves output tokens from the limit sent to the backend. If the outgoing request omits the output limit, the Router uses the model's `max_output_tokens` or, if unset, `global.services.budgets.output_reserve_tokens` (default 4096). The token limit sums both quantities across candidates. The cost limit prices them using each model's rates. A token limit alone requires no pricing.
+
+The Router skips the group if either configured limit is exceeded, a cost-limited candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. When a cost limit is configured, Replay records the estimated cost for attempted calls and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
 
 The old flat shadow fields are rejected; use the nested structure above.
 
 The primary model is excluded from the group. Each remaining candidate makes
 at most one call, without retries. Candidates wait for concurrency slots under
 the same deadline. Byte allowances are assigned before dispatch and are not
-refunded on failure. Token usage and estimated cost remain observations, not
-admission limits; missing usage is unknown.
+refunded on failure. Replay records token usage when the backend reports it.
 
 Requests sampled out or left with no candidates produce metrics only. A
 decision whose algorithm is an executor (`escalate`, `fusion`, `remom`,
@@ -806,6 +817,21 @@ thread, whose agent and session ids are equal, is `main`. A viewer without
 so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
+
+A record's `selected_model` is the model whose answer the request got, and
+`reasoning_mode` and `reasoning_effort` the reasoning it was sent with. When a
+[fallback](../../installation/model-configuration#fall-back-to-another-model)
+candidate answers in place of the routed model, the record names the
+candidate, and its `fallback` outcome keeps every attempt with the routed model
+as `initial_model`. `reasoning_mode` is `on` or `off` where the Router wrote
+reasoning for the model, a model with a reasoning family that the decision's
+controls reached, and empty for a request passed through with the client's
+reasoning fields as sent, such as one to a model without a reasoning family.
+`reasoning_effort` is empty when no effort level was sent: for a decision that
+turns reasoning off, a backend whose reasoning switch carries no level, or a
+request the Router answered itself, such as a blocked one, which has no mode
+either. A Looper request's own record carries neither, while each hop's record
+keeps what that hop was sent with.
 
 The page's **Sessions** view groups the records by harness session. Each session
 opens into its agents, the main agent first and every subagent under the agent

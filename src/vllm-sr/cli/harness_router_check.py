@@ -49,7 +49,7 @@ OPENAI_LOSSY = ("tool_result.is_error", "messages[].role", "content.file")
 # the canonical name of each api_format alias, as the Router reads it
 API_FORMAT_ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
 OPENAI_FORMATS = {"chat_completions", "responses"}
-NOT_CHAT = {"images", "systemone"}
+NOT_CHAT = {"images", "speech", "systemone"}
 PROBE_TOOL = {
     "name": "get_time",
     "description": "Return the current time.",

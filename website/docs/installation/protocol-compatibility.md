@@ -6,9 +6,11 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
+data plane, the Images API for image generation, and the Speech API for
+text-to-speech. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
-The response is translated back to the client's original format.
+Chat, Responses, Messages and Images responses are translated back to the client's
+original format. A Speech response is the backend's audio bytes, forwarded unchanged.
 
 ```text
 client endpoint -> client codec -> routing -> backend codec -> model endpoint
@@ -33,6 +35,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
 | OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
+| OpenAI Speech | `POST /v1/audio/speech` | Supported | Not supported | Routed on the input text to a model with `api_format: speech`. The audio bytes are forwarded unchanged. See [Speech API](../api/router#speech-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -64,6 +67,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
 | `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
+| `speech` | OpenAI Speech | `/v1/audio/speech` | Speaks the input text. `stream: true` and `stream_format` are rejected. The response is the backend's audio, not a JSON completion, so response policy, the response cache, token limits and cost estimates do not apply. Request-text checks still run, on `input` only: `instructions`, `ref_text` and the other fields are forwarded unchecked. A model that cannot speak fails closed with `unsupported_capability`. |
 
 These fields are easy to confuse:
 
@@ -251,6 +255,18 @@ blocks are omitted:
 | An empty system prompt | Nothing; it's omitted |
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
+
+### Empty answers
+
+A model can end its turn with nothing to say, which Anthropic answers with
+`end_turn` and no content block. The Router passes that on as an empty
+completion, buffered or streamed: a Messages client gets `content: []` with
+`end_turn`, a Chat Completions client an assistant message with `content: ""`
+and `finish_reason: stop`, and a Responses client a `completed` response with
+no output. Router Replay records it `completed`, with its usage and cost. A
+reply with no output under any other stop, such as a tool call that names no
+call, and a stream without its stop reason or its `message_stop`, are still
+invalid upstream answers.
 
 ### Chat request fields the Router refuses
 

@@ -165,12 +165,25 @@ const (
 
 	// VSRBudgetRemaining is what the tightest spend budget the request
 	// belongs to has left, in global.services.budgets.currency: after the
-	// call's actual cost on a buffered response, after its reservation on a
-	// stream and on a refusal. Example: "1.250000"
+	// call's actual cost on a buffered response, after a failed call's
+	// reservation ends, after its reservation on a stream and on a refusal.
+	// Example: "1.250000"
 	VSRBudgetRemaining = "x-vsr-budget-remaining"
 
 	// VSRBudgetScope names that budget: run, or user/<rule name>.
 	VSRBudgetScope = "x-vsr-budget-scope"
+
+	// XShouldRetry tells an OpenAI or Anthropic SDK client, Claude Code and
+	// Pi whether to retry a failed request, whatever its status: "true" or
+	// "false".
+	XShouldRetry = "x-should-retry"
+
+	// XCodexPromoMessage is text Codex shows with a usage limit error.
+	XCodexPromoMessage = "x-codex-promo-message"
+
+	// AnthropicOverageDisabledReason is the header of Anthropic's spend limit
+	// refusal, with which Claude Code shows a 429's message as it is.
+	AnthropicOverageDisabledReason = "anthropic-ratelimit-unified-overage-disabled-reason"
 )
 
 // Warning codes in VSRWarnings: a request-stage guard rule that read only
