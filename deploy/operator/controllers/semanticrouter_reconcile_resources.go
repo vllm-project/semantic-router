@@ -214,7 +214,14 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 			if !metav1.IsControlledBy(hpa, sr) {
 				return nil
 			}
-			return r.Delete(ctx, hpa)
+			// The read above may come from a stale cache. Delete only if the
+			// HPA is still the exact object we checked; if it was replaced by
+			// another HPA with the same name, the API server returns a
+			// Conflict and the next reconcile re-reads it.
+			return r.Delete(ctx, hpa, client.Preconditions{
+				UID:             &hpa.UID,
+				ResourceVersion: &hpa.ResourceVersion,
+			})
 		}
 		return nil
 	}
