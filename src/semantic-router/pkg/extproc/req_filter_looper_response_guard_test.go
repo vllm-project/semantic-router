@@ -98,6 +98,11 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 					t.Fatalf("%s = %q, want %q", headers.VSRWarnings, warnings, headers.WarningJailbreak)
 				}
 			}
+			if blocked {
+				// The record ends with the refusal, under the status its client
+				// got, before the stream ends.
+				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", status)
+			}
 			if err := router.ReplayRecorder.DrainOutcomes(); err != nil {
 				t.Fatalf("drain replay outcomes: %v", err)
 			}

@@ -147,6 +147,20 @@ func TestNativeAcceptanceProbabilityBounds(t *testing.T) {
 	}
 }
 
+// A set answer has a probability for each label and no distribution, so a
+// rule gates it on probability_margin and on no other field.
+func TestNativeAcceptanceGatesASetOnItsProbabilityMargin(t *testing.T) {
+	threshold := 0.5
+	for field, valid := range map[string]bool{"probability_margin": true, "top_probability": false, "confidence": false} {
+		err := validateNativeAcceptance(&EscalateAccept{Native: []NativeAcceptanceRule{{
+			QuestionType: "set", Field: field, NumericPredicate: NumericPredicate{GTE: &threshold},
+		}}})
+		if (err == nil) != valid {
+			t.Fatalf("a set rule on %s: %v", field, err)
+		}
+	}
+}
+
 func TestChatRecipeDoesNotSilentlyIgnoreNativeBudget(t *testing.T) {
 	raw := strings.Replace(nativeRoutingTestYAML, "\n  - name: default\n", "\n  - name: default\n    budget: {deadline: 3s, max_calls: 4}\n", 1)
 	_, err := ParseYAMLBytes([]byte(raw))

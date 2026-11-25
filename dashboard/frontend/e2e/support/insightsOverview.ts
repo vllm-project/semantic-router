@@ -48,6 +48,7 @@ function markersOf(index: number, agent: string, first: boolean): string[] | und
   if (index % 9 === 4) markers.push('tool_loop')
   if (index === 66) markers.push('failure')
   if (index === 120) markers.push('guard', 'block')
+  if (index % 7 === 3 && index !== 120) markers.push('switch')
   return markers.length ? markers : undefined
 }
 
@@ -104,9 +105,8 @@ function longRunCalls() {
   })
 }
 
-export async function mockLongRun(page: Page) {
-  await mockAuthenticatedAppShell(page)
-  const calls = longRunCalls()
+/** The long session's run as the runs list and the run read answer it. */
+function longRun(calls: ReturnType<typeof longRunCalls>, mixedCurrency: boolean) {
   const ended = Date.parse(calls[calls.length - 1].timestamp) + 6_000
   const agents = [
     'main',
@@ -148,7 +148,17 @@ export async function mockLongRun(page: Page) {
       tool_results: 54,
       tool_failures: 18,
     },
-    cost: cost(0.334),
+    cost: mixedCurrency
+      ? {
+          ...cost(0.334),
+          unpriced_records: 4,
+          // the session's older calls were priced in plain units, before USD list prices
+          by_currency: [
+            { currency: 'USD', total: 0.334, router_call_spend: 0 },
+            { currency: 'XXX', total: 0.2112, router_call_spend: 0 },
+          ],
+        }
+      : cost(0.334),
     events: {
       subagent_start: 9,
       compaction: 1,
@@ -157,14 +167,56 @@ export async function mockLongRun(page: Page) {
       failure: 1,
       guard: 1,
       block: 1,
+      switch: calls.filter((call) => call.markers?.includes('switch')).length,
     },
   }
+  return run
+}
+
+export async function mockLongRun(page: Page, { mixedCurrency = false } = {}) {
+  await mockAuthenticatedAppShell(page)
+  const calls = longRunCalls()
+  const run = longRun(calls, mixedCurrency)
   await page.route(`${REPLAYS}/models`, (route) =>
     route.fulfill({ json: { object: 'list', data: [] } }),
   )
   await page.route(`${REPLAYS}/run?*`, (route) =>
     route.fulfill({ json: { object: 'router_replay.run', run, calls } }),
   )
+}
+
+/**
+ * The Sessions view listing the long session, its run read held until the
+ * returned release is called; counts the run reads the page makes.
+ */
+export async function mockLongSession(page: Page) {
+  await mockOverview(page, { mixedCurrency: true })
+  const calls = longRunCalls()
+  const run = longRun(calls, true)
+  let release: () => void = () => undefined
+  const released = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const reads = { count: 0 }
+  await page.route(`${REPLAYS}/runs*`, (route) =>
+    route.fulfill({
+      json: {
+        object: 'router_replay.runs',
+        count: 1,
+        total: 1,
+        limit: 100,
+        offset: 0,
+        has_more: false,
+        data: [run],
+      },
+    }),
+  )
+  await page.route(`${REPLAYS}/run?*`, async (route) => {
+    reads.count += 1
+    await released
+    await route.fulfill({ json: { object: 'router_replay.run', run, calls } })
+  })
+  return { release, reads }
 }
 
 const record = (id: string, harness: string | undefined, minutes: number, model: string) => ({
@@ -301,7 +353,36 @@ export async function mockHomeOverview(page: Page) {
   )
 }
 
-export async function mockOverview(page: Page) {
+// The same day, part of it priced in plain units before USD list prices were set.
+const mixedAggregate = {
+  ...aggregate,
+  summary: {
+    ...aggregate.summary,
+    by_currency: [
+      {
+        currency: 'USD',
+        total_saved: 17.81,
+        gross_saved: 18.42,
+        netted_router_call_spend: 0.61,
+        baseline_spend: 31.9,
+        actual_spend: 13.48,
+        router_call_spend: 0.61,
+        total_spend: 14.09,
+        cost_record_count: 1322,
+      },
+      {
+        currency: 'XXX',
+        total_saved: 40.1,
+        baseline_spend: 120.4,
+        actual_spend: 80.3,
+        total_spend: 80.3,
+        cost_record_count: 2210,
+      },
+    ],
+  },
+}
+
+export async function mockOverview(page: Page, { mixedCurrency = false } = {}) {
   await mockAuthenticatedAppShell(page)
   await page.route(/\/api\/router\/api\/v1\/observability\/replays(\?|$)/, (route) =>
     route.fulfill({
@@ -315,7 +396,9 @@ export async function mockOverview(page: Page) {
       },
     }),
   )
-  await page.route(`${REPLAYS}/aggregate*`, (route) => route.fulfill({ json: aggregate }))
+  await page.route(`${REPLAYS}/aggregate*`, (route) =>
+    route.fulfill({ json: mixedCurrency ? mixedAggregate : aggregate }),
+  )
   await page.route(`${REPLAYS}/models`, (route) =>
     route.fulfill({ json: { object: 'list', data: [] } }),
   )

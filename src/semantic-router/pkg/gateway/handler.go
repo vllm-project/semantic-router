@@ -40,6 +40,10 @@ type Serving struct {
 	// accept together, which GET /v1/models lists; the routing core enforces
 	// a path's own models, which Gate gives, on the model it parses.
 	Models []string
+	// APIPath, when set, reads a request path under one of the listener's API
+	// prefixes as the API's own path; every later step, the Gate, System One
+	// and the routing core included, sees the request under that path.
+	APIPath func(path string) string
 	// Gate, when set, is the listener's API grant: the models it accepts on
 	// a request path (nil accepts every model), or false and the detail of
 	// the 404 a path it does not serve answers.
@@ -173,6 +177,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
+	r = withAPIPath(r, serving.APIPath)
 	listing := r.Method == http.MethodGet && r.URL.Path == "/v1/models"
 	models := serving.Models
 	if serving.Gate != nil && !listing {
@@ -202,7 +207,8 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		serving.SystemOne.ServeHTTP(w, r)
 		return
 	}
-	if !newAPIKeys(serving.APIKeys).authorize(r) {
+	keys := newAPIKeys(serving.APIKeys)
+	if !keys.check(r) {
 		writeUnauthorized(w)
 		return
 	}
@@ -211,9 +217,10 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	if listing && serving.ListsSystemOne && serving.SystemOne != nil {
-		h.serveListing(w, r, serving, x)
+		h.serveListing(w, r, serving, x, keys)
 		return
 	}
+	keys.strip(r)
 	route := ""
 	if serving.UnservedRoute != nil && !listing {
 		route = serving.UnservedRoute(r.URL.Path)
@@ -234,11 +241,16 @@ func isSystemOnePath(path string) bool {
 // systemone: the LLM models as OpenAI data, with the System One listing's
 // models beside them. A listing that already carries models, the empty
 // catalog Codex asks for, stays as the routing core wrote it.
-func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange) {
+func (h *Handler) serveListing(w http.ResponseWriter, r *http.Request, serving Serving, x *exchange, keys *apiKeys) {
+	// The systemone listing checks the listener's key itself, so it gets the
+	// request before the credential is removed; the routed listing forwards a
+	// request that carries none.
+	systemOneRequest := r.Clone(r.Context())
+	keys.strip(r)
 	llm := newBufferedResponse()
 	h.serveRouted(llm, r, serving, x, serving.Models, "")
 	systemOne := newBufferedResponse()
-	serving.SystemOne.ServeHTTP(systemOne, r.Clone(r.Context()))
+	serving.SystemOne.ServeHTTP(systemOne, systemOneRequest)
 	var listed, native map[string]json.RawMessage
 	if llm.status != http.StatusOK || json.Unmarshal(llm.body.Bytes(), &listed) != nil || listed == nil ||
 		listed["models"] != nil || systemOne.status != http.StatusOK || json.Unmarshal(systemOne.body.Bytes(), &native) != nil ||
@@ -347,9 +359,10 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 		return verbatim(resp), closeBody, nil
 	}
 	out, err := serving.Engine.Respond(ctx, plan, &routing.UpstreamResponse{
-		Status: resp.StatusCode,
-		Header: routingHeader(resp.Header),
-		Body:   responseBody(plan.Call, resp),
+		Status:   resp.StatusCode,
+		Header:   routingHeader(resp.Header),
+		Body:     responseBody(plan.Call, resp),
+		Deadline: resp.Deadline,
 	})
 	if err != nil {
 		closeBody()
@@ -504,4 +517,21 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+// withAPIPath is r as the API it asks for sees it: its path without the
+// listener's prefix for the API, the query and the rest of the request as the
+// client sent them. The client's own request is left untouched.
+func withAPIPath(r *http.Request, apiPath func(string) string) *http.Request {
+	if apiPath == nil {
+		return r
+	}
+	path := apiPath(r.URL.Path)
+	if path == r.URL.Path {
+		return r
+	}
+	clone := r.Clone(r.Context())
+	clone.URL.Path, clone.URL.RawPath = path, ""
+	clone.RequestURI = clone.URL.RequestURI()
+	return clone
 }

@@ -263,7 +263,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		nativeRouter, rules = lease.Router, lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules)),
+		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules, systemone.ClientAuth{Served: lease.Snapshot.ClientAuth(), Active: lease.ActiveClientAuth})),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		IdentityHeaders: []string{
@@ -306,6 +306,7 @@ func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name 
 		serving.Models, _ = listener.LLMModels()
 		serving.ListsLLM = servesAnyLLM(listener)
 		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+		serving.APIPath = listener.APIPath
 		serving.Gate = listenerGate(listener)
 		serving.UnservedRoute = listenerUnservedRoute(listener)
 		return

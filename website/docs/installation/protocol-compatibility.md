@@ -6,9 +6,11 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
+data plane, the Images API for image generation, and the Speech API for
+text-to-speech. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
-The response is translated back to the client's original format.
+Chat, Responses, Messages and Images responses are translated back to the client's
+original format. A Speech response is the backend's audio bytes, forwarded unchanged.
 
 ```text
 client endpoint -> client codec -> routing -> backend codec -> model endpoint
@@ -33,6 +35,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
 | OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
+| OpenAI Speech | `POST /v1/audio/speech` | Supported | Not supported | Routed on the input text to a model with `api_format: speech`. The audio bytes are forwarded unchanged. See [Speech API](../api/router#speech-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -64,6 +67,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
 | `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
+| `speech` | OpenAI Speech | `/v1/audio/speech` | Speaks the input text. `stream: true` and `stream_format` are rejected. The response is the backend's audio, not a JSON completion, so response policy, the response cache, token limits and cost estimates do not apply. Request-text checks still run, on `input` only: `instructions`, `ref_text` and the other fields are forwarded unchecked. A model that cannot speak fails closed with `unsupported_capability`. |
 
 These fields are easy to confuse:
 
@@ -215,6 +219,7 @@ instead of being silently dropped.
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 | Deferred tool loading (`tools[].defer_loading`) | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full | Not supported; opt-in sends tools in full |
+| Anthropic server tools, their result blocks and citations | Not supported | Not supported | Supported toward an `anthropic` or `anthropic-compatible` backend |
 
 This table describes codec representation, not model capability. For example,
 an OpenAI-compatible server can accept the Chat request shape while rejecting
@@ -250,6 +255,18 @@ blocks are omitted:
 | An empty system prompt | Nothing; it's omitted |
 | Non-empty text, including whitespace | The same text |
 | A message with only empty text, or an empty text block that carries a cache directive | Nothing; the request is rejected, because removing it would discard a turn or a cache boundary |
+
+### Empty answers
+
+A model can end its turn with nothing to say, which Anthropic answers with
+`end_turn` and no content block. The Router passes that on as an empty
+completion, buffered or streamed: a Messages client gets `content: []` with
+`end_turn`, a Chat Completions client an assistant message with `content: ""`
+and `finish_reason: stop`, and a Responses client a `completed` response with
+no output. Router Replay records it `completed`, with its usage and cost. A
+reply with no output under any other stop, such as a tool call that names no
+call, and a stream without its stop reason or its `message_stop`, are still
+invalid upstream answers.
 
 ### Chat request fields the Router refuses
 
@@ -341,6 +358,36 @@ Replies reach these clients in the shape an `anthropic` backend gives them:
   the answer ends, so a stream's `message_start` reports the Router's estimate
   of the input tokens. The final `message_delta` reports the backend's count.
 
+### Request extension fields
+
+Some backends accept top-level request members their wire contract does not
+declare — a vLLM fork may read `vllm_xargs` for an acceleration algorithm,
+for example. The Router fails such requests closed: an unmodelled member
+would be silently erased by the neutral translation that model selection
+and plugins perform, so it is rejected instead of lost.
+
+Listing a member in `global.router.allow_request_extension_fields` changes
+that:
+
+- **Captured at ingress.** The Router lifts the member out of the request
+  before decoding, bounded by an extension budget, and carries it opaquely
+  through routing, model rewrite, and policy plugins.
+- **Merged on same-format dispatch.** The backend receives the member with
+  its original value; a replayed request keeps the original bytes.
+- **Dropped across formats, reported.** Dispatch that translates the
+  request to another wire format drops the member with a `dropped`
+  diagnostic in `x-vsr-warnings`.
+- **Never interpreted.** The Router does not read the member's value, and
+  it never influences routing decisions. Every member not listed keeps
+  failing closed.
+
+```yaml
+global:
+  router:
+    allow_request_extension_fields:
+      - vllm_xargs
+```
+
 ### Files a model can't read
 
 A model whose declared capabilities leave out `file_input` can't receive a
@@ -391,6 +438,48 @@ out and `x-vsr-warnings` reports a `dropped` diagnostic for `safeguards`. The
 array holds Claude Code's working directory, permission rules and git state, so
 on a decision with the `masking` plugin its string values are masked like a
 structured tool result's, and an array that will not decode refuses the request.
+
+### Anthropic server tools
+
+A Messages tool with a `type`, such as `web_search_20250305`,
+`web_fetch_20250910` or `code_execution_20250825`, is one Anthropic defines,
+and the server tools among them run on Anthropic's side. Claude Code's
+WebSearch sends `web_search_20250305` in a request of its own. The Router has
+no neutral form for these tools, so it carries every typed tool as written,
+including those a client runs, such as `bash_20250124`, whose calls come back
+as ordinary `tool_use` blocks:
+
+- **Toward Anthropic.** A Messages backend whose `provider` is `anthropic` or
+  `anthropic-compatible` receives the tool definitions unchanged, and the
+  `server_tool_use` and `*_tool_result` blocks and the citations on text that
+  a client sends back in later turns. Its reply, buffered or streamed,
+  reaches a Messages client with every block and citation, and a reply the
+  Router passes through as sent keeps Anthropic's `usage.server_tool_use`
+  counts.
+- **Toward any other backend.** A Chat Completions or Responses backend, or a
+  Messages backend with another provider, such as `vllm`, cannot run the
+  tool. A request that declares one is refused before it is sent, with HTTP
+  400 and the code `unsupported_server_tool`, for example `Anthropic tool
+  "web_search" (web_search_20250305) runs only on an Anthropic backend, and
+  model "qwen-chat" is served by provider vllm over openai.chat.v1`. Selection
+  and fallback pass over such a model when the decision has one that runs the
+  tool, and a decision with none returns the refusal. Router Replay records it
+  as `request_rejected` with the status the client got.
+- **History on another backend.** A later turn that declares no server tool
+  but carries the blocks an earlier one left can still go to any backend.
+  The Router leaves out the calls and results, whose search results Anthropic
+  encrypts, keeps the text that cites them without its citations, and
+  `x-vsr-warnings` reports a `dropped` diagnostic for `content.server_tool`.
+- **Masking.** On a decision with the `masking` plugin, the string values of
+  these blocks and citations are masked like a structured tool result's.
+- **Cost.** The Router prices the tokens Anthropic reports, which include the
+  search results a turn reads. It does not price Anthropic's fee per search,
+  $10 per 1,000 web searches on the Claude API on 2026-11-17, or code
+  execution time: `pricing` has no per-request rate, so neither enters a
+  call's cost in Router Replay or a spend budget.
+
+The request field `container`, which picks up a code execution container
+again, stays unsupported, so each request starts in a new one.
 
 ### Sampling controls a backend rejects
 

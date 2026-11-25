@@ -57,6 +57,7 @@ func (r *OpenAIRouter) routerReplayInProgress(ctx *RequestContext) bool {
 // client got, under the status the record holds: for a stream, the 200 it
 // began with before an error event took the place of the answer.
 func (r *OpenAIRouter) failStreamedRouterReplay(ctx *RequestContext, body []byte, reason string) {
+	r.finishNativeFallbackResponse(ctx, reason)
 	if !r.routerReplayInProgress(ctx) {
 		return
 	}
