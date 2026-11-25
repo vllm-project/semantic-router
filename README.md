@@ -6,9 +6,10 @@
 
 <p>
   <a href="https://vllm-sr.ai">Documentation</a> |
-  <a href="https://app.vllm-sr.ai/playground">Playground</a> |
+  <a href="https://app.vllm-sr.ai/">System Duo</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
+  <a href="https://vllm-sr.ai/community/contributor-guide">Contributor Guide</a> |
   <a href="https://huggingface.co/vllm-sr">Hugging Face</a> |
   <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
@@ -56,20 +57,9 @@ curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable
 
 For pip, uv, or agent-driven installation, see the **[Installation Guide](https://vllm-sr.ai/docs/installation/)**.
 
-### Connect your agent harness
+### Try it online
 
-Point your harness at the Router's inference endpoint. Use a public model ID such as `vllm-sr/auto`.
-
-Follow **[Connect an agent harness](https://vllm-sr.ai/docs/next/installation/agent-harness/)** for setup and compatibility.
-
-### Online playground
-
-Try the online playground at <https://app.vllm-sr.ai/playground>.
-
-Credentials:
-
-- Username: `love@vllm-sr.ai`
-- Password: `vllm-sr-read`
+Try [System Duo](https://app.vllm-sr.ai/#try): pick an example and it runs live in your browser, with a free key on first run.
 
 ## Latest News
 
@@ -118,14 +108,14 @@ We host two monthly community meetings across APAC and the Americas:
 
 - **APAC-friendly meeting — second Wednesday of the month**: 9:00-10:00 AM Singapore time (UTC+8; the same local time in Beijing)
   - [Google Meet](https://meet.google.com/sed-jmht-ddm)
-  - [Google Calendar Invite](https://calendar.app.google/w3r6mfKf4X4xCMAm9)
 - **Americas-friendly meeting — fourth Wednesday of the month**: 8:00-9:00 PM Eastern Time (`America/New_York`) / 5:00-6:00 PM Pacific Time
   - [Google Meet](https://meet.google.com/wvm-vbfy-xzj)
-  - [Google Calendar Invite](https://calendar.app.google/xHPHx8xhD1wHQfhH6)
 
 ## Contributing
 
-If you want to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
+New to the project? The **[Contributor Guide](https://vllm-sr.ai/community/contributor-guide)** explains how vLLM Semantic Router works, where you can help, and how to grow from your first pull request to maintainer.
+
+When you are ready to contribute, start with **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 For repository-native development workflow and validation commands, use **[AGENTS.md](AGENTS.md)** as the entrypoint and **[tools/agent/docs/README.md](tools/agent/docs/README.md)** as the canonical index.
 
@@ -148,6 +138,9 @@ An open ecosystem spanning research, infrastructure, and enterprise adoption.
 
 <div align="center">
   <a href="https://vllm-sr.ai/#ecosystem">
-    <img src="website/static/img/ecosystem/ecosystem.webp" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="website/static/img/ecosystem/ecosystem-dark-theme.png">
+      <img src="website/static/img/ecosystem/ecosystem-light-theme.png" alt="vLLM Semantic Router's growing ecosystem: AMD, Hugging Face, Microsoft, Intel, NVIDIA, Red Hat, IBM, Liquid, DaoCloud, Delta, MBZUAI, McGill, KR Labs, University of Chicago, UC Berkeley, UMass Boston, University of Illinois Chicago, National Taiwan University, New York University, UBS, AI21, Bayer, Dell, and Nutanix." width="100%"/>
+    </picture>
   </a>
 </div>

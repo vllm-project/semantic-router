@@ -49,6 +49,7 @@ var ownedFields = map[string]bool{
 	"APIServer.Listeners":                      true, // listeners
 	"BackendModels.VLLMEndpoints":              true, // endpoints
 	"BackendModels.ProviderProfiles":           true,
+	"BackendModels.DefaultBackendTLS":          true, // applied to each profile
 	"BackendModels.ModelConfig":                true, // clusters
 	"BackendModels.ProviderModelOrder":         true,
 	"InlineModels.ModelDeployments":            true, // runtime models

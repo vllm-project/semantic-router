@@ -24,16 +24,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from router_trace import routing_headers
+
 HTTP_OK = 200
 HTTP_REDIRECT_START = 300
 VSR_HEADERS = (
     "x-vsr-selected-model",
     "x-vsr-selected-decision",
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
+    "session_phase",
+    "confidence",
     "x-vsr-replay-id",
-    "x-vsr-context-token-count",
-    "x-vsr-matched-conversation",
+    "context_tokens",
+    "matched_conversation",
 )
 CORE_ROUTER_HEADERS = (
     "x-vsr-selected-model",
@@ -42,9 +44,9 @@ CORE_ROUTER_HEADERS = (
 )
 DIAGNOSTIC_ROUTER_HEADERS = (
     *CORE_ROUTER_HEADERS,
-    "x-vsr-session-phase",
-    "x-vsr-selected-confidence",
-    "x-vsr-context-token-count",
+    "session_phase",
+    "confidence",
+    "context_tokens",
 )
 
 
@@ -267,7 +269,7 @@ def response_record(
     return {
         "status": status,
         "latency_ms": elapsed_ms,
-        "headers": {key.lower(): value for key, value in headers.items()},
+        "headers": routing_headers(headers),
         "json": parsed,
         "error": (
             ""
@@ -341,10 +343,10 @@ def dry_run_response(plan: TurnPlan) -> dict[str, Any]:
         "headers": {
             "x-vsr-selected-model": model,
             "x-vsr-selected-decision": "dry-run",
-            "x-vsr-session-phase": plan.phase,
-            "x-vsr-selected-confidence": "0.0000",
+            "session_phase": plan.phase,
+            "confidence": "0.0000",
             "x-vsr-replay-id": f"dry-replay-{plan.session_id}-{plan.turn}",
-            "x-vsr-context-token-count": "42",
+            "context_tokens": "42",
         },
         "json": {
             "id": f"dry_{plan.session_id}_{plan.turn}",
@@ -425,6 +427,7 @@ def run_benchmark(args: argparse.Namespace) -> list[dict[str, Any]]:
         "Content-Type": "application/json",
         "Accept": "application/json",
         "User-Agent": "vllm-sr-agentic-live-benchmark",
+        "X-VSR-Debug": "true",
     }
     if args.api_key:
         headers["Authorization"] = f"Bearer {args.api_key}"
@@ -565,19 +568,19 @@ def invalid_router_header_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def valid_router_header_value(header: str, value: str) -> bool:
-    if header == "x-vsr-selected-confidence":
+    if header == "confidence":
         try:
             parsed = float(value)
         except ValueError:
             return False
         return 0.0 <= parsed <= 1.0
-    if header == "x-vsr-context-token-count":
+    if header == "context_tokens":
         try:
             parsed = int(value)
         except ValueError:
             return False
         return parsed >= 0
-    if header == "x-vsr-session-phase":
+    if header == "session_phase":
         return value.strip() in {
             "user_turn",
             "tool_loop",

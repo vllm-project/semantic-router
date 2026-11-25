@@ -1,7 +1,7 @@
 # Test support
 
-- `services/`: shared mock vLLM and MCP classifier servers used by E2E profiles
-  and local development;
+- `services/`: the shared mock provider and the tiny-model runner used by E2E
+  profiles and local development;
 - `smoke/`: directly runnable API and local-stack checks, including the Milvus
   installation smoke;
 - `soak/`: local stack orchestration for the soak runner in `e2e/cmd/soak`.

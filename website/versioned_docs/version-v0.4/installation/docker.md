@@ -16,7 +16,7 @@ able to generate.
 
 ## Start the stack
 
-Complete the [Quickstart](/docs/installation) to install the CLI and create a
+Complete the [Quickstart](/docs/v0.4/installation) to install the CLI and create a
 configuration, or start from an existing canonical YAML file:
 
 ```bash

@@ -24,9 +24,7 @@ CONFIG_JSON = b'{"architectures": ["ModernBertForSequenceClassification"]}'
 
 def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeypatch):
     repo = "vllm-sr/Vela-1.0-Encoder-307M-Feedback"
-    site = LoadSite(
-        "feedback", "models/" + repo.rsplit("/", maxsplit=1)[-1], None, None, None, ()
-    )
+    site = LoadSite("feedback", "models/" + repo.rsplit("/", maxsplit=1)[-1], None, ())
     served = ServedArtifact("feedback", site.model_path, (site,))
     calls = []
     monkeypatch.setattr(
@@ -49,11 +47,9 @@ def test_served_vela_download_uses_the_router_pin_not_hub_head(tmp_path, monkeyp
 
 def served_artifact():
     site = LoadSite(
-        location="prompt_guard",
+        location="recipes[default].signals.jailbreak[attack]",
         model_path="models/mmbert32k-jailbreak-detector-merged",
-        model_ref="prompt_guard",
         threshold=0.7,
-        mapping_path=None,
         positive_labels=("jailbreak",),
     )
     return ServedArtifact(task="jailbreak", model_path=site.model_path, sites=(site,))

@@ -10,6 +10,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
@@ -57,8 +58,19 @@ func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel 
 		Groups:     splitRateLimitGroups(ctx.Headers[groupsHeader]),
 		Model:      selectedModel,
 		Headers:    ctx.Headers,
-		TokenCount: ctx.VSRContextTokenCount,
+		TokenCount: rateLimitTokenCount(ctx),
 	}
+}
+
+// rateLimitTokenCount is the token cost charged against tokens_per_unit at
+// admission. A Speech API request completes with zero token usage, so its
+// input text is not charged either: tokens_per_unit never rejects it, while
+// requests_per_unit still applies.
+func rateLimitTokenCount(ctx *RequestContext) int {
+	if ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return 0
+	}
+	return ctx.VSRContextTokenCount
 }
 
 func splitRateLimitGroups(value string) []string {
@@ -87,12 +99,12 @@ func (r *OpenAIRouter) createRateLimitResponse(decision *ratelimit.Decision) *ex
 	}
 	if decision != nil {
 		responseHeaders = append(responseHeaders,
-			&core.HeaderValueOption{Header: &core.HeaderValue{Key: "x-ratelimit-limit", RawValue: []byte(fmt.Sprintf("%d", decision.Limit))}},
-			&core.HeaderValueOption{Header: &core.HeaderValue{Key: "x-ratelimit-remaining", RawValue: []byte(fmt.Sprintf("%d", decision.Remaining))}},
+			&core.HeaderValueOption{Header: &core.HeaderValue{Key: headers.RateLimitLimit, RawValue: []byte(fmt.Sprintf("%d", decision.Limit))}},
+			&core.HeaderValueOption{Header: &core.HeaderValue{Key: headers.RateLimitRemaining, RawValue: []byte(fmt.Sprintf("%d", decision.Remaining))}},
 		)
 		if !decision.ResetAt.IsZero() {
 			responseHeaders = append(responseHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
-				Key: "x-ratelimit-reset", RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
+				Key: headers.RateLimitReset, RawValue: []byte(fmt.Sprintf("%d", decision.ResetAt.Unix())),
 			}})
 		}
 	}

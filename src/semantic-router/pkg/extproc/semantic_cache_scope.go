@@ -4,9 +4,14 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool {
+	// Speech responses are audio bytes, not a cacheable text answer.
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return false
+	}
 	if r == nil || r.Config == nil {
 		return true
 	}
@@ -17,20 +22,12 @@ func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool 
 		strings.TrimSpace(responseCacheScopeIdentity(ctx)) == "" {
 		return false
 	}
-	if ctx != nil && ctx.VSRSelectedDecision != nil {
-		return r.Config.IsCacheEnabledForDecisionObject(ctx.VSRSelectedDecision)
-	}
-	if r.Config.HasRoutingDecisions() {
-		return false
-	}
-	return r.Config.Enabled
+	plugin := requestResponseCache(ctx)
+	return plugin != nil && plugin.Enabled
 }
 
 func responseCacheModeForRequest(ctx *RequestContext) string {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return config.ResponseCacheModeSemantic
-	}
-	pluginConfig := ctx.VSRSelectedDecision.GetResponseCacheConfig()
+	pluginConfig := requestResponseCache(ctx)
 	if pluginConfig == nil || strings.TrimSpace(pluginConfig.Mode) == "" {
 		return config.ResponseCacheModeSemantic
 	}

@@ -18,14 +18,19 @@ from pathlib import Path
 from typing import Any
 
 from ...errors import PackageError
-from ...registry.artifacts import named_files, read_json, safe_relative, sha256_json
+from ...registry.artifacts import (
+    named_files,
+    read_json,
+    read_sums,
+    safe_relative,
+    sha256_json,
+)
 from .calibration import Calibration
 
 ENCODER, DECODER = "vela2-unified", "vela2-decoder"
 FORMAT_VERSION = 1
 BROAD_HEAD_FILE = "broad_head.safetensors"
 MANIFEST_FILE = "MODEL_MANIFEST.json"
-SUMS_FILE = "SHA256SUMS"
 COMMON_FILES = ("config.json", "calibration.json", "tokenizer.json")
 
 
@@ -83,19 +88,6 @@ class Vela2Package:
         return int(self.config["max_length"])
 
 
-def _sums(root: Path) -> dict[str, str]:
-    path = root / SUMS_FILE
-    if not path.is_file():
-        return {}
-    sums = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        digest, _, name = line.strip().partition(" ")
-        name = name.strip().lstrip("*")
-        if digest and name:
-            sums[name] = digest
-    return sums
-
-
 def verify(root: Path, expected: dict[str, str] | None) -> Vela2Package:
     """Check every loaded file; ``expected`` is the built-in table's digests for a pinned revision."""
     root = Path(root)
@@ -111,7 +103,7 @@ def verify(root: Path, expected: dict[str, str] | None) -> Vela2Package:
         )
         if wrong:
             raise PackageError(f"files differ from the pinned revision: {wrong[:5]}")
-    sums = _sums(root)
+    sums = read_sums(root)
     mismatched = sorted(
         name for name, digest in files.items() if name in sums and sums[name] != digest
     )

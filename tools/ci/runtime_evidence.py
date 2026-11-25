@@ -11,7 +11,6 @@ import sys
 from http import HTTPStatus
 from pathlib import Path
 
-from image_calibration import evidence as image_calibration_evidence
 from run_model_tests import required_inventory
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +46,7 @@ def models_evidence(directory: Path) -> dict:
             "Model evidence case inventory differs from the required inventory"
         )
     cases, expected = [], []
+    seen_process = set()
     for suite in report["suites"]:
         prefix = suite["package"] + ":"
         expected.extend(prefix + name for name in suite["expected"])
@@ -54,9 +54,13 @@ def models_evidence(directory: Path) -> dict:
             cases.extend(
                 {"id": prefix + name, "status": field} for name in suite[field]
             )
-        # A crashed Go process can lack a terminal test event.
-        if suite["exit_code"] and not suite["failed"]:
-            cases.append({"id": prefix + "process", "status": "failed"})
+        if suite["exit_code"] and (
+            not suite["failed"] or suite.get("package_failed", False)
+        ):
+            process_id = prefix + "process"
+            if process_id not in seen_process:
+                seen_process.add(process_id)
+                cases.append({"id": process_id, "status": "failed"})
     return {
         "runtime": "model-runtime",
         "device": "cpu",
@@ -64,6 +68,7 @@ def models_evidence(directory: Path) -> dict:
         "models": report["models"],
         "cases": cases,
         "expected_cases": expected,
+        "discovered_cases": [case["id"] for case in cases],
     }
 
 
@@ -172,7 +177,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "kind",
-        choices=["local", "recipes", "models", "image-calibration"],
+        choices=["local", "recipes", "models"],
     )
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
@@ -180,8 +185,6 @@ def main() -> None:
     args = parser.parse_args()
     if args.kind == "models":
         result = models_evidence(args.directory)
-    elif args.kind == "image-calibration":
-        result = image_calibration_evidence(args.directory)
     elif args.kind == "local":
         result = local_evidence(args.directory, args.suite)
     else:

@@ -17,6 +17,7 @@ func memoryMetadataJSON(memory *Memory) ([]byte, error) {
 		"access_count":  memory.AccessCount,
 		"last_accessed": memory.LastAccessed.Unix(),
 	}
+	putProvenanceMetadata(metadata, memory)
 	return json.Marshal(metadata)
 }
 

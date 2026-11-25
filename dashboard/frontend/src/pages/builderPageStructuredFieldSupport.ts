@@ -1,4 +1,5 @@
 import type { FieldSchema } from '@/lib/dslMutations'
+import { requiredFieldErrors } from '@/lib/schemaFieldValidation'
 import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 
 export function parseLegacyStructuredValue(value: unknown): unknown {
@@ -22,8 +23,8 @@ export function normalizeStructuredObject(value: unknown): DSLFieldObject {
 export function normalizeStructuredObjectList(value: unknown): DSLFieldObject[] {
   const parsed = parseLegacyStructuredValue(value)
   if (!Array.isArray(parsed)) return []
-  return parsed.filter(
-    (item): item is DSLFieldObject => Boolean(item && typeof item === 'object' && !Array.isArray(item)),
+  return parsed.filter((item): item is DSLFieldObject =>
+    Boolean(item && typeof item === 'object' && !Array.isArray(item)),
   )
 }
 
@@ -32,14 +33,6 @@ export function normalizeStructuredStringList(value: unknown): string[] {
   return Array.isArray(parsed)
     ? parsed.filter((item): item is string => typeof item === 'string')
     : []
-}
-
-export function normalizeStructuredStringMatrix(value: unknown): string[][] {
-  const parsed = parseLegacyStructuredValue(value)
-  if (!Array.isArray(parsed)) return []
-  return parsed.map((row) =>
-    Array.isArray(row) ? row.filter((item): item is string => typeof item === 'string') : [],
-  )
 }
 
 export function updateStructuredObjectField(
@@ -84,20 +77,9 @@ export function requiredStructuredFieldErrors(
   fields: readonly FieldSchema[],
   value: DSLFieldObject,
 ): string[] {
-  return fields.flatMap((field) => {
-    if (!field.required) return []
-    const fieldValue = value[field.key]
-    const missing =
-      fieldValue === undefined ||
-      fieldValue === null ||
-      fieldValue === '' ||
-      (Array.isArray(fieldValue) && fieldValue.length === 0)
-    return missing ? [`${field.label} is required.`] : []
-  })
+  return requiredFieldErrors(fields, value)
 }
 
 export function supportsSharedObjectList(fields: readonly FieldSchema[]): boolean {
-  return fields.every((field) =>
-    ['string', 'number', 'select', 'key-value'].includes(field.type),
-  )
+  return fields.every((field) => ['string', 'number', 'select', 'key-value'].includes(field.type))
 }

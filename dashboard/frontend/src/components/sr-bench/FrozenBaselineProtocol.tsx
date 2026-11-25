@@ -1,12 +1,14 @@
+import { Lock } from 'lucide-react'
 import { number } from './model'
 import { profileTitle } from './datasetPresentation'
 import type { Run } from './types'
-import styles from './SrBench.module.css'
+import { Notice } from './benchUi'
+import { identityClass } from './benchStyles'
 
 export default function FrozenBaselineProtocol({ run }: { run: Run }) {
   const { manifest } = run
   return (
-    <section className={styles.notice} aria-label="Frozen baseline protocol">
+    <Notice tone="info" icon={Lock} as="section" aria-label="Frozen baseline protocol">
       <h3>Reuse {manifest.name}</h3>
       <p>
         The service preserves the exact questions, grading protocol, sampling defaults and limits
@@ -18,7 +20,7 @@ export default function FrozenBaselineProtocol({ run }: { run: Run }) {
           protocol does not change the saved outcomes.
         </p>
       )}
-      <dl className={styles.identity}>
+      <dl className={`${identityClass} mb-0`}>
         <dt>Profile</dt>
         <dd>{profileTitle(manifest.profile)}</dd>
         <dt>Frozen questions</dt>
@@ -44,6 +46,6 @@ export default function FrozenBaselineProtocol({ run }: { run: Run }) {
           {number(manifest.limits.max_run_seconds)} seconds
         </dd>
       </dl>
-    </section>
+    </Notice>
   )
 }

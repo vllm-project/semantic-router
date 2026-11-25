@@ -112,44 +112,103 @@ def validate_status_publisher(
         errors.append("missing trusted PR CI status publisher")
         return
     trigger = publisher.events.get("workflow_run", {})
-    if trigger.get("workflows") != ["Pull Request"] or set(
+    if trigger.get("workflows") != ["Pull Request", "Community"] or set(
         trigger.get("types", [])
     ) != {"in_progress", "completed"}:
-        errors.append("ci-status.yml must observe PR starts, reruns and completions")
-    job = publisher.jobs.get("publish", {})
-    condition = " ".join(job.get("if", "").split())
-    if condition != (
-        "github.event_name == 'workflow_run' || (github.event_name == "
-        "'workflow_dispatch' && github.ref == 'refs/heads/main')"
+        errors.append(
+            "ci-status.yml must observe PR reruns and completions and Community"
+        )
+    workflow_run = "github.event_name == 'workflow_run'"
+    trusted_dispatch = (
+        "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
+    )
+    community_filter = (
+        "(github.event.workflow_run.path != '.github/workflows/community.yml' "
+        "|| (github.event.action == 'completed' "
+        "&& github.event.workflow_run.conclusion == 'success' "
+        "&& (github.event.workflow_run.event == 'pull_request' "
+        "|| github.event.workflow_run.event == 'pull_request_review')))"
+    )
+    expected_conditions = {
+        "resolve": f"({workflow_run} && {community_filter}) || {trusted_dispatch}",
+        "publish": f"needs.resolve.outputs.run_id != '' && ({workflow_run} || {trusted_dispatch})",
+    }
+    commands = {
+        "resolve": 'python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"',
+        "publish": 'python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"',
+    }
+    permissions = {
+        "resolve": {"contents": "read", "actions": "read", "pull-requests": "read"},
+        "publish": {
+            "contents": "read",
+            "actions": "read",
+            "checks": "write",
+            "statuses": "write",
+            "issues": "write",
+            "pull-requests": "write",
+        },
+    }
+    for name in ("resolve", "publish"):
+        job = publisher.jobs.get(name, {})
+        if " ".join(job.get("if", "").split()) != expected_conditions[name]:
+            errors.append(
+                f"ci-status.yml {name} must enforce its event filter to execute only trusted main code"
+            )
+        if job.get("permissions") != permissions[name]:
+            errors.append(
+                "ci-status.yml must limit resolver and publisher token permissions"
+            )
+        steps = job.get("steps", [])
+        checkouts = [
+            step
+            for step in steps
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        if len(checkouts) != 1 or checkouts[0].get("with") != {
+            "ref": "${{ github.sha }}",
+            "persist-credentials": False,
+        }:
+            errors.append("ci-status.yml must never check out or execute PR contents")
+        if [step.get("run") for step in steps if "run" in step] != [commands[name]]:
+            errors.append(
+                "ci-status.yml must use only the trusted publisher entrypoint"
+            )
+        if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
+            errors.append(
+                "ci-status.yml must finish without occupying a waiting runner"
+            )
+    resolve = publisher.jobs.get("resolve", {})
+    if resolve.get("outputs") != {
+        "run_id": "${{ steps.qualification.outputs.run_id }}",
+        "mode": "${{ steps.qualification.outputs.mode }}",
+    } or not any(
+        step.get("id") == "qualification" for step in resolve.get("steps", [])
     ):
-        errors.append("ci-status.yml dispatch must execute only trusted main code")
-    if job.get("permissions") != {
-        "contents": "read",
-        "actions": "read",
-        "checks": "write",
-        "issues": "write",
-        "pull-requests": "write",
-    }:
-        errors.append("ci-status.yml must limit its publisher token permissions")
-    steps = job.get("steps", [])
-    checkouts = [
-        step for step in steps if step.get("uses", "").startswith("actions/checkout@")
-    ]
-    if len(checkouts) != 1 or checkouts[0].get("with") != {
-        "ref": "${{ github.sha }}",
-        "persist-credentials": False,
-    }:
-        errors.append("ci-status.yml must never check out or execute PR contents")
-    commands = [step.get("run") for step in steps if "run" in step]
-    if commands != ['python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH"']:
-        errors.append("ci-status.yml must use only the trusted publisher entrypoint")
-    if publisher.data.get("concurrency") != {
-        "group": "ci-status-${{ github.event.workflow_run.id || inputs.run_id }}",
-        "cancel-in-progress": False,
-    }:
-        errors.append("ci-status.yml must serialize observations of the same PR run")
-    if job.get("timeout-minutes") != STATUS_PUBLISHER_TIMEOUT_MINUTES:
-        errors.append("ci-status.yml must finish without occupying a waiting runner")
+        errors.append("ci-status.yml resolver must expose typed qualification outputs")
+    job = publisher.jobs.get("publish", {})
+    if (
+        job.get("needs") != "resolve"
+        or job.get("concurrency")
+        != {
+            "group": "ci-status-${{ needs.resolve.outputs.run_id }}",
+            "cancel-in-progress": False,
+            "queue": "max",
+        }
+        or publisher.data.get("concurrency")
+    ):
+        errors.append(
+            "ci-status.yml must serialize observations and keep queued jobs "
+            "for the same qualification run"
+        )
+    executions = [step for step in job.get("steps", []) if "run" in step]
+    env = executions[0].get("env", {}) if len(executions) == 1 else {}
+    if (
+        env.get("QUALIFICATION_RUN_ID") != "${{ needs.resolve.outputs.run_id }}"
+        or env.get("STATUS_MODE") != "${{ needs.resolve.outputs.mode }}"
+    ):
+        errors.append(
+            "ci-status.yml publisher must consume the resolver identity and mode"
+        )
 
 
 def validate_publisher_bootstrap(
@@ -197,13 +256,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append("missing pull-request dispatcher")
         return
     gate = dispatcher.jobs.get("pr-gate", {})
-    if (
-        gate.get("name") != PR_EXECUTION_NAME
-        or gate.get("if") != "always()"
-        or needs(gate) != {"ci"}
-    ):
+    if gate.get("name") != PR_EXECUTION_NAME or needs(gate) != {"ci"}:
         errors.append(
             "pr.yml must retain strict execution and a legacy PR Gate until the base publisher exists"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "pr.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_status_publisher(workflows, errors)
     validate_publisher_bootstrap(workflows, errors)
@@ -234,9 +293,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         return
     expected = set(ALL_DISPATCH_JOBS)
     gate = shared.jobs.get("gate", {})
-    if needs(gate) != expected or gate.get("if") != "always()":
+    if needs(gate) != expected:
         errors.append(
             "ci.yml gate must aggregate every executor and build prerequisite"
+        )
+    if gate.get("if") != "${{ !cancelled() }}":
+        errors.append(
+            "ci.yml gate must reconcile failures without blocking workflow cancellation"
         )
     validate_gate_transport(gate, errors)
     text = shared.path.read_text()
@@ -264,6 +327,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         for word in ("docker/login-action", "push: true")
     ):
         errors.append("shared image producer must not authenticate or publish")
+    if builder and any(
+        {"cache-from", "cache-to"} & set(step.get("with") or {})
+        for job in builder.jobs.values()
+        for step in job.get("steps", [])
+        if "docker/build-push-action" in str(step.get("uses", ""))
+    ):
+        errors.append("shared image producer must not import or export a layer cache")
     community = workflows.get("community.yml")
     trigger = community.events.get("pull_request", {}) if community else {}
     if "synchronize" in (trigger or {}).get("types", []):
@@ -285,6 +355,38 @@ def validate_main_publishers(
         )
 
 
+def validate_main_latest(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
+    """latest moves only forward, once its commit's complete image set exists."""
+    main = workflows.get("main.yml")
+    jobs = main.jobs if main else {}
+    if jobs.get("images", {}).get("with", {}).get("publish_latest"):
+        errors.append(
+            ".github/workflows/main.yml: 'images' publishes commit tags only; "
+            "'latest' moves latest"
+        )
+    latest = jobs.get("latest", {})
+    if (
+        "images" not in needs(latest)
+        or "needs.images.result == 'success'" not in latest.get("if", "")
+        or "tools/ci/latest_tags.py" not in json.dumps(latest.get("steps", []))
+        or latest.get("concurrency")
+        != {"group": "main-latest", "cancel-in-progress": False}
+    ):
+        errors.append(
+            ".github/workflows/main.yml: 'latest' must move latest one run at a "
+            "time, after its commit's complete image set is published"
+        )
+    qualification = jobs.get("ci", {}).get("concurrency", {}).get("group")
+    for job_id in ("images", "helm", "pypi"):
+        concurrency = jobs.get(job_id, {}).get("concurrency", {})
+        cancels = concurrency.get("cancel-in-progress") is not False
+        if cancels or concurrency.get("group") in {None, qualification}:
+            errors.append(
+                f".github/workflows/main.yml: '{job_id}' must queue in its own "
+                "group, so a newer push never cancels a publication that started"
+            )
+
+
 def validate_release_contract(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -296,6 +398,7 @@ def validate_release_contract(
     validate_release_images(release, errors)
     validate_stable_tag_owner(workflows, errors)
     validate_nightly_docker_owner(workflows, errors)
+    validate_nightly_qualification(workflows, errors)
     validate_fixture_tag_policy(workflows, errors)
 
 
@@ -466,6 +569,65 @@ def validate_nightly_docker_owner(
         errors.append("nightly images must consume the planner publication inventory")
 
 
+def validate_nightly_qualification(
+    workflows: dict[str, WorkflowLike], errors: list[str]
+) -> None:
+    """Every day publishes the newest qualified main commit, whatever came before."""
+    nightly = workflows.get("nightly-build.yml")
+    if nightly is None:
+        errors.append("missing nightly qualification")
+        return
+    schedules = nightly.events.get("schedule") or []
+    crons = [entry.get("cron", "") for entry in schedules if isinstance(entry, dict)]
+    if len(crons) != 1 or crons[0].split()[2:] != ["*", "*", "*"]:
+        errors.append("nightly-build.yml must qualify main once every day")
+    if "concurrency" in nightly.data:
+        errors.append(
+            "nightly-build.yml must not let a newer run cancel an older run's publication"
+        )
+    ci = nightly.jobs.get("ci", {})
+    if ci.get("concurrency") != {
+        "group": "nightly-qualification",
+        "cancel-in-progress": "${{ github.event_name == 'workflow_dispatch' }}",
+    } or "head" not in needs(ci):
+        errors.append(
+            "nightly-build.yml: a dispatch must cancel the qualification it supersedes, "
+            "and a scheduled run must wait for it"
+        )
+    reserve = json.dumps(nightly.jobs.get("reserve", {}))
+    for job_id in ("docker", "helm"):
+        job = nightly.jobs.get(job_id, {})
+        if "concurrency" in job:
+            errors.append(
+                f"nightly-build.yml: '{job_id}' publication must not be cancelled"
+            )
+        if (
+            "tools/ci/nightly_tags.py" not in reserve
+            or "reserve" not in needs(job)
+            or "needs.reserve.outputs.publish == 'true'" not in job.get("if", "")
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' may publish only a date that is free "
+                "or the run's own"
+            )
+    for job_id in ("ci", "helm"):
+        if nightly.jobs.get(job_id, {}).get("with", {}).get("date") != (
+            "${{ needs.head.outputs.date }}"
+        ):
+            errors.append(
+                f"nightly-build.yml: '{job_id}' must use the run's one publication date"
+            )
+    retry = workflows.get("nightly-retry.yml")
+    trigger = retry.events.get("workflow_run", {}) if retry else {}
+    job = retry.jobs.get("retry", {}) if retry else {}
+    if trigger.get("workflows") != [nightly.data.get("name")] or trigger.get(
+        "types"
+    ) != ["completed"]:
+        errors.append("nightly-retry.yml must observe Nightly Qualification runs")
+    elif "github.event.workflow_run.run_attempt == 1" not in job.get("if", ""):
+        errors.append("nightly-retry.yml may re-run a qualification only once")
+
+
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
@@ -544,6 +706,11 @@ def validate_mergify_contract(errors: list[str]) -> None:
         )
         if any(f"check-success = {context}" in serialized for context in obsolete):
             errors.append(f".mergify.yml: {section} retains compatibility contexts")
+    if not default_rule.get("max_checks_retries"):
+        errors.append(
+            ".mergify.yml: the default queue rule must set max_checks_retries "
+            "above 0, or Mergify checks in place and the queue waits for /ci run"
+        )
     pull_request_rules = data.get("pull_request_rules", [])
     queue_rules = [
         rule
@@ -567,6 +734,7 @@ def validate_workflow_policies(
 ) -> None:
     validate_pr_contract(workflows, errors)
     validate_main_publishers(workflows, errors)
+    validate_main_latest(workflows, errors)
     validate_release_contract(workflows, errors)
     validate_security_boundary(workflows, errors)
     validate_removed_workflows(errors)

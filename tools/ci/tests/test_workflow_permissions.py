@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -124,6 +125,186 @@ class CommunityLabelSyncConcurrencyTests(unittest.TestCase):
         self.assertNotEqual(pr_concurrency["group"], sweep_concurrency["group"])
         self.assertFalse(pr_concurrency["cancel-in-progress"])
         self.assertFalse(sweep_concurrency["cancel-in-progress"])
+
+    def test_acceptance_backfill_runs_one_sweep_at_a_time_off_events(self) -> None:
+        job = self.data["jobs"]["issue-acceptance-sweep"]
+
+        self.assertEqual(
+            job["concurrency"],
+            {
+                "group": "community-label-sync-acceptance-sweep",
+                "cancel-in-progress": False,
+            },
+        )
+        self.assertIn("github.event_name == 'schedule'", job["if"])
+        self.assertIn("github.event_name == 'workflow_dispatch'", job["if"])
+        self.assertNotIn("workflow_run", job["if"])
+        self.assertNotIn("check_suite", job["if"])
+        self.assertIn("accept-issues", job["steps"][-1]["run"])
+
+
+class CommunityValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        path = REPO_ROOT / ".github" / "workflows" / "community.yml"
+        self.data = yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def test_linked_issue_validation_only_runs_for_ready_human_pr_events(self) -> None:
+        condition = self.data["jobs"]["linked-issue"]["if"]
+        for event in ("pull_request", "pull_request_review", "issues", "issue_comment"):
+            for draft in (False, True):
+                for author_type in ("User", "Bot"):
+                    with self.subTest(event=event, draft=draft, author=author_type):
+                        expression = condition
+                        for name, value in {
+                            "github.event_name": event,
+                            "github.event.pull_request.draft": draft,
+                            "github.event.pull_request.user.type": author_type,
+                        }.items():
+                            expression = expression.replace(name, repr(value))
+                        expression = expression.replace("&&", " and ").replace(
+                            "||", " or "
+                        )
+                        expression = " ".join(
+                            re.sub(r"!(?!=)", "not ", expression).split()
+                        )
+                        self.assertEqual(
+                            eval(expression, {"__builtins__": {}}),
+                            event == "pull_request"
+                            and not draft
+                            and author_type == "User",
+                        )
+
+    def test_only_read_only_jobs_cancel_superseded_checks(self) -> None:
+        self.assertNotIn("concurrency", self.data)
+        jobs = self.data["jobs"]
+        self.assertEqual(
+            {name for name, job in jobs.items() if "concurrency" in job},
+            {"title-format", "linked-issue", "issue-manager", "issue-lifecycle"},
+        )
+        for name in ("title-format", "linked-issue"):
+            with self.subTest(job=name):
+                job = jobs[name]
+                concurrency = job["concurrency"]
+                self.assertTrue(concurrency["cancel-in-progress"])
+                group = concurrency["group"]
+                self.assertTrue(group.startswith(f"community-{name}-"))
+                self.assertIn("github.event.pull_request.number", group)
+                self.assertIn("github.run_id", group)
+                self.assertNotIn("github.sha", group)
+                self.assertTrue(
+                    all(value == "read" for value in job["permissions"].values())
+                )
+        for name in ("issue-manager", "issue-lifecycle"):
+            with self.subTest(job=name):
+                concurrency = jobs[name]["concurrency"]
+                self.assertFalse(concurrency["cancel-in-progress"])
+                self.assertEqual(concurrency["queue"], "max")
+        self.assertIn(
+            "github.event.issue.number", jobs["title-format"]["concurrency"]["group"]
+        )
+        # Only events that can change an issue title run the title check.
+        condition = jobs["title-format"]["if"]
+        self.assertIn("github.event.changes.title != null", condition)
+        self.assertNotIn("labeled", condition)
+
+    def test_accept_comments_reconcile_one_issue_not_the_repository(self) -> None:
+        job = self.data["jobs"]["issue-acceptance"]
+        commands = " ".join(step.get("run", "") for step in job["steps"])
+
+        self.assertIn("github.event.comment.body == '/accept'", job["if"])
+        self.assertIn("community_lifecycle.py accept-issue ", commands)
+        self.assertNotIn("accept-issues", commands)
+
+    def test_assignment_commands_reconcile_after_the_prow_action(self) -> None:
+        steps = self.data["jobs"]["issue-manager"]["steps"]
+        action = next(
+            index
+            for index, step in enumerate(steps)
+            if "prow-github-actions" in str(step.get("uses", ""))
+        )
+        following = steps[action + 1 :]
+        sync = next(
+            step for step in following if "sync-issue-assignment" in step.get("run", "")
+        )
+        condition = " ".join(sync["if"].split())
+
+        self.assertIn("!cancelled()", condition)
+        self.assertIn("github.event.issue.pull_request == null", condition)
+        self.assertIn("contains(github.event.comment.body, '/assign')", condition)
+        self.assertIn("contains(github.event.comment.body, '/unassign')", condition)
+        self.assertIn("GH_TOKEN", sync["env"])
+        self.assertTrue(
+            any(
+                str(step.get("uses", "")) == "actions/checkout@v4" for step in following
+            )
+        )
+
+    def test_three_assignment_jobs_queue_without_replacing_pending_work(self) -> None:
+        concurrency = self.data["jobs"]["issue-manager"]["concurrency"]
+        group = " ".join(concurrency["group"].split())
+
+        self.assertEqual(concurrency["queue"], "max")
+        self.assertFalse(concurrency["cancel-in-progress"])
+        self.assertIn("github.event.issue.pull_request == null", group)
+        self.assertIn("contains(github.event.comment.body, '/assign')", group)
+        self.assertIn("contains(github.event.comment.body, '/unassign')", group)
+        # /assign and /unassign select the shared state group, while /cc falls
+        # through to the run-unique group and cannot replace a pending command.
+        self.assertIn(
+            "format('community-issue-state-{0}', github.event.issue.number)", group
+        )
+        self.assertIn("format('community-issue-command-{0}', github.run_id)", group)
+
+    def test_pr_commands_keep_their_own_scheduling(self) -> None:
+        group = " ".join(
+            self.data["jobs"]["issue-manager"]["concurrency"]["group"].split()
+        )
+
+        self.assertIn("github.event.issue.pull_request == null", group)
+        self.assertIn("format('community-issue-command-{0}', github.run_id)", group)
+
+    def test_manual_assignment_joins_the_issue_command_queue(self) -> None:
+        lifecycle = self.data["jobs"]["issue-lifecycle"]["concurrency"]
+        manager = self.data["jobs"]["issue-manager"]["concurrency"]
+
+        self.assertEqual(
+            lifecycle,
+            {
+                "group": "community-issue-state-${{ github.event.issue.number }}",
+                "cancel-in-progress": False,
+                "queue": "max",
+            },
+        )
+        self.assertIn(
+            "format('community-issue-state-{0}', github.event.issue.number)",
+            " ".join(manager["group"].split()),
+        )
+
+    def test_manual_assignment_events_keep_their_lifecycle_sync(self) -> None:
+        events = self.data.get("on", self.data.get(True))
+        self.assertIn("assigned", events["issues"]["types"])
+        self.assertIn("unassigned", events["issues"]["types"])
+        job = self.data["jobs"]["issue-lifecycle"]
+        self.assertIn("github.event_name == 'issues'", job["if"])
+        commands = " ".join(step.get("run", "") for step in job["steps"])
+        self.assertIn("community_lifecycle.py sync-issue ", commands)
+
+    def test_review_events_keep_the_trusted_label_sync_bridge(self) -> None:
+        events = self.data.get("on", self.data.get(True))
+        self.assertEqual(
+            events["pull_request_review"]["types"], ["submitted", "dismissed"]
+        )
+        self.assertNotIn("synchronize", events["pull_request"]["types"])
+        self.assertIn("edited", events["pull_request"]["types"])
+        path = REPO_ROOT / ".github" / "workflows" / "community-labels.yml"
+        sync = yaml.safe_load(path.read_text(encoding="utf-8"))
+        sync_events = sync.get("on", sync.get(True))
+        self.assertNotIn("pull_request_review", sync_events)
+        self.assertEqual(sync_events["workflow_run"]["workflows"], ["Community"])
+        self.assertIn(
+            "github.event.workflow_run.event == 'pull_request_review'",
+            sync["jobs"]["pull-request-state"]["if"],
+        )
 
 
 if __name__ == "__main__":

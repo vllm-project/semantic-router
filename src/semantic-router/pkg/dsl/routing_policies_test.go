@@ -39,7 +39,7 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 	if err != nil {
 		t.Fatal(err)
 	}
-	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.3\n"), data...))
+	parsed, err := config.ParseYAMLBytes(append([]byte("version: v0.5\n"), data...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,9 +61,14 @@ ENTRYPOINT {model_names: ["secondary"] recipe: secondary}
 
 func TestReplayPluginOverridesRoundTrip(t *testing.T) {
 	for _, fields := range []string{
-		"", "enabled: false", "capture_personal_data: false",
+		"", "enabled: false", "capture_personal_data: false", `prompt_capture: "none"`, `prompt_capture: "verified"`,
 		"capture_request_body: false capture_response_body: false max_tool_trace_bytes: 0 max_tool_trace_steps: 0",
 		"enabled: true capture_personal_data: true max_records: 500 max_body_bytes: 2048",
+		`enabled: true prompt_capture: "raw" capture_tool_results: true max_tool_trace_bytes: 8192`,
+		`enabled: true cost_baseline_model: "premium-model"`,
+		`enabled: false shadow: {models: ["candidate"] sample_rate: 0}`,
+		`shadow: {models: [" candidate ", "other"] sample_rate: 0.5 execution: {max_concurrency: 1.0 max_queue_size: 8 timeout: "1m30s"} budget: {max_response_bytes: 4.0} capture: {enabled: true max_bytes: 1024}}`,
+		`shadow: {sample_rate: 0 execution: {timeout: "1s"} capture: {enabled: true}}`,
 	} {
 		t.Run(fields, func(t *testing.T) {
 			cfg, errs := Compile("ROUTE everything {PRIORITY 1 MODEL \"local\" PLUGIN router_replay {" + fields + "}}")
@@ -96,7 +101,7 @@ func TestReplayPluginOverridesRoundTrip(t *testing.T) {
 			}
 		})
 	}
-	for _, fields := range []string{`capture_personal_data: "false"`, `capture_request_body: 1`, `enabled: true unknown_field: false`} {
+	for _, fields := range []string{`capture_personal_data: "false"`, `prompt_capture: "full"`, `prompt_capture: true`, `capture_request_body: 1`, `enabled: true unknown_field: false`, `cost_baseline_model: 3`} {
 		if _, errs := Compile("ROUTE invalid {PRIORITY 1 MODEL \"local\" PLUGIN router_replay {" + fields + "}}"); len(errs) == 0 {
 			t.Fatalf("accepted invalid replay override: %s", fields)
 		}
@@ -194,6 +199,38 @@ func TestRequestParamsDefaultRoundTrip(t *testing.T) {
 	}
 }
 
+// A route that turns an inherited fast_response off keeps enabled: false
+// through the DSL, which would otherwise answer every request it routes.
+func TestFastResponseEnabledRoundTrip(t *testing.T) {
+	source := `ROUTE open {
+ PRIORITY 1
+ MODEL "local"
+ PLUGIN fast_response {enabled: false}
+}`
+	cfg, errs := Compile(source)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	output, err := DecompileConfig(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, errs := Compile(output)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	ast := DecompileRoutingToAST(cfg)
+	astCfg, errs := CompileAST(ast)
+	if len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	for name, decision := range map[string]config.Decision{"compiled": cfg.Decisions[0], "text": again.Decisions[0], "ast": astCfg.Decisions[0]} {
+		if !decision.HasPlugin(config.DecisionPluginFastResponse) || decision.GetFastResponseConfig() != nil {
+			t.Fatalf("%s: fast_response is not turned off: %s", name, output)
+		}
+	}
+}
+
 func TestAutomaticOutputAndForecastRoundTrip(t *testing.T) {
 	source := `ROUTE capacity {
  PRIORITY 1
@@ -219,5 +256,57 @@ func TestAutomaticOutputAndForecastRoundTrip(t *testing.T) {
 	astConfig, errs := CompileAST(DecompileRoutingToAST(cfg))
 	if len(errs) > 0 || !reflect.DeepEqual(cfg.Decisions[0].GetRequestParamsConfig(), astConfig.Decisions[0].GetRequestParamsConfig()) {
 		t.Fatalf("AST lost automatic default: %v", errs)
+	}
+}
+
+func TestReplayShadowRejectsInvalidDSL(t *testing.T) {
+	for _, fields := range []string{
+		`models: [1]`, `models: "a"`, `model: "a"`,
+		`models: ["a"] enabled: false`,
+		`models: ["a"] max_concurrency: 2`,
+
+		`models: ["a"] sample_rate: true`,
+		`models: ["a"] sample_rate: "0.5"`,
+
+		`models: ["a"] execution: {max_queue_size: 2.5}`,
+		`models: ["a"] execution: {max_concurrency: true}`,
+
+		`models: ["a"] execution: {timeout: 30}`,
+		`models: ["a"] budget: "bad"`,
+		`models: ["a"] budget: {max_response_bytes: "2"}`,
+
+		`models: ["a"] budget: {max_estimated_tokens: 0}`,
+		`models: ["a"] budget: {max_estimated_tokens: 2.5}`,
+		`models: ["a"] budget: {max_estimated_cost: 0}`,
+		`models: ["a"] budget: {max_estimated_cost: -0.01}`,
+		`models: ["a"] budget: {max_estimated_cost: "0.01"}`,
+		`models: ["a"] budget: {max_tokens: 100}`,
+		`models: ["a"] capture: {enabled: 1}`,
+
+		`models: ["a"] capture: {bogus: true}`,
+	} {
+		t.Run(fields, func(t *testing.T) {
+			// Disabled Replay still requires a well-typed plugin payload.
+			source := `ROUTE invalid {PRIORITY 1 MODEL "primary" PLUGIN router_replay {enabled: false shadow: {` + fields + `}}}`
+			if _, errs := Compile(source); len(errs) == 0 {
+				t.Fatalf("accepted invalid shadow: %s", fields)
+			}
+		})
+	}
+}
+
+func TestReplayShadowPartialOverrideInheritsRecipeModels(t *testing.T) {
+	cfg := mustCompile(t, `
+ROUTING {plugins: [{type: "router_replay", configuration: {shadow: {models: ["a", "b"]}}}]}
+ROUTE r {PRIORITY 1 MODEL "primary"
+  PLUGIN router_replay {enabled: false shadow: {sample_rate: 0 execution: {timeout: "1s"} capture: {enabled: true}}}
+}`)
+	replay := cfg.Decisions[0].GetRouterReplayConfig()
+	if replay == nil || replay.Shadow == nil {
+		t.Fatal("layering lost the shadow")
+	}
+	shadow := replay.Shadow
+	if !reflect.DeepEqual(shadow.Models, []string{"a", "b"}) || shadow.SampleRate == nil || *shadow.SampleRate != 0 || shadow.Execution.Timeout != "1s" || !shadow.Capture.Enabled {
+		t.Fatalf("partial override lost inherited fields: %#v", shadow)
 	}
 }

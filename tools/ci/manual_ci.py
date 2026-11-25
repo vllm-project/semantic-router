@@ -22,25 +22,55 @@ CONTROLLER = ".github/workflows/manual-ci.yml"
 AUTHORIZE_JOB = "Authorize requested CI"
 # Public immutable GitHub identity: https://api.github.com/users/mergify%5Bbot%5D
 MERGIFY_BOT_ID = 37929162
+GITHUB_ACTIONS_BOT_ID = 41898282
+PR_QUALIFICATION_CONTEXT = "PR Qualification"
+PUBLISHER_FILES = frozenset(
+    (".github/workflows/ci-status.yml", "tools/ci/pr_ci_status.py")
+)
 SCOPES = frozenset(
     {"affected", "models", "storage", "product", "e2e", "operator", "performance"}
 )
 SHA = re.compile(r"[0-9a-f]{40}")
 PINNED_REVISION_COUNT = 3
+MERGE_PARENT_COUNT = 2
+MERGE_EVIDENCE_UNAVAILABLE = "planned_merge_unavailable"
 NO_AUTHORIZATION = {"authorized": False, "scopes": [], "full": False}
 PAGE_SIZE = 100
+MAX_QUALIFICATION_STATUS_PAGES = 10
+MAX_PAGES = 100
+STATUS_READBACK_DELAYS = (0, 1, 2, 4)
 AUTHORIZATION_LIMIT = 65536
 PLAN_LIMIT = 16 * 1024 * 1024
 ERROR_STATUS_TAIL_LIMIT = 256
+# A rate limit, and for reads a 5xx or a timeout, is waited out within one
+# budget per client, so a job stays inside its five-minute timeout.
+RETRY_DELAYS = (5, 15, 45)
+RETRY_BUDGET_SECONDS = 120
+GH_TIMEOUT_SECONDS = 60
+HTTP_SERVER_ERROR = 500
+HTTP_NOT_FOUND = 404
 
 
 def http_error_status(stderr: str | bytes) -> int | None:
-    """Retain only gh's bounded HTTP error suffix, never response text."""
+    """Retain only gh's bounded HTTP error suffix, never response text.
+
+    gh ends with "(HTTP 503)" after a JSON message, or prints a bare
+    "gh: HTTP 503" line when the body is not JSON or carries no message.
+    """
     tail = stderr[-ERROR_STATUS_TAIL_LIMIT:]
     if isinstance(tail, bytes):
         tail = tail.decode("ascii", errors="replace")
-    match = re.search(r"\(HTTP ([45][0-9]{2})\)\s*\Z", tail)
-    return int(match[1]) if match else None
+    match = re.search(
+        r"(?:\(HTTP ([45][0-9]{2})\)|^gh: HTTP ([45][0-9]{2}))\s*\Z", tail, re.M
+    )
+    return int(match[1] or match[2]) if match else None
+
+
+def rate_limited(status: int | None, stderr: str | bytes) -> bool:
+    """Classify a primary or secondary rate limit from gh's text, never echo it."""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    return status in {403, 429} and "rate limit" in stderr.lower()
 
 
 class ManualCIError(RuntimeError):
@@ -54,19 +84,54 @@ class ManualCIError(RuntimeError):
         self.http_status = http_status
 
 
+def api_failure(result, message: str) -> ManualCIError:
+    """Name the HTTP status and a rate limit, never gh's response text."""
+    status = http_error_status(result.stderr)
+    if rate_limited(status, result.stderr):
+        message += f" (HTTP {status}, rate limited); rerun after the limit resets."
+    elif status in {None, 401, 403, 404}:
+        suffix = f" (HTTP {status})" if status else ""
+        message += f"{suffix}; check workflow permissions."
+    else:
+        message += f" (HTTP {status})."
+    return ManualCIError(message, http_status=status)
+
+
 class GitHubClient:
+    retry_budget = RETRY_BUDGET_SECONDS
+
+    def gh(self, args: list[str], *, read: bool, **options):
+        """Run gh and wait out a transient failure while the budget lasts."""
+        for delay in (*RETRY_DELAYS, None):
+            try:
+                result = subprocess.run(
+                    args,
+                    capture_output=True,
+                    check=False,
+                    timeout=GH_TIMEOUT_SECONDS,
+                    **options,
+                )
+            except subprocess.TimeoutExpired:
+                self.retry_budget -= GH_TIMEOUT_SECONDS
+                if not read or delay is None or delay > self.retry_budget:
+                    raise
+            else:
+                status = http_error_status(result.stderr)
+                transient = result.returncode != 0 and (
+                    rate_limited(status, result.stderr)
+                    or (read and status is not None and status >= HTTP_SERVER_ERROR)
+                )
+                if not transient or delay is None or delay > self.retry_budget:
+                    return result
+            self.retry_budget -= delay
+            time.sleep(delay)
+
     def raw(self, endpoint: str, *, method="GET") -> bytes:
-        result = subprocess.run(
-            ["gh", "api", endpoint, "--method", method],
-            capture_output=True,
-            check=False,
-            timeout=60,
+        result = self.gh(
+            ["gh", "api", endpoint, "--method", method], read=method == "GET"
         )
         if result.returncode:
-            raise ManualCIError(
-                "GitHub API request failed; check workflow permissions.",
-                http_status=http_error_status(result.stderr),
-            )
+            raise api_failure(result, "GitHub API request failed")
         return result.stdout
 
     def request(self, endpoint: str, *, method="GET"):
@@ -74,19 +139,14 @@ class GitHubClient:
         return json.loads(value) if value.strip() else None
 
     def write(self, endpoint: str, payload: dict, *, method="POST"):
-        result = subprocess.run(
+        result = self.gh(
             ["gh", "api", endpoint, "--method", method, "--input", "-"],
+            read=False,
             input=json.dumps(payload),
             text=True,
-            capture_output=True,
-            check=False,
-            timeout=60,
         )
         if result.returncode:
-            raise ManualCIError(
-                "GitHub feedback API request failed.",
-                http_status=http_error_status(result.stderr),
-            )
+            raise api_failure(result, "GitHub feedback API request failed")
         return json.loads(result.stdout) if result.stdout.strip() else None
 
 
@@ -122,6 +182,32 @@ def timestamp(value: str) -> datetime:
         raise ManualCIError("Invalid authorization timestamp.") from None
 
 
+def main_contains(client, repo: str, base: str) -> bool:
+    """A planned base remains trusted when main advances without rewriting it."""
+    if not isinstance(base, str) or not SHA.fullmatch(base):
+        return False
+    try:
+        base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
+        if (
+            not isinstance(base_ref, dict)
+            or base_ref.get("ref") != "refs/heads/main"
+            or base_ref.get("object", {}).get("type") != "commit"
+        ):
+            return False
+        current_main = base_ref.get("object", {}).get("sha")
+        if not isinstance(current_main, str) or not SHA.fullmatch(current_main):
+            return False
+        if current_main == base:
+            return True
+        comparison = client.request(f"repos/{repo}/compare/{base}...{current_main}")
+        return bool(
+            isinstance(comparison, dict)
+            and comparison.get("merge_base_commit", {}).get("sha") == base
+        )
+    except (ManualCIError, KeyError, TypeError, ValueError):
+        return False
+
+
 def source_identity(client, repo: str, number: int) -> dict:
     pull = client.request(f"repos/{repo}/pulls/{number}")
     if (
@@ -134,7 +220,8 @@ def source_identity(client, repo: str, number: int) -> dict:
             reason="revision",
         )
     # The PR API's base.sha can lag behind the test merge commit. Read the
-    # actual target ref, then require one coherent base/head/merge revision.
+    # actual target ref, then require that the merge commit has a valid head
+    # and a base that is either the current main tip or an ancestor of main.
     base_ref = client.request(f"repos/{repo}/git/ref/heads/main")
     if (
         base_ref.get("ref") != "refs/heads/main"
@@ -143,14 +230,18 @@ def source_identity(client, repo: str, number: int) -> dict:
         raise ManualCIError(
             "The current main revision is unavailable.", reason="revision"
         )
+    current_main = base_ref.get("object", {}).get("sha")
     result = {
         "head_sha": pull.get("head", {}).get("sha"),
-        "base_sha": base_ref.get("object", {}).get("sha"),
         "source_sha": pull.get("merge_commit_sha"),
     }
-    if any(
-        not isinstance(value, str) or not SHA.fullmatch(value)
-        for value in result.values()
+    if (
+        not isinstance(current_main, str)
+        or not SHA.fullmatch(current_main)
+        or any(
+            not isinstance(value, str) or not SHA.fullmatch(value)
+            for value in result.values()
+        )
     ):
         raise ManualCIError(
             "The current PR merge revision is unavailable; resolve conflicts first.",
@@ -160,15 +251,101 @@ def source_identity(client, repo: str, number: int) -> dict:
     parents = commit.get("parents")
     if (
         not isinstance(parents, list)
+        or len(parents) != MERGE_PARENT_COUNT
         or any(not isinstance(parent, dict) for parent in parents)
-        or [parent.get("sha") for parent in parents]
-        != [result["base_sha"], result["head_sha"]]
+        or parents[1].get("sha") != result["head_sha"]
+        or not isinstance(parents[0].get("sha"), str)
+        or not SHA.fullmatch(parents[0]["sha"])
     ):
         raise ManualCIError(
             "The PR merge revision changed or is still being prepared; wait for its Plan job.",
             reason="revision",
         )
+    merge_base = parents[0]["sha"]
+    if not main_contains(client, repo, merge_base):
+        raise ManualCIError(
+            "The PR merge revision changed or is still being prepared; wait for its Plan job.",
+            reason="revision",
+        )
+    result = {
+        "head_sha": result["head_sha"],
+        "base_sha": merge_base,
+        "source_sha": result["source_sha"],
+    }
     return result
+
+
+def merge_revision_matches(
+    client,
+    repo: str,
+    source: str,
+    base: str,
+    head: str,
+    *,
+    equivalent_source: str | None = None,
+) -> bool:
+    """Verify planned parents and, when required, the replacement merge's tree."""
+    revisions = (source, base, head)
+    if equivalent_source is not None:
+        revisions += (equivalent_source,)
+    if any(
+        not isinstance(value, str) or not SHA.fullmatch(value) for value in revisions
+    ):
+        return False
+    try:
+        commit = client.request(f"repos/{repo}/git/commits/{source}")
+    except ManualCIError as error:
+        if error.http_status != HTTP_NOT_FOUND:
+            raise
+        raise ManualCIError(
+            "The original planned merge commit is unavailable; its qualification source cannot be verified.",
+            reason=MERGE_EVIDENCE_UNAVAILABLE,
+            http_status=HTTP_NOT_FOUND,
+        ) from None
+    parents = commit.get("parents") if isinstance(commit, dict) else None
+    if not (
+        isinstance(parents, list)
+        and len(parents) == MERGE_PARENT_COUNT
+        and all(isinstance(parent, dict) for parent in parents)
+        and [parent.get("sha") for parent in parents] == [base, head]
+    ):
+        return False
+    if equivalent_source is None:
+        return True
+    replacement = client.request(f"repos/{repo}/git/commits/{equivalent_source}")
+    trees = (
+        commit.get("tree"),
+        replacement.get("tree") if isinstance(replacement, dict) else None,
+    )
+    tree_shas = [tree.get("sha") if isinstance(tree, dict) else None for tree in trees]
+    return (
+        all(isinstance(value, str) and SHA.fullmatch(value) for value in tree_shas)
+        and tree_shas[0] == tree_shas[1]
+    )
+
+
+def merge_source_matches(
+    client, repo: str, source: str, base: str, identity: dict
+) -> bool:
+    """Accept a verified equivalent merge or the existing ancestor-base policy."""
+    if any(
+        not isinstance(value, str) or not SHA.fullmatch(value)
+        for value in (source, base)
+    ):
+        return False
+    if source == identity["source_sha"] and base == identity["base_sha"]:
+        return True
+    same_base = base == identity["base_sha"]
+    if not merge_revision_matches(
+        client,
+        repo,
+        source,
+        base,
+        identity["head_sha"],
+        equivalent_source=identity["source_sha"] if same_base else None,
+    ):
+        return False
+    return same_base or main_contains(client, repo, base)
 
 
 def trusted_queue_pull(pull: dict, repo: str) -> bool:
@@ -251,10 +428,10 @@ def plan_for_run(client, repo: str, run: dict, identity: dict) -> dict | None:
         digest = hashlib.sha256(
             json.dumps(unsigned, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
-        if (
-            plan.get("source_sha") == identity["source_sha"]
-            and plan.get("base_sha") == identity["base_sha"]
-            and plan.get("plan_sha256") == digest
+        if plan.get("plan_sha256") != digest:
+            continue
+        if run.get("head_sha") == identity["head_sha"] and merge_source_matches(
+            client, repo, plan.get("source_sha"), plan.get("base_sha"), identity
         ):
             return plan
     return None
@@ -291,10 +468,8 @@ def authorize(client, event: dict) -> dict | None:
     identity = source_identity(client, repo, number)
     head = client.request(f"repos/{repo}/pulls/{number}")["head"]
     if command["pinned"] and command["pinned"] != list(identity.values()):
-        raise ManualCIError(
-            "The requested head, base or merge SHA is no longer current.",
-            reason="expired",
-        )
+        # Verification against the planned run occurs once selected below.
+        pass
     query = urlencode(
         {"event": "pull_request", "head_sha": identity["head_sha"], "per_page": 20}
     )
@@ -327,11 +502,21 @@ def authorize(client, event: dict) -> dict | None:
         plan = plan_for_run(client, repo, run, identity)
         if plan is None:
             break
+        if command["pinned"] and command["pinned"] not in (
+            list(identity.values()),
+            [identity["head_sha"], plan["base_sha"], plan["source_sha"]],
+        ):
+            raise ManualCIError(
+                "The requested head, base or merge SHA is no longer current.",
+                reason="expired",
+            )
         return {
             "schema_version": 1,
             "repository": repo,
             "pr_number": number,
-            **identity,
+            "head_sha": identity["head_sha"],
+            "base_sha": plan["base_sha"],
+            "source_sha": plan["source_sha"],
             "pr_run_id": run["id"],
             "pr_run_created_at": run["created_at"],
             "plan_sha256": plan["plan_sha256"],
@@ -397,7 +582,8 @@ def matching_authorization(
         or record.get("pr_number") != number
         or record.get("pr_run_id") != run["id"]
         or record.get("pr_run_created_at") != run["created_at"]
-        or any(record.get(key) != value for key, value in identity.items())
+        or record.get("head_sha") != identity["head_sha"]
+        or run.get("head_sha") != identity["head_sha"]
     ):
         return False
     comment = unchanged_comment(client, repo, number, int(record["comment_id"]))
@@ -406,7 +592,17 @@ def matching_authorization(
         command
         and command["scopes"] == record.get("scopes")
         and command["full"] == record.get("full")
-        and (not command["pinned"] or command["pinned"] == list(identity.values()))
+        and (
+            not command["pinned"]
+            or (
+                command["pinned"]
+                == [
+                    record.get("head_sha"),
+                    record.get("base_sha"),
+                    record.get("source_sha"),
+                ]
+            )
+        )
         and comment.get("user", {}).get("login") == record.get("actor")
         and comment["created_at"] == record.get("comment_created_at")
         and timestamp(comment["created_at"]) >= timestamp(run["created_at"])
@@ -440,12 +636,16 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
         return dict(NO_AUTHORIZATION)
     repo, number = os.environ["GITHUB_REPOSITORY"], int(event["number"])
     identity = source_identity(client, repo, number)
+    head_sha = event.get("pull_request", {}).get("head", {}).get("sha")
     if (
-        identity["source_sha"] != source
-        or identity["base_sha"] != base
-        or identity["head_sha"]
-        != event.get("pull_request", {}).get("head", {}).get("sha")
+        identity["head_sha"] != head_sha
+        or not isinstance(source, str)
+        or not SHA.fullmatch(source)
+        or not isinstance(base, str)
+        or not SHA.fullmatch(base)
     ):
+        return dict(NO_AUTHORIZATION)
+    if not merge_source_matches(client, repo, source, base, identity):
         return dict(NO_AUTHORIZATION)
     run_id = int(os.environ["GITHUB_RUN_ID"])
     run = client.request(f"repos/{repo}/actions/runs/{run_id}")
@@ -468,9 +668,12 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
             record = read_artifact(
                 client, repo, artifact, "authorization.json", AUTHORIZATION_LIMIT
             )
-            if matching_authorization(
-                client, repo, number, run, identity, record
-            ) and trusted_controller(client, repo, record, artifact):
+            if (
+                matching_authorization(client, repo, number, run, identity, record)
+                and record.get("source_sha") == source
+                and record.get("base_sha") == base
+                and trusted_controller(client, repo, record, artifact)
+            ):
                 approved.append(record)
         except (ManualCIError, KeyError, TypeError, ValueError):
             continue  # Malformed or obsolete authorization never permits execution.
@@ -481,22 +684,153 @@ def resolve(client, event: dict, *, source: str, base: str) -> dict:
     }
 
 
-def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
+def pages(client, endpoint: str, key: str | None = None):
+    separator = "&" if "?" in endpoint else "?"
+    for page in range(1, MAX_PAGES + 1):
+        response = client.request(
+            f"{endpoint}{separator}per_page={PAGE_SIZE}&page={page}"
+        )
+        items = response[key] if key else response
+        if not isinstance(items, list):
+            raise ManualCIError("Invalid GitHub collection response.")
+        yield from items
+        if len(items) < PAGE_SIZE:
+            return
+    raise ManualCIError("GitHub collection exceeds the reconciliation limit.")
+
+
+def latest_run(client, repo: str, run: dict) -> bool:
+    query = urlencode({"event": "pull_request", "head_sha": run["head_sha"]})
+    candidates = [
+        item
+        for item in pages(
+            client,
+            f"repos/{repo}/actions/workflows/pr.yml/runs?{query}",
+            "workflow_runs",
+        )
+        if item.get("head_branch") == run.get("head_branch")
+        and (item.get("head_repository") or {}).get("full_name")
+        == (run.get("head_repository") or {}).get("full_name")
+    ]
+    return (
+        bool(candidates)
+        and max(candidates, key=lambda item: (item["created_at"], item["id"]))["id"]
+        == run["id"]
+    )
+
+
+def status_publisher_available(client, repo: str, base: str) -> bool:
+    tree = client.request(f"repos/{repo}/git/trees/{base}?recursive=1")
+    if tree.get("truncated"):
+        raise ManualCIError("Cannot establish the trusted base's status publisher.")
+    paths = {
+        item.get("path") for item in tree.get("tree", []) if item.get("type") == "blob"
+    }
+    return paths >= PUBLISHER_FILES
+
+
+def qualification_status_url(repo: str, run_id: int, attempt: int) -> str:
+    return f"https://github.com/{repo}/actions/runs/{run_id}/attempts/{attempt}"
+
+
+def pending_rerun_status(repo: str, run_id: int, attempt: int) -> dict:
+    return {
+        "context": PR_QUALIFICATION_CONTEXT,
+        "state": "pending",
+        "target_url": qualification_status_url(repo, run_id, attempt + 1),
+        "description": "Waiting for authorized CI rerun",
+    }
+
+
+def latest_qualification_status(client, repo: str, head: str) -> dict:
+    # GitHub lists commit statuses newest first. Ignore same-name statuses
+    # published by accounts other than the trusted GitHub Actions bot.
+    for page in range(1, MAX_QUALIFICATION_STATUS_PAGES + 1):
+        statuses = client.request(
+            f"repos/{repo}/commits/{head}/statuses?per_page={PAGE_SIZE}&page={page}"
+        )
+        if not isinstance(statuses, list):
+            raise ManualCIError("Invalid GitHub commit status response.")
+        for status in statuses:
+            creator = status.get("creator") or {}
+            if (
+                status.get("context") == PR_QUALIFICATION_CONTEXT
+                and creator.get("id") == GITHUB_ACTIONS_BOT_ID
+                and creator.get("login") == "github-actions[bot]"
+            ):
+                return status
+        if len(statuses) < PAGE_SIZE:
+            return {}
+    raise ManualCIError(
+        "Could not establish the latest PR Qualification commit status."
+    )
+
+
+def write_qualification_status(client, repo: str, head: str, payload: dict) -> None:
+    posted = client.write(f"repos/{repo}/statuses/{head}", payload)
+    if posted and type(posted.get("id")) is int:
+        # A new status can take a few seconds to appear in the commit rollup.
+        # Retry the read, so replication lag does not cause duplicate writes.
+        for delay in STATUS_READBACK_DELAYS:
+            if delay:
+                time.sleep(delay)
+            observed = latest_qualification_status(client, repo, head)
+            if observed.get("id") == posted["id"] and all(
+                observed.get(key) == value for key, value in payload.items()
+            ):
+                return
+    raise ManualCIError("Could not confirm the published PR Qualification status.")
+
+
+def checked_rerun(client, record: dict) -> dict:
     repo, number, run_id = (
         record["repository"],
         record["pr_number"],
         record["pr_run_id"],
     )
+    identity = source_identity(client, repo, number)
+    run = client.request(f"repos/{repo}/actions/runs/{run_id}")
+    if (
+        not main_contains(client, repo, record["base_sha"])
+        or not matching_authorization(client, repo, number, run, identity, record)
+        or not merge_source_matches(
+            client, repo, record.get("source_sha"), record.get("base_sha"), identity
+        )
+    ):
+        raise ManualCIError(
+            "The PR revision or authorization changed; post a new /ci run request.",
+            reason="expired",
+        )
+    return run
+
+
+def rerun(client, record: dict, *, wait_seconds: int = 900) -> None:
+    repo, run_id = record["repository"], record["pr_run_id"]
     deadline = time.monotonic() + wait_seconds
     while True:
-        identity = source_identity(client, repo, number)
-        run = client.request(f"repos/{repo}/actions/runs/{run_id}")
-        if not matching_authorization(client, repo, number, run, identity, record):
-            raise ManualCIError(
-                "The PR revision or authorization changed; post a new /ci run request.",
-                reason="expired",
-            )
+        run = checked_rerun(client, record)
         if run.get("status") == "completed":
+            if status_publisher_available(client, repo, record["base_sha"]):
+                if not latest_run(client, repo, run):
+                    raise ManualCIError(
+                        "The current PR CI run changed; post a new /ci run request.",
+                        reason="expired",
+                    )
+                attempt = run.get("run_attempt")
+                if type(attempt) is not int or attempt < 1:
+                    raise ManualCIError("Cannot determine the next CI attempt.")
+                head = run["head_sha"]
+                pending = pending_rerun_status(repo, run_id, attempt)
+                write_qualification_status(client, repo, head, pending)
+                current = checked_rerun(client, record)
+                if (
+                    current.get("run_attempt") != attempt
+                    or current["status"] != "completed"
+                    or not latest_run(client, repo, current)
+                ):
+                    raise ManualCIError(
+                        "The CI attempt changed before rerun.", reason="expired"
+                    )
             client.request(f"repos/{repo}/actions/runs/{run_id}/rerun", method="POST")
             return
         if time.monotonic() >= deadline:

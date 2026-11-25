@@ -12,7 +12,7 @@ import {
   type RouterSystemKey,
 } from './configPageRouterSectionCatalog'
 
-function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
+export function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
   const common = {
     label: field.label,
     description: field.description,
@@ -67,7 +67,7 @@ function generatedStructuredSchema(field: FieldSchema): RouterStructuredSchema {
   }
 }
 
-function mergeStructuredSchema(
+export function mergeStructuredSchema(
   generated: RouterStructuredSchema,
   curated: RouterStructuredSchema,
 ): RouterStructuredSchema {
@@ -84,6 +84,7 @@ function mergeStructuredSchema(
     const generatedFields = generated.fields ?? {}
     const curatedFields = curated.fields ?? {}
     merged.fields = { ...generatedFields }
+    for (const name of curated.omit ?? []) delete merged.fields[name]
     for (const [name, schema] of Object.entries(curatedFields)) {
       merged.fields[name] = generatedFields[name]
         ? mergeStructuredSchema(generatedFields[name], schema)

@@ -43,6 +43,9 @@ type Options struct {
 	MaxResponseBytes int64
 	MaxErrorBytes    int64
 	TLSConfig        *tls.Config
+	// Query is the encoded query of the deployment's endpoint, which every
+	// call carries before its operation's own.
+	Query string
 }
 
 // Request carries one operation payload plus headers that belong to that
@@ -88,6 +91,9 @@ func New(
 	if err := validateOptions(options); err != nil {
 		return nil, err
 	}
+	if _, err := url.ParseQuery(options.Query); err != nil || strings.ContainsAny(options.Query, "?#") {
+		return nil, fmt.Errorf("connector query is not a valid query string")
+	}
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if options.TLSConfig != nil {
@@ -127,6 +133,37 @@ func isRedirectStatus(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+// joinPath appends operation to the base URL's path, keeping the base path's
+// percent-encoded segments encoded. The base URL is operator supplied, so a
+// segment such as tenant%2Fblue names one path segment; re-joining only the
+// decoded URL.Path would turn its %2F into a separator and send the operation
+// to a different route. The joined escaped path is unescaped again for Path,
+// and RawPath keeps the escaped form so url.URL keeps emitting it; when the
+// two agree nothing was escaped and RawPath stays empty, as for an ordinary
+// base path. An operation path that is not validly escaped falls back to the
+// decoded join, which escapes it as a literal path.
+func joinPath(base *url.URL, operation string) (decoded, escaped string) {
+	joined := path.Join(base.EscapedPath(), operation)
+	resolved, err := url.PathUnescape(joined)
+	if err != nil {
+		return path.Join(base.Path, operation), ""
+	}
+	if resolved == joined {
+		return joined, ""
+	}
+	return resolved, joined
+}
+
+func joinQuery(base, operation string) string {
+	switch {
+	case base == "":
+		return operation
+	case operation == "":
+		return base
+	}
+	return base + "&" + operation
 }
 
 func validateOptions(options Options) error {
@@ -297,10 +334,9 @@ func (c *Client) newRequest(
 ) (*http.Request, *Error) {
 	target := *c.baseURL
 	if operation.Path != "" {
-		target.Path = path.Join(c.baseURL.Path, operation.Path)
-		target.RawPath = ""
+		target.Path, target.RawPath = joinPath(c.baseURL, operation.Path)
 	}
-	target.RawQuery = operation.Query
+	target.RawQuery = joinQuery(c.options.Query, operation.Query)
 	httpRequest, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(request.Body))
 	if err != nil {
 		return nil, &Error{Kind: KindRequest, Operation: operation.Name, Attempt: attempt, Cause: err}
@@ -340,8 +376,8 @@ func (c *Client) readResponse(
 				Kind:      KindResponse,
 				Operation: operation.Name,
 				Attempt:   attempt,
-				Retryable: operation.RetrySafe && ctx.Err() == nil,
-				Cause:     readErr,
+				Retryable: operation.RetrySafe && ctx.Err() == nil && retryableStatus(response.StatusCode),
+				Cause:     fmt.Errorf("read error body of HTTP status %d: %w", response.StatusCode, readErr),
 			}
 		}
 		return Result{}, &Error{
@@ -350,6 +386,7 @@ func (c *Client) readResponse(
 			StatusCode: response.StatusCode,
 			Attempt:    attempt,
 			Retryable:  operation.RetrySafe && retryableStatus(response.StatusCode),
+			RetryAfter: response.Header.Get("Retry-After"),
 			body:       errorBody,
 			truncated:  truncated,
 		}

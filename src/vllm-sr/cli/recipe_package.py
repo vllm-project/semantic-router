@@ -537,48 +537,6 @@ def _credential_query_key(key: str) -> bool:
     )
 
 
-def _local_process_mcp_path(data: bytes) -> str | None:
-    """Return the enabled local-process MCP path without exposing its values."""
-
-    try:
-        document = yaml.safe_load(data.decode("utf-8"))
-    except yaml.YAMLError:
-        return None
-    if not isinstance(document, dict):
-        return None
-
-    node: object = document
-    path = "global.model_catalog.modules.classifier.mcp"
-    for component in path.split("."):
-        if not isinstance(node, dict):
-            return None
-        node = node.get(component)
-    if not isinstance(node, dict) or node.get("enabled") is not True:
-        return None
-
-    raw_transport = node.get("transport_type")
-    transport = raw_transport.strip().lower() if isinstance(raw_transport, str) else ""
-    command = node.get("command")
-    command_present = isinstance(command, str) and bool(command.strip())
-    url = node.get("url")
-    url_present = isinstance(url, str) and bool(url.strip())
-    if not transport:
-        transport = (
-            "streamable-http" if url_present and not command_present else "stdio"
-        )
-
-    args = node.get("args")
-    env = node.get("env")
-    if (
-        transport == "stdio"
-        or command_present
-        or (isinstance(args, (list, dict)) and len(args) != 0)
-        or (isinstance(env, (list, dict)) and len(env) != 0)
-    ):
-        return path
-    return None
-
-
 def _resolve_output_path(
     recipe_dir: Path, recipe_id: str, version: str, output: Path | None
 ) -> Path:
@@ -686,12 +644,6 @@ def pack_recipe(recipe_dir: Path, output: Path | None = None) -> PackageResult:
         raise RecipePackageError(
             "config.yaml contains a literal credential-like value at "
             f"{credential_paths[0]}; use api_key_env or a pure environment reference"
-        )
-    local_process_mcp_path = _local_process_mcp_path(files["config.yaml"])
-    if local_process_mcp_path is not None:
-        raise RecipePackageError(
-            "config.yaml must not enable a local-process MCP transport at "
-            f"{local_process_mcp_path}"
         )
     output_path = _resolve_output_path(recipe_dir, recipe_id, version, output)
     _write_deterministic_archive(output_path, files)

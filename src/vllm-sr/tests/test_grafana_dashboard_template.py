@@ -204,5 +204,5 @@ def test_accounting_is_optional_currency_scoped_and_never_claims_complete_cost()
         assert " or " not in expression
     for current in row["panels"]:
         if "Looper" in current["title"]:
-            assert "currently covers Confidence" in current["description"]
+            assert "currently covers escalate" in current["description"]
             assert "absent series" in current["description"]

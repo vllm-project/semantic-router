@@ -4,7 +4,7 @@
 configuration choose the Router's decision model,
 `global.model_catalog.system.decision_model` (`vllm-sr serve
 --decision-model`). That is the Vela model that answers every built-in signal
-it covers, and every `routing.signals.decision` question that names no
+it covers, and every `recipes[].signals.decision` question that names no
 `deployment`, in one call per request. This record measures each Vela 2.0
 size through the Router, as
 [vela2-router-signals.md](vela2-router-signals.md) did for the 0.3B, and gives

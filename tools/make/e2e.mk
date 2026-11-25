@@ -37,10 +37,6 @@ e2e-coverage-check: ## Run the runtime-derived E2E coverage drift gates (no clus
 	@cd e2e && go test -count=1 ./pkg/verification/
 
 # Run E2E tests
-test-e2e-profile-multimodal: ## Unit-test the multimodal-routing E2E profile package (CRD mirrors the pack, chart defaults kept)
-	@$(LOG_TARGET)
-	@cd e2e && go test ./profiles/multimodal-routing/ -count=1
-
 e2e-test: ## Run E2E tests (PROFILE=envoy-ai-gateway by default)
 e2e-test: build-e2e
 	@$(LOG_TARGET)

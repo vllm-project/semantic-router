@@ -10,9 +10,10 @@ consent; this change only lets ARM64 hosts use the already supported path.
 - **Date and revisions:** 2026-10-22. Baseline `879121d17`; candidate
   `9128bf4d8`. Vela package `vllm-sr/Vela-2.0-0.3B` at
   `a3209a50dc3ebd7e3b7520440d8fba666000f4c4`.
-- **Host:** AWS Linux on ARM64, with cores 0-11 pinned by `taskset`,
-  `OMP_NUM_THREADS=12`, `OMP_WAIT_POLICY=PASSIVE` and device-backend
-  autoload disabled. Both sides ran in one process on the same host.
+- **Host and build:** AWS Linux on ARM64 (Neoverse-V1), PyTorch
+  `2.10.0+cpu` with oneDNN `3.7.1`. Both sides ran in one process on the
+  same host, with cores 0-11 pinned by `taskset`, `OMP_NUM_THREADS=12`,
+  `OMP_WAIT_POLICY=PASSIVE` and device-backend autoload disabled.
 - **Accuracy:** `tools/vela2_parity.py --reduced float32-packed` compared the
   packed merged path with the runtime's exact path on deterministic generated
   requests (seed 4668). Decisions are Choice label, Score arg-max, Noul above
@@ -31,8 +32,9 @@ consent; this change only lets ARM64 hosts use the already supported path.
 On the same host, the released engine and exact native runtime had no decision
 changes, rendering mismatches or span differences over eight generated
 requests. Their maximum answer difference was 0.258, above the CPU parity bar
-of 1e-4, so that pre-existing strict comparison failed. This ARM64 change does
-not claim to resolve that discrepancy.
+of 1e-4, so that pre-existing strict comparison failed. The packed-copy results
+below measure the additional difference from the exact native path on this
+build. They leave released-engine parity unresolved.
 
 The paired exact-path baseline over five rounds was:
 

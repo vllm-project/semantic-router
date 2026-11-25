@@ -14,7 +14,6 @@ func TestOfficialNestedUnsupportedFieldsFailWithTypedErrors(t *testing.T) {
 		format llmprotocol.WireFormat
 		body   string
 	}{
-		{"Chat message name", llmprotocol.OpenAIChatV1, `{"model":"m","messages":[{"role":"user","name":"alice","content":"hello"}]}`},
 		{"Chat cache breakpoint", llmprotocol.OpenAIChatV1, `{"model":"m","messages":[{"role":"user","content":[{"type":"text","text":"hello","prompt_cache_breakpoint":{"mode":"explicit"}}]}]}`},
 		{"Responses deferred tool", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","tools":[{"type":"function","name":"lookup","parameters":{"type":"object"},"defer_loading":true}]}`},
 		{"Responses reasoning mode", llmprotocol.OpenAIResponsesV1, `{"model":"m","input":"hello","reasoning":{"mode":"pro"}}`},
@@ -236,13 +235,23 @@ func decodeAnthropicToolsFixture(t *testing.T, body json.RawMessage) []anthropic
 	return tools
 }
 
-func TestCacheDirectiveOnUnsupportedChatBlockFailsExplicitly(t *testing.T) {
+func TestCacheDirectiveOnUnsupportedChatBlockDropsExplicitly(t *testing.T) {
 	engine := NewBuiltinEngine()
 	body := []byte(`{"model":"m","max_tokens":16,"messages":[{"role":"user","content":"hello"},{"role":"assistant","content":[{"type":"tool_use","id":"call-1","name":"lookup","input":{},"cache_control":{"type":"ephemeral"}}]}]}`)
-	_, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, body, nil)
-	var protocolError *llmprotocol.ProtocolError
-	if !errors.As(err, &protocolError) || protocolError.Category != llmprotocol.ErrorUnsupportedFeature {
-		t.Fatalf("unsupported Chat cache directive returned %T %v, want typed unsupported_feature", err, err)
+	result, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, body, nil)
+	if err != nil {
+		t.Fatalf("Chat dispatch rejected a tool_use cache directive: %v", err)
+	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Field != "cache_control" ||
+		result.Diagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("unsupported Chat cache directive was not dropped explicitly: %+v", result.Diagnostics)
+	}
+	var wire chatRequestWire
+	if err := json.Unmarshal(result.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.Messages) != 2 || len(wire.Messages[1].ToolCalls) != 1 {
+		t.Fatalf("Chat lost the tool call: %s", result.Body)
 	}
 }
 
@@ -558,10 +567,10 @@ func TestOfficialResponsesItemVariantsRejectCrossVariantFields(t *testing.T) {
 func TestOfficialUnsupportedResponsesToolDiscriminatorsAreTyped(t *testing.T) {
 	unsupported := fields(
 		"apply_patch", "code_interpreter", "computer", "computer_use_preview",
-		"file_search", "local_shell", "mcp", "namespace",
+		"file_search", "local_shell", "mcp",
 		"programmatic_tool_calling", "shell", "tool_search", "web_search", "web_search_preview",
 	)
-	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "custom", "image_generation"), unsupported)
+	assertClosedDiscriminatorInventory(t, "OpenAI Responses tool", 16, fields("function", "custom", "image_generation", "namespace"), unsupported)
 	engine := NewBuiltinEngine()
 	for _, toolType := range unsupported {
 		t.Run(toolType, func(t *testing.T) {

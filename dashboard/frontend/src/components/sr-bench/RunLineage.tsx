@@ -2,8 +2,8 @@ import { useState } from 'react'
 import BenchPagination from './BenchPagination'
 import { money, number } from './model'
 import type { Report } from './types'
-import { RunStatus } from './RunList'
-import styles from './SrBench.module.css'
+import { Notice, RunStatus, TableFrame } from './benchUi'
+import { benchTable } from './benchStyles'
 
 export default function RunLineage({ report }: { report: Report | null }) {
   const [page, setPage] = useState(0)
@@ -28,7 +28,11 @@ export default function RunLineage({ report }: { report: Report | null }) {
   const current = Math.min(page, Math.max(0, Math.ceil((children?.length ?? 0) / 10) - 1))
   if (!recovery && !children?.length) return null
   return (
-    <aside className={styles.notice}>
+    <Notice
+      tone="info"
+      as="aside"
+      className="[&_a]:font-medium [&_a]:text-primary hover:[&_a]:underline"
+    >
       <h3>Recovery lineage</h3>
       {recovery && (
         <>
@@ -55,33 +59,40 @@ export default function RunLineage({ report }: { report: Report | null }) {
         </>
       )}
       {!!children?.length && (
-        <div className={styles.tableScroll}>
-          <table>
-            <thead>
-              <tr>
-                <th>Child attempt</th>
-                <th>Status</th>
-                <th>Completed / own scope</th>
-                <th>Failures</th>
-              </tr>
-            </thead>
-            <tbody>
-              {children.slice(current * 10, current * 10 + 10).map((child) => (
-                <tr key={child.id}>
-                  <td>
-                    <a href={`?view=runs&run=${encodeURIComponent(child.id)}`}>{child.id}</a>
-                  </td>
-                  <td>
-                    <RunStatus status={child.status} />
-                  </td>
-                  <td>
-                    {number(child.progress.completed)} / {number(child.progress.total)}
-                  </td>
-                  <td>{number(child.progress.failed)}</td>
+        <div className="min-w-0">
+          <TableFrame className="my-2">
+            <table className={benchTable}>
+              <thead>
+                <tr>
+                  <th>Child attempt</th>
+                  <th>Status</th>
+                  <th>Completed / own scope</th>
+                  <th>Failures</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {children.slice(current * 10, current * 10 + 10).map((child) => (
+                  <tr key={child.id}>
+                    <td>
+                      <a
+                        className="font-mono"
+                        href={`?view=runs&run=${encodeURIComponent(child.id)}`}
+                      >
+                        {child.id}
+                      </a>
+                    </td>
+                    <td>
+                      <RunStatus status={child.status} />
+                    </td>
+                    <td>
+                      {number(child.progress.completed)} / {number(child.progress.total)}
+                    </td>
+                    <td>{number(child.progress.failed)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TableFrame>
           <BenchPagination
             label="Recovery attempts"
             total={children.length}
@@ -91,6 +102,6 @@ export default function RunLineage({ report }: { report: Report | null }) {
           />
         </div>
       )}
-    </aside>
+    </Notice>
   )
 }

@@ -63,7 +63,7 @@ class QualityWorkflowTests(unittest.TestCase):
         job = generated["generated"]
         check = step_with_command(job, "make config-schema-check")
         self.assertIn("api-docs-check docs-crd-check", check["run"])
-        self.assertEqual(parent["gate"]["if"], "always()")
+        self.assertEqual(parent["gate"]["if"], "${{ !cancelled() }}")
         self.assertIn("generated", parent["gate"]["needs"])
 
     def test_security_receipt_requires_both_scans_against_the_planned_source(self):

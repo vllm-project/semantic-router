@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -107,6 +109,12 @@ func TestOpenAIRequestsWithoutOutputLimitRemainValidForAnthropic(t *testing.T) {
 			}
 			if len(translated.Diagnostics) != 1 || translated.Diagnostics[0].Action != llmprotocol.DiagnosticGenerated {
 				t.Fatalf("diagnostics = %+v, want one generated max_tokens diagnostic", translated.Diagnostics)
+			}
+			// the header is the only place an operator sees the value and how to change it
+			reason := translated.Diagnostics[0].Reason
+			if !strings.Contains(reason, strconv.FormatInt(defaultAnthropicMaxOutputTokens, 10)) ||
+				!strings.Contains(reason, "request_params.default_max_tokens") {
+				t.Fatalf("reason = %q, want the sent value and the setting that changes it", reason)
 			}
 		})
 	}
@@ -276,12 +284,22 @@ func assertBufferedResponsePair(t *testing.T, engine *Engine, source, target llm
 	if err != nil {
 		t.Fatalf("target response decode error = %v, body=%s", err, translated.Body)
 	}
-	if decoded.ID != "response_1" || len(decoded.Output) == 0 || decoded.Output[0].Content[0].Text != "hello" {
+	if decoded.ID != matrixReplyID(source, target, anthropicMessageIDPrefix, "response_1") ||
+		len(decoded.Output) == 0 || decoded.Output[0].Content[0].Text != "hello" {
 		t.Fatalf("translated response = %+v", decoded)
 	}
 	if decoded.Usage.State != llmprotocol.UsageAvailable || decoded.Usage.InputTotal.Value == nil || *decoded.Usage.InputTotal.Value != 2 {
 		t.Fatalf("translated usage = %+v", decoded.Usage)
 	}
+}
+
+// matrixReplyID is the identifier a target client receives for one the source
+// backend assigned.
+func matrixReplyID(source, target llmprotocol.WireFormat, prefix, id string) string {
+	if target != llmprotocol.AnthropicMessagesV1 {
+		return id
+	}
+	return anthropicReplyID(source, prefix, id)
 }
 
 func forEachBuiltinFormatPair(
@@ -433,7 +451,7 @@ func assertStreamingToolPair(t *testing.T, engine *Engine, source, target llmpro
 	stream := mustNewMatrixStream(t, engine, source, target)
 	events, encoded := pushChunkedFixture(t, stream, toolStreamFixture(source), 13)
 	assertStreamToolCall(t, events)
-	assertTargetToolStreamDecodes(t, engine, target, encoded.Bytes())
+	assertTargetToolStreamDecodes(t, engine, source, target, encoded.Bytes())
 }
 
 func mustNewMatrixStream(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat) *StreamEngine {
@@ -506,7 +524,7 @@ func assertTargetStreamDecodes(t *testing.T, engine *Engine, target llmprotocol.
 	}
 }
 
-func assertTargetToolStreamDecodes(t *testing.T, engine *Engine, target llmprotocol.WireFormat, encoded []byte) {
+func assertTargetToolStreamDecodes(t *testing.T, engine *Engine, source, target llmprotocol.WireFormat, encoded []byte) {
 	t.Helper()
 	verify := mustNewMatrixStream(t, engine, target, target)
 	_, events, _, err := verify.Push(encoded)
@@ -517,5 +535,5 @@ func assertTargetToolStreamDecodes(t *testing.T, engine *Engine, target llmproto
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertStreamToolCall(t, append(events, finalEvents...))
+	assertStreamToolCallID(t, append(events, finalEvents...), matrixReplyID(source, target, anthropicToolUseIDPrefix, "call_1"))
 }

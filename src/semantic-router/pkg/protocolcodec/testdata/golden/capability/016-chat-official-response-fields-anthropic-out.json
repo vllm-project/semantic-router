@@ -12,7 +12,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -42,6 +42,100 @@
       }
     },
     {
+      "name": "citations",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_2234400da79a73f647f83e89",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "citations",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
+      "name": "search_results",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_2234400da79a73f647f83e89",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "search_results",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "created",
       "outcome": {
         "status": "ok",
@@ -53,7 +147,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -94,7 +188,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -141,7 +235,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -188,7 +282,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -239,7 +333,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_2",
+          "id": "msg_ee6240da2a2b1b8fd4aa712d",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -280,7 +374,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -321,7 +415,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -368,7 +462,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -409,7 +503,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -450,7 +544,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -497,7 +591,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -538,7 +632,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -579,7 +673,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -620,7 +714,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -661,7 +755,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -702,7 +796,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -749,7 +843,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -796,7 +890,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -843,7 +937,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -890,7 +984,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -937,7 +1031,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -978,7 +1072,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1008,6 +1102,53 @@
       }
     },
     {
+      "name": "time_info",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "container": null,
+          "content": [
+            {
+              "text": "done",
+              "type": "text"
+            }
+          ],
+          "id": "msg_2234400da79a73f647f83e89",
+          "model": "routed-model",
+          "role": "assistant",
+          "stop_details": null,
+          "stop_reason": "end_turn",
+          "stop_sequence": null,
+          "type": "message",
+          "usage": {
+            "cache_creation": {
+              "ephemeral_1h_input_tokens": 0,
+              "ephemeral_5m_input_tokens": 0
+            },
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "inference_geo": "global",
+            "input_tokens": 2,
+            "output_tokens": 1,
+            "output_tokens_details": {
+              "thinking_tokens": 0
+            },
+            "server_tool_use": {
+              "web_fetch_requests": 0,
+              "web_search_requests": 0
+            },
+            "service_tier": "standard"
+          }
+        },
+        "diagnostics": [
+          {
+            "field": "time_info",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "usage",
       "outcome": {
         "status": "ok",
@@ -1019,7 +1160,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1066,7 +1207,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,
@@ -1107,7 +1248,7 @@
               "type": "text"
             }
           ],
-          "id": "chatcmpl_1",
+          "id": "msg_2234400da79a73f647f83e89",
           "model": "routed-model",
           "role": "assistant",
           "stop_details": null,

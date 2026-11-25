@@ -2,7 +2,11 @@
 
 package cache
 
-import "math/rand/v2"
+import (
+	"cmp"
+	"math/rand/v2"
+	"slices"
+)
 
 // searchResult holds a candidate with its similarity score.
 type searchResult struct {
@@ -62,8 +66,85 @@ func newHybridNode(entryIndex, level int) *HNSWNode {
 }
 
 func (h *HybridCache) registerHybridNode(entryIndex int, node *HNSWNode) {
-	h.hnswIndex.nodes = append(h.hnswIndex.nodes, node)
+	// Entries fill slots in order, so nodes[i] is entry i's node, and an
+	// evicted entry's slot is reused in place.
+	if entryIndex < len(h.hnswIndex.nodes) {
+		h.hnswIndex.nodes[entryIndex] = node
+	} else {
+		h.hnswIndex.nodes = append(h.hnswIndex.nodes, node)
+	}
 	h.hnswIndex.nodeIndex[entryIndex] = node
+}
+
+// removeNodeHybrid unlinks an entry's node from the graph and relinks its
+// former neighbors. Links are always added in both directions and never pruned,
+// so the node's own neighbor lists name every node that links back to it.
+func (h *HybridCache) removeNodeHybrid(entryIndex int) {
+	node := h.hnswIndex.nodeIndex[entryIndex]
+	if node == nil {
+		return
+	}
+	delete(h.hnswIndex.nodeIndex, entryIndex)
+	for layer, neighbors := range node.neighbors {
+		for _, neighborID := range neighbors {
+			if neighborNode := h.hnswIndex.nodeIndex[neighborID]; neighborNode != nil {
+				neighborNode.neighbors[layer] = slices.DeleteFunc(neighborNode.neighbors[layer], func(id int) bool {
+					return id == entryIndex
+				})
+			}
+		}
+		h.repairHybridNeighbors(layer, neighbors)
+	}
+
+	if h.hnswIndex.entryPoint == entryIndex {
+		h.replaceHybridEntryPoint()
+	}
+}
+
+// repairHybridNeighbors links each former neighbor of an evicted node to the
+// closest other former neighbors until it has twice the layer's link limit, the
+// degree nodes average when no entry is evicted. Without this repair the graph
+// loses about half its links as the index turns over, and lookups miss entries
+// a freshly built graph finds.
+func (h *HybridCache) repairHybridNeighbors(layer int, formerNeighbors []int) {
+	target := 2 * h.hybridNeighborLimit(layer)
+	for _, a := range formerNeighbors {
+		nodeA := h.hnswIndex.nodeIndex[a]
+		if nodeA == nil || len(nodeA.neighbors[layer]) >= target {
+			continue
+		}
+		candidates := make([]searchResult, 0, len(formerNeighbors))
+		for _, b := range formerNeighbors {
+			if b == a || h.hnswIndex.nodeIndex[b] == nil || slices.Contains(nodeA.neighbors[layer], b) {
+				continue
+			}
+			candidates = append(candidates, searchResult{index: b, similarity: dotProduct(h.embeddings[a], h.embeddings[b])})
+		}
+		slices.SortFunc(candidates, func(x, y searchResult) int {
+			return cmp.Compare(y.similarity, x.similarity)
+		})
+		for _, candidate := range candidates[:min(len(candidates), target-len(nodeA.neighbors[layer]))] {
+			nodeA.neighbors[layer] = append(nodeA.neighbors[layer], candidate.index)
+			nodeB := h.hnswIndex.nodeIndex[candidate.index]
+			nodeB.neighbors[layer] = append(nodeB.neighbors[layer], a)
+		}
+	}
+}
+
+// replaceHybridEntryPoint makes a node on the highest remaining layer the
+// entry point, or empties the graph if no node is left.
+func (h *HybridCache) replaceHybridEntryPoint() {
+	h.hnswIndex.entryPoint = -1
+	h.hnswIndex.maxLayer = -1
+	for _, node := range h.hnswIndex.nodes {
+		if h.hnswIndex.nodeIndex[node.entryIndex] != node {
+			continue
+		}
+		if node.maxLayer > h.hnswIndex.maxLayer {
+			h.hnswIndex.entryPoint = node.entryIndex
+			h.hnswIndex.maxLayer = node.maxLayer
+		}
+	}
 }
 
 func (h *HybridCache) initializeHybridEntryPoint(entryIndex, level int) bool {

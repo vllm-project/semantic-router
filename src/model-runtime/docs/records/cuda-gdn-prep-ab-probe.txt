@@ -1,0 +1,80 @@
+"""Offline A/B probe using Runtime and released forwards; no model-package code."""
+import argparse
+import importlib.metadata as metadata
+import json
+import statistics
+import sys
+import time
+from pathlib import Path
+import torch
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument('variant')
+    parser.add_argument('model')
+    parser.add_argument('--bench', action='store_true')
+    args=parser.parse_args()
+    sys.path.insert(0,str(Path(__import__('vllm_srun').__file__).parent.parent/'tools'))
+    import many_questions
+    from vllm_srun.config import ModelConfig, ServeConfig
+    from vllm_srun.runtime import Runtime
+    from vllm_srun.plugins.decisions import SURFACE
+
+    # Identical test-only workaround for #5298 in both variants, as in prior A evidence.
+    real_mem_get_info=torch.cuda.mem_get_info
+    def unified_free(device=None):
+        free,total=real_mem_get_info(device)
+        info={line.split(':')[0]:int(line.split()[1])*1024 for line in Path('/proc/meminfo').read_text().splitlines()}
+        return max(free,min(info['MemAvailable'],total)),total
+    torch.cuda.mem_get_info=unified_free
+
+    cache=Path('/cache/srun')
+    snapshots=list((cache/('models--vllm-sr--'+args.model)/'snapshots').iterdir())
+    assert len(snapshots)==1, snapshots
+    revision=snapshots[0].name
+    runtime=Runtime(ServeConfig(models=(ModelConfig(model='vllm-sr/'+args.model,revision=revision,device='cuda:0'),),cache_dir=str(cache),offline=True))
+    result={'variant':args.variant,'model':args.model,'revision':revision,'stack':{x:metadata.version(x) for x in ['torch','triton','fla-core','nvidia-cublas-cu12']},'workaround':'#5298 MemAvailable placement only','warmup':5,'repetitions':30,'timings':{},'goldens':[]}
+    output=Path('/evidence')/f'{args.model}.{args.variant}.json'
+    def save():
+        output.write_text(json.dumps(result,indent=2)+'\n')
+    try:
+        started=time.monotonic()
+        runtime.load()
+        served=runtime.lookup(None)
+        engine=served.model.engine_model
+        result.update(load_seconds=time.monotonic()-started,model_sha256=served.model.info.model_sha256,readiness=served.health.golden.describe(),fast=engine.fast,kernels=engine.kernels.describe(),approximate=engine.approximate_kernels)
+        for golden in served.family.golden(served.package):
+            surface=golden['surface']
+            values=served.golden_surface(surface,golden['body'])
+            again=served.golden_surface(surface,golden['body'])
+            refs={}
+            for key,expected in golden.get('expected',{}).items():
+                counts=served.model.golden_compare(surface,values,expected,0.02)
+                refs[key]={'checked':counts[0],'matched':counts[1],'pass':counts[0]>0 and counts[0]==counts[1]} if counts else {'pass':False}
+            result['goldens'].append({'surface':surface,'values':values,'deterministic':values==again,'references_at_gpu_tolerance':refs})
+        save()
+        print(json.dumps({'event':'loaded','variant':args.variant,'model':args.model,'fast':engine.fast,'readiness':result['readiness']}),flush=True)
+        if args.bench:
+            for count in (1,16,64):
+                body=many_questions.request(count)
+                answers=[served.answer_alone(SURFACE,body) for _ in range(5)]
+                times=[]
+                for sample in range(30):
+                    torch.cuda.synchronize()
+                    start=time.perf_counter()
+                    answer=served.answer_alone(SURFACE,body)
+                    torch.cuda.synchronize()
+                    times.append((time.perf_counter()-start)*1000)
+                if (sample+1)%10==0:
+                    print(json.dumps({'event':'samples','model':args.model,'variant':args.variant,'count':count,'completed':sample+1}),flush=True)
+                result['timings'][str(count)]={'p50_ms':statistics.median(times),'samples_ms':times,'answers':answer,'warmup_stable':all(a==answers[0] for a in answers)}
+                save()
+                print(json.dumps({'event':'timing','model':args.model,'variant':args.variant,'count':count,'p50_ms':statistics.median(times)}),flush=True)
+        result['complete']=True
+        save()
+    finally:
+        runtime.stop()
+
+
+if __name__ == "__main__":
+    main()

@@ -14,7 +14,7 @@ import (
 // Lists memories for a user with optional filtering.
 // Returns up to `limit` most recent memories sorted by created_at descending.
 //
-// User identity: x-authz-user-id header (trusted) or user_id query param (dev fallback)
+// User identity: the configured user id header (trusted, x-authz-user-id by default) or user_id query param (dev fallback)
 //
 // Query parameters:
 //   - type: filter by memory type (semantic, procedural, episodic)

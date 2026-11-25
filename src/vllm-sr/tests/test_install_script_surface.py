@@ -192,37 +192,46 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "vllm-sr route preview" in agent_docs
     assert "vllm-sr route probe" in agent_docs
 
+    install = (
+        VLLM_SR_AGENT_SKILL_PATH.parent / "references" / "deployment-loop.md"
+    ).read_text(encoding="utf-8")
     assert "name: vllm-sr" in skill
-    assert "--channel stable --mode cli --runtime skip --no-launch" in skill
-    assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
+    assert "--channel stable --mode cli --runtime skip --no-launch" in install
+    assert 'export PATH="$HOME/.local/bin:$PATH"' in install
 
 
 def test_agent_skill_installs_a_current_cli_and_verifies_a_routed_answer() -> None:
     skill = VLLM_SR_AGENT_SKILL_PATH.read_text(encoding="utf-8")
     references = VLLM_SR_AGENT_SKILL_PATH.parent / "references"
+    # The skill routes a first install to its deployment reference.
+    install = (references / "deployment-loop.md").read_text(encoding="utf-8")
     agent_docs = " ".join(AGENT_INSTALL_DOC_PATH.read_text(encoding="utf-8").split())
 
-    # A stable release that predates the current serve contract falls back to
-    # the dev channel, so neither channel is pinned.
-    assert "grep -q -- '--data-parallel-size'" in skill
-    assert "--channel dev --mode cli --runtime skip --no-launch" in skill
+    assert "references/deployment-loop.md" in skill
+    # A stable release that predates the v0.5 configuration falls back to the
+    # dev channel, so neither channel is pinned.
+    assert '["config_version"]' in install
+    assert "--channel dev --mode cli --runtime skip --no-launch" in install
     assert "python3 -m ensurepip --version" in skill
-    assert "--platform rocm" in skill
+    assert "--platform rocm" in install
     # A complete config, bound to loopback; bare serve waits for the Dashboard.
-    assert "address: 127.0.0.1" in skill
+    assert "address: 127.0.0.1" in install
     assert "Never run `vllm-sr serve` without a complete `--config`" in skill
-    assert "vllm-sr serve --config config.yaml" in skill
-    # Verification names its success criteria, and the probe caps its answer.
+    assert "vllm-sr serve --config config.yaml" in install
+    # Verification names its success criteria, including the decision model's
+    # readiness and its route, and the probe caps its answer.
     for evidence in (
         "vllm-sr status",
         "x-vsr-selected-decision: code-route",
+        "/api/v1/inventory/model-runtime",
+        "cs-route",
         "vllm-sr route preview",
         "--max-completion-tokens 256",
         "vllm-sr instance models",
         "--device-ids 0",
         "-e --platform rocm",
     ):
-        assert evidence in skill
+        assert evidence in install
     assert "through Envoy" not in skill
     assert "through Envoy" not in (references / "route-verification.md").read_text(
         encoding="utf-8"

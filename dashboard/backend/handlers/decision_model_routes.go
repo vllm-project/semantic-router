@@ -34,13 +34,13 @@ func DecisionModelRoutesHandler(upstream string, providers ...routerauth.Credent
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodPost {
 			decisionModelError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Use GET to discover routes or POST to run a native route")
 			return
 		}
 		var body []byte
 		ctx := r.Context()
-		if r.Method == http.MethodGet {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
 			var cancel context.CancelFunc
 			ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
@@ -65,7 +65,13 @@ func DecisionModelRoutesHandler(upstream string, providers ...routerauth.Credent
 				return
 			}
 		}
-		response, data, err := transport.request(ctx, r.Method, decisionModelRoutesPath, body)
+		// Discovery responses are validated as JSON, so fetch the GET representation
+		// for HEAD too; net/http suppresses the downstream response body.
+		method := r.Method
+		if method == http.MethodHead {
+			method = http.MethodGet
+		}
+		response, data, err := transport.request(ctx, method, decisionModelRoutesPath, body)
 		if err != nil {
 			decisionModelTransportError(w, err)
 			return

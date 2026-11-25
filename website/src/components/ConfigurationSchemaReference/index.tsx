@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 
-import routerConfigSchema from '../../../../src/semantic-router/pkg/configschema/router-config-v0.3.schema.json'
+import routerConfigSchema from '../../../../src/semantic-router/pkg/configschema/router-config-v0.5.schema.json'
 import styles from './styles.module.css'
 
 interface SchemaNode {
@@ -198,7 +198,7 @@ export default function ConfigurationSchemaReference() {
           <strong>{document['x-vllm-sr'].contract_version}</strong>
         </div>
         <a
-          href="https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/configschema/router-config-v0.3.schema.json"
+          href="https://github.com/vllm-project/semantic-router/blob/main/src/semantic-router/pkg/configschema/router-config-v0.5.schema.json"
           target="_blank"
           rel="noreferrer"
         >

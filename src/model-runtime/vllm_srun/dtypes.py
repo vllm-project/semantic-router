@@ -1,19 +1,55 @@
 """``--dtype``: the precision a backbone computes in.
 
-``auto`` runs the precision the model was published in: its family's
-``DtypePolicy``, with the kernel variants of its released runtime and the
-faster copies and kernels its records consent to. Any other value that names
-the published precision on the device class is ``auto`` too. Otherwise every
-backbone and tower weight is held and computed in that dtype, with the
-reference kernels: an explicit choice of numerics, which the golden
-references (recorded at the published precision) no longer check.
+``auto`` runs its family's ``DtypePolicy``: the precision the model was
+published in (Decision 3.0 computes in FP32 on CPUs instead, where its BF16
+answers depend on the CPU's kernels, except on a CPU class with its own BF16
+references: ``on_host``), with the kernel variants of its released runtime and
+the faster copies and kernels its records consent to. Any other
+value that names that precision on the device class is ``auto`` too.
+Otherwise every backbone and tower weight is held and computed in that dtype,
+with the reference kernels: an explicit choice of numerics, which only golden
+references recorded at that dtype check (``readiness.qualified``: Decision
+3.0's BF16 on CPUs).
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
 
-from .plugins.base import DtypePolicy, ModelSpec
+from .plugins.base import Accelerator, DeviceInfo, DtypePolicy, ModelSpec
+
+
+def on_host(
+    spec: ModelSpec, dtype: str, accelerator: Accelerator, device: DeviceInfo
+) -> ModelSpec:
+    """``spec`` as ``--dtype dtype`` runs it on ``device``.
+
+    On a CPU that computes BF16 natively and whose golden reference key
+    (``Accelerator.golden_reference``) has a BF16 reference for every golden
+    request (``DtypePolicy.cpu_bf16_references``), ``auto`` holds BF16 as
+    ``--dtype bfloat16`` does, with no reduced copy or approximate CPU kernel:
+    those consents rest on records at the policy's own precision. Elsewhere,
+    and at any explicit ``--dtype``, ``spec`` is unchanged.
+    """
+    policy = spec.dtype
+    if (
+        dtype != "auto"
+        or not device.bf16
+        or policy.cpu_weights == "bfloat16"
+        or not policy.cpu_bf16_references
+        or accelerator.torch_device(device).type != "cpu"
+        or accelerator.golden_reference(device) not in policy.cpu_bf16_references
+    ):
+        return spec
+    return replace(
+        spec,
+        dtype=replace(
+            policy,
+            cpu_weights="bfloat16",
+            reduced_cpu=None,
+            approximate_cpu_kernels=False,
+        ),
+    )
 
 
 def published(policy: DtypePolicy, gpu: bool) -> str:

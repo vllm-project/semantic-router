@@ -18,8 +18,9 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 
 import manual_ci  # noqa: E402
+import pr_ci_status  # noqa: E402
 from manual_ci_feedback import feedback_for_event, warning  # noqa: E402
-from test_manual_ci import REPO, TRUSTED, FakeGitHub  # noqa: E402
+from test_manual_ci import HEAD, REPO, TRUSTED, FakeGitHub  # noqa: E402
 
 
 class FeedbackGitHub(FakeGitHub):
@@ -32,6 +33,7 @@ class FeedbackGitHub(FakeGitHub):
         self.next_reaction_id = 1000
         self.deleted_reactions = []
         self.feedback_error = False
+        self.feedback_transport = None
         self.lookup_error = False
         self.trigger_error = None
         self.delete_error = False
@@ -59,6 +61,11 @@ class FeedbackGitHub(FakeGitHub):
         return super().request(endpoint, method=method)
 
     def write(self, endpoint, payload, *, method="POST"):
+        if endpoint == f"repos/{REPO}/statuses/{HEAD}":
+            self.timeline.append("qualification pending")
+            return super().write(endpoint, payload)
+        if self.feedback_transport is not None:
+            return self.feedback_transport(endpoint, payload, method=method)
         if self.feedback_error:
             raise manual_ci.ManualCIError("SECRET feedback error")
         self.writes.append((endpoint, copy.deepcopy(payload), method))
@@ -118,12 +125,33 @@ class ManualCIFeedbackTests(unittest.TestCase):
             "comment": copy.deepcopy(self.client.comment),
         }
 
+    def test_unreadable_planned_merge_feedback_keeps_qualification_blocked(self):
+        self.client.pull["merge_commit_sha"] = "e" * 40
+        original = self.client.request
+
+        def request(endpoint, **kwargs):
+            if endpoint.endswith("/git/commits/" + "c" * 40):
+                raise manual_ci.ManualCIError("SECRET object response", http_status=404)
+            return original(endpoint, **kwargs)
+
+        self.client.request = request
+        with self.assertRaises(manual_ci.ManualCIError):
+            manual_ci.authorize_with_feedback(self.client, self.event)
+        body = self.client.comments[-1]["body"]
+        self.assertIn("planned merge", body)
+        self.assertIn("cannot be verified", body)
+        self.assertNotIn("SECRET", body)
+        self.assertNotIn("rocket", self.client.reactions)
+        self.assertEqual(self.client.posts, [])
+
     def test_valid_request_is_received_and_rocket_follows_actual_rerun(self):
         record = manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(self.client.reactions, {"eyes"})
         self.assertEqual(self.client.posts, [])
         manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.timeline, ["eyes", "rerun", "rocket"])
+        self.assertEqual(
+            self.client.timeline, ["eyes", "qualification pending", "rerun", "rocket"]
+        )
         self.assertEqual(self.client.comments, [])
 
     def test_permission_denial_explains_who_can_request_without_authorizing(self):
@@ -199,6 +227,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
 
     def test_stale_merge_reports_branch_update_instead_of_only_waiting_for_plan(self):
         self.client.base_ref["object"]["sha"] = "f" * 40
+        self.client.merge_ancestor = "unrelated" * 4
         with self.assertRaises(manual_ci.ManualCIError) as error:
             manual_ci.authorize_with_feedback(self.client, self.event)
         self.assertEqual(error.exception.reason, "revision")
@@ -229,14 +258,17 @@ class ManualCIFeedbackTests(unittest.TestCase):
         with contextlib.redirect_stdout(output):
             record = manual_ci.authorize_with_feedback(self.client, self.event)
             manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertEqual(
+            self.client.posts,
+            [f"repos/{REPO}/statuses/{HEAD}", f"repos/{REPO}/actions/runs/123/rerun"],
+        )
         self.assertIn("::warning::", output.getvalue())
         self.assertNotIn("SECRET", output.getvalue())
 
     def test_http_403_diagnostic_does_not_expose_api_content_or_change_authorization(
         self,
     ):
-        self.client.write = manual_ci.GitHubClient().write
+        self.client.feedback_transport = manual_ci.GitHubClient().write
         output = io.StringIO()
         result = subprocess.CompletedProcess(
             args=[],
@@ -250,13 +282,16 @@ class ManualCIFeedbackTests(unittest.TestCase):
         ):
             record = manual_ci.authorize_with_feedback(self.client, self.event)
             manual_ci.rerun_with_feedback(self.client, record, self.event)
-        self.assertEqual(self.client.posts, [f"repos/{REPO}/actions/runs/123/rerun"])
+        self.assertEqual(
+            self.client.posts,
+            [f"repos/{REPO}/statuses/{HEAD}", f"repos/{REPO}/actions/runs/123/rerun"],
+        )
         self.assertIn("(reaction; HTTP 403)", output.getvalue())
         self.assertNotIn("SECRET", output.getvalue())
         self.assertNotIn(REPO, output.getvalue())
 
     def test_malformed_success_response_has_no_public_payload_or_invented_status(self):
-        self.client.write = manual_ci.GitHubClient().write
+        self.client.feedback_transport = manual_ci.GitHubClient().write
         result = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="SECRET malformed JSON", stderr=""
         )
@@ -278,6 +313,13 @@ class ManualCIFeedbackTests(unittest.TestCase):
             ("SECRET (HTTP 4030)", None),
             ("SECRET (HTTP 999)", None),
             ("SECRET (HTTP 403)\nSECRET trailing payload", None),
+            ("gh: HTTP 503\n", 503),
+            ("gh: HTTP 404", 404),
+            ("SECRET gh: HTTP 503\n", None),
+            ("gh: HTTP 503\nSECRET trailing payload", None),
+            ("gh: SECRET (SECRET message)\n", None),
+            ("gh: SECRET first\nSECRET second\n", None),
+            ("unexpected end of JSON input\n", None),
         ):
             for raw in (False, True):
                 with self.subTest(stderr=stderr, raw=raw):
@@ -290,6 +332,7 @@ class ManualCIFeedbackTests(unittest.TestCase):
                     client = manual_ci.GitHubClient()
                     with (
                         patch("manual_ci.subprocess.run", return_value=result),
+                        patch("manual_ci.time.sleep"),
                         self.assertRaises(manual_ci.ManualCIError) as error,
                     ):
                         if raw:
@@ -423,7 +466,10 @@ class ManualCIFeedbackTests(unittest.TestCase):
                     ["manual_ci.py", "rerun", "--authorization", str(authorization)],
                 ):
                     self.assertEqual(manual_ci.main(), 0)
-                self.assertEqual(self.client.timeline, ["eyes", "rerun", "rocket"])
+                self.assertEqual(
+                    self.client.timeline,
+                    ["eyes", "qualification pending", "rerun", "rocket"],
+                )
 
     def test_feedback_never_edits_another_users_marker_or_another_command(self):
         original = [
@@ -488,6 +534,89 @@ class ManualCIFeedbackTests(unittest.TestCase):
                 self.client.feedback_error = True
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(manual_ci.main(), 0)
+
+    def test_transient_api_failures_are_waited_out_within_one_budget(self):
+        def gh(stderr="", returncode=1):
+            return subprocess.CompletedProcess(
+                args=[], returncode=returncode, stdout="{}", stderr=stderr
+            )
+
+        ok = gh(returncode=0)
+        limited = gh("gh: SECRET API rate limit exceeded for installation (HTTP 403)\n")
+        throttled = gh("gh: SECRET API rate limit exceeded (HTTP 429)\n")
+        server = gh("gh: SECRET bad gateway (HTTP 502)\n")
+        missing = gh("gh: SECRET not found (HTTP 404)\n")
+        bare_server = gh("gh: HTTP 503\n")
+        bare_missing = gh("gh: HTTP 404\n")
+        timeout = subprocess.TimeoutExpired("SECRET command", timeout=60)
+
+        def read(client):
+            return client.raw("SECRET endpoint")
+
+        def rerun(client):
+            return client.raw("SECRET endpoint", method="POST")
+
+        def write(client):
+            return client.write("SECRET endpoint", {"body": "SECRET"})
+
+        def publish(_client):
+            return pr_ci_status.StatusClient().write(
+                "SECRET endpoint", {"body": "SECRET"}
+            )
+
+        for name, call, outcomes, sleeps, failure in (
+            ("read rate limit", read, [limited, ok], [5], None),
+            ("read 5xx", read, [server, ok], [5], None),
+            ("read timeout", read, [timeout, ok], [5], None),
+            (
+                "read 404",
+                read,
+                [missing],
+                [],
+                "(HTTP 404); check workflow permissions.",
+            ),
+            ("lasting rate limit", read, [limited] * 4, [5, 15, 45], "rate limited"),
+            ("rerun 5xx may have landed", rerun, [server], [], "(HTTP 502)."),
+            ("write 5xx may have landed", write, [server], [], "(HTTP 502)."),
+            ("write rate limit", write, [throttled, ok], [5], None),
+            ("bare 503 read", read, [bare_server, ok], [5], None),
+            ("bare 503 rerun", rerun, [bare_server], [], "(HTTP 503)."),
+            ("bare 503 write", write, [bare_server], [], "(HTTP 503)."),
+            (
+                "bare 404 read",
+                read,
+                [bare_missing],
+                [],
+                "(HTTP 404); check workflow permissions.",
+            ),
+            ("status publish rate limit", publish, [throttled, ok], [5], None),
+        ):
+            with self.subTest(name=name):
+                client = manual_ci.GitHubClient()
+                with (
+                    patch("manual_ci.subprocess.run", side_effect=outcomes) as run,
+                    patch("manual_ci.time.sleep") as sleep,
+                ):
+                    if failure:
+                        with self.assertRaises(manual_ci.ManualCIError) as error:
+                            call(client)
+                        self.assertIn(failure, str(error.exception))
+                        self.assertNotIn("SECRET", str(error.exception))
+                    else:
+                        call(client)
+                self.assertEqual(run.call_count, len(outcomes))
+                self.assertEqual([c.args[0] for c in sleep.call_args_list], sleeps)
+
+        client = manual_ci.GitHubClient()
+        client.retry_budget = 10
+        with (
+            patch("manual_ci.subprocess.run", side_effect=[limited] * 4) as run,
+            patch("manual_ci.time.sleep") as sleep,
+            self.assertRaises(manual_ci.ManualCIError),
+        ):
+            read(client)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual([c.args[0] for c in sleep.call_args_list], [5])
 
 
 if __name__ == "__main__":

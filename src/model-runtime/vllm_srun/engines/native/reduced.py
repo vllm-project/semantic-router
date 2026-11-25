@@ -93,11 +93,8 @@ def unavailable(
         return (
             "this CPU computes BF16 without native instructions (AVX-512 BF16 or AMX)"
         )
-    if kind == "float32-packed" and not onednn.available():
-        return (
-            "oneDNN's packed linear needs an x86 or ARM64 CPU and a PyTorch "
-            "build with oneDNN"
-        )
+    if kind == "float32-packed":
+        return onednn.unavailable_reason()
     if kind == "int8" and "fbgemm" not in torch.backends.quantized.supported_engines:
         return "this PyTorch build has no fbgemm"
     return None

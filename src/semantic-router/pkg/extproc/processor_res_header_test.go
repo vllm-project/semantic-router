@@ -2,11 +2,13 @@ package extproc
 
 import (
 	"testing"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
@@ -93,8 +95,8 @@ func TestHandleResponseHeadersUsesResponseAPIStreamRequestFallback(t *testing.T)
 	if !ctx.IsStreamingResponse {
 		t.Fatal("expected stream:true Responses API request to force streaming response mode")
 	}
-	if response.ModeOverride == nil || response.ModeOverride.ResponseBodyMode != http_ext.ProcessingMode_STREAMED {
-		t.Fatalf("expected streamed mode override, got %#v", response.ModeOverride)
+	if response.ModeOverride != nil && response.ModeOverride.ResponseBodyMode == http_ext.ProcessingMode_STREAMED {
+		t.Fatalf("a provider body without an SSE content-type must be read whole, got %#v", response.ModeOverride)
 	}
 
 	mutation := response.GetResponseHeaders().Response.GetHeaderMutation()
@@ -181,6 +183,41 @@ func TestHandleResponseHeadersCapturesUpstreamStatus(t *testing.T) {
 		if ctx.UpstreamStatusCode != want {
 			t.Fatalf("status %s: ctx.UpstreamStatusCode = %d, want %d", status, ctx.UpstreamStatusCode, want)
 		}
+	}
+}
+
+// A failed response says nothing about how fast its model answers. Only a
+// successful one is the model's time to first response, which latency-aware
+// selection compares, so a model that fails at once must not look fastest.
+func TestHandleResponseHeadersRecordsTTFTOnlyForSuccess(t *testing.T) {
+	respond := func(model, status string) *RequestContext {
+		ctx := &RequestContext{RequestModel: model, ProcessingStartTime: time.Now().Add(-50 * time.Millisecond)}
+		_, err := (&OpenAIRouter{}).handleResponseHeaders(&ext_proc.ProcessingRequest_ResponseHeaders{
+			ResponseHeaders: &ext_proc.HttpHeaders{Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: ":status", Value: status},
+				{Key: "content-type", Value: "application/json"},
+			}}},
+		}, ctx)
+		if err != nil {
+			t.Fatalf("handleResponseHeaders(%s) failed: %v", status, err)
+		}
+		return ctx
+	}
+
+	for _, status := range []string{"429", "500", "503"} {
+		model := "ttft-failed-" + status
+		if ctx := respond(model, status); ctx.TTFTRecorded || ctx.TTFTSeconds != 0 {
+			t.Fatalf("status %s recorded as time to first token: %v", status, ctx.TTFTSeconds)
+		}
+		if ttft, ok := latency.GetTTFTPercentile(model, 90); ok {
+			t.Fatalf("status %s fed selection a TTFT of %.3fs", status, ttft)
+		}
+	}
+	if ctx := respond("ttft-served", "200"); !ctx.TTFTRecorded {
+		t.Fatal("a successful response must record its time to first token")
+	}
+	if _, ok := latency.GetTTFTPercentile("ttft-served", 90); !ok {
+		t.Fatal("a successful response must feed selection its TTFT")
 	}
 }
 

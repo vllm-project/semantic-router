@@ -13,8 +13,6 @@ func TestRegistry_ConcurrentReassignmentRaces(t *testing.T) {
 	const iterations = 2000
 	selCtx := &SelectionContext{
 		CandidateModels: createCandidateModels("m1"),
-		QualityWeight:   0.5,
-		CostWeight:      0.5,
 	}
 
 	var wg sync.WaitGroup

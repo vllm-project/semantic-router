@@ -29,13 +29,20 @@ BUILT_IN_MODEL_ASSETS = (
 
 
 def test_dashboard_dockerfile_uses_glibc_builder_for_cgo_backend() -> None:
+    """The backend links go-sqlite3's C code, so its builder is a glibc image
+    with a C toolchain, whichever platform it runs on; the cross compilers a
+    build for the other architecture adds are run in
+    tools/ci/tests/test_docker_cross_compilation.py."""
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder"
-        in content
+    builder = next(
+        line
+        for line in content.splitlines()
+        if line.startswith("FROM ") and line.endswith(" AS backend-builder")
     )
-    assert "apt_get_install_with_retry build-essential" in content
+    assert "library/golang:1.25-bookworm" in builder
+    assert 'packages="build-essential"' in content
+    assert "apt_get_install_with_retry $packages" in content
 
 
 def test_dashboard_dockerfile_retries_runtime_apk_installs() -> None:
@@ -238,7 +245,7 @@ def test_dashboard_permission_helper_shares_the_recipe_store_with_the_cli_group(
     object_dir = store / "objects" / "sha256" / ("0" * 64)
     object_dir.mkdir(parents=True, mode=0o700)
     config = object_dir / "config.yaml"
-    config.write_text("version: v0.3\n", encoding="utf-8")
+    config.write_text("version: v0.5\n", encoding="utf-8")
     config.chmod(0o600)
     pointer = store / "active.json"
     pointer.write_text("{}", encoding="utf-8")

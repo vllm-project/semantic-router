@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 )
@@ -35,15 +37,89 @@ func validateProviderReliability(modelName string, reliability ProviderReliabili
 }
 
 // DefaultProviderRetryOn is the retry_on applied when retries are enabled
-// without one, as the CLI renders it for Envoy.
+// without one, as the CLI renders it for Envoy. Its conditions retry only an
+// attempt the backend never received: a connection that was never opened, or
+// a stream the server refused before processing it.
 const DefaultProviderRetryOn = "connect-failure,refused-stream"
 
+// DefaultProviderRetryCount is the retries of a provider model whose
+// reliability block sets neither retry_count nor retry_on, on
+// DefaultProviderRetryOn. A request is then never sent twice to a backend that
+// received it, so a refused connection no longer fails the request.
+const DefaultProviderRetryCount = 2
+
+// Retries is the provider model's retry count: retry_count when set, else
+// DefaultProviderRetryCount when retry_on is unset too. A retry_on without a
+// count retries nothing, as before the default, so the default never retries a
+// condition after the backend received the request.
+func (r ProviderReliability) Retries() int {
+	switch {
+	case r.RetryCount != nil:
+		return *r.RetryCount
+	case strings.TrimSpace(r.RetryOn) == "":
+		return DefaultProviderRetryCount
+	default:
+		return 0
+	}
+}
+
+// providerRetryWarnings name the provider models whose retry_on, set without
+// retry_count, turns their default retries off. That was a valid way to say
+// nothing before the default, so it stays valid, but no longer silent.
+func providerRetryWarnings(cfg *RouterConfig) []ConfigWarning {
+	names := make([]string, 0, len(cfg.ModelConfig))
+	for name := range cfg.ModelConfig {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	var warnings []ConfigWarning
+	for _, name := range names {
+		r := cfg.ModelConfig[name].Reliability
+		if r.RetryCount == nil && strings.TrimSpace(r.RetryOn) != "" {
+			warnings = append(warnings, ConfigWarning{
+				Code:  CodeRetryOnWithoutCount,
+				Field: fmt.Sprintf("providers.models[%s].reliability.retry_on", name),
+				Message: fmt.Sprintf("sets retry conditions without retry_count, so this model retries nothing; "+
+					"set retry_count to retry them, or remove retry_on to keep the %d default retries of an attempt "+
+					"the backend never received", DefaultProviderRetryCount),
+			})
+		}
+	}
+	return warnings
+}
+
+// RetryOnConditions are the retry_on names Envoy documents, the HTTP ones
+// and the gRPC ones. The standalone gateway (pkg/upstream) acts on the HTTP
+// conditions it implements and ignores the others.
+var RetryOnConditions = []string{
+	"5xx", "gateway-error", "reset", "reset-before-request", "connect-failure",
+	"envoy-ratelimited", "retriable-4xx", "refused-stream", "retriable-status-codes",
+	"retriable-headers", "http3-post-connect-failure",
+	"cancelled", "deadline-exceeded", "internal", "resource-exhausted", "unavailable",
+}
+
+// validateRetryOn refuses a name outside RetryOnConditions. Envoy and the
+// native gateway both ignore a name they do not know, so a typo would turn off
+// the retries it names without a word.
+func validateRetryOn(path, value string) error {
+	for _, token := range strings.Split(value, ",") {
+		if token = strings.TrimSpace(token); token != "" && !slices.Contains(RetryOnConditions, token) {
+			return fmt.Errorf("%s has unknown condition %q; expected any of %s",
+				path, token, strings.Join(RetryOnConditions, ", "))
+		}
+	}
+	return nil
+}
+
 func validateProviderRetry(modelName string, reliability ProviderReliability) error {
-	if reliability.RetryCount < 0 || reliability.RetryCount > 5 {
+	if count := reliability.Retries(); count < 0 || count > 5 {
 		return fmt.Errorf(
 			"providers.models[%s].reliability.retry_count must be between 0 and 5",
 			modelName,
 		)
+	}
+	if err := validateRetryOn(fmt.Sprintf("providers.models[%s].reliability.retry_on", modelName), reliability.RetryOn); err != nil {
+		return err
 	}
 	for _, code := range reliability.RetriableStatusCodes {
 		if code < 100 || code > 599 {

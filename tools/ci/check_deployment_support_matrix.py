@@ -37,7 +37,6 @@ ASSET_LABELS = {
     "deploy/kubernetes/provider-mocker/": "Provider mocker and optional tiny-model smoke",
     "deploy/kubernetes/llmd-base/": "llm-d",
     "deploy/kubernetes/observability/": "Observability demo",
-    "deploy/kubernetes/pii-remote-backend/": "PII remote backend demo",
     "deploy/kubernetes/response-api/": "Responses API Kubernetes demo",
     "deploy/kubernetes/response-jailbreak/": "Response jailbreak demo",
     "deploy/kubernetes/route-action/": "Route action demo",

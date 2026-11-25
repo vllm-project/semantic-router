@@ -27,11 +27,22 @@ def load_labeled_set(path: Path) -> list[dict[str, str]]:
 
 
 def predicted_label(response: dict[str, Any], observation: str) -> str:
-    """Return the one label the preview matched, or NO_MATCH when none did."""
+    """Return the one label the preview matched, or NO_MATCH when none did.
+
+    observation names a decision_result.matched_signals field, or field:rule
+    for one rule's labels, which the field lists as rule:label.
+    """
+    field, _, rule = observation.partition(":")
     matched_signals = (response.get("decision_result") or {}).get(
         "matched_signals"
     ) or {}
-    labels = matched_signals.get(observation) or []
+    labels = matched_signals.get(field) or []
+    if rule:
+        labels = [
+            label.removeprefix(f"{rule}:")
+            for label in labels
+            if label.startswith(f"{rule}:")
+        ]
     if len(labels) > 1:
         raise ValueError(f"preview matched several {observation} labels: {labels}")
     return labels[0] if labels else NO_MATCH
@@ -138,8 +149,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument(
         "--observation",
-        default="action",
-        help="decision_result.matched_signals field that holds the predicted label",
+        default="systemone:action",
+        help=(
+            "decision_result.matched_signals field that holds the predicted label, "
+            "or field:rule for the labels of one rule"
+        ),
     )
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--json-output", type=Path)

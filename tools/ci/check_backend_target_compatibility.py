@@ -38,7 +38,7 @@ TARGET_FORMS = {
 EVIDENCE = {
     Path("config/config.yaml"): (
         "remote-openai-reference",
-        "base_url: https://api.example.com/v1",
+        "endpoint: https://api.example.com/v1",
         "api_key_env: VLLM_SR_PRIMARY_API_KEY",
     ),
     Path("src/vllm-sr/tests/test_config_generator.py"): (
@@ -46,7 +46,7 @@ EVIDENCE = {
         "test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers",
     ),
     Path("deploy/helm/testdata/backend-target-values.yaml"): (
-        "base_url: https://provider.example/v1",
+        "endpoint: https://provider.example/v1",
         "api_key_env: PROVIDER_API_KEY",
     ),
     Path("deploy/helm/validate-chart.sh"): (
@@ -67,7 +67,7 @@ EVIDENCE = {
         "TestUpdateConfigHandler_PreservesBackendTargetFields",
     ),
     Path("src/semantic-router/pkg/config/maintained_asset_contract_test.go"): (
-        "TestMaintainedConfigAssetsUseCanonicalV03Contract",
+        "TestMaintainedConfigAssetsUseCanonicalV05Contract",
     ),
 }
 
@@ -151,43 +151,42 @@ def validate_canonical_config(config: object) -> list[str]:
         return ["rendered config.yaml must be a mapping"]
 
     providers = config.get("providers")
-    routing = config.get("routing")
+    recipes = config.get("recipes")
     models = providers.get("models") if isinstance(providers, dict) else None
-    cards = routing.get("modelCards") if isinstance(routing, dict) else None
-    decisions = routing.get("decisions") if isinstance(routing, dict) else None
     if not isinstance(models, list) or not models:
         return ["rendered config.yaml must define providers.models"]
-    if not isinstance(cards, list) or not cards:
-        return ["rendered config.yaml must define routing.modelCards"]
+    if (
+        not isinstance(recipes, list)
+        or len(recipes) != 1
+        or not isinstance(recipes[0], dict)
+    ):
+        return ["rendered config.yaml must define one recipe"]
+    decisions = recipes[0].get("decisions")
     if not isinstance(decisions, list) or not decisions:
-        return ["rendered config.yaml must define routing.decisions"]
+        return ["rendered config.yaml must define recipes[0].decisions"]
 
     model_names = {model.get("name") for model in models if isinstance(model, dict)}
-    card_names = {card.get("name") for card in cards if isinstance(card, dict)}
     errors: list[str] = []
-    if missing_cards := sorted(name for name in model_names - card_names if name):
-        errors.append(
-            "rendered provider models lack routing.modelCards entries: "
-            + ", ".join(missing_cards)
-        )
 
     for index, decision in enumerate(decisions):
         if not isinstance(decision, dict):
-            errors.append(f"rendered routing.decisions[{index}] must be a mapping")
+            errors.append(f"rendered recipes[0].decisions[{index}] must be a mapping")
             continue
         if not isinstance(decision.get("priority"), int) or decision["priority"] <= 0:
             errors.append(
-                f"rendered routing.decisions[{index}] must define positive priority"
+                f"rendered recipes[0].decisions[{index}] must define positive priority"
             )
         refs = decision.get("modelRefs")
         if not isinstance(refs, list) or not refs:
-            errors.append(f"rendered routing.decisions[{index}] must define modelRefs")
+            errors.append(
+                f"rendered recipes[0].decisions[{index}] must define modelRefs"
+            )
             continue
         for ref in refs:
             name = ref.get("model") if isinstance(ref, dict) else None
-            if not name or name not in model_names or name not in card_names:
+            if not name or name not in model_names:
                 errors.append(
-                    f"rendered routing.decisions[{index}] has unknown model ref: {name!r}"
+                    f"rendered recipes[0].decisions[{index}] has unknown model ref: {name!r}"
                 )
     return errors
 

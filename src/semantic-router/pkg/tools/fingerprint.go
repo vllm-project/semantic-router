@@ -1,3 +1,6 @@
+// Package tools fingerprints tool definitions, tool catalogs and the tools
+// plugin's selection policy: the identities sticky tool selection
+// (pkg/sessiontools) keys its session state by.
 package tools
 
 import (
@@ -155,55 +158,15 @@ func ToolCatalogFingerprint(catalog []llmprotocol.Tool) string {
 }
 
 type toolPolicyFingerprintInput struct {
-	Mode                 string                                `json:"mode"`
-	TopK                 int                                   `json:"top_k,omitempty"`
-	SimilarityThreshold  *float32                              `json:"similarity_threshold,omitempty"`
-	Strategy             string                                `json:"strategy"`
-	RelevanceThreshold   *float32                              `json:"relevance_threshold,omitempty"`
-	PreserveCount        int                                   `json:"preserve_count,omitempty"`
-	AdvancedFiltering    *advancedToolFilteringFingerprintView `json:"advanced_filtering,omitempty"`
-	StickyEnabled        bool                                  `json:"sticky_enabled"`
-	StickyMaxTools       int                                   `json:"sticky_max_tools"`
-	StickyMaxNewPerTurn  int                                   `json:"sticky_max_new_tools_per_turn"`
-	StickyPinCalledTools bool                                  `json:"sticky_pin_called_tools"`
-}
-
-// advancedToolFilteringFingerprintView mirrors config.AdvancedToolFilteringConfig
-// for fingerprinting, except AllowTools/BlockTools are sorted copies: those
-// are semantically unordered sets, and hashing the caller's raw slice order
-// would make the fingerprint change on a config reformat that changes
-// nothing about effective policy.
-type advancedToolFilteringFingerprintView struct {
-	Enabled                     bool                                     `json:"enabled"`
-	RetrievalStrategy           string                                   `json:"retrieval_strategy,omitempty"`
-	CandidatePoolSize           *int                                     `json:"candidate_pool_size,omitempty"`
-	MinLexicalOverlap           *int                                     `json:"min_lexical_overlap,omitempty"`
-	MinCombinedScore            *float32                                 `json:"min_combined_score,omitempty"`
-	Weights                     config.ToolFilteringWeights              `json:"weights,omitempty"`
-	UseCategoryFilter           *bool                                    `json:"use_category_filter,omitempty"`
-	CategoryConfidenceThreshold *float32                                 `json:"category_confidence_threshold,omitempty"`
-	AllowTools                  []string                                 `json:"allow_tools,omitempty"`
-	BlockTools                  []string                                 `json:"block_tools,omitempty"`
-	HybridHistory               *config.HybridHistoryToolRetrievalConfig `json:"hybrid_history,omitempty"`
-}
-
-func newAdvancedToolFilteringFingerprintView(c *config.AdvancedToolFilteringConfig) *advancedToolFilteringFingerprintView {
-	if c == nil {
-		return nil
-	}
-	return &advancedToolFilteringFingerprintView{
-		Enabled:                     c.Enabled,
-		RetrievalStrategy:           c.RetrievalStrategy,
-		CandidatePoolSize:           c.CandidatePoolSize,
-		MinLexicalOverlap:           c.MinLexicalOverlap,
-		MinCombinedScore:            c.MinCombinedScore,
-		Weights:                     c.Weights,
-		UseCategoryFilter:           c.UseCategoryFilter,
-		CategoryConfidenceThreshold: c.CategoryConfidenceThreshold,
-		AllowTools:                  sortedStrings(c.AllowTools),
-		BlockTools:                  sortedStrings(c.BlockTools),
-		HybridHistory:               c.HybridHistory,
-	}
+	Mode                 string             `json:"mode"`
+	Match                config.MatchConfig `json:"match"`
+	NeedThreshold        float64            `json:"need_threshold"`
+	PreserveCount        int                `json:"preserve_count,omitempty"`
+	History              bool               `json:"history,omitempty"`
+	StickyEnabled        bool               `json:"sticky_enabled"`
+	StickyMaxTools       int                `json:"sticky_max_tools"`
+	StickyMaxNewPerTurn  int                `json:"sticky_max_new_tools_per_turn"`
+	StickyPinCalledTools bool               `json:"sticky_pin_called_tools"`
 }
 
 func sortedStrings(in []string) []string {
@@ -216,34 +179,31 @@ func sortedStrings(in []string) []string {
 }
 
 // ToolPolicyFingerprint returns a canonical fingerprint of the effective
-// selection policy: mode, thresholds, strategy, advanced filtering, and
-// sticky bounds. Deliberately excludes catalog contents (see
-// ToolCatalogFingerprint) and source identity such as decision name — two
-// decisions with the same effective policy share continuity (see PL-0042
-// section 2.3). Sticky bounds are read through their Effective* helpers
-// (nil-safe: StickyToolSelectionConfig's Effective* methods handle a nil
-// receiver), not the raw configured pointers, so an explicit value equal
-// to the default and an omitted field produce the same fingerprint —
-// matching the policy fingerprint's purpose (did the *effective* policy
-// change), not a raw-YAML diff.
-func ToolPolicyFingerprint(pluginCfg *config.ToolSelectionPluginConfig) string {
-	if pluginCfg == nil {
+// selection policy: mode, the judge and its keep rules, the need gate,
+// preserve_count, the input read, and sticky bounds. Deliberately excludes
+// catalog contents (see ToolCatalogFingerprint) and source identity such as
+// decision name — two decisions with the same effective policy share
+// continuity (see PL-0042 section 2.3). Defaults are read through their
+// Effective* helpers, so an explicit value equal to the default and an
+// omitted field produce the same fingerprint — matching the policy
+// fingerprint's purpose (did the *effective* policy change), not a raw-YAML
+// diff.
+func ToolPolicyFingerprint(spec *config.ToolsSelectConfig) string {
+	if spec == nil {
 		return marshalFingerprint(toolPolicyFingerprintInput{})
 	}
 	input := toolPolicyFingerprintInput{
-		Mode:                 pluginCfg.Mode,
-		TopK:                 pluginCfg.TopK,
-		SimilarityThreshold:  pluginCfg.SimilarityThreshold,
-		Strategy:             pluginCfg.EffectiveStrategy(),
-		RelevanceThreshold:   pluginCfg.RelevanceThreshold,
-		PreserveCount:        pluginCfg.PreserveCount,
-		AdvancedFiltering:    newAdvancedToolFilteringFingerprintView(pluginCfg.AdvancedFiltering),
-		StickyMaxTools:       pluginCfg.Sticky.EffectiveMaxTools(),
-		StickyMaxNewPerTurn:  pluginCfg.Sticky.EffectiveMaxNewToolsPerTurn(),
-		StickyPinCalledTools: pluginCfg.Sticky.EffectivePinCalledTools(),
+		Mode:                 spec.Mode,
+		Match:                spec.EffectiveMatch(),
+		NeedThreshold:        spec.EffectiveNeedThreshold(),
+		PreserveCount:        spec.PreserveCount,
+		History:              spec.Input.History,
+		StickyMaxTools:       spec.Sticky.EffectiveMaxTools(),
+		StickyMaxNewPerTurn:  spec.Sticky.EffectiveMaxNewToolsPerTurn(),
+		StickyPinCalledTools: spec.Sticky.EffectivePinCalledTools(),
 	}
-	if pluginCfg.Sticky != nil {
-		input.StickyEnabled = pluginCfg.Sticky.Enabled
+	if spec.Sticky != nil {
+		input.StickyEnabled = spec.Sticky.Enabled
 	}
 	return marshalFingerprint(input)
 }

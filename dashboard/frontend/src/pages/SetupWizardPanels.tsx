@@ -1,14 +1,43 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import ConfirmDialog from "../components/ConfirmDialog";
-import styles from "./SetupWizardPage.module.css";
-import SetupWizardPresetChecklist from "./SetupWizardPresetChecklist";
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { motion } from 'framer-motion'
+import {
+  Check,
+  CircleCheck,
+  CloudDownload,
+  KeyRound,
+  Layers,
+  Plus,
+  PlugZap,
+  Search,
+  Sparkles,
+  Star,
+  Trash2,
+} from 'lucide-react'
+import ConfirmDialog from '../components/ConfirmDialog'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Field,
+  IconTile,
+  Input,
+  InputGroup,
+  MiniStat,
+  ProviderLogo,
+  Skeleton,
+  Tooltip,
+  cn,
+} from '../ui'
+import SetupWizardPresetChecklist from './SetupWizardPresetChecklist'
 import {
   DEFAULT_REMOTE_SETUP_CONFIG_URL,
+  SETUP_MODELS_PER_PAGE,
+  SETUP_STEP_LABELS,
+  discoverSetupModels,
   filterSetupModels,
   getModelDraftFieldErrors,
   paginateSetupModels,
-  SETUP_MODELS_PER_PAGE,
-  SETUP_STEP_LABELS,
   type ImportedSetupConfig,
   type ModelDraft,
   type PresetCatalogState,
@@ -19,142 +48,374 @@ import {
   type SetupConfigCounts,
   type SetupRoutingMode,
   type SetupStep,
-} from "./setupWizardSupport";
-import { SETUP_PROVIDER_OPTIONS } from "./setupWizardProviderCatalog";
+} from './setupWizardSupport'
+import { SETUP_PROVIDER_OPTIONS, getSetupProviderOption } from './setupWizardProviderCatalog'
 
-interface RouteSummaryProps {
-  currentRouteLabel: string;
+interface SetupWizardStepRailProps {
+  currentStep: SetupStep
+  finished: boolean
+  summaries: string[]
+  onGoToStep: (step: SetupStep) => boolean
 }
 
-interface SetupWizardStepperProps {
-  currentStep: SetupStep;
-  onGoToStep: (step: SetupStep) => boolean;
-}
-
-interface ModelStepPanelProps {
-  currentRouteLabel: string;
-  models: ModelDraft[];
-  defaultModelId: string;
-  shouldShowStepOneIssues: boolean;
-  stepOneErrors: string[];
-  stepOneAttempted: boolean;
-  draftBuildError: string | null;
-  removedModel: ModelDraft | null;
-  onAddModel: () => void;
-  onUpdateModel: (id: string, field: keyof ModelDraft, value: string) => void;
-  onRemoveModel: (id: string) => void;
-  onUndoRemoveModel: () => void;
-  onSelectDefaultModel: (id: string) => void;
-}
-
-interface RoutingStarterPanelProps {
-  currentRouteLabel: string;
-  routingMode: SetupRoutingMode;
-  remoteConfigUrl: string;
-  remoteImportState: RemoteImportState;
-  remoteImportError: string | null;
-  importedConfig: ImportedSetupConfig | null;
-  counts: SetupConfigCounts;
-  presets: PresetInfo[];
-  presetCatalogState: PresetCatalogState;
-  presetCatalogError: string | null;
-  selectedPresetId: string | null;
-  presetRequestState: PresetRequestState;
-  presetDelta: PresetDelta | null;
-  presetImportedConfig: ImportedSetupConfig | null;
-  presetError: string | null;
-  onSelectRoutingMode: (mode: SetupRoutingMode) => void;
-  onChangeRemoteConfigUrl: (value: string) => void;
-  onImportRemoteConfig: () => void;
-  onSelectPreset: (id: string) => void;
-  onImportPresetConfig: () => void;
-  onRetryPresets: () => void;
-}
-
-export function SetupRouteSummary({ currentRouteLabel }: RouteSummaryProps) {
-  return (
-    <div className={styles.routeSummary}>
-      <span className={styles.routeSummaryLabel}>Routing mode</span>
-      <span className={styles.routeSummaryValue}>{currentRouteLabel}</span>
-    </div>
-  );
-}
-
-export function SetupWizardStepper({
+export function SetupWizardStepRail({
   currentStep,
+  finished,
+  summaries,
   onGoToStep,
-}: SetupWizardStepperProps) {
-  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
+}: SetupWizardStepRailProps) {
+  const buttonRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const focusStep = (step: number) => buttonRefs.current[step]?.focus()
 
-  const focusStep = (step: number) => {
-    buttonRefs.current[step]?.focus();
-  };
-
-  const handleStepKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    stepIndex: number,
-  ) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-      return;
+  const handleStepKeyDown = (event: KeyboardEvent<HTMLButtonElement>, stepIndex: number) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key))
+      return
+    event.preventDefault()
+    if (event.key === 'Home') focusStep(0)
+    else if (event.key === 'End') focusStep(SETUP_STEP_LABELS.length - 1)
+    else {
+      const direction = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1
+      focusStep((stepIndex + direction + SETUP_STEP_LABELS.length) % SETUP_STEP_LABELS.length)
     }
-
-    event.preventDefault();
-    if (event.key === "Home") {
-      focusStep(0);
-    } else if (event.key === "End") {
-      focusStep(SETUP_STEP_LABELS.length - 1);
-    } else {
-      const direction = event.key === "ArrowRight" ? 1 : -1;
-      focusStep(
-        (stepIndex + direction + SETUP_STEP_LABELS.length) %
-          SETUP_STEP_LABELS.length,
-      );
-    }
-  };
+  }
 
   const activateStep = (step: SetupStep) => {
-    if (!onGoToStep(step)) {
-      window.requestAnimationFrame(() => focusStep(currentStep));
-    }
-  };
+    if (!onGoToStep(step)) window.requestAnimationFrame(() => focusStep(currentStep))
+  }
 
   return (
-    <nav className={styles.stepper} aria-label="Setup progress">
-      <ol className={styles.stepList}>
+    <nav aria-label="Setup progress">
+      <ol className="flex flex-col gap-0.5">
         {SETUP_STEP_LABELS.map(([index, label], stepIndex) => {
-          const numericStep = stepIndex as SetupStep;
-          const isActive = currentStep === numericStep;
-          const isDone = currentStep > numericStep;
-
+          const numericStep = stepIndex as SetupStep
+          const isActive = currentStep === numericStep && !finished
+          const isDone = finished || currentStep > numericStep
           return (
-            <li key={label} className={styles.stepItem}>
+            <li key={label} className="relative">
+              {stepIndex < SETUP_STEP_LABELS.length - 1 ? (
+                <span
+                  aria-hidden
+                  className="absolute left-[23px] top-[42px] h-[calc(100%-30px)] w-px bg-border"
+                />
+              ) : null}
               <button
                 ref={(element) => {
-                  buttonRefs.current[stepIndex] = element;
+                  buttonRefs.current[stepIndex] = element
                 }}
                 id={`setup-step-${numericStep}-button`}
                 type="button"
-                className={`${styles.stepButton} ${isActive ? styles.stepButtonActive : ""} ${isDone ? styles.stepButtonDone : ""}`}
-                aria-current={isActive ? "step" : undefined}
+                disabled={finished}
+                aria-current={isActive ? 'step' : undefined}
                 aria-controls={`setup-step-${numericStep}-panel`}
-                aria-label={`Step ${index}: ${label}${isDone ? ", complete" : ""}`}
-                tabIndex={isActive ? 0 : -1}
+                aria-label={`Step ${index}: ${label}${isDone ? ', complete' : ''}`}
+                tabIndex={currentStep === numericStep ? 0 : -1}
                 onKeyDown={(event) => handleStepKeyDown(event, stepIndex)}
                 onClick={() => activateStep(numericStep)}
+                className="relative flex w-full items-start gap-3 rounded-lg px-2.5 py-2.5 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/40 disabled:cursor-default enabled:hover:bg-accent/50"
               >
-                <span className={styles.stepNumber}>{isDone ? "✓" : index}</span>
-                <span className={styles.stepLabel}>{label}</span>
+                {isActive ? (
+                  <motion.span
+                    layoutId="setup-rail-active"
+                    className="absolute inset-0 rounded-lg bg-surface shadow-xs ring-1 ring-border dark:bg-accent"
+                    transition={{ type: 'spring', bounce: 0.15, duration: 0.45 }}
+                  />
+                ) : null}
+                <span
+                  className={cn(
+                    'relative grid size-7 shrink-0 place-items-center rounded-full border text-xs font-semibold tabular transition-colors duration-300',
+                    isDone && 'border-transparent bg-success text-white',
+                    isActive && 'border-primary bg-primary-soft text-primary-soft-foreground',
+                    !isDone && !isActive && 'border-border-strong bg-surface text-muted-foreground',
+                  )}
+                >
+                  {isDone ? <Check className="size-3.5" strokeWidth={3} /> : index}
+                </span>
+                <span className="relative flex min-w-0 flex-col pt-0.5">
+                  <span
+                    className={cn(
+                      'text-[13px] font-medium',
+                      !isDone && !isActive && 'text-muted-foreground',
+                    )}
+                  >
+                    {label}
+                  </span>
+                  <span className="truncate text-xs text-subtle-foreground">
+                    {summaries[stepIndex]}
+                  </span>
+                </span>
               </button>
             </li>
-          );
+          )
         })}
       </ol>
     </nav>
-  );
+  )
+}
+
+interface ModelStepPanelProps {
+  models: ModelDraft[]
+  defaultModelId: string
+  shouldShowStepOneIssues: boolean
+  stepOneErrors: string[]
+  stepOneAttempted: boolean
+  draftBuildError: string | null
+  removedModel: ModelDraft | null
+  onAddModel: () => void
+  onUpdateModel: (id: string, field: keyof ModelDraft, value: string) => void
+  onRemoveModel: (id: string) => void
+  onUndoRemoveModel: () => void
+  onSelectDefaultModel: (id: string) => void
+}
+
+type ConnectionTest =
+  | { state: 'idle' }
+  | { state: 'testing' }
+  | { state: 'ok'; models: string[] }
+  | { state: 'error'; message: string }
+
+function ModelCard({
+  model,
+  index,
+  isDefault,
+  canRemove,
+  nameError,
+  baseUrlError,
+  onUpdate,
+  onRemove,
+  onMakeDefault,
+}: {
+  model: ModelDraft
+  index: number
+  isDefault: boolean
+  canRemove: boolean
+  nameError?: string
+  baseUrlError?: string
+  onUpdate: (field: keyof ModelDraft, value: string) => void
+  onRemove: () => void
+  onMakeDefault: () => void
+}) {
+  const [test, setTest] = useState<ConnectionTest>({ state: 'idle' })
+  const provider = SETUP_PROVIDER_OPTIONS.find((option) => option.id === model.providerKind)
+  const title = model.name.trim() || 'New model'
+  const update = (field: keyof ModelDraft, value: string) => {
+    if (test.state !== 'idle' && test.state !== 'testing') setTest({ state: 'idle' })
+    onUpdate(field, value)
+  }
+
+  const runTest = async () => {
+    setTest({ state: 'testing' })
+    try {
+      setTest({ state: 'ok', models: await discoverSetupModels(model) })
+    } catch (error) {
+      setTest({
+        state: 'error',
+        message: error instanceof Error ? error.message : 'The endpoint could not be reached.',
+      })
+    }
+  }
+
+  return (
+    <article className="rounded-xl border border-border bg-card shadow-xs">
+      <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+        <ProviderLogo provider={getSetupProviderOption(model.providerKind).logo} size={18} framed />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-subtle-foreground">
+            Model {index + 1}
+          </span>
+          <span
+            className={cn(
+              'truncate font-mono text-[13px] font-medium',
+              !model.name.trim() && 'text-muted-foreground',
+            )}
+          >
+            {title}
+          </span>
+        </div>
+        {isDefault ? (
+          <Badge tone="brand">
+            <Star />
+            Default
+          </Badge>
+        ) : (
+          <Button variant="ghost" size="xs" onClick={onMakeDefault} aria-pressed={false}>
+            Make default
+          </Button>
+        )}
+        <Tooltip content={canRemove ? 'Remove' : 'Setup needs at least one model'}>
+          <span className="inline-flex">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Remove model ${model.name.trim() || index + 1}`}
+              onClick={onRemove}
+              disabled={!canRemove}
+              className="hover:text-destructive-foreground"
+            >
+              <Trash2 />
+            </Button>
+          </span>
+        </Tooltip>
+      </header>
+      <div className="@container flex flex-col gap-4 px-4 py-4">
+        <div
+          role="radiogroup"
+          aria-label={`Provider for model ${index + 1}`}
+          className="grid grid-cols-2 gap-2 @[34rem]:grid-cols-3"
+        >
+          {SETUP_PROVIDER_OPTIONS.map((option) => {
+            const active = option.id === model.providerKind
+            const generic = option.id === 'openai-compatible'
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => update('providerKind', option.id)}
+                className={cn(
+                  'flex min-w-0 items-center gap-2.5 rounded-lg border bg-card px-2.5 py-2 text-left outline-none transition-[border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                  generic && 'col-span-full',
+                  active
+                    ? 'border-primary shadow-[0_0_0_3px_var(--ring)]'
+                    : 'border-border hover:border-border-strong',
+                )}
+              >
+                <ProviderLogo provider={option.logo} size={16} />
+                <span className="flex min-w-0 flex-col leading-tight">
+                  <span className="truncate text-[12.5px] font-medium">
+                    {generic ? 'Any OpenAI-compatible endpoint' : option.label}
+                  </span>
+                  <span className="truncate text-[11px] text-subtle-foreground">
+                    {option.supportTier === 'runtime'
+                      ? 'Self-hosted'
+                      : generic
+                        ? 'Your own base URL and key'
+                        : 'Hosted API'}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field
+            label="Model name"
+            htmlFor={`${model.id}-name`}
+            error={nameError}
+            hint={!nameError ? 'The provider’s model ID; apps can send it as model.' : undefined}
+          >
+            <Input
+              id={`${model.id}-name`}
+              value={model.name}
+              onChange={(event) => update('name', event.target.value)}
+              placeholder="qwen/qwen3.5-rocm"
+              spellCheck={false}
+              aria-invalid={Boolean(nameError)}
+              className="font-mono text-[12.5px]"
+            />
+          </Field>
+          <Field
+            label="Base URL or host"
+            htmlFor={`${model.id}-base-url`}
+            error={baseUrlError}
+            hint={
+              !baseUrlError
+                ? `${provider?.description ?? ''} A URL like ${provider?.placeholder ?? ''} or a host such as localhost:8000/v1.`
+                : undefined
+            }
+          >
+            <Input
+              id={`${model.id}-base-url`}
+              value={model.baseUrl}
+              onChange={(event) => update('baseUrl', event.target.value)}
+              placeholder={provider?.placeholder}
+              spellCheck={false}
+              aria-invalid={Boolean(baseUrlError)}
+              className="font-mono text-[12.5px]"
+            />
+          </Field>
+          <Field label="Endpoint label" htmlFor={`${model.id}-endpoint`} optional>
+            <Input
+              id={`${model.id}-endpoint`}
+              value={model.endpointName}
+              onChange={(event) => update('endpointName', event.target.value)}
+              placeholder="primary"
+              spellCheck={false}
+              className="font-mono text-[12.5px]"
+            />
+          </Field>
+          <Field label="Access key" htmlFor={`${model.id}-key`} optional>
+            <InputGroup
+              id={`${model.id}-key`}
+              type="password"
+              value={model.accessKey}
+              onChange={(event) => update('accessKey', event.target.value)}
+              placeholder="API key, when the provider needs one"
+              autoComplete="off"
+              leading={<KeyRound />}
+              className="pr-3"
+            />
+          </Field>
+        </div>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void runTest()}
+              loading={test.state === 'testing'}
+              disabled={!model.baseUrl.trim() || Boolean(baseUrlError)}
+            >
+              {test.state === 'testing' ? null : <PlugZap />}
+              Test connection
+            </Button>
+            {test.state === 'ok' ? (
+              <span
+                className="flex items-center gap-1.5 text-xs text-success-foreground"
+                role="status"
+              >
+                <CircleCheck className="size-3.5" />
+                Reachable · {test.models.length} {test.models.length === 1 ? 'model' : 'models'}{' '}
+                listed
+              </span>
+            ) : test.state === 'idle' ? (
+              <span className="text-xs text-muted-foreground">
+                Lists the models the endpoint serves. Nothing is saved.
+              </span>
+            ) : null}
+          </div>
+          {test.state === 'error' ? (
+            <Alert tone="warning" title="The endpoint did not answer">
+              {test.message} You can still continue; the router checks the backend again once it
+              runs.
+            </Alert>
+          ) : null}
+          {test.state === 'ok' && test.models.length ? (
+            <div className="flex flex-wrap gap-1.5">
+              {test.models.slice(0, 12).map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => update('name', name)}
+                  className={cn(
+                    'inline-flex h-6 items-center rounded-md border px-2 font-mono text-[11.5px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                    name === model.name.trim()
+                      ? 'border-primary bg-primary-soft text-primary-soft-foreground'
+                      : 'border-border bg-surface-subtle hover:border-border-strong',
+                  )}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  )
 }
 
 export function ModelStepPanel({
-  currentRouteLabel,
   models,
   defaultModelId,
   shouldShowStepOneIssues,
@@ -168,321 +429,163 @@ export function ModelStepPanel({
   onUndoRemoveModel,
   onSelectDefaultModel,
 }: ModelStepPanelProps) {
-  const [modelQuery, setModelQuery] = useState("");
-  const [modelPageNumber, setModelPageNumber] = useState(1);
-  const [pendingRemoveModel, setPendingRemoveModel] =
-    useState<ModelDraft | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const validationFocusHandledRef = useRef(false);
-  const fieldErrorsByModelId = getModelDraftFieldErrors(models);
-  const filteredModels = filterSetupModels(models, modelQuery);
-  const modelPage = paginateSetupModels(filteredModels, modelPageNumber);
+  const [modelQuery, setModelQuery] = useState('')
+  const [modelPageNumber, setModelPageNumber] = useState(1)
+  const [pendingRemoveModel, setPendingRemoveModel] = useState<ModelDraft | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const validationFocusHandledRef = useRef(false)
+  const fieldErrorsByModelId = getModelDraftFieldErrors(models)
+  const filteredModels = filterSetupModels(models, modelQuery)
+  const modelPage = paginateSetupModels(filteredModels, modelPageNumber)
 
   useEffect(() => {
-    if (modelPage.page !== modelPageNumber) {
-      setModelPageNumber(modelPage.page);
-    }
-  }, [modelPage.page, modelPageNumber]);
+    if (modelPage.page !== modelPageNumber) setModelPageNumber(modelPage.page)
+  }, [modelPage.page, modelPageNumber])
 
   useEffect(() => {
     const shouldFocusValidation =
-      shouldShowStepOneIssues || Boolean(stepOneAttempted && draftBuildError);
+      shouldShowStepOneIssues || Boolean(stepOneAttempted && draftBuildError)
     if (!shouldFocusValidation) {
-      validationFocusHandledRef.current = false;
-      return;
+      validationFocusHandledRef.current = false
+      return
     }
-    if (validationFocusHandledRef.current) {
-      return;
-    }
-    validationFocusHandledRef.current = true;
-    const currentFieldErrors = getModelDraftFieldErrors(models);
+    if (validationFocusHandledRef.current) return
+    validationFocusHandledRef.current = true
+    const currentFieldErrors = getModelDraftFieldErrors(models)
     const firstInvalidModelIndex = models.findIndex((model) => {
-      const errors = currentFieldErrors[model.id];
-      return Boolean(errors?.name || errors?.baseUrl);
-    });
+      const errors = currentFieldErrors[model.id]
+      return Boolean(errors?.name || errors?.baseUrl)
+    })
     if (firstInvalidModelIndex >= 0) {
-      setModelQuery("");
-      setModelPageNumber(
-        Math.floor(firstInvalidModelIndex / SETUP_MODELS_PER_PAGE) + 1,
-      );
+      setModelQuery('')
+      setModelPageNumber(Math.floor(firstInvalidModelIndex / SETUP_MODELS_PER_PAGE) + 1)
     }
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
-        panelRef.current
-          ?.querySelector<HTMLElement>('[aria-invalid="true"]')
-          ?.focus();
-      });
-    });
-  }, [draftBuildError, models, shouldShowStepOneIssues, stepOneAttempted]);
+        panelRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      })
+    })
+  }, [draftBuildError, models, shouldShowStepOneIssues, stepOneAttempted])
 
   const handleAddModel = () => {
-    setModelQuery("");
-    setModelPageNumber(
-      Math.max(1, Math.ceil((models.length + 1) / SETUP_MODELS_PER_PAGE)),
-    );
-    onAddModel();
-  };
+    setModelQuery('')
+    setModelPageNumber(Math.max(1, Math.ceil((models.length + 1) / SETUP_MODELS_PER_PAGE)))
+    onAddModel()
+  }
 
   return (
-    <div ref={panelRef} className={styles.stepBody}>
-      <div className={styles.sectionHeader}>
-        <div className={styles.sectionHeaderMain}>
-          <h2 className={styles.sectionTitle}>Connect your first model</h2>
-          <p className={styles.sectionDescription}>
-            Start by registering one or more models. Routing can stay simple for
-            now; setup only needs enough information to create a valid baseline
-            config.
-          </p>
-          <SetupRouteSummary currentRouteLabel={currentRouteLabel} />
-        </div>
-        <div className={styles.sectionHeaderAside}>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={handleAddModel}
-          >
-            Add model
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.modelCollectionToolbar}>
-        <label className={styles.modelSearchField}>
-          <span className={styles.fieldLabel}>Find a model</span>
+    <div ref={panelRef} className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-subtle-foreground" />
           <input
             type="search"
+            aria-label="Find a model"
             value={modelQuery}
             onChange={(event) => {
-              setModelQuery(event.target.value);
-              setModelPageNumber(1);
+              setModelQuery(event.target.value)
+              setModelPageNumber(1)
             }}
-            placeholder="Search name, provider, or endpoint"
+            placeholder="Find a model…"
+            className="h-8 w-56 rounded-md border border-input bg-surface pl-8 pr-2 text-[13px] shadow-xs outline-none placeholder:text-subtle-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
           />
-        </label>
-        <p className={styles.modelCount} aria-live="polite">
+        </div>
+        <span className="text-xs text-muted-foreground" aria-live="polite">
           {modelQuery.trim()
             ? `${filteredModels.length} of ${models.length} models`
-            : `${models.length} model${models.length === 1 ? "" : "s"}`}
-        </p>
+            : `${models.length} model${models.length === 1 ? '' : 's'}`}
+        </span>
+        <Button variant="outline" size="sm" className="ml-auto" onClick={handleAddModel}>
+          <Plus />
+          Add model
+        </Button>
       </div>
 
-      {removedModel && (
-        <div className={styles.undoNotice} role="status" aria-live="polite">
-          <span>
-            Removed <strong>{removedModel.name || "model draft"}</strong>.
-          </span>
-          <button
-            type="button"
-            className={styles.undoButton}
-            onClick={onUndoRemoveModel}
-          >
-            Undo
-          </button>
-        </div>
-      )}
+      {removedModel ? (
+        <Alert
+          tone="neutral"
+          actions={
+            <Button size="sm" variant="outline" onClick={onUndoRemoveModel}>
+              Undo
+            </Button>
+          }
+        >
+          Removed{' '}
+          <strong className="font-medium text-foreground">
+            {removedModel.name || 'model draft'}
+          </strong>
+          .
+        </Alert>
+      ) : null}
 
-      <div className={styles.modelList} aria-label="Connected models">
+      <div className="flex flex-col gap-3" aria-label="Connected models">
         {modelPage.items.map((model) => {
-          const index = models.findIndex((candidate) => candidate.id === model.id);
-          const providerMeta = SETUP_PROVIDER_OPTIONS.find(
-            (option) => option.id === model.providerKind,
-          );
-          const fieldErrors = fieldErrorsByModelId[model.id] ?? {};
-          const nameError = shouldShowStepOneIssues
-            ? fieldErrors.name
-            : undefined;
-          const baseUrlError = shouldShowStepOneIssues
-            ? fieldErrors.baseUrl
-            : undefined;
-          const hasNameError = Boolean(nameError);
-          const hasBaseUrlError = Boolean(baseUrlError);
-
+          const index = models.findIndex((candidate) => candidate.id === model.id)
+          const fieldErrors = fieldErrorsByModelId[model.id] ?? {}
           return (
-            <article key={model.id} className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <div>
-                  <div className={styles.modelCardEyebrow}>
-                    Model {index + 1}
-                  </div>
-                  <h3 className={styles.modelCardTitle}>
-                    {model.name.trim() || "New model draft"}
-                  </h3>
-                </div>
-                <div className={styles.modelCardActions}>
-                  <label className={styles.defaultToggle}>
-                    <input
-                      type="radio"
-                      name="default-model"
-                      checked={defaultModelId === model.id}
-                      onChange={() => onSelectDefaultModel(model.id)}
-                    />
-                    <span>Default</span>
-                  </label>
-                  <button
-                    type="button"
-                    className={styles.ghostButton}
-                    aria-label={`Remove model ${model.name.trim() || index + 1}`}
-                    onClick={() => setPendingRemoveModel(model)}
-                    disabled={models.length === 1}
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.formGrid}>
-                <label
-                  className={`${styles.field} ${hasNameError ? styles.fieldError : ""}`}
-                >
-                  <span className={styles.fieldLabel}>Model name</span>
-                  <input
-                    value={model.name}
-                    onChange={(event) =>
-                      onUpdateModel(model.id, "name", event.target.value)
-                    }
-                    placeholder="qwen/qwen3.5-rocm"
-                    aria-invalid={hasNameError}
-                    aria-describedby={
-                      hasNameError ? `${model.id}-name-error` : undefined
-                    }
-                  />
-                  {hasNameError && (
-                    <span
-                      id={`${model.id}-name-error`}
-                      className={styles.fieldErrorText}
-                    >
-                      {nameError}
-                    </span>
-                  )}
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Provider</span>
-                  <select
-                    value={model.providerKind}
-                    onChange={(event) =>
-                      onUpdateModel(
-                        model.id,
-                        "providerKind",
-                        event.target.value,
-                      )
-                    }
-                  >
-                    {SETUP_PROVIDER_OPTIONS.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label
-                  className={`${styles.field} ${styles.fieldWide} ${hasBaseUrlError ? styles.fieldError : ""}`}
-                >
-                  <span className={styles.fieldLabel}>Base URL or host</span>
-                  <input
-                    value={model.baseUrl}
-                    onChange={(event) =>
-                      onUpdateModel(model.id, "baseUrl", event.target.value)
-                    }
-                    placeholder={providerMeta?.placeholder}
-                    aria-invalid={hasBaseUrlError}
-                    aria-describedby={
-                      hasBaseUrlError ? `${model.id}-base-url-error` : undefined
-                    }
-                  />
-                  <span className={styles.fieldHint}>
-                    {providerMeta?.description} You can enter a full URL like{" "}
-                    <code>{providerMeta?.placeholder}</code> or a host such as{" "}
-                    <code>localhost:8000/v1</code>.
-                  </span>
-                  {hasBaseUrlError && (
-                    <span
-                      id={`${model.id}-base-url-error`}
-                      className={styles.fieldErrorText}
-                    >
-                      {baseUrlError}
-                    </span>
-                  )}
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Endpoint label</span>
-                  <input
-                    value={model.endpointName}
-                    onChange={(event) =>
-                      onUpdateModel(
-                        model.id,
-                        "endpointName",
-                        event.target.value,
-                      )
-                    }
-                    placeholder="primary"
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.fieldLabel}>Access key</span>
-                  <input
-                    value={model.accessKey}
-                    onChange={(event) =>
-                      onUpdateModel(model.id, "accessKey", event.target.value)
-                    }
-                    placeholder="Optional API key"
-                    type="password"
-                  />
-                </label>
-              </div>
-            </article>
-          );
+            <ModelCard
+              key={model.id}
+              model={model}
+              index={index}
+              isDefault={defaultModelId === model.id}
+              canRemove={models.length > 1}
+              nameError={shouldShowStepOneIssues ? fieldErrors.name : undefined}
+              baseUrlError={shouldShowStepOneIssues ? fieldErrors.baseUrl : undefined}
+              onUpdate={(field, value) => onUpdateModel(model.id, field, value)}
+              onRemove={() => setPendingRemoveModel(model)}
+              onMakeDefault={() => onSelectDefaultModel(model.id)}
+            />
+          )
         })}
-
-        {modelPage.total === 0 && (
-          <div className={styles.modelEmptyState} role="status">
-            No models match “{modelQuery.trim()}”. Clear the search to return to
-            the full inventory.
-          </div>
-        )}
+        {modelPage.total === 0 ? (
+          <p
+            className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground"
+            role="status"
+          >
+            No models match “{modelQuery.trim()}”. Clear the search to see every model.
+          </p>
+        ) : null}
       </div>
 
-      {modelPage.pageCount > 1 && (
-        <nav className={styles.modelPagination} aria-label="Model pages">
-          <button
-            type="button"
-            className={styles.ghostButton}
+      {modelPage.pageCount > 1 ? (
+        <nav
+          className="flex items-center justify-between text-xs text-muted-foreground"
+          aria-label="Model pages"
+        >
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setModelPageNumber((page) => Math.max(1, page - 1))}
             disabled={modelPage.page === 1}
           >
             Previous
-          </button>
+          </Button>
           <span aria-live="polite">
             Page {modelPage.page} of {modelPage.pageCount}
           </span>
-          <button
-            type="button"
-            className={styles.ghostButton}
-            onClick={() =>
-              setModelPageNumber((page) => Math.min(modelPage.pageCount, page + 1))
-            }
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={() => setModelPageNumber((page) => Math.min(modelPage.pageCount, page + 1))}
             disabled={modelPage.page === modelPage.pageCount}
           >
             Next models
-          </button>
+          </Button>
         </nav>
-      )}
+      ) : null}
 
-      {(shouldShowStepOneIssues || (stepOneAttempted && draftBuildError)) && (
-        <div className={styles.errorPanel} role="alert">
-          <div className={styles.errorTitle}>
-            Finish the model setup before continuing
-          </div>
-          <ul className={styles.errorList}>
-            {shouldShowStepOneIssues &&
-              stepOneErrors.map((error) => <li key={error}>{error}</li>)}
-            {stepOneAttempted && draftBuildError && <li>{draftBuildError}</li>}
-          </ul>
+      {shouldShowStepOneIssues || (stepOneAttempted && draftBuildError) ? (
+        <div role="alert">
+          <Alert tone="danger" title="Finish the model setup before continuing">
+            <ul className="list-disc pl-4">
+              {shouldShowStepOneIssues
+                ? stepOneErrors.map((error) => <li key={error}>{error}</li>)
+                : null}
+              {stepOneAttempted && draftBuildError ? <li>{draftBuildError}</li> : null}
+            </ul>
+          </Alert>
         </div>
-      )}
+      ) : null}
 
       <ConfirmDialog
         isOpen={Boolean(pendingRemoveModel)}
@@ -490,26 +593,97 @@ export function ModelStepPanel({
         title="Remove this model?"
         description={
           <p>
-            {pendingRemoveModel?.name || "This model draft"} will be removed from
-            the setup configuration. You can undo immediately after removal.
+            {pendingRemoveModel?.name || 'This model draft'} will be removed from the setup
+            configuration. You can undo right after.
           </p>
         }
         confirmLabel="Remove model"
         tone="danger"
         onCancel={() => setPendingRemoveModel(null)}
         onConfirm={() => {
-          if (pendingRemoveModel) {
-            onRemoveModel(pendingRemoveModel.id);
-          }
-          setPendingRemoveModel(null);
+          if (pendingRemoveModel) onRemoveModel(pendingRemoveModel.id)
+          setPendingRemoveModel(null)
         }}
       />
     </div>
-  );
+  )
+}
+
+interface RoutingStarterPanelProps {
+  routingMode: SetupRoutingMode
+  remoteConfigUrl: string
+  remoteImportState: RemoteImportState
+  remoteImportError: string | null
+  importedConfig: ImportedSetupConfig | null
+  counts: SetupConfigCounts
+  presets: PresetInfo[]
+  presetCatalogState: PresetCatalogState
+  presetCatalogError: string | null
+  selectedPresetId: string | null
+  presetRequestState: PresetRequestState
+  presetDelta: PresetDelta | null
+  presetImportedConfig: ImportedSetupConfig | null
+  presetError: string | null
+  onSelectRoutingMode: (mode: SetupRoutingMode) => void
+  onChangeRemoteConfigUrl: (value: string) => void
+  onImportRemoteConfig: () => void
+  onSelectPreset: (id: string) => void
+  onImportPresetConfig: () => void
+  onRetryPresets: () => void
+}
+
+function ChoiceCard({
+  active,
+  icon,
+  title,
+  meta,
+  description,
+  onSelect,
+}: {
+  active: boolean
+  icon: typeof Layers
+  title: string
+  meta: string
+  description: string
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      data-choice
+      onClick={onSelect}
+      className={cn(
+        'relative flex flex-col gap-3 rounded-xl border bg-card p-4 text-left shadow-xs outline-none transition-[border-color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring/40',
+        active
+          ? 'border-primary shadow-[0_0_0_3px_var(--ring)]'
+          : 'border-border hover:border-border-strong',
+      )}
+    >
+      <span className="flex items-start gap-3">
+        <IconTile icon={icon} tone="blue" />
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-sm font-semibold tracking-[-0.01em]">{title}</span>
+          <span className="truncate text-xs text-subtle-foreground">{meta}</span>
+        </span>
+      </span>
+      <span className="text-[13px] leading-relaxed text-muted-foreground">{description}</span>
+      {active ? (
+        <motion.span
+          initial={{ scale: 0.4, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', bounce: 0.4, duration: 0.35 }}
+          className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm"
+        >
+          <Check className="size-3" strokeWidth={3} />
+        </motion.span>
+      ) : null}
+    </button>
+  )
 }
 
 export function RoutingStarterPanel({
-  currentRouteLabel,
   routingMode,
   remoteConfigUrl,
   remoteImportState,
@@ -531,260 +705,185 @@ export function RoutingStarterPanel({
   onImportPresetConfig,
   onRetryPresets,
 }: RoutingStarterPanelProps) {
-  const isScratchMode = routingMode === "scratch";
-  const isRemoteMode = routingMode === "remote";
-  const isPresetMode = routingMode === "preset";
-  const isImporting = remoteImportState === "importing";
+  const isPresetMode = routingMode === 'preset'
+  const isRemoteMode = routingMode === 'remote'
+  const isImporting = remoteImportState === 'importing'
 
   return (
-    <div className={styles.stepBody}>
-      <div className={styles.sectionHeader}>
-        <div className={styles.sectionHeaderMain}>
-          <h2 className={styles.sectionTitle}>
-            Choose how routing should begin
-          </h2>
-          <p className={styles.sectionDescription}>
-            Pick a goal-oriented mode, keep setup minimal with a default
-            catch-all route, or import a remote config.
-          </p>
-          <SetupRouteSummary currentRouteLabel={currentRouteLabel} />
-        </div>
+    <div className="flex flex-col gap-5">
+      <div
+        role="radiogroup"
+        aria-label="Routing options"
+        className="grid grid-cols-1 gap-3 md:grid-cols-2"
+      >
+        <ChoiceCard
+          active={routingMode === 'scratch'}
+          icon={Layers}
+          title="From scratch"
+          meta="Default catch-all"
+          description="One route sends every request to the default model. Grow the routing tree after activation."
+          onSelect={() => onSelectRoutingMode('scratch')}
+        />
+        {presets.map((preset) => (
+          <ChoiceCard
+            key={preset.id}
+            active={isPresetMode && selectedPresetId === preset.id}
+            icon={Sparkles}
+            title={preset.label}
+            meta={`${preset.required_models.length} model${preset.required_models.length === 1 ? '' : 's'}`}
+            description={preset.summary}
+            onSelect={() => {
+              onSelectRoutingMode('preset')
+              onSelectPreset(preset.id)
+            }}
+          />
+        ))}
+        {presetCatalogState === 'loading'
+          ? [0, 1].map((key) => <Skeleton key={key} className="h-[132px] rounded-xl" />)
+          : null}
+        <ChoiceCard
+          active={isRemoteMode}
+          icon={CloudDownload}
+          title="From remote"
+          meta={
+            importedConfig
+              ? `${counts.models} models · ${counts.decisions} decisions`
+              : 'Import config.yaml'
+          }
+          description="Fetch a config.yaml from a URL and reuse its routing graph instead of a blank baseline."
+          onSelect={() => onSelectRoutingMode('remote')}
+        />
       </div>
 
-      <div className={styles.presetSection}>
-        <div className={styles.presetSectionHeader}>
-          <div>
-            <h3 className={styles.presetSectionTitle}>Routing options</h3>
-            <p className={styles.presetSectionDescription}>
-              Choose a built-in mode to get a curated routing config, start from
-              scratch with a default catch-all, or import a full config from a
-              URL.
-            </p>
-          </div>
-          <span className={styles.presetSummaryBadge}>{currentRouteLabel}</span>
+      {presetCatalogState === 'loading' ? (
+        <p className="text-xs text-muted-foreground" role="status">
+          Loading starter architectures…
+        </p>
+      ) : null}
+
+      {presetCatalogState === 'error' ? (
+        <div role="alert">
+          <Alert
+            tone="warning"
+            title="Starter architectures unavailable"
+            actions={
+              <Button size="sm" variant="outline" onClick={onRetryPresets}>
+                Retry presets
+              </Button>
+            }
+          >
+            {presetCatalogError}
+          </Alert>
         </div>
+      ) : null}
 
-        <div className={styles.presetGrid}>
-          <button
-            type="button"
-            className={`${styles.presetCard} ${isScratchMode ? styles.presetCardActive : ""}`}
-            aria-pressed={isScratchMode}
-            onClick={() => onSelectRoutingMode("scratch")}
+      {isPresetMode && presetRequestState === 'loading' ? (
+        <Card className="flex flex-col gap-2 p-4" role="status">
+          <span className="text-[13px] font-medium">
+            Checking the architecture against your models…
+          </span>
+          <Skeleton className="h-1.5 w-full" />
+        </Card>
+      ) : null}
+
+      {isPresetMode && selectedPresetId && presetRequestState === 'idle' && !presetDelta ? (
+        <Alert
+          tone="info"
+          actions={
+            <Button size="sm" variant="outline" onClick={() => onSelectPreset(selectedPresetId)}>
+              Recheck preset
+            </Button>
+          }
+        >
+          The model inventory changed. Recheck this preset before continuing.
+        </Alert>
+      ) : null}
+
+      {isPresetMode && presetDelta ? (
+        <SetupWizardPresetChecklist
+          presetDelta={presetDelta}
+          presetImportedConfig={presetImportedConfig}
+          counts={counts}
+          presetError={presetError}
+          presetRequestState={presetRequestState}
+          onImportPresetConfig={onImportPresetConfig}
+        />
+      ) : null}
+
+      {isPresetMode && !presetDelta && presetError ? (
+        <div role="alert">
+          <Alert
+            tone="danger"
+            title="The preset could not be prepared"
+            actions={
+              selectedPresetId ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onSelectPreset(selectedPresetId)}
+                >
+                  Retry selected preset
+                </Button>
+              ) : null
+            }
           >
-            <div className={styles.presetCardHeader}>
-              <h4 className={styles.presetCardTitle}>From scratch</h4>
-              <span className={styles.presetCardMeta}>Default catch-all</span>
-            </div>
-            <p className={styles.presetCardDescription}>
-              Build the first router config from the model you connected in step
-              one, then evolve the routing tree after activation.
-            </p>
-          </button>
-
-          {presets.map((preset) => {
-            const isActive =
-              isPresetMode && selectedPresetId === preset.id;
-            return (
-              <button
-                key={preset.id}
-                type="button"
-                className={`${styles.presetCard} ${isActive ? styles.presetCardActive : ""}`}
-                aria-pressed={isActive}
-                onClick={() => {
-                  onSelectRoutingMode("preset");
-                  onSelectPreset(preset.id);
-                }}
-              >
-                <div className={styles.presetCardHeader}>
-                  <h4 className={styles.presetCardTitle}>{preset.label}</h4>
-                  <span className={styles.presetCardMeta}>
-                    {preset.required_models.length} model
-                    {preset.required_models.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <p className={styles.presetCardDescription}>
-                  {preset.summary}
-                </p>
-              </button>
-            );
-          })}
-
-          <button
-            type="button"
-            className={`${styles.presetCard} ${isRemoteMode ? styles.presetCardActive : ""}`}
-            aria-pressed={isRemoteMode}
-            onClick={() => onSelectRoutingMode("remote")}
-          >
-            <div className={styles.presetCardHeader}>
-              <h4 className={styles.presetCardTitle}>From remote</h4>
-              <span className={styles.presetCardMeta}>
-                {importedConfig
-                  ? `${counts.models} models · ${counts.decisions} decisions`
-                  : "Import config.yaml"}
-              </span>
-            </div>
-            <p className={styles.presetCardDescription}>
-              Paste a direct YAML URL, fetch the config, and reuse its existing
-              routing graph instead of starting from a blank baseline.
-            </p>
-          </button>
+            {presetError}
+          </Alert>
         </div>
+      ) : null}
 
-        {presetCatalogState === "loading" && (
-          <div className={styles.asyncNotice} role="status">
-            Loading starter architectures…
-          </div>
-        )}
-
-        {presetCatalogState === "error" && (
-          <div className={styles.errorPanel} role="alert">
-            <div className={styles.errorTitle}>Starter architectures unavailable</div>
-            <p className={styles.errorText}>{presetCatalogError}</p>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={onRetryPresets}
-            >
-              Retry presets
-            </button>
-          </div>
-        )}
-
-        {isPresetMode && presetRequestState === "loading" && (
-          <div className={styles.asyncNotice} role="status">
-            Checking the selected architecture against your model inventory…
-          </div>
-        )}
-
-        {isPresetMode &&
-          selectedPresetId &&
-          presetRequestState === "idle" &&
-          !presetDelta && (
-            <div className={styles.asyncNotice} role="status">
-              <span>The model inventory changed. Recheck this preset before continuing.</span>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => onSelectPreset(selectedPresetId)}
-              >
-                Recheck preset
-              </button>
-            </div>
-          )}
-
-        {isPresetMode && presetDelta && (
-          <div
-            className={styles.remoteImportPanel}
-            aria-busy={presetRequestState === "importing"}
+      {isRemoteMode ? (
+        <Card className="flex flex-col gap-3 p-4" aria-busy={isImporting}>
+          <Field
+            label="Remote config URL"
+            htmlFor="setup-remote-url"
+            error={remoteImportError ?? undefined}
+            hint="A direct YAML link. The wizard fetches and parses it, and the review step validates it."
           >
-            <SetupWizardPresetChecklist
-              presetDelta={presetDelta}
-              presetImportedConfig={presetImportedConfig}
-              counts={counts}
-              presetError={presetError}
-              presetRequestState={presetRequestState}
-              onImportPresetConfig={onImportPresetConfig}
-            />
-          </div>
-        )}
-
-        {isPresetMode && !presetDelta && presetError && (
-          <div className={styles.remoteImportPanel}>
-            <p className={styles.fieldErrorText} role="alert">
-              {presetError}
-            </p>
-            {selectedPresetId && (
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={() => onSelectPreset(selectedPresetId)}
-              >
-                Retry selected preset
-              </button>
-            )}
-          </div>
-        )}
-
-        {isRemoteMode && (
-          <div className={styles.remoteImportPanel} aria-busy={isImporting}>
-            <label
-              className={`${styles.field} ${styles.fieldWide} ${remoteImportError ? styles.fieldError : ""}`}
-            >
-              <span className={styles.fieldLabel}>Remote config URL</span>
-              <input
+            <div className="flex gap-2">
+              <Input
+                id="setup-remote-url"
                 value={remoteConfigUrl}
-                onChange={(event) =>
-                  onChangeRemoteConfigUrl(event.target.value)
-                }
+                onChange={(event) => onChangeRemoteConfigUrl(event.target.value)}
                 placeholder={DEFAULT_REMOTE_SETUP_CONFIG_URL}
                 aria-invalid={Boolean(remoteImportError)}
+                spellCheck={false}
+                className="font-mono text-[12.5px]"
               />
-              <span className={styles.fieldHint}>
-                Paste a direct YAML link. The wizard fetches the file, parses
-                the config, and moves that imported draft into the review step.
-              </span>
-              {remoteImportError && (
-                <span className={styles.fieldErrorText}>
-                  {remoteImportError}
-                </span>
-              )}
-            </label>
-
-            <div className={styles.remoteImportActions}>
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                onClick={onImportRemoteConfig}
-                disabled={isImporting}
-              >
+              <Button variant="outline" onClick={onImportRemoteConfig} loading={isImporting}>
                 {isImporting
-                  ? "Importing…"
-                  : remoteImportState === "error"
-                    ? "Retry import"
-                    : "Import"}
-              </button>
+                  ? 'Importing…'
+                  : remoteImportState === 'error'
+                    ? 'Retry import'
+                    : 'Import'}
+              </Button>
             </div>
-
-            {isImporting && (
-              <div className={styles.asyncNotice} role="status">
-                Fetching and parsing the remote configuration…
-              </div>
-            )}
-
-            {importedConfig && (
-              <div className={styles.remoteImportSummary} role="status">
-                <div className={styles.remoteImportSummaryHeader}>
-                  <h4 className={styles.presetCardTitle}>
-                    Remote config ready
-                  </h4>
-                  <span className={styles.presetCardMeta}>
-                    {counts.models} models · {counts.decisions} decisions ·{" "}
-                    {counts.signals} signals
-                  </span>
-                </div>
-                <p className={styles.remoteImportSource}>
+          </Field>
+          {isImporting ? (
+            <p className="text-xs text-muted-foreground" role="status">
+              Fetching and parsing the remote configuration…
+            </p>
+          ) : null}
+          {importedConfig ? (
+            <div role="status">
+              <Alert tone="success" title="Remote config ready">
+                <span className="block">
+                  {counts.models} models · {counts.decisions} decisions · {counts.signals} signals
+                </span>
+                <span className="block truncate font-mono text-[12px]">
                   {importedConfig.sourceUrl}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                </span>
+              </Alert>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
 
-      <div className={styles.reviewStats}>
-        <div className={styles.reviewStat}>
-          <span className={styles.reviewStatLabel}>Models ready</span>
-          <span className={styles.reviewStatValue}>{counts.models}</span>
-        </div>
-        <div className={styles.reviewStat}>
-          <span className={styles.reviewStatLabel}>Generated decisions</span>
-          <span className={styles.reviewStatValue}>{counts.decisions}</span>
-        </div>
-        <div className={styles.reviewStat}>
-          <span className={styles.reviewStatLabel}>Generated signals</span>
-          <span className={styles.reviewStatValue}>{counts.signals}</span>
-        </div>
+      <div className="grid grid-cols-3 gap-3">
+        <MiniStat label="Models ready" value={counts.models} />
+        <MiniStat label="Decisions" value={counts.decisions} />
+        <MiniStat label="Signals" value={counts.signals} />
       </div>
     </div>
-  );
+  )
 }

@@ -113,10 +113,6 @@ func (t *Task[Input, Output]) Bind(ctx context.Context, provider string, id Iden
 	return resolved, err
 }
 
-func Register[Input, Output any](r *Registry, contract string, input func(Input) error, output func(Input, Output) error) (*Task[Input, Output], error) {
-	return RegisterTask(r, contract, contract, input, output)
-}
-
 // RegisterTask allows different typed inputs to share a result contract. A
 // grounded text task and a plain text task can both return token_spans.v1;
 // their registry identities and input validators remain distinct.

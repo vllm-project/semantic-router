@@ -38,6 +38,8 @@ const (
 // NewServer returns an HTTP server for handler that speaks HTTP/1.1 and,
 // like Envoy's automatic codec, HTTP/2: over cleartext (h2c), or by ALPN
 // when the listener serves TLS.
+// A native *Handler supplies its body bounds to the h2c Upgrade adapter.
+// Other handlers use DefaultMaxRequestBodyBytes and opts.IdleTimeout there.
 func NewServer(handler http.Handler, opts ServerOptions) *http.Server {
 	if opts.IdleTimeout <= 0 {
 		opts.IdleTimeout = DefaultIdleTimeout
@@ -53,7 +55,14 @@ func NewServer(handler http.Handler, opts ServerOptions) *http.Server {
 		TLSConfig:         opts.TLS,
 	}
 	if opts.TLS == nil {
-		server.Handler = h2c.NewHandler(handler, &http2.Server{IdleTimeout: opts.IdleTimeout})
+		h2 := &http2.Server{IdleTimeout: opts.IdleTimeout}
+		// Configured, the h2c connections take part in the server's Shutdown,
+		// which sends each a GOAWAY so that its client opens no new stream on
+		// it. ConfigureServer also prepares the server for TLS, which Serve
+		// would then expect.
+		_ = http2.ConfigureServer(server, h2)
+		server.TLSConfig, server.TLSNextProto = nil, nil
+		server.Handler = boundH2CUpgrade(handler, h2c.NewHandler(handler, h2), opts.IdleTimeout)
 	}
 	return server
 }

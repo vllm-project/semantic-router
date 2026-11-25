@@ -138,14 +138,29 @@ def test_every_family_has_a_table_and_lookups_cover_them():
         "decision1",
         "task_heads",
         "vela2",
+        "vela3",
+        "vela3_d3",
+        "vela3_pico",
         "multimodal_embedding",
     }
     assert all(model.family == "decision2" for model in builtin.all_models("decision2"))
+    assert {model.repo_id for model in builtin.all_models("vela3_pico")} == {
+        "vllm-sr/vela3.1-pico-380m",
+        "vllm-sr/vela3.1-pico-150m",
+    }
+    assert {model.repo_id for model in builtin.all_models("vela3_d3")} == {
+        "vllm-sr/vela3-lite",
+        "vllm-sr/vela3-mini",
+        "vllm-sr/vela3-flash",
+        "vllm-sr/vela3-turbo",
+    }
+    assert all(model.base is not None for model in builtin.all_models("vela3_d3"))
     assert {model.repo_id for model in builtin.all_models("decision3")} == {
         f"vllm-sr/{name}"
         for name in (
             "d3",
             "d3-turbo",
+            "d3-ultra",
             "d3-flash",
             "d3-mini",
             "d3-nano",
@@ -282,3 +297,20 @@ def test_downloads_retry_transient_hub_failures_only(monkeypatch, tmp_path):
     with pytest.raises(LocalEntryNotFoundError):
         resolver.download("acme/encoder", revision, offline=True)
     assert len(calls) == 1
+
+
+# Models recorded with a device-class ``cuda`` reference on purpose
+# (``golden_answers.py --generic``). A class reference is compared with every
+# NVIDIA architecture, so one recorded on a single GPU fails the load of any
+# architecture whose answers differ by more than ``GPU_TOLERANCE``, where no
+# reference at all serves ``unverified``. Opting a model in is a deliberate
+# choice to check unknown NVIDIA hardware against this GPU's answers.
+GENERIC_CUDA_REFERENCE: frozenset[str] = frozenset()
+
+
+def test_a_device_class_cuda_reference_needs_an_explicit_opt_in():
+    """Guards the recorder's default: a GPU keys its own architecture alone."""
+    for model in builtin.all_models():
+        classes = {key.partition("@")[0] for key in model.golden_answers}
+        if "cuda" in classes:
+            assert model.repo_id in GENERIC_CUDA_REFERENCE, model.repo_id

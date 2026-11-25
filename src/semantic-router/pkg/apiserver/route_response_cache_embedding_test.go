@@ -38,17 +38,17 @@ func (p *responseCacheDiagnosticProvider) Embed(context.Context, string) ([]floa
 
 func TestResponseCacheDiagnosticsBorrowActualServiceWithoutDefaultEmbedding(t *testing.T) {
 	provider := &responseCacheDiagnosticProvider{}
-	backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: "bert", EmbeddingProvider: provider})
+	backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingDeployment: "cache-embed", EmbeddingProvider: provider})
 	t.Cleanup(func() { _ = backend.Close() })
-	adapter := cache.NewLegacyBackendAdapter(backend, cache.InMemoryCacheType).WithEmbeddingModel("bert").WithEmbeddingProvider(provider)
+	adapter := cache.NewLegacyBackendAdapter(backend, cache.InMemoryCacheType).WithEmbeddingDeployment("cache-embed").WithEmbeddingProvider(provider)
 	server := &ClassificationAPIServer{responseCache: cache.NewResponseCacheService(adapter, cache.DefaultResponseCacheServiceOptions())}
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/storage/response-cache/test", strings.NewReader(`{"configuration":{"backend_type":"memory","enabled":true,"embedding_model":"bert"}}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/storage/response-cache/test", strings.NewReader(`{"configuration":{"backend_type":"memory","enabled":true,"embedding":{"deployment":"cache-embed"}}}`))
 	recorder := httptest.NewRecorder()
 	server.handleResponseCacheTest(recorder, request)
 	if recorder.Code != http.StatusOK || provider.calls == 0 {
 		t.Fatalf("diagnostic did not use the live cache consumer: %d / %s / calls=%d", recorder.Code, recorder.Body.String(), provider.calls)
 	}
-	if _, err := server.responseCache.PreparedEmbedding("mmbert"); err == nil {
-		t.Fatal("a different candidate model borrowed the cache consumer")
+	if _, err := server.responseCache.PreparedEmbedding("vela-embedding"); err == nil {
+		t.Fatal("a different candidate deployment borrowed the cache consumer")
 	}
 }

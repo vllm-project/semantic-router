@@ -33,34 +33,13 @@ ROOT = Path(__file__).resolve().parents[2]
 ROUTER = ROOT / "src/semantic-router"
 # Environment variable -> the runtime's built-in package it names.
 PACKAGES = {
-    "VLLM_SR_DOMAIN_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Domain",
-    "VLLM_SR_PII_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-PII",
-    "VLLM_SR_JAILBREAK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Guard",
-    "VLLM_SR_FACTCHECK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-FactCheck",
-    "VLLM_SR_FEEDBACK_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Feedback",
     "VLLM_SR_MMBERT_TEST_MODEL": "vllm-sr/Vela-1.0-Encoder-307M-Embedding",
 }
-# Router consumers read their label mappings from the package directory; the
-# runtime's pinned file list leaves them out.
+# Files the runtime's pinned file list leaves out of a package directory.
 ROUTER_FILES = ["*_mapping.json"]
-CLASSIFIER_TESTS = (
-    "TestJailbreakDistributionRealModel",
-    "TestJailbreakRiskRealModelContract",
-    "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
-    "TestFeedbackPredictionAndAbstentionRealModel",
-    "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
-    "TestFactCheckPolicyRealModel",
-    "TestFactCheckEmptyInputRealModel",
-    "TestLocalClassifierMaintainedCPU",
-    "TestUnifiedClassifierPublishedModels",
-)
 CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
 # The pinned Omni Nano snapshot (VELA_OMNI_ARTIFACT) serves these.
 OMNI_TESTS = {
-    "classification": (
-        "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-        "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-    ),
     "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
 }
 # Log -> the Vela 2.0 size a runtime of its own serves for the tests that log
@@ -80,7 +59,6 @@ VELA2_SUITES = {
     ),
 }
 SELECTIONS = (
-    ("./pkg/classification", CLASSIFIER_TESTS, "classification.jsonl"),
     ("./pkg/cache", CACHE_TESTS, "cache.jsonl"),
     *(
         ("./pkg/" + package, names, "omni-" + package + ".jsonl")
@@ -236,20 +214,34 @@ def validate_results(events: list[dict], expected: set[str]) -> dict:
     skipped = sorted(
         {e["Test"] for e in events if e.get("Action") == "skip" and "Test" in e}
     )
+
     failed = sorted(
-        {
-            e.get("Test", e.get("Package", "unknown"))
-            for e in events
-            if e.get("Action") == "fail"
-        }
+        {e["Test"] for e in events if e.get("Action") == "fail" and "Test" in e}
     )
+
+    # Go initialization panics can fail the package without producing
+    # any terminal test-level events.
+    has_terminal_test_event = any(
+        e.get("Action") in {"pass", "skip", "fail"} and "Test" in e for e in events
+    )
+    package_failed = (
+        any(
+            e.get("Action") == "fail" and "Package" in e and "Test" not in e
+            for e in events
+        )
+        and not has_terminal_test_event
+    )
+
     missing = sorted(expected - passed)
+
     return {
         "passed": sorted(passed),
         "skipped": skipped,
         "failed": failed,
+        "package_failed": package_failed,
         "missing": missing,
-        "success": bool(expected) and not (skipped or failed or missing),
+        "success": bool(expected)
+        and not (skipped or failed or package_failed or missing),
     }
 
 

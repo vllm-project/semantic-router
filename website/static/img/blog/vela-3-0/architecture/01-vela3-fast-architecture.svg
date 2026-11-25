@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1560" height="1700" viewBox="0 0 1560 1700" role="img"><title>vela3-fast: model architecture</title><desc>UltraBERT-380M bidirectional encoder. Frozen decision backbone with its decision readout; one routed adapter per non-decision question. Read bottom to top.</desc>
+<defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
+        <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
+<text x="330" y="58.0" font-size="28" text-anchor="middle" class="">Decisions</text>
+<text x="860" y="58.0" font-size="28" text-anchor="middle" class="">Router answers · labeled spans</text>
+<g data-box="110.0 100 440 88">
+<rect x="110.0" y="100" width="440" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="138.12" font-size="24" text-anchor="middle" class="">Softmax over the options</text>
+<text x="330" y="166.2" font-size="24" text-anchor="middle" class="">Choice · Noul = p(yes)</text>
+</g>
+<g data-box="610.0 100 500 88">
+<rect x="610.0" y="100" width="500" height="88" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="138.365" font-size="23" text-anchor="middle" class="">Softmax / sigmoid · threshold + merge</text>
+<text x="860" y="165.275" font-size="23" text-anchor="middle" class="">options, sets, character-offset spans</text>
+</g>
+<path d="M330,99 L330,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,99 L860,72" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="110.0 235 440 86">
+<rect x="110.0" y="235" width="440" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="272.12" font-size="24" text-anchor="middle" class="">Cosine / τ + option MLP</text>
+<text x="330" y="300.2" font-size="24" text-anchor="middle" class="">projection width 256</text>
+</g>
+<g data-box="610.0 235 500 86">
+<rect x="610.0" y="235" width="500" height="86" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="272.12" font-size="24" text-anchor="middle" class="">Adapter head: cosine + MLP</text>
+<text x="860" y="300.2" font-size="24" text-anchor="middle" class="">or word–label cosine / τ_span</text>
+</g>
+<g data-box="110.0 370 440 86">
+<rect x="110.0" y="370" width="440" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="330" y="407.12" font-size="24" text-anchor="middle" class="">[Q] and [O] marker states</text>
+<text x="330" y="435.2" font-size="24" text-anchor="middle" class="">+ state-part mean</text>
+</g>
+<g data-box="610.0 370 500 86">
+<rect x="610.0" y="370" width="500" height="86" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="860" y="407.12" font-size="24" text-anchor="middle" class="">[O] markers · first sub-token</text>
+<text x="860" y="435.2" font-size="24" text-anchor="middle" class="">of each word · [E] label markers</text>
+</g>
+<path d="M330,234 L330,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M330,369 L330,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,234 L860,189" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M860,369 L860,322" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="425.0 530 350 54">
+<rect x="425.0" y="530" width="350" height="54" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="565.84" font-size="26" text-anchor="middle" class="">Final RMSNorm</text>
+</g>
+<path d="M600,529 L600,492 L330,492 L330,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,492 L860,492 L860,457" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="600" cy="492" r="3.5" fill="#111"/>
+<text x="600" y="480.0" font-size="22" text-anchor="middle" class="math">H: sequence length × 1,024</text>
+<text x="320" y="520.0" font-size="21" text-anchor="end" class="">frozen pass</text>
+<text x="870" y="520.0" font-size="21" text-anchor="start" class="">adapter pass</text>
+<rect x="318" y="625" width="568" height="595" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<text x="294" y="931.5" font-size="30" text-anchor="end" class="math">24×</text>
+<circle cx="600" cy="675" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="600" y="683.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="425.0 723 350 80">
+<rect x="425.0" y="723" width="350" height="80" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="756.875" font-size="25" text-anchor="middle" class="">SwiGLU feed forward</text>
+<text x="600" y="786.125" font-size="25" text-anchor="middle" class="">1,024 → 3,072 → 1,024</text>
+</g>
+<g data-box="425.0 841 350 50">
+<rect x="425.0" y="841" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="874.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<circle cx="600" cy="935" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="600" y="943.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="425.0 983 350 85">
+<rect x="425.0" y="983" width="350" height="85" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1019.6200000000001" font-size="24" text-anchor="middle" class="">Bidirectional self-attention</text>
+<text x="600" y="1047.7" font-size="24" text-anchor="middle" class="">local / global layers</text>
+</g>
+<g data-box="425.0 1106 350 50">
+<rect x="425.0" y="1106" width="350" height="50" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1139.5" font-size="25" text-anchor="middle" class="">RMSNorm</text>
+</g>
+<path d="M600,656 L600,585" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,722 L600,694" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,840 L600,804" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,916 L600,892" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,982 L600,954" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,1105 L600,1069" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,1188 L839,1188 L839,935 L619,935" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M600,907 L839,907 L839,675 L619,675" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="600" cy="1188" r="3.5" fill="#111"/>
+<circle cx="600" cy="907" r="3.5" fill="#111"/>
+<g data-box="425.0 1290 350 74">
+<rect x="425.0" y="1290" width="350" height="74" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="600" y="1320.875" font-size="25" text-anchor="middle" class="">Token embedding</text>
+<text x="600" y="1350.125" font-size="25" text-anchor="middle" class="">49,160 × 1,024</text>
+</g>
+<path d="M600,1289 L600,1157" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="795" y="1318.0" font-size="21" text-anchor="start" class="">49,152 UltraBERT tokens</text>
+<text x="795" y="1342.57" font-size="21" text-anchor="start" class="">+ 8 markers: [Q] [O] [ABS] [E]</text>
+<text x="795" y="1367.14" font-size="21" text-anchor="start" class="">[SEP_SCHEMA] [SEG_user / context / answer]</text>
+<text x="600" y="1470.0" font-size="25" text-anchor="middle" class="">Question schema + typed state · one input of up to 32,768 tokens</text>
+<path d="M600,1445 L600,1366" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="130" y="760.0" font-size="22" text-anchor="middle" class="">Global layers</text>
+<text x="130" y="785.74" font-size="22" text-anchor="middle" class="">3, 6, 9, …, 24</text>
+<text x="130" y="811.48" font-size="22" text-anchor="middle" class="">RoPE θ = 2,560,000</text>
+<text x="130" y="880.0" font-size="22" text-anchor="middle" class="">Other layers</text>
+<text x="130" y="905.74" font-size="22" text-anchor="middle" class="">|i − j| ≤ 128</text>
+<text x="130" y="931.48" font-size="22" text-anchor="middle" class="">RoPE θ = 10,000</text>
+<text x="130" y="1010.0" font-size="22" text-anchor="middle" class="">8 heads × 128</text>
+<text x="130" y="1035.74" font-size="22" text-anchor="middle" class="">no bias</text>
+<rect x="1100" y="625" width="440" height="660" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2" stroke-dasharray="9 7"/>
+<text x="1320.0" y="661.0" font-size="25" text-anchor="middle" class="serif">Routed adapter (one per pass)</text>
+<g data-box="1125.0 700 390 110">
+<rect x="1125.0" y="700" width="390" height="110" rx="7" fill="#DED2EC" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="736.74" font-size="22" text-anchor="middle" class="">LoRA ΔW = B A · α / r</text>
+<text x="1320" y="762.48" font-size="22" text-anchor="middle" class="">q, k, v, o, gate, up, down</text>
+<text x="1320" y="788.22" font-size="22" text-anchor="middle" class="">all 24 layers</text>
+</g>
+<g data-box="1125.0 845 390 110">
+<rect x="1125.0" y="845" width="390" height="110" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="881.74" font-size="22" text-anchor="middle" class="">Own copies of the top layers</text>
+<text x="1320" y="907.48" font-size="22" text-anchor="middle" class="">spans 20–23 · router 16–23</text>
+<text x="1320" y="933.22" font-size="22" text-anchor="middle" class="">domain 12–23</text>
+</g>
+<g data-box="1125.0 990 390 80">
+<rect x="1125.0" y="990" width="390" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="1024.6100000000001" font-size="22" text-anchor="middle" class="">Own readout head</text>
+<text x="1320" y="1050.3500000000001" font-size="22" text-anchor="middle" class="">norm, projections, τ</text>
+</g>
+<g data-box="1125.0 1105 390 80">
+<rect x="1125.0" y="1105" width="390" height="80" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1320" y="1139.855" font-size="21" text-anchor="middle" class="">Every other weight: the frozen</text>
+<text x="1320" y="1164.425" font-size="21" text-anchor="middle" class="">backbone&#x27;s, shared by reference</text>
+</g>
+<path d="M1100,920 L840,920" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="7 6" marker-end="url(#arrow)"/>
+<text x="1320" y="1222.0" font-size="22" text-anchor="middle" class="">Rank 64 (α 128); NER and</text>
+<text x="1320" y="1247.74" font-size="22" text-anchor="middle" class="">relation adapters rank 128 (α 256)</text>
+<text x="600" y="1580.0" font-size="31" text-anchor="middle" class="serif">vela3-fast (0.4B)</text>
+<text x="600" y="1620.0" font-size="21" text-anchor="middle" class="">Decisions run on the frozen backbone with no adapter; every other question runs one routed adapter pass.</text>
+<text x="600" y="1652.0" font-size="21" text-anchor="middle" class="">Bidirectional SDPA encoder. Decisions run under bf16 autocast on GPU; adapter passes run in fp32, as evaluated.</text>
+</svg>

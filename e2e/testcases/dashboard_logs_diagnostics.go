@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -54,13 +55,14 @@ type dashboardAuditEntry struct {
 
 // testDashboardLogsDiagnostics covers the diagnostics journey from #3233 as
 // behavior rather than HTTP success. The dashboard profile runs on
-// Kubernetes, where no bounded log spool is mounted: only the `vllm-sr serve`
-// split runtime relays container output into one, and the Kubernetes
-// manifests do not. /api/logs must therefore say so explicitly, with
-// supported=false and a message, instead of answering an empty success that
-// reads as "nothing happened". Input validation still runs ahead of that
-// answer: an unknown component is the caller's mistake and is reported as
-// such, not hidden behind the unsupported notice.
+// Kubernetes, where no bounded log spool is mounted, so /api/logs reads pod
+// logs through the Kubernetes API. The profile's Dashboard runs under the
+// namespace's default service account, which may not list pods, so /api/logs
+// must say so explicitly, with supported=false and a message naming the
+// missing permission, instead of answering an empty success that reads as
+// "nothing happened". Input validation still runs ahead of that answer: an
+// unknown component is the caller's mistake and is reported as such, not
+// hidden behind the permission notice.
 //
 // A rejected deploy writes no log line and no backup; the Dashboard records
 // it only in the deploy response and in the audit trail. The second half of
@@ -83,11 +85,11 @@ func testDashboardLogsDiagnostics(ctx context.Context, client *kubernetes.Client
 		return err
 	}
 
-	logsDefault, err := assertDashboardLogsUnsupported(ctx, httpClient, baseURL, token, "", "router")
+	logsDefault, err := assertDashboardLogsNamePermission(ctx, httpClient, baseURL, token, "", "router")
 	if err != nil {
 		return err
 	}
-	if _, allErr := assertDashboardLogsUnsupported(ctx, httpClient, baseURL, token, "all", "all"); allErr != nil {
+	if _, allErr := assertDashboardLogsNamePermission(ctx, httpClient, baseURL, token, "all", "all"); allErr != nil {
 		return allErr
 	}
 	if componentErr := assertDashboardLogsRejectsComponent(ctx, httpClient, baseURL, token, "e2e-not-a-component"); componentErr != nil {
@@ -174,12 +176,12 @@ func testDashboardLogsDiagnostics(ctx context.Context, client *kubernetes.Client
 	return nil
 }
 
-// assertDashboardLogsUnsupported reads /api/logs for the given component and
-// pins the explicit unsupported answer this profile must give: a 200 with
-// supported=false, the unsupported deployment type, no entries, no error,
-// and a message that tells the operator why. The exact wording belongs to
-// the handler and is recorded in the details rather than asserted.
-func assertDashboardLogsUnsupported(ctx context.Context, client *http.Client, baseURL, token, component, wantService string) (dashboardLogsResponse, error) {
+// assertDashboardLogsNamePermission reads /api/logs for the given component
+// and pins the explicit answer this profile must give: a 200 from the
+// Kubernetes source with supported=false, no entries, no error, and a message
+// that names the permission the service account lacks, list on pods. The
+// rest of the wording belongs to the handler and is recorded in the details.
+func assertDashboardLogsNamePermission(ctx context.Context, client *http.Client, baseURL, token, component, wantService string) (dashboardLogsResponse, error) {
 	target := baseURL + "/api/logs"
 	if component != "" {
 		target += "?component=" + url.QueryEscape(component)
@@ -192,15 +194,15 @@ func assertDashboardLogsUnsupported(ctx context.Context, client *http.Client, ba
 	if decodeErr := json.Unmarshal(body, &logs); decodeErr != nil {
 		return dashboardLogsResponse{}, fmt.Errorf("logs response is not JSON: %w (body: %s)", decodeErr, truncateString(string(body), 300))
 	}
-	if logs.Supported || logs.DeploymentType != "unsupported" {
-		return logs, fmt.Errorf("logs for component %q must state they are unsupported on this profile, got supported=%t deployment_type=%q",
+	if logs.Supported || logs.DeploymentType != "kubernetes" {
+		return logs, fmt.Errorf("logs for component %q must state that pod logs are not readable on this profile, got supported=%t deployment_type=%q",
 			wantService, logs.Supported, logs.DeploymentType)
 	}
-	if logs.Message == "" || logs.Error != "" {
-		return logs, fmt.Errorf("unsupported logs must carry a message and no error, got message=%q error=%q", logs.Message, logs.Error)
+	if !strings.Contains(logs.Message, "list verb on pods") || logs.Error != "" {
+		return logs, fmt.Errorf("unreadable pod logs must name the missing list permission on pods and carry no error, got message=%q error=%q", logs.Message, logs.Error)
 	}
 	if logs.Logs == nil || len(logs.Logs) != 0 || logs.Count != 0 {
-		return logs, fmt.Errorf("unsupported logs must answer an empty entry list with count 0, got %d entries (count %d, list present %t)",
+		return logs, fmt.Errorf("unreadable pod logs must answer an empty entry list with count 0, got %d entries (count %d, list present %t)",
 			len(logs.Logs), logs.Count, logs.Logs != nil)
 	}
 	if logs.Service != wantService {
@@ -210,7 +212,7 @@ func assertDashboardLogsUnsupported(ctx context.Context, client *http.Client, ba
 }
 
 // assertDashboardLogsRejectsComponent pins that an unknown component is
-// answered as the caller's error, ahead of the spool check.
+// answered as the caller's error, ahead of reading any log source.
 func assertDashboardLogsRejectsComponent(ctx context.Context, client *http.Client, baseURL, token, component string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/api/logs?component="+url.QueryEscape(component), nil)
 	if err != nil {

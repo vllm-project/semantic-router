@@ -2,15 +2,16 @@ package extproc
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 const (
@@ -41,11 +42,43 @@ type preparedShadowCall struct {
 	body   []byte
 }
 
+type shadowTokenEstimate struct {
+	input  int
+	output int64
+}
+
+func (p *preparedShadowCall) estimateTokens(engine *protocolcodec.Engine) (shadowTokenEstimate, error) {
+	request, _, _, err := engine.DecodeRequest(p.target.format, p.body)
+	if err != nil {
+		return shadowTokenEstimate{}, err
+	}
+	output := request.Sampling.MaxOutputTokens
+	if output != nil && *output <= 0 {
+		return shadowTokenEstimate{}, errors.New("shadow token estimate requires a positive output limit when specified")
+	}
+	if request.CandidateCount != nil && *request.CandidateCount > 1 {
+		return shadowTokenEstimate{}, errors.New("shadow token estimate requires a single completion")
+	}
+	tokens := shadowTokenEstimate{input: llmprotocol.EstimateInput(&request).Tokens}
+	if output != nil {
+		tokens.output = *output
+	}
+	return tokens, nil
+}
+
 func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResult {
 	result := shadowResult{startedAt: d.now()}
-	prepared, reason, err := d.prepareShadowCall(job)
-	if err != nil {
-		return d.failShadow(result, reason, err)
+	if reason, done := shadowContextFailure(ctx, d.ctx); done {
+		return d.failShadow(result, reason, ctx.Err())
+	}
+	prepared := job.prepared
+	if prepared == nil {
+		var reason string
+		var err error
+		prepared, reason, err = d.prepareShadowCall(job)
+		if err != nil {
+			return d.failShadow(result, reason, err)
+		}
 	}
 	result.shadowBackend = prepared.target.backendName
 	operation := connector.Operation{
@@ -59,6 +92,9 @@ func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResul
 		Body:    prepared.body,
 		Headers: shadowCallHeaders(job, prepared.target),
 	})
+	if job.spend != nil {
+		job.spend.dispatched = shadowCallMayHaveBeenDispatched(err)
+	}
 	if err != nil {
 		reason, attempts, status := shadowConnectorFailure(ctx, d.ctx, err)
 		result.attempts = attempts
@@ -75,6 +111,11 @@ func (d *shadowDispatcher) call(ctx context.Context, job *shadowJob) shadowResul
 	result.stopReason = string(decoded.Response.StopReason)
 	result.inputTokens = shadowTokenCount(decoded.Response.Usage.InputTotal)
 	result.outputTokens = shadowTokenCount(decoded.Response.Usage.OutputTotal)
+	if job.spend != nil {
+		job.spend.usage = responseUsageFromSemanticUsage(decoded.Response.Usage)
+	}
+	result.inputKnown = decoded.Response.Usage.InputTotal.Value != nil
+	result.outputKnown = decoded.Response.Usage.OutputTotal.Value != nil
 	result.text = semanticResponseText(decoded.Response)
 	result.verdict = shadowVerdictCompleted
 	result.reason = shadowReasonCompleted
@@ -95,7 +136,7 @@ func (d *shadowDispatcher) failShadow(result shadowResult, reason string, err er
 // prepareShadowCall resolves the shadow backend, its connector, and the
 // encoded body once; the connector then owns every transport attempt.
 func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCall, string, error) {
-	target, err := resolveShadowTarget(job.routerConfig, job.cfg.Model)
+	target, err := resolveShadowTarget(job.routerConfig, job.model)
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, err
 	}
@@ -103,7 +144,13 @@ func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCal
 	if err != nil {
 		return nil, reason, err
 	}
-	body, err := job.encode(job.request, target)
+	// Each worker owns its mutable provider projection; the group snapshot is
+	// immutable and retained only once on the primary path.
+	request, err := cloneSemanticRequestForReplay(&job.request)
+	if err != nil {
+		return nil, shadowReasonEncodeFailed, err
+	}
+	body, err := job.encode(*request, target)
 	if err != nil {
 		return nil, shadowReasonEncodeFailed, err
 	}
@@ -113,22 +160,22 @@ func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCal
 // connectorFor returns the shared connector for a target and decision bounds,
 // creating it on first use. The key includes the router config identity so a
 // rebuilt configuration never reuses a connector bound to the old one.
-// Certificate verification is skipped only when the operator opted in for
-// that decision.
 func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*connector.Client, string, error) {
-	key := fmt.Sprintf("%p|%s|%s|%d|%d|%d|%t",
-		job.routerConfig, target.baseURL, target.logicalModel,
-		job.cfg.TimeoutSeconds, job.cfg.MaxRetries, job.cfg.MaxResponseBytes, job.cfg.TLSSkipVerify)
+	key := fmt.Sprintf("%p|%s|%s|%d|%d", job.routerConfig, target.baseURL, target.logicalModel, job.timeout, job.responseLimit)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if client, ok := d.clients[key]; ok {
 		return client, "", nil
 	}
-	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel)
+	authorize, err := configuredProviderAuthorizer(job.routerConfig, target.profile, target.logicalModel, "router_replay_shadow")
 	if err != nil {
 		return nil, shadowReasonCredentialUnresolved, err
 	}
-	client, err := connector.New(target.baseURL, authorize, shadowConnectorOptions(job.cfg))
+	backendTLS, err := providerTLSConfig(target.profile)
+	if err != nil {
+		return nil, shadowReasonBackendUnresolved, err
+	}
+	client, err := connector.New(target.baseURL, authorize, shadowConnectorOptions(job, backendTLS))
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, fmt.Errorf("shadow model %q: %w", target.logicalModel, err)
 	}
@@ -136,23 +183,21 @@ func (d *shadowDispatcher) connectorFor(job *shadowJob, target *shadowTarget) (*
 	return client, "", nil
 }
 
-func shadowConnectorOptions(cfg config.ShadowDispatchPluginConfig) connector.Options {
-	options := connector.Options{
-		AttemptTimeout:   time.Duration(cfg.TimeoutSeconds) * time.Second,
-		MaxRetries:       cfg.MaxRetries,
+func shadowConnectorOptions(job *shadowJob, backendTLS *tls.Config) connector.Options {
+	// Leave room for the connector's overflow probe on success and error bodies.
+	return connector.Options{
+		TLSConfig:        backendTLS,
+		AttemptTimeout:   job.timeout,
+		MaxRetries:       0,
 		MaxRequestBytes:  shadowDispatchMaxRequestBytes,
-		MaxResponseBytes: int64(cfg.MaxResponseBytes),
-		MaxErrorBytes:    shadowDispatchErrorBodyBytes,
+		MaxResponseBytes: int64(job.responseLimit - 1),
+		MaxErrorBytes:    int64(min(shadowDispatchErrorBodyBytes, job.responseLimit-1)),
 	}
-	if cfg.TLSSkipVerify {
-		options.TLSConfig = insecureShadowTLSConfig()
-	}
-	return options
 }
 
 // shadowCallHeaders carries the per-request context a shadow copy keeps:
-// trace headers, decision header mutations, provider extra headers, and its
-// own request identifier. Client headers are never forwarded. Per-request
+// trace context, allowed decision mutations, provider headers, and its own
+// request identifier. Client headers are never forwarded. Per-request
 // headers are filtered once more against the shadow backend's own auth
 // header, so a decision mutation can never stand in for the shadow's
 // credential; only configuredProviderAuthorizer may set that header.
@@ -172,6 +217,20 @@ func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 	}
 	result[headers.RequestID] = job.shadowRequestID
 	return result
+}
+
+// A transport error may come back after the backend has started generating.
+func shadowCallMayHaveBeenDispatched(err error) bool {
+	var failure *connector.Error
+	if !errors.As(err, &failure) {
+		return true
+	}
+	switch failure.Kind {
+	case connector.KindRequest, connector.KindAuthorization, connector.KindBudget:
+		return false
+	default:
+		return failure.Attempt > 0
+	}
 }
 
 // shadowConnectorFailure maps a connector error onto the shadow reason
@@ -241,6 +300,9 @@ func resolveShadowTarget(cfg *config.RouterConfig, model string) (*shadowTarget,
 func shadowContextFailure(callCtx, rootCtx context.Context) (string, bool) {
 	if rootCtx.Err() != nil {
 		return shadowReasonRouterClosing, true
+	}
+	if errors.Is(callCtx.Err(), context.Canceled) {
+		return "canceled", true
 	}
 	if callCtx.Err() != nil {
 		return shadowReasonTimeout, true

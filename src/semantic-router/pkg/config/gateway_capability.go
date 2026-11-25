@@ -132,10 +132,7 @@ func (c *RouterConfig) RoutingDecisionsAt() []RoutingDecisionAt {
 	}
 	var decisions []RoutingDecisionAt
 	for i := range recipes {
-		base := "routing"
-		if recipes[i].Name != DefaultRecipeName {
-			base = "recipes[" + string(recipes[i].Name) + "].routing"
-		}
+		base := recipePath(string(recipes[i].Name))
 		for j := range recipes[i].Profile.Decisions {
 			decision := &recipes[i].Profile.Decisions[j]
 			decisions = append(decisions, RoutingDecisionAt{

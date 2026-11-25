@@ -1,436 +1,424 @@
-import { useId, useMemo, useState } from 'react'
+import { useId } from 'react'
+import { Check, Layers, Plus, Search } from 'lucide-react'
 
-import useAccessibleDialog from '../hooks/useAccessibleDialog'
-import ProductIcon from '../components/ProductIcon'
+import NativeSelect from '../components/NativeSelect'
+import { configCollectionItemYaml } from '../lib/configYaml'
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  ChipInput,
+  CodeView,
+  DetailSheet,
+  DetailSheetBody,
+  DetailSheetFooter,
+  DetailSheetHeader,
+  Field,
+  IconTile,
+  Input,
+  InputGroup,
+  SectionLabel,
+  cn,
+} from '../ui'
 import {
   DEFAULT_RECIPE_NAME,
-  getPublishableRecipeNames,
-  getRecipeByName,
-  getRecipeNames,
   normalizeEntrypointModelNames,
-  validateEntrypointForm,
 } from './configPageEntrypointsRecipesSupport'
+import { mixtureRecipeKey } from './configPageMixtureSupport'
 import {
-  applyRecipeAssignments,
-  assignmentState,
-  type ModelAssignments,
-  minimumCandidatesForDecision,
-} from './configPageMixtureSupport'
-import type { ConfigData, EntrypointConfig, NormalizedModel } from './configPageSupport'
-import styles from './ConfigPageMixtureDialog.module.css'
+  useMixtureEditor,
+  type ConfigPageMixtureDialogProps,
+  type MixtureEditor,
+} from './useMixtureEditor'
+import { ModelLogo } from './ConfigPageModelLogo'
 
-const firstDecisionName = (decisionNames: string[]) => decisionNames[0] ?? ''
-
-interface ConfigPageMixtureDialogProps {
-  config: ConfigData
-  models: NormalizedModel[]
-  entrypoint?: EntrypointConfig
-  entrypointIndex?: number
-  onClose: () => void
-  onSave: (config: ConfigData) => Promise<void>
+function entrypointPreview(editor: MixtureEditor): string {
+  const names = normalizeEntrypointModelNames([editor.primaryName, ...editor.aliases])
+  const entry: Record<string, unknown> = {
+    model_names: names.length ? names : ['acme/auto'],
+    recipe: editor.choice?.name ?? DEFAULT_RECIPE_NAME,
+  }
+  if (editor.reviewModel) entry.review_model = editor.reviewModel
+  if (editor.memoryModel) entry.memory_model = editor.memoryModel
+  return configCollectionItemYaml(['entrypoints'], entry)
 }
 
-export default function ConfigPageMixtureDialog({
-  config,
-  models,
-  entrypoint,
-  entrypointIndex,
-  onClose,
-  onSave,
-}: ConfigPageMixtureDialogProps) {
-  const titleId = useId()
-  const recipeNames = getPublishableRecipeNames(config)
-  const initialRecipeName =
-    entrypoint?.recipe ?? recipeNames[0] ?? getRecipeNames(config)[0] ?? DEFAULT_RECIPE_NAME
-  const initialRecipe = getRecipeByName(config, initialRecipeName)
-  const [primaryName, setPrimaryName] = useState(entrypoint?.model_names[0] ?? '')
-  const [aliases, setAliases] = useState<string[]>(entrypoint?.model_names.slice(1) ?? [])
-  const [aliasDraft, setAliasDraft] = useState('')
-  const [recipeName, setRecipeName] = useState(initialRecipeName)
-  const [assignments, setAssignments] = useState<ModelAssignments>(() =>
-    assignmentState(initialRecipe?.routing.decisions ?? []),
-  )
-  const [activeDecisionName, setActiveDecisionName] = useState(() =>
-    firstDecisionName((initialRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
-  )
-  const [decisionSearch, setDecisionSearch] = useState('')
-  const [modelSearch, setModelSearch] = useState('')
-  const [showSelectedModels, setShowSelectedModels] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({
-    isOpen: true,
-    onClose,
-    dismissible: !saving,
-  })
-  const recipe = getRecipeByName(config, recipeName)
-  const decisions = recipe?.routing.decisions ?? []
-  const modelOptions = useMemo(
-    () =>
-      models
-        .flatMap((model) => [model.name, ...(model.loras ?? []).map((adapter) => adapter.name)])
-        .filter((name, index, names) => names.indexOf(name) === index)
-        .sort((left, right) => left.localeCompare(right)),
-    [models],
-  )
-
-  const chooseRecipe = (nextRecipeName: string) => {
-    const nextRecipe = getRecipeByName(config, nextRecipeName)
-    setRecipeName(nextRecipeName)
-    setAssignments(assignmentState(nextRecipe?.routing.decisions ?? []))
-    setActiveDecisionName(
-      firstDecisionName((nextRecipe?.routing.decisions ?? []).map((decision) => decision.name)),
+function AssignmentWorkspace({ editor }: { editor: MixtureEditor }) {
+  const { activeDecision, decisions } = editor
+  if (!activeDecision || decisions.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-border-strong px-4 py-6 text-center text-[13px] text-muted-foreground">
+        Add decisions to this recipe first.
+      </div>
     )
-    setDecisionSearch('')
-    setModelSearch('')
-    setShowSelectedModels(false)
-    setError(null)
   }
-
-  const toggleModel = (decisionName: string, modelName: string) => {
-    setAssignments((current) => {
-      const selected = current[decisionName] ?? []
-      return {
-        ...current,
-        [decisionName]: selected.includes(modelName)
-          ? selected.filter((name) => name !== modelName)
-          : [...selected, modelName],
-      }
-    })
-  }
-
-  const addAlias = () => {
-    const alias = aliasDraft.trim()
-    if (!alias || alias === primaryName.trim() || aliases.includes(alias)) return
-    setAliases((current) => [...current, alias])
-    setAliasDraft('')
-  }
-
-  const save = async () => {
-    const publicNames = normalizeEntrypointModelNames([primaryName, ...aliases].join('\n'))
-    if (!recipe || decisions.length === 0) {
-      setError('Choose a recipe with at least one decision.')
-      return
-    }
-    const incompleteDecision = decisions.find(
-      (decision) =>
-        (assignments[decision.name]?.length ?? 0) < minimumCandidatesForDecision(decision),
-    )
-    if (incompleteDecision) {
-      const minimum = minimumCandidatesForDecision(incompleteDecision)
-      setActiveDecisionName(incompleteDecision.name)
-      setError(
-        `Choose at least ${minimum} model${minimum === 1 ? '' : 's'} for “${incompleteDecision.name}”.`,
-      )
-      return
-    }
-
-    try {
-      const normalizedEntrypoint = validateEntrypointForm(
-        { modelNames: publicNames.join('\n'), recipe: recipeName },
-        config,
-        models,
-        entrypointIndex ?? null,
-      )
-      const next = applyRecipeAssignments(config, recipeName, assignments)
-      const entrypoints = [...(next.entrypoints ?? [])]
-      if (entrypointIndex === undefined) entrypoints.push(normalizedEntrypoint)
-      else entrypoints[entrypointIndex] = normalizedEntrypoint
-      next.entrypoints = entrypoints
-
-      setSaving(true)
-      setError(null)
-      await onSave(next)
-      onClose()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Model could not be saved.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const activeDecision =
-    decisions.find((decision) => decision.name === activeDecisionName) ?? decisions[0]
-  const activeSelection = activeDecision ? (assignments[activeDecision.name] ?? []) : []
-  const normalizedDecisionSearch = decisionSearch.trim().toLocaleLowerCase()
-  const visibleDecisions = normalizedDecisionSearch
-    ? decisions.filter((decision) =>
-        `${decision.name} ${decision.description ?? ''}`
-          .toLocaleLowerCase()
-          .includes(normalizedDecisionSearch),
-      )
-    : decisions
-  const normalizedModelSearch = modelSearch.trim().toLocaleLowerCase()
-  const visibleModelOptions = modelOptions.filter(
-    (modelName) =>
-      (!showSelectedModels || activeSelection.includes(modelName)) &&
-      (!normalizedModelSearch || modelName.toLocaleLowerCase().includes(normalizedModelSearch)),
-  )
-  const completedDecisionCount = decisions.filter(
-    (decision) =>
-      (assignments[decision.name]?.length ?? 0) >= minimumCandidatesForDecision(decision),
-  ).length
-
   return (
-    <div
-      className={styles.backdrop}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose()
-      }}
-    >
+    <div className="grid min-h-[320px] grid-cols-1 overflow-hidden rounded-xl border border-border bg-card md:grid-cols-[minmax(0,240px)_1fr]">
+      <div className="flex min-h-0 flex-col border-b border-border bg-surface-subtle/50 md:border-b-0 md:border-r">
+        <div className="border-b border-border p-2">
+          <InputGroup
+            value={editor.decisionSearch}
+            onChange={(event) => editor.setDecisionSearch(event.target.value)}
+            placeholder="Find a decision"
+            aria-label="Find a decision"
+            leading={<Search />}
+            className="h-8"
+          />
+        </div>
+        <div
+          className="flex max-h-[360px] flex-col gap-0.5 overflow-y-auto p-1.5"
+          role="tablist"
+          aria-label="Recipe decisions"
+          aria-orientation="vertical"
+        >
+          {editor.visibleDecisions.map((decision) => {
+            const decisionIndex = decisions.findIndex(
+              (candidate) => candidate.name === decision.name,
+            )
+            const selected = editor.assignments[decision.name] ?? []
+            const needsModels = decision.minimumCandidates > 0
+            const ready = selected.length >= decision.minimumCandidates
+            const isActive = decision.name === activeDecision.name
+            return (
+              <button
+                key={decision.name}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => {
+                  editor.setActiveDecisionName(decision.name)
+                  editor.setModelSearch('')
+                  editor.setShowSelectedModels(false)
+                }}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/40',
+                  isActive ? 'bg-surface shadow-xs ring-1 ring-border' : 'hover:bg-accent',
+                )}
+              >
+                <span className="font-mono text-[11px] tabular text-subtle-foreground">
+                  {String(decisionIndex + 1).padStart(2, '0')}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <strong className="truncate font-mono text-[12.5px] font-medium">
+                    {decision.name}
+                  </strong>
+                  <small className="truncate text-[11px] text-muted-foreground">
+                    {decision.description || 'Model path'}
+                  </small>
+                </span>
+                {needsModels ? (
+                  <Badge size="sm" tone={ready ? 'success' : 'warning'} className="tabular">
+                    {selected.length || '—'}
+                  </Badge>
+                ) : (
+                  <Badge size="sm" tone="outline">
+                    No model
+                  </Badge>
+                )}
+              </button>
+            )
+          })}
+          {editor.visibleDecisions.length === 0 ? (
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+              No matching decisions.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
       <div
-        ref={dialogRef}
-        className={styles.dialog}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-busy={saving}
-        tabIndex={-1}
+        className="flex min-h-0 flex-col"
+        role="tabpanel"
+        aria-label={`${activeDecision.name} model assignment`}
       >
-        <header className={styles.header}>
-          <div className={styles.headerIdentity}>
-            <div className={styles.headerLogo} aria-hidden="true">
-              <img src="/vllm.png" alt="" />
-            </div>
-            <div>
-              <span>Mixture-of-Models</span>
-              <h2 id={titleId}>{entrypoint ? 'Edit model' : 'Create model'}</h2>
-              <p>Choose a recipe. Assign the right models.</p>
-            </div>
+        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <strong className="truncate font-mono text-[13px] font-medium">
+              {activeDecision.name}
+            </strong>
+            <span className="text-xs text-muted-foreground">
+              {activeDecision.description || 'Choose the models for this path.'}
+            </span>
           </div>
-          <button type="button" onClick={onClose} disabled={saving} aria-label="Close dialog">
-            <ProductIcon name="close" />
-          </button>
-        </header>
-
-        {error ? (
-          <div className={styles.error} role="alert">
-            {error}
-          </div>
-        ) : null}
-
-        <div className={styles.body}>
-          <div className={styles.identityGrid}>
-            <label>
-              <span>Model name</span>
-              <input
-                value={primaryName}
-                onChange={(event) => setPrimaryName(event.target.value)}
-                placeholder="my-company/auto"
-                data-dialog-initial-focus
+          <Badge
+            tone={
+              activeDecision.minimumCandidates === 0
+                ? 'outline'
+                : editor.activeSelection.length >= activeDecision.minimumCandidates
+                  ? 'success'
+                  : 'warning'
+            }
+          >
+            {activeDecision.minimumCandidates > 0
+              ? `${editor.activeSelection.length} selected · minimum ${activeDecision.minimumCandidates}`
+              : 'No model needed'}
+          </Badge>
+        </div>
+        {activeDecision.minimumCandidates > 0 ? (
+          <>
+            <div className="flex items-center gap-2 px-4 pt-3">
+              <InputGroup
+                value={editor.modelSearch}
+                onChange={(event) => editor.setModelSearch(event.target.value)}
+                placeholder="Find a model"
+                aria-label={`Find a model for ${activeDecision.name}`}
+                leading={<Search />}
+                containerClassName="flex-1"
+                className="h-8"
               />
-            </label>
-            <label>
-              <span>Recipe</span>
-              <select value={recipeName} onChange={(event) => chooseRecipe(event.target.value)}>
-                {recipeNames.map((name) => (
+              <Button
+                type="button"
+                variant={editor.showSelectedModels ? 'soft' : 'ghost'}
+                size="sm"
+                aria-pressed={editor.showSelectedModels}
+                onClick={() => editor.setShowSelectedModels((current) => !current)}
+              >
+                <Check />
+                Selected
+                <span className="font-mono text-[11px] tabular">
+                  {editor.activeSelection.length}
+                </span>
+              </Button>
+            </div>
+            <div className="grid max-h-[300px] grid-cols-1 gap-1.5 overflow-y-auto p-4 pt-3 sm:grid-cols-2">
+              {editor.visibleModelOptions.map((modelName) => {
+                const checked = editor.activeSelection.includes(modelName)
+                const model = editor.models.find((candidate) => candidate.name === modelName)
+                return (
+                  <label
+                    key={modelName}
+                    className={cn(
+                      'flex min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors',
+                      checked
+                        ? 'border-primary/40 bg-primary-soft/50'
+                        : 'border-border bg-surface hover:border-border-strong',
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => editor.toggleModel(activeDecision.name, modelName)}
+                    />
+                    {model ? <ModelLogo model={model} size={14} /> : null}
+                    <code className="truncate font-mono text-[12.5px]">{modelName}</code>
+                  </label>
+                )
+              })}
+              {editor.visibleModelOptions.length === 0 ? (
+                <p className="col-span-full py-6 text-center text-xs text-muted-foreground">
+                  {editor.modelOptions.length === 0
+                    ? 'Connect a model before publishing this mixture.'
+                    : 'No models match this view.'}
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">
+            This decision responds without calling a model.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** The editor's fields; the sheet adds the header, error and footer around them. */
+export function MixtureEditorBody({ editor }: { editor: MixtureEditor }) {
+  const nameId = useId()
+  const recipeId = useId()
+  const aliasesId = useId()
+  const reviewId = useId()
+  const memoryId = useId()
+  const configRecipeOptions = editor.recipeNames.map((name) => (
+    <option key={name} value={mixtureRecipeKey({ name })}>
+      {name}
+    </option>
+  ))
+  const builtIn = editor.choice?.bundle !== undefined
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field
+          label="Model name"
+          htmlFor={nameId}
+          error={editor.nameProblem}
+          hint="Apps send this name in the model field."
+        >
+          <Input
+            id={nameId}
+            value={editor.primaryName}
+            onChange={(event) => editor.setPrimaryName(event.target.value)}
+            placeholder="my-company/auto"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={editor.nameProblem ? true : undefined}
+            className="font-mono text-[12.5px]"
+            data-dialog-initial-focus
+          />
+        </Field>
+        <Field label="Recipe" htmlFor={recipeId} hint={editor.description}>
+          <NativeSelect
+            id={recipeId}
+            value={editor.choice ? mixtureRecipeKey(editor.choice) : ''}
+            onChange={(event) => editor.chooseRecipe(event.target.value)}
+          >
+            {editor.catalog?.bundles.length ? (
+              <>
+                {configRecipeOptions.length ? (
+                  <optgroup label="Configured recipes">{configRecipeOptions}</optgroup>
+                ) : null}
+                {editor.catalog.bundles.map((bundle) => (
+                  <optgroup key={bundle.name} label={`Built-in · ${bundle.name}`}>
+                    {bundle.recipes.map((recipe) => (
+                      <option
+                        key={recipe.name}
+                        value={mixtureRecipeKey({ bundle: bundle.name, name: recipe.name })}
+                      >
+                        {recipe.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </>
+            ) : (
+              configRecipeOptions
+            )}
+          </NativeSelect>
+        </Field>
+        <Field
+          label="Aliases"
+          htmlFor={aliasesId}
+          optional
+          hint="Other names that call this same model. Press Enter after each."
+          className="sm:col-span-2"
+        >
+          <ChipInput
+            id={aliasesId}
+            value={editor.aliases}
+            onChange={editor.setAliases}
+            placeholder="Add an alias"
+            caseSensitive
+            validate={(candidate) =>
+              candidate === editor.primaryName.trim()
+                ? 'An alias must differ from the model name.'
+                : null
+            }
+          />
+        </Field>
+        {builtIn ? null : (
+          <>
+            <Field label="Reviews go to" htmlFor={reviewId} hint="Agent approval reviews.">
+              <NativeSelect
+                id={reviewId}
+                value={editor.reviewModel}
+                onChange={(event) => editor.setReviewModel(event.target.value)}
+              >
+                <option value="">Session model</option>
+                {editor.delegateNames.map((name) => (
                   <option key={name} value={name}>
                     {name}
                   </option>
                 ))}
-              </select>
-            </label>
-          </div>
-
-          <section className={styles.aliasSection}>
-            <div className={styles.aliasHeading}>
-              <div>
-                <span>Aliases</span>
-                <strong>Additional names</strong>
-              </div>
-              <p>Optional names that call this same model.</p>
-            </div>
-            <div className={styles.aliasWorkspace}>
-              <div className={styles.aliasComposer}>
-                <input
-                  value={aliasDraft}
-                  onChange={(event) => setAliasDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      addAlias()
-                    }
-                  }}
-                  placeholder="Add an alias"
-                />
-                <button type="button" onClick={addAlias} disabled={!aliasDraft.trim()}>
-                  <ProductIcon name="plus" aria-hidden="true" />
-                  Add
-                </button>
-              </div>
-              {aliases.length > 0 ? (
-                <div className={styles.aliasList}>
-                  {aliases.map((alias) => (
-                    <div key={alias} className={styles.aliasItem}>
-                      <code>{alias}</code>
-                      <button
-                        type="button"
-                        aria-label={`Remove alias ${alias}`}
-                        onClick={() =>
-                          setAliases((current) => current.filter((item) => item !== alias))
-                        }
-                      >
-                        <ProductIcon name="close" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section className={styles.decisionSection}>
-            <div className={styles.sectionHeader}>
-              <div>
-                <span>Model assignments</span>
-                <strong>
-                  {completedDecisionCount} of {decisions.length} ready
-                </strong>
-              </div>
-              <p>{recipe?.description || 'Complete every decision before publishing.'}</p>
-            </div>
-            {decisions.length > 0 && activeDecision ? (
-              <div className={styles.assignmentWorkspace}>
-                <div className={styles.decisionRail}>
-                  <label className={styles.assignmentSearch}>
-                    <ProductIcon name="search" aria-hidden="true" />
-                    <input
-                      value={decisionSearch}
-                      onChange={(event) => setDecisionSearch(event.target.value)}
-                      placeholder="Find a decision"
-                      aria-label="Find a decision"
-                    />
-                  </label>
-                  <div className={styles.decisionList} role="tablist" aria-label="Recipe decisions">
-                    {visibleDecisions.map((decision) => {
-                      const decisionIndex = decisions.findIndex(
-                        (candidate) => candidate.name === decision.name,
-                      )
-                      const selected = assignments[decision.name] ?? []
-                      const isActive = decision.name === activeDecision.name
-                      return (
-                        <button
-                          key={decision.name}
-                          type="button"
-                          role="tab"
-                          aria-selected={isActive}
-                          className={isActive ? styles.activeDecision : ''}
-                          onClick={() => {
-                            setActiveDecisionName(decision.name)
-                            setModelSearch('')
-                            setShowSelectedModels(false)
-                          }}
-                        >
-                          <span className={styles.decisionIndex}>
-                            {String(decisionIndex + 1).padStart(2, '0')}
-                          </span>
-                          <span className={styles.decisionCopy}>
-                            <strong>{decision.name}</strong>
-                            <small>{decision.description || 'Model path'}</small>
-                          </span>
-                          <span
-                            className={
-                              selected.length ? styles.selectionCount : styles.missingCount
-                            }
-                          >
-                            {selected.length || '—'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                    {visibleDecisions.length === 0 ? (
-                      <p className={styles.noResults}>No matching decisions.</p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div
-                  className={styles.assignmentPanel}
-                  role="tabpanel"
-                  aria-label={`${activeDecision.name} model assignment`}
-                >
-                  <div className={styles.assignmentPanelHeader}>
-                    <div>
-                      <strong>{activeDecision.name}</strong>
-                      <span>
-                        {activeDecision.description || 'Choose the models for this path.'}
-                      </span>
-                    </div>
-                    <span>
-                      {activeSelection.length} selected · minimum{' '}
-                      {minimumCandidatesForDecision(activeDecision)}
-                    </span>
-                  </div>
-                  <div className={styles.modelPickerToolbar}>
-                    <label className={styles.assignmentSearch}>
-                      <ProductIcon name="search" aria-hidden="true" />
-                      <input
-                        value={modelSearch}
-                        onChange={(event) => setModelSearch(event.target.value)}
-                        placeholder="Find a model"
-                        aria-label={`Find a model for ${activeDecision.name}`}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className={showSelectedModels ? styles.activeFilter : ''}
-                      aria-pressed={showSelectedModels}
-                      onClick={() => setShowSelectedModels((current) => !current)}
-                    >
-                      <ProductIcon name="check" aria-hidden="true" />
-                      Selected
-                      <span>{activeSelection.length}</span>
-                    </button>
-                  </div>
-                  <div className={styles.modelPicker}>
-                    {visibleModelOptions.map((modelName) => (
-                      <label
-                        key={modelName}
-                        className={activeSelection.includes(modelName) ? styles.selectedModel : ''}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={activeSelection.includes(modelName)}
-                          onChange={() => toggleModel(activeDecision.name, modelName)}
-                        />
-                        <span aria-hidden="true">
-                          <ProductIcon name="check" />
-                        </span>
-                        <code>{modelName}</code>
-                      </label>
-                    ))}
-                    {visibleModelOptions.length === 0 ? (
-                      <p>
-                        {modelOptions.length === 0
-                          ? 'Connect a model before publishing this mixture.'
-                          : 'No models match this view.'}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.empty}>Add decisions to this recipe first.</div>
-            )}
-          </section>
-        </div>
-
-        <footer className={styles.footer}>
-          <button type="button" className={styles.cancel} onClick={onClose} disabled={saving}>
-            <ProductIcon name="close" aria-hidden="true" />
-            Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.save}
-            onClick={() => void save()}
-            disabled={saving}
-          >
-            <ProductIcon name={entrypoint ? 'check' : 'plus'} aria-hidden="true" />
-            {saving ? 'Saving…' : entrypoint ? 'Save model' : 'Create model'}
-          </button>
-        </footer>
+              </NativeSelect>
+            </Field>
+            <Field
+              label="Memories go to"
+              htmlFor={memoryId}
+              hint="Memory extraction and consolidation."
+            >
+              <NativeSelect
+                id={memoryId}
+                value={editor.memoryModel}
+                onChange={(event) => editor.setMemoryModel(event.target.value)}
+              >
+                <option value="">Session model</option>
+                {editor.delegateNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
+          </>
+        )}
       </div>
+
+      <section className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
+            <SectionLabel>Model assignments</SectionLabel>
+            <span className="text-[13px] font-medium tabular">
+              {editor.completedDecisionCount} of {editor.decisions.length} ready
+            </span>
+          </div>
+          <span className="max-w-md text-right text-xs text-muted-foreground">
+            {editor.decisions.length && editor.completedDecisionCount === editor.decisions.length
+              ? 'Every decision has the models it needs.'
+              : 'Complete every decision before publishing.'}
+          </span>
+        </div>
+        <AssignmentWorkspace editor={editor} />
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionLabel>{builtIn ? 'Publishes to config.yaml' : 'Adds to config.yaml'}</SectionLabel>
+        <div className="overflow-hidden rounded-lg border border-border bg-surface-sunken/60">
+          <CodeView code={entrypointPreview(editor)} language="yaml" />
+        </div>
+        {builtIn ? (
+          <p className="text-xs text-muted-foreground">
+            The installed vllm-sr package composes the recipe with your model assignments when you
+            create the model.
+          </p>
+        ) : null}
+      </section>
     </div>
+  )
+}
+
+export default function ConfigPageMixtureDialog(props: ConfigPageMixtureDialogProps) {
+  const editor = useMixtureEditor(props)
+  const editing = Boolean(props.entrypoint)
+  return (
+    <DetailSheet
+      open
+      onOpenChange={(open) => {
+        if (!open && !editor.saving) props.onClose()
+      }}
+      size="xl"
+    >
+      <DetailSheetHeader
+        icon={<IconTile icon={editing ? Layers : Plus} tone="blue" size="lg" />}
+        title={editing ? 'Edit public model' : 'New public model'}
+        description="Choose a recipe. Assign the right models."
+      />
+      <DetailSheetBody className="flex flex-col gap-4 px-5 py-5" aria-busy={editor.saving}>
+        {editor.error ? (
+          <div role="alert">
+            <Alert tone="danger" title="The model was not saved">
+              {editor.error}
+            </Alert>
+          </div>
+        ) : null}
+        <MixtureEditorBody editor={editor} />
+      </DetailSheetBody>
+      <DetailSheetFooter>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {editor.decisions.length
+            ? `${editor.completedDecisionCount} of ${editor.decisions.length} decisions have their models`
+            : 'Choose a recipe with at least one decision.'}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={props.onClose} disabled={editor.saving}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => void editor.save()} loading={editor.saving}>
+            {editor.saving ? null : editing ? <Check /> : <Plus />}
+            {editor.saving ? 'Saving…' : editing ? 'Save public model' : 'Create public model'}
+          </Button>
+        </div>
+      </DetailSheetFooter>
+    </DetailSheet>
   )
 }

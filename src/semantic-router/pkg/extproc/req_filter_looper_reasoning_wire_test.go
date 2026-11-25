@@ -79,7 +79,7 @@ func TestLooperReasoningSurvivesProviderBoundary(t *testing.T) {
 }
 
 var looperReasoningWireConfig = `
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: worker-alias
@@ -89,26 +89,28 @@ providers:
       backend_refs:
         - provider: vllm
           endpoint: 127.0.0.1:8000
-routing: {}
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default
+    default: true
 recipes:
-` + looperReasoningWireRecipe("quiet", false) + looperReasoningWireRecipe("thinking", true)
+  - name: default` + looperReasoningWireRecipe("quiet", false) + looperReasoningWireRecipe("thinking", true)
 
 func looperReasoningWireRecipe(name string, enabled bool) string {
 	return fmt.Sprintf(`
   - name: %s
-    routing:
-      decisions:
-        - name: shared
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: worker-alias
-              use_reasoning: %t
-          plugins:
-            - type: system_prompt
-              configuration:
-                system_prompt: "Stage instruction."
-                mode: insert
+    decisions:
+      - name: shared
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: worker-alias
+            use_reasoning: %t
+        plugins:
+          - type: system_prompt
+            configuration:
+              system_prompt: "Stage instruction."
+              mode: insert
 `, name, enabled)
 }

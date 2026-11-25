@@ -1,23 +1,28 @@
-"""CUDA accelerator. Validated on NVIDIA GPUs (``docs/records/cuda-*.md``).
+"""CUDA accelerator (hardware records: ``docs/records/cuda-*.md``).
 
-With Triton on an Ampere or newer GPU it adds the ROCm build's fused
-element-wise kernels (``triton_gfx942``) as approximate kernels, which run
-only for a family that consents to them. Their RMSNorm sums follow ATen's ROCm reduction
-order, not CUDA's, so they differ from the eager ops by rounding
-(``docs/records/cuda-fused-approximate.md``).
+Fused Triton kernels require Ampere and family consent; gated-delta prep also
+needs FLA, but not causal-conv1d. Optional causal-conv1d is approximate on CUDA,
+so exact-only/non-consenting models use the torch reference even when it is
+installed. This can differ from their released package runtime; see the
+convolution record below. Packed rows run PyTorch's variable-length flash
+attention: ``varlen_attn`` from 2.10, the ATen op it calls before that.
+
+Evidence under ``docs/records/``: ``cuda-fused-approximate.md``,
+``cuda-causal-conv1d-exactness.md`` and ``cuda-gdn-prep-without-causal-conv1d.md``.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import torch
 
 from ..plugins.base import DeviceInfo
-from .gpu import GPUAccelerator, _optional
+from .gpu import GPUAccelerator, _flash_varlen, _optional, _wrap_varlen
 from .kernels import Kernel, KernelSet
 
-# BF16 Triton kernels need Ampere (compute capability 8.0) or newer.
+# BF16 Triton kernels and PyTorch's flash attention need Ampere (compute capability 8.0) or newer.
 MIN_FUSED_CAPABILITY = 80
 
 
@@ -37,21 +42,36 @@ class CUDAAccelerator(GPUAccelerator):
 
     def kernels(self, device: DeviceInfo) -> KernelSet:
         kernels = super().kernels(device)
+        kernels.available["causal_conv1d"] = [
+            replace(kernel, exact=False) if kernel.source == "causal-conv1d" else kernel
+            for kernel in kernels.available.get("causal_conv1d", [])
+        ]
         capability = (device.arch or "").removeprefix("sm_")
+        ampere = capability.isdigit() and int(capability) >= MIN_FUSED_CAPABILITY
+        flash = _optional("torch.backends.cuda", "is_flash_attention_available")
+        # Before PyTorch 2.10 there is no varlen_attn, but its flash kernel is
+        # there (Ampere or newer only).
         if (
-            not capability.isdigit()
-            or int(capability) < MIN_FUSED_CAPABILITY
-            or _optional("triton", "__version__") is None
+            ampere
+            and kernels.preferred_source("varlen_attention") == "torch-reference"
+            and flash is not None
+            and flash()
         ):
+            kernels.register(
+                Kernel(
+                    "varlen_attention",
+                    _wrap_varlen(_flash_varlen),
+                    "aten-flash-attention",
+                    exact=False,
+                )
+            )
+        if not ampere or _optional("triton", "__version__") is None:
             return kernels
         from . import triton_gfx942 as fused
         from .rocm import FUSED, FUSED_GATED_DELTA
 
         names = list(FUSED)
-        if (
-            kernels.select("causal_conv1d").source == "causal-conv1d"
-            and kernels.select("chunk_gated_delta_rule").source == "fla"
-        ):
+        if kernels.select("chunk_gated_delta_rule").source == "fla":
             names += FUSED_GATED_DELTA
         for name in names:
             kernels.register(

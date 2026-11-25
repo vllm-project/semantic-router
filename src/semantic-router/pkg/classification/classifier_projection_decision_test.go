@@ -12,17 +12,17 @@ import (
 func effortProjectionClassifier() *Classifier {
 	return &Classifier{Config: &config.RouterConfig{
 		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{DecisionRules: []config.DecisionSignalRule{
-				{Name: "difficulty", Question: config.DecisionQuestion{Type: config.DecisionQuestionScore, Instructions: "How hard?", Levels: []string{"easy", "hard"}}},
-				{Name: "needs", Question: config.DecisionQuestion{Type: config.DecisionQuestionSet, Instructions: "What does it need?", Labels: []config.DecisionChoice{{Key: "deliberation"}, {Key: "tools"}}}},
+			Signals: config.Signals{SystemOneRules: []config.SystemOneRule{
+				{Name: "difficulty", Question: config.SystemOneQuestion{Type: config.SystemOneQuestionScore, Instructions: "How hard?", Levels: []string{"easy", "hard"}}},
+				{Name: "needs", Question: config.SystemOneQuestion{Type: config.SystemOneQuestionSet, Instructions: "What does it need?", Labels: []config.SystemOneOption{{Key: "deliberation"}, {Key: "tools"}}}},
 			}},
 			Projections: config.Projections{
 				Scores: []config.ProjectionScore{{
 					Name:   "effort",
 					Method: "weighted_sum",
 					Inputs: []config.ProjectionScoreInput{
-						{Type: config.SignalTypeDecision, Name: "difficulty", Weight: 0.5, ValueSource: "raw"},
-						{Type: config.SignalTypeDecision, Name: "needs:deliberation", Weight: 0.4, ValueSource: "raw"},
+						{Type: config.SignalTypeSystemOne, Name: "difficulty", Weight: 0.5, ValueSource: "raw"},
+						{Type: config.SignalTypeSystemOne, Name: "needs:deliberation", Weight: 0.4, ValueSource: "raw"},
 					},
 				}},
 				Mappings: []config.ProjectionMapping{{
@@ -40,8 +40,8 @@ func effortProjectionClassifier() *Classifier {
 
 func TestALabelledDecisionProjectionInputAsksItsQuestion(t *testing.T) {
 	used := effortProjectionClassifier().getUsedSignals()
-	for _, key := range []string{"decision:difficulty", "decision:needs"} {
-		if !signalRuleUsed(used, config.SignalTypeDecision, key[len("decision:"):]) {
+	for _, key := range []string{"systemone:difficulty", "systemone:needs"} {
+		if !signalRuleUsed(used, config.SignalTypeSystemOne, key[len("systemone:"):]) {
 			t.Fatalf("%s feeds the effort projection, so it must be asked; used = %v", key, used)
 		}
 	}
@@ -49,10 +49,10 @@ func TestALabelledDecisionProjectionInputAsksItsQuestion(t *testing.T) {
 
 func TestALabelledDecisionProjectionInputReadsThatLabelsProbability(t *testing.T) {
 	results := &SignalResults{SignalValues: map[string]float64{
-		"decision:difficulty":         0.8,
-		"decision:needs":              0.9,
-		"decision:needs:deliberation": 0.6,
-		"decision:needs:tools":        0.9,
+		"systemone:difficulty":         0.8,
+		"systemone:needs":              0.9,
+		"systemone:needs:deliberation": 0.6,
+		"systemone:needs:tools":        0.9,
 	}}
 	got := effortProjectionClassifier().applyProjections(results)
 	if score := got.ProjectionScores["effort"]; math.Abs(score-0.64) > 1e-9 {

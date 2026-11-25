@@ -316,9 +316,10 @@ Questions whose decision is unchanged, per answer type:
   margin, and the same BF16 copy on ROCm drops to 98.5% over all 360. A
   `cpu` consent also names one copy for every CPU, while BF16 runs at this
   speed only with AVX-512 BF16 or AMX instructions and rounds differently on
-  each, so this record would not carry to other CPUs. `float32-packed` runs
-  the same FP32 math on supported x86 and ARM64 CPUs with oneDNN; the ARM64
-  parity and latency measurements are in `vela2-arm64-packed.md`.
+  each, so this record would not carry to other CPUs. `float32-packed` is
+  available on `x86_64` / `amd64` and `aarch64` / `arm64` when PyTorch has
+  oneDNN enabled and exposes `_reorder_linear_weight` and `_linear_pointwise`.
+  See `vela2-arm64-packed.md` for the ARM64 parity and latency measurements.
 - **`int8` (CPU): fails the floor** on every answer type, on the same 270
   requests: dynamic int8 activations move answers by up to 0.85.
 - **`bfloat16` (ROCm): fails the floor on spans** (98.5%). The seven span

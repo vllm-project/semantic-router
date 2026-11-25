@@ -113,12 +113,92 @@ class PublicSkillTests(unittest.TestCase):
 
     def test_repository_publication_is_complete_and_current(self):
         self.assertEqual(skill.sync(skill.SOURCE, skill.DESTINATION, check=True), [])
+        self.assertEqual(
+            skill.sync(
+                skill.SERVE_SOURCE,
+                skill.SERVE_DESTINATION,
+                check=True,
+                public_origin=skill.SERVE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-serve",
+                public_name="vllm-sr-serve",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.DECISION_SOURCE,
+                skill.DECISION_DESTINATION,
+                check=True,
+                public_origin=skill.DECISION_PUBLIC_ORIGIN,
+                source_name="vllm-sr-decision-model",
+                public_name="vllm-sr-decision-model",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.CONFIGURE_SOURCE,
+                skill.CONFIGURE_DESTINATION,
+                check=True,
+                public_origin=skill.CONFIGURE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-configure-recipe",
+                public_name="vllm-sr-configure-recipe",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.DIAGNOSE_SOURCE,
+                skill.DIAGNOSE_DESTINATION,
+                check=True,
+                public_origin=skill.DIAGNOSE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-diagnose-routing",
+                public_name="vllm-sr-diagnose-routing",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.BENCHMARK_SOURCE,
+                skill.BENCHMARK_DESTINATION,
+                check=True,
+                public_origin=skill.BENCHMARK_PUBLIC_ORIGIN,
+                source_name="vllm-sr-benchmark",
+                public_name="vllm-sr-benchmark",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.COMPARE_SOURCE,
+                skill.COMPARE_DESTINATION,
+                check=True,
+                public_origin=skill.COMPARE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-compare-configurations",
+                public_name="vllm-sr-compare-configurations",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.TUNE_SOURCE,
+                skill.TUNE_DESTINATION,
+                check=True,
+                public_origin=skill.TUNE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-tune-recipe",
+                public_name="vllm-sr-tune-recipe",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
             {
                 "configuration-loop.md",
+                "http-configuration-plan.md",
                 "deployment-loop.md",
+                "maintenance.md",
+                "optimization.md",
                 "route-verification.md",
                 "sr-bench.md",
                 "recipe-tuning.md",

@@ -13,7 +13,7 @@ const routes = {
     {
       model: 'vllm-sr/auto',
       recipe: 'typed',
-      algorithms: ['cascade'],
+      algorithms: ['escalate'],
       question_types: ['choice', 'score', 'noul'],
       execution_timeout_ms: 120000,
     },

@@ -24,19 +24,19 @@ describe('ConfigPageRouterStructuredEditor', () => {
   })
 
   it('renders string arrays as addable typed rows', () => {
-    const schema = ROUTER_STRUCTURED_FIELDS.prompt_compression?.skip_signals.schema
+    const schema = ROUTER_STRUCTURED_FIELDS.vector_store?.supported_formats.schema
     expect(schema).toBeDefined()
     const markup = renderToStaticMarkup(
       <ConfigPageRouterStructuredEditor
         schema={schema!}
-        value={['jailbreak', 'pii']}
+        value={['.md', '.pdf']}
         onChange={vi.fn()}
       />,
     )
 
-    expect(markup).toContain('jailbreak')
-    expect(markup).toContain('pii')
-    expect(markup).toContain('Add signal')
+    expect(markup).toContain('.md')
+    expect(markup).toContain('.pdf')
+    expect(markup).toContain('Add file extension')
   })
 
   it('surfaces preserved future fields in read-only object views', () => {

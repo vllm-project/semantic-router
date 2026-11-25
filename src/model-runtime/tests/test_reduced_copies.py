@@ -18,8 +18,8 @@ from .test_modernbert import CONFIGS, batch, native
 CPU = torch.device("cpu")
 
 
-@pytest.mark.parametrize("machine", ["aarch64", "arm64"])
-def test_packed_linear_is_available_on_arm64(monkeypatch, machine):
+@pytest.mark.parametrize("machine", ["x86_64", "amd64", "aarch64", "arm64"])
+def test_packed_linear_is_available_on_supported_cpus(monkeypatch, machine):
     monkeypatch.setattr(onednn.platform, "machine", lambda: machine)
     monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
     monkeypatch.setattr(
@@ -33,8 +33,9 @@ def test_packed_linear_is_available_on_arm64(monkeypatch, machine):
     assert onednn.available()
 
 
-def test_packed_linear_needs_the_reorder_op(monkeypatch):
-    monkeypatch.setattr(onednn.platform, "machine", lambda: "aarch64")
+@pytest.mark.parametrize("machine", ["x86_64", "aarch64"])
+def test_packed_linear_needs_the_reorder_op(monkeypatch, machine):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: machine)
     monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
     monkeypatch.setattr(
         onednn.torch.ops,
@@ -42,6 +43,14 @@ def test_packed_linear_needs_the_reorder_op(monkeypatch):
         SimpleNamespace(_linear_pointwise=object()),
     )
     assert not onednn.available()
+    reason = unavailable("float32-packed", CPU)
+    assert reason is not None and "PyTorch build lacks" in reason
+
+
+def test_packed_linear_reports_an_unsupported_cpu(monkeypatch):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: "ppc64le")
+    reason = unavailable("float32-packed", CPU)
+    assert reason is not None and "CPU architecture 'ppc64le'" in reason
 
 
 def runnable(kind):
@@ -97,16 +106,38 @@ def test_a_view_computes_close_to_the_exact_backbone(kind, tolerance):
     torch.testing.assert_close(actual, expected, rtol=0, atol=tolerance)
 
 
-def test_packed_linears_give_a_row_the_same_result_in_any_batch():
+def test_the_probe_says_whether_a_packed_linear_gives_a_row_the_same_result_in_any_batch():
     runnable("float32-packed")
     torch.manual_seed(0)
-    linear = PackedLinear(nn.Linear(64, 96))
-    rows = torch.randn(300, 64)
-    with torch.inference_mode():
-        alone = linear(rows[:3])
-        for count in (4, 17, 64, 300):
-            assert torch.equal(linear(rows[:count])[:3], alone)
-        assert linear(rows[None, :5]).shape == (1, 5, 96)
+    # a narrow product and ModernBERT's wide-K down-projection, which oneDNN
+    # 3.7 splits differently from 81 rows at some thread counts
+    for features in ((64, 96), (1152, 768)):
+        linear = PackedLinear(nn.Linear(*features))
+        rows = onednn.probe_rows(features[0], torch.Generator().manual_seed(0))
+        with torch.inference_mode():
+            pairs = torch.cat(
+                [linear(rows[i : i + 2]) for i in range(0, rows.shape[0], 2)]
+            )
+            same = all(
+                torch.equal(linear(rows[:count]), pairs[:count])
+                for count in onednn.PROBE_ROWS
+            )
+            assert onednn.invariant([linear]) == same
+            assert linear(rows[None, :5]).shape == (1, 5, features[1])
+
+
+class _Drifting(PackedLinear):
+    """A packed linear whose rows move once a batch exceeds the 2-row reference."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return super().forward(x) + (x.shape[0] > 2) * 1e-6
+
+
+def test_the_probe_fails_a_product_whose_rows_move_with_the_batch():
+    runnable("float32-packed")
+    torch.manual_seed(0)
+    assert not onednn.invariant([_Drifting(nn.Linear(64, 96))])
+    assert onednn.invariant([]) is True
 
 
 def test_copies_that_cannot_run_on_a_device_say_why():

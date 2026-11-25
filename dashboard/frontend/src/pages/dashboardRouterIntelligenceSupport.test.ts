@@ -3,8 +3,10 @@ import type { RouterModelInfo } from '../utils/routerRuntime'
 import type { RouterConfig } from './dashboardPageTypes'
 import {
   buildIntelligenceRoutingScopes,
+  decisionModelHealth,
   getDecisionRuntimeSummary,
 } from './dashboardRouterIntelligenceSupport'
+import type { ModelRuntimeDeployment } from './decisionModelManagement'
 
 const config: RouterConfig = {
   global: {
@@ -19,7 +21,7 @@ const config: RouterConfig = {
       name: 'balanced',
       routing: {
         signals: {
-          decision: [{ name: 'task', question: { type: 'choice' } }],
+          systemone: [{ name: 'task', question: { type: 'choice' } }],
           pii: [{ name: 'personal_data' }],
           context: [{ name: 'long_input' }],
         },
@@ -28,7 +30,7 @@ const config: RouterConfig = {
     },
     {
       name: 'private',
-      routing: { signals: { decision: [{ name: 'task', question: { type: 'set' } }] } },
+      routing: { signals: { systemone: [{ name: 'task', question: { type: 'set' } }] } },
     },
   ],
 }
@@ -93,10 +95,78 @@ describe('decision model runtime evidence', () => {
   })
 })
 
+describe('decision model deployment state', () => {
+  const deployment = (overrides: Partial<ModelRuntimeDeployment> = {}): ModelRuntimeDeployment => ({
+    name: 'judge',
+    managed: true,
+    served_name: 'judge',
+    ready: true,
+    state: 'ready',
+    device: 'rocm:0',
+    desired_replicas: 2,
+    ready_replicas: 2,
+    ...overrides,
+  })
+
+  it('reads the deployment the model runtime reports, as Models › Decision models does', () => {
+    expect(decisionModelHealth(config, { deployments: [deployment()] })).toEqual({
+      model: 'Vela-2.0-4B',
+      deployment: 'judge',
+      tone: 'success',
+      label: 'Ready',
+      detail: 'rocm:0 · 2 of 2 replicas ready',
+    })
+    expect(
+      decisionModelHealth(config, {
+        deployments: [deployment({ state: 'degraded', ready_replicas: 1 })],
+      }),
+    ).toMatchObject({
+      tone: 'warning',
+      label: 'Degraded capacity',
+      detail: 'rocm:0 · 1 of 2 replicas ready',
+    })
+    expect(
+      decisionModelHealth(config, {
+        deployments: [deployment({ ready: false, state: 'loading_weights', reason: undefined })],
+      }),
+    ).toMatchObject({
+      tone: 'warning',
+      label: 'Needs attention',
+      detail: 'The model runtime reports it loading weights',
+    })
+  })
+
+  it('falls back to the Router bindings and says when nothing reports the deployment', () => {
+    const other = { deployments: [deployment({ name: 'another' })] }
+    expect(decisionModelHealth(config, other, { models: [binding()] })).toMatchObject({
+      tone: 'success',
+      label: 'Ready',
+      detail: 'The Router reports it ready',
+    })
+    expect(
+      decisionModelHealth(config, null, { models: [binding({ loaded: false })] }),
+    ).toMatchObject({ tone: 'warning', label: 'Needs attention' })
+    expect(decisionModelHealth(config, other)).toEqual({
+      model: 'Vela-2.0-4B',
+      deployment: 'judge',
+      tone: 'neutral',
+      label: 'Not reported',
+      detail: 'The model runtime has not reported the judge deployment yet',
+    })
+  })
+})
+
 describe('configured routing overview', () => {
   it('keeps questions, signals and projections scoped to their recipe', () => {
     expect(buildIntelligenceRoutingScopes(config)).toEqual([
-      { id: 'default', label: 'Default routing', entrypoints: ['vllm-sr/auto'], questions: [], signals: [], projections: [] },
+      {
+        id: 'default',
+        label: 'Default routing',
+        entrypoints: ['vllm-sr/auto'],
+        questions: [],
+        signals: [],
+        projections: [],
+      },
       {
         id: 'balanced',
         label: 'balanced',
@@ -127,7 +197,7 @@ describe('configured routing overview', () => {
       buildIntelligenceRoutingScopes({
         routing: {
           signals: {
-            decision: [{ name: 'difficulty', question: { type: 'score' } }],
+            systemone: [{ name: 'difficulty', question: { type: 'score' } }],
             pii: [],
             context: [{}],
           },

@@ -24,7 +24,16 @@ func (s *replayQueryTestStore) QueryPage(_ context.Context, f store.QueryFilters
 	return s.page(f, l, o, d)
 }
 
-func (s *replayQueryTestStore) ScanMetadata(_ context.Context, v func(store.Record) error) error {
+func (s *replayQueryTestStore) ScanMetadata(_ context.Context, _ store.QueryFilters, v func(store.Record) error) error {
+	return s.scan(v)
+}
+
+// ScanFilterOptions visits every record: their option values are the distinct
+// combinations a database would return.
+func (s *replayQueryTestStore) ScanFilterOptions(_ context.Context, v func(store.Record) error) error {
+	if s.scan == nil {
+		return nil
+	}
 	return s.scan(v)
 }
 
@@ -40,7 +49,7 @@ func TestRouterReplayDatabasePageIncludesOlderRecords(t *testing.T) {
 		return store.RecordPage{Records: records, Total: 12230, Offset: o}, nil
 	}}
 	router := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage), ReplayStoreShared: true}
-	response := router.handleRouterReplayAPI("GET", routerReplayAPIBasePath+"?recipe=evaluation&offset=12225&limit=5")
+	response := router.handleRouterReplayAPI(context.Background(), "GET", routerReplayAPIBasePath+"?recipe=evaluation&offset=12225&limit=5")
 	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
 	if body["total"] != float64(12230) || body["count"] != float64(5) || body["has_more"] != false {
 		t.Fatalf("incorrect DB page: %#v", body)
@@ -61,6 +70,9 @@ func TestRouterReplayStreamingAggregateMatchesAllRecords(t *testing.T) {
 		if i%11 == 0 {
 			records[i].TotalTokens = nil
 		}
+		if i%5 == 0 {
+			records[i].ProviderCache = &store.ProviderCacheAccounting{State: "complete", NoCacheCost: replayFloatPtr(.5), CacheSavings: replayFloatPtr(float64(i%4) - 1.5)}
+		}
 	}
 	storage := &replayQueryTestStore{scan: func(visit func(store.Record) error) error {
 		for _, record := range records {
@@ -72,7 +84,7 @@ func TestRouterReplayStreamingAggregateMatchesAllRecords(t *testing.T) {
 	}}
 	router := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage), ReplayStoreShared: true}
 	for _, filters := range []routerReplayFilters{{}, {model: "model-1"}, {search: "request-122"}} {
-		got, err := router.queryRouterReplayAggregate(filters)
+		got, err := router.queryRouterReplayAggregate(context.Background(), filters)
 		want := buildRouterReplayAggregatePayload(records, filterRouterReplayRecords(records, filters))
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("stream aggregate differs for %+v: got=%+v want=%+v err=%v", filters, got, want, err)
@@ -87,7 +99,7 @@ func TestRouterReplayQueryFailureDoesNotLookEmpty(t *testing.T) {
 	}, scan: func(func(store.Record) error) error { return unavailable }}
 	router := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage), ReplayStoreShared: true}
 	for _, path := range []string{routerReplayAPIBasePath, routerReplayAggregatePath, routerReplayTrajectoryPath + "?session_id=old-session"} {
-		response := router.handleRouterReplayAPI("GET", path)
+		response := router.handleRouterReplayAPI(context.Background(), "GET", path)
 		if response.GetImmediateResponse().GetStatus().GetCode() != typev3.StatusCode_InternalServerError {
 			t.Fatalf("query failure was hidden for %s", path)
 		}
@@ -111,7 +123,7 @@ func TestRouterReplayQueriesOlderSessionBeforeLoadingBodies(t *testing.T) {
 		return store.RecordPage{Records: records, Offset: offset, Total: 105}, nil
 	}}
 	router := &OpenAIRouter{ReplayRecorder: routerreplay.NewRecorder(storage), ReplayStoreShared: true}
-	records, err := router.queryRouterReplaySession("old-session", replayStringPtr("evaluation"))
+	records, err := router.queryRouterReplaySession(context.Background(), "old-session", replayStringPtr("evaluation"))
 	if err != nil || len(records) != 105 || calls != 1 || records[104].ID != "old-001" {
 		t.Fatalf("older trajectory count=%d calls=%d err=%v", len(records), calls, err)
 	}
@@ -133,7 +145,7 @@ func TestRouterReplayIsolatedDatabasePageHasNextOffset(t *testing.T) {
 		readers[name] = routerreplay.NewRecorder(storage)
 	}
 	router := &OpenAIRouter{ReplayRecorders: readers}
-	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 5})
+	page, err := router.queryRouterReplayPage(context.Background(), routerReplayListQuery{limit: 5})
 	if err != nil || page.Total != 24460 || !page.HasMore || page.NextOffset == nil || *page.NextOffset != 5 {
 		t.Fatalf("isolated page=%+v err=%v", page, err)
 	}
@@ -153,7 +165,7 @@ func TestRouterReplayIsolatedDetailRetainsSourceForDuplicateIDs(t *testing.T) {
 		readers[name] = routerreplay.NewRecorder(storage)
 	}
 	router := &OpenAIRouter{ReplayRecorders: readers}
-	page, err := router.queryRouterReplayPage(routerReplayListQuery{limit: 5, showDetails: true})
+	page, err := router.queryRouterReplayPage(context.Background(), routerReplayListQuery{limit: 5, showDetails: true})
 	if err != nil || len(page.Data) != 2 {
 		t.Fatalf("page=%+v err=%v", page, err)
 	}

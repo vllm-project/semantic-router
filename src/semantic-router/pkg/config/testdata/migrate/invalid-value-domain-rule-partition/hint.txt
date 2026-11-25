@@ -1,0 +1,1 @@
+recipes[default].signals.domains[general]: invalid_value: a domain rule without labels or mmlu_categories whose name is no domain matched only as the default of a projection partition that names it; run `vllm-sr config migrate` (labels: [other], so the partition keeps it)

@@ -15,10 +15,11 @@ import (
 
 // structuredOutputProbeFormat mirrors the reproduction in issue #3024: a
 // strict json_schema response_format sent through the auto-routing model.
-// The simulator backend does not enforce schemas, so this contract guards the
-// transport behavior: the request must route successfully (no 4xx/5xx from
-// the response_format handling) and return a well-formed completion. Byte
-// fidelity of the forwarded response_format is asserted by unit tests in
+// The simulator backend does not enforce schemas, but its default completion
+// echoes the response_format it received (provider-mocker chat_request.py,
+// build_chat_content), so this contract checks that the request routes and
+// that the json_schema reaches the backend with its name. Byte fidelity of the
+// forwarded response_format is asserted by unit tests in
 // src/semantic-router/pkg/extproc.
 const structuredOutputProbeFormat = `{
 	"type": "json_schema",
@@ -84,6 +85,21 @@ func testChatCompletionsStructuredOutput(ctx context.Context, client *kubernetes
 	}
 	if len(completion.Choices) == 0 {
 		return fmt.Errorf("completion has no choices: %s", string(resp.Body))
+	}
+	var echo struct {
+		StructuredOutput struct {
+			Type       string `json:"type"`
+			JSONSchema struct {
+				Name string `json:"name"`
+			} `json:"json_schema"`
+		} `json:"structured_output"`
+	}
+	content := completion.Choices[0].Message.Content
+	if err := json.Unmarshal([]byte(content), &echo); err != nil {
+		return fmt.Errorf("completion is not the provider-mocker echo: %w (%q)", err, content)
+	}
+	if echo.StructuredOutput.Type != "json_schema" || echo.StructuredOutput.JSONSchema.Name != "probe" {
+		return fmt.Errorf("the backend did not receive the json_schema response_format: %q", content)
 	}
 
 	if opts.SetDetails != nil {

@@ -2,5 +2,15 @@
 # /netlify and uploaded by .github/workflows/netlify-preview.yml.
 # Also disable automatic Deploy Previews and branch deploys in the Netlify UI;
 # that prevents queueing builds even for PRs that predate this file.
+#
+# The build command and toolchain versions are pinned so production matches the
+# preview workflow: make docs-build provisions its own Python venv, so the build
+# does not depend on the build image's ambient interpreter (#5222).
 [build]
   ignore = 'if [ "$CONTEXT" = "production" ] && [ "$BRANCH" = "main" ]; then exit 1; else exit 0; fi'
+  command = "make docs-build"
+  publish = "website/build"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PYTHON_VERSION = "3.12"

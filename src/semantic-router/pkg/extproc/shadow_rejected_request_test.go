@@ -44,7 +44,7 @@ func TestShadowIsNotDispatchedForRejectedRequest(t *testing.T) {
 			}
 			ctx.RouterReplayID = replayID
 			ctx.RouterReplayRecorder = recorder
-			ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
+			ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, Shadow: shadowTestPluginConfig()}
 
 			response, err := router.handleEntrypointModelRouting(
 				request, originalModel, decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,

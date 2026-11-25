@@ -11,6 +11,8 @@ from typing import Any
 from community_lifecycle_github import (
     GitHubClient,
     accept_issue_event,
+    accept_issue_queue,
+    sync_issue_assignment_event,
     sync_issue_event,
     sync_issue_kind_event,
     sync_issue_queue,
@@ -20,6 +22,8 @@ from community_lifecycle_github import (
     validate_title_event,
 )
 from community_lifecycle_policy import (
+    ASSIGN_COMMANDS,
+    ASSIGNMENT_COMMAND_EVENT,
     EPIC,
     ISSUE_DELIVERY_STATE_LABELS,
     MAINTAINER_OWNER,
@@ -27,6 +31,7 @@ from community_lifecycle_policy import (
     PR_STATE_LABELS,
     WORKGROUP_LABELS,
     WORKGROUP_OPTIONS,
+    assignment_command,
     evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
@@ -38,6 +43,8 @@ from community_lifecycle_policy import (
 )
 
 __all__ = [
+    "ASSIGNMENT_COMMAND_EVENT",
+    "ASSIGN_COMMANDS",
     "EPIC",
     "ISSUE_DELIVERY_STATE_LABELS",
     "MAINTAINER_OWNER",
@@ -45,6 +52,7 @@ __all__ = [
     "PR_STATE_LABELS",
     "WORKGROUP_LABELS",
     "WORKGROUP_OPTIONS",
+    "assignment_command",
     "evaluate_issue_acceptance",
     "evaluate_pull_request",
     "extract_related_issue_numbers",
@@ -67,8 +75,10 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "sync-issue",
             "sync-issue-kind",
+            "sync-issue-assignment",
             "sync-issues",
             "accept-issue",
+            "accept-issues",
             "validate-pr",
             "sync-pr",
             "sync-prs",
@@ -90,10 +100,14 @@ def main() -> int:
         sync_issue_event(client, event)
     elif args.command == "sync-issue-kind":
         sync_issue_kind_event(client, event)
+    elif args.command == "sync-issue-assignment":
+        sync_issue_assignment_event(client, event)
     elif args.command == "sync-issues":
         sync_issue_queue(client, event)
     elif args.command == "accept-issue":
         accept_issue_event(client, event)
+    elif args.command == "accept-issues":
+        accept_issue_queue(client, event)
     elif args.command == "validate-pr":
         validate_pull_request_event(client, event)
     elif args.command == "sync-pr":

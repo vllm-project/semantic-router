@@ -38,10 +38,32 @@ func (engine *Engine) DecodeResponse(
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
+	diagnostics = appendDiagnostics(diagnostics, engine.stopAtRequestOutputLimit(format, &response, &envelope), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.ValidateResponse(response, engine.policy.Limits); err != nil {
 		return response, envelope, diagnostics, err
 	}
 	return response, envelope, diagnostics, nil
+}
+
+// stopAtRequestOutputLimit decodes a buffered reply that stopped for its tool
+// calls once its output reached the request's output limit as stopped at that
+// limit, so its last call is read as one the limit may have cut.
+func (engine *Engine) stopAtRequestOutputLimit(
+	source llmprotocol.WireFormat,
+	response *llmprotocol.Response,
+	envelope *llmprotocol.Envelope,
+) llmprotocol.Diagnostics {
+	if len(response.Alternatives) > 0 ||
+		!llmprotocol.ToolCallStopAtOutputLimit(response.StopReason, response.Usage, engine.policy.RequestOutputLimit) {
+		return nil
+	}
+	response.StopReason = llmprotocol.StopMaxTokens
+	// The backend's bytes name the tool-call stop.
+	envelope.ResponseReencodeRequired = true
+	return llmprotocol.Diagnostics{{
+		Source: source, Field: "response.stop_reason", Action: llmprotocol.DiagnosticApproximated,
+		Reason: "a tool-call stop whose output reached the request's output token limit is reported as that limit",
+	}}
 }
 
 // DecodeResponseStream decodes a complete wire stream into one neutral
@@ -60,7 +82,7 @@ func (engine *Engine) DecodeResponseStream(
 		return llmprotocol.Response{}, nil, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"streaming_unsupported",
-			"wire format does not support streaming",
+			fmt.Sprintf("the %s API does not stream", format.APIName()),
 			nil,
 		)
 	}
@@ -149,7 +171,7 @@ func (accumulator *responseAccumulator) applyEvent(event llmprotocol.Event) erro
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"opaque_stream_event",
-			"provider-opaque stream events cannot enter the neutral response contract",
+			"the model service streamed an event the Router cannot translate",
 			nil,
 		)
 	default:
@@ -214,6 +236,9 @@ func (accumulator *responseAccumulator) applyEventMetadata(event llmprotocol.Eve
 	if event.Model != "" {
 		accumulator.result.Model = event.Model
 	}
+	if !event.CreatedAt.IsZero() {
+		accumulator.result.CreatedAt = event.CreatedAt
+	}
 	if event.Usage != nil {
 		accumulator.result.Usage = *event.Usage
 	}
@@ -230,7 +255,10 @@ func (accumulator *responseAccumulator) startItem(event llmprotocol.Event) error
 	if event.ToolCall != nil {
 		call := *event.ToolCall
 		item.call = &call
-	} else if event.Content != nil {
+	} else if event.Content != nil && (event.Content.Kind != llmprotocol.ContentReasoning ||
+		event.Content.Text != "" || event.Content.Signature != "" || event.Content.ReasoningDetail != nil || event.Content.Reasoning != "") {
+		// An empty reasoning item-start only frames later content. Reserving its
+		// index would collide with an encrypted-only Responses item's blob.
 		content := *event.Content
 		item.contents[event.ContentIndex] = &content
 	}
@@ -245,10 +273,38 @@ func (accumulator *responseAccumulator) appendOutputText(event llmprotocol.Event
 		kind = event.Content.Kind
 		citations = event.Content.Citations
 	}
-	return accumulator.appendText(event.ItemIndex, event.ContentIndex, kind, event.Delta, "", "", citations)
+	if err := accumulator.appendText(event.ItemIndex, event.ContentIndex, kind, event.Delta, "", "", citations); err != nil {
+		return err
+	}
+	if event.Content != nil && len(event.Content.Raw) > 0 {
+		content := accumulator.items[event.ItemIndex].contents[event.ContentIndex]
+		content.Raw = llmprotocol.AppendCitations(content.Raw, event.Content.Raw)
+	}
+	return nil
 }
 
 func (accumulator *responseAccumulator) appendReasoning(event llmprotocol.Event) error {
+	if event.Content != nil && event.Content.ReasoningDetail != nil {
+		item, err := accumulator.item(event.ItemIndex)
+		if err != nil {
+			return err
+		}
+		content := item.contents[event.ContentIndex]
+		if content == nil {
+			detail := *event.Content.ReasoningDetail
+			item.contents[event.ContentIndex] = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning, ReasoningDetail: &detail}
+			return nil
+		}
+		if content.ReasoningDetail == nil {
+			return invalidProviderResponse("stream_content_kind_mismatch", "Upstream stream changed a reasoning block kind")
+		}
+		merged, err := llmprotocol.MergeReasoningDetail(*content.ReasoningDetail, *event.Content.ReasoningDetail)
+		if err != nil {
+			return invalidProviderResponse("reasoning_detail_identity_mismatch", "Upstream reasoning detail changed identity or type")
+		}
+		content.ReasoningDetail = &merged
+		return nil
+	}
 	signature := ""
 	reasoning := llmprotocol.ReasoningScope("")
 	if event.Content != nil {
