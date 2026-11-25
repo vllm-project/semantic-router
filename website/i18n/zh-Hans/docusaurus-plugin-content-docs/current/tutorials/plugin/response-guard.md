@@ -106,4 +106,6 @@ Router Replay 用 `stream: buffered` 或 `stream: unbuffered` 记录流式回答
 
 同一决策上的 [`response_cache`](./response-cache.md) 只保存守卫放行的回答：被拦截的回答，以及只在 `x-vsr-warnings` 中被标记的回答，都不会存入缓存。缓存命中无需调用模型即可应答，因此守卫不会对它运行。精确命中是同一个请求，守卫对它的判定仍然成立。语义命中返回守卫为先前一个相似请求放行的回答，不会针对新请求求值守卫中依赖请求本身的条件，例如 `keyword` 或 `fact_check` 条件。在这一点重要的场景下，请为该决策的缓存使用 `mode: exact`。
 
+只有工具调用的回答没有可写入说明的文本块。配置 `annotate` 和 `details: true` 时，路由器通过 `x-vsr-warnings` 返回警告，并跳过缓存写入。从尚未检查工具调用参数的版本升级后，启用了响应守卫的决策会使用新的缓存分区。
+
 修改守卫会让该决策的缓存重新开始。修改守卫读取的信号（例如越狱规则的 `predicate`）则不会：请在该决策的 `response_cache` 配置中为 `revision.policy_revision` 设置新值。见[配合响应守卫](./response-cache.md#with-a-response-guard)。

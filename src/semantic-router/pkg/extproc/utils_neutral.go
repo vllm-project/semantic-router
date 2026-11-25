@@ -20,23 +20,6 @@ func semanticAssistantContent(response *llmprotocol.Response) string {
 	return response.AssistantText(nil)
 }
 
-// prependSemanticAssistantText mutates every assistant alternative in place so
-// a response warning remains protocol-neutral until the inbound codec renders
-// it. It returns false when the response has no client-visible text block.
-func prependSemanticAssistantText(response *llmprotocol.Response, prefix string) bool {
-	if response == nil || prefix == "" {
-		return false
-	}
-	changed := prependSemanticOutputText(response.Output, prefix)
-	for index := range response.Alternatives {
-		changed = prependSemanticOutputText(response.Alternatives[index], prefix) || changed
-	}
-	if changed {
-		response.Generation++
-	}
-	return changed
-}
-
 func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) bool {
 	changed := false
 	for itemIndex := range output {

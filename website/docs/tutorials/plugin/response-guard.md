@@ -162,6 +162,11 @@ for a similar earlier request, without evaluating the guard's conditions on the
 new request, such as a `keyword` or `fact_check` condition. Where that matters,
 use `mode: exact` for that decision's cache.
 
+A tool-call-only reply has no text block for an inline note. With `annotate`
+and `details: true`, the router delivers the warning in `x-vsr-warnings` and
+skips the cache write. Upgrading from a router that did not inspect tool-call
+arguments starts a new cache partition for decisions with a response guard.
+
 Changing the guard starts the decision's cache fresh. Changing a signal it
 reads, such as a jailbreak rule's `predicate`, does not: set a new
 `revision.policy_revision` in the decision's `response_cache` configuration.
