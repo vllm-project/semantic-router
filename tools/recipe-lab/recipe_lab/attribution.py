@@ -452,12 +452,38 @@ def attribute(
     return rows
 
 
+# Routing verdicts the taxonomy can resolve: the answer branches classified
+# these rows against a resolved expectation. E1 rows contradict their own
+# signal truth, policy_gap rows have no expectation, and no_evidence rows
+# keep the answer unknown, so none of them carries a routing verdict.
+ROUTABLE_CLASSES = (
+    CORRECT,
+    E3_CAPABILITY,
+    SUBOPTIMAL,
+    E2_POLICY,
+    DECISION_MISMATCH,
+)
+ROUTED_AS_EXPECTED_CLASSES = (CORRECT, E3_CAPABILITY)
+
+
 def summarize(rows: list[dict[str, Any]], top_k: int = 5) -> dict[str, Any]:
     counts = Counter(row["error_class"] for row in rows)
-    answered_classes = (CORRECT, E2_POLICY, E3_CAPABILITY, SUBOPTIMAL)
-    n_answered = sum(counts[c] for c in answered_classes)
+    # every case with a known answer outcome counts: a misrouted wrong answer
+    # (decision_mismatch) is still a wrong answer, so it joins the denominator
+    evaluated = [r for r in rows if r.get("answer_ok") is not None]
+    n_evaluated = len(evaluated)
+    n_answer_ok = sum(1 for r in evaluated if r["answer_ok"])
+    answer_accuracy = n_answer_ok / n_evaluated if n_evaluated else None
+    routable = [r for r in evaluated if r["error_class"] in ROUTABLE_CLASSES]
+    n_routed_ok = sum(
+        1 for r in routable if r["error_class"] in ROUTED_AS_EXPECTED_CLASSES
+    )
+    routing_correctness = n_routed_ok / len(routable) if routable else None
+    # the runner's ledger metric (routed_accuracy) reads these keys: the
+    # answer counted only when it came through the expected route, now over
+    # every case with a known answer outcome
     n_correct = counts[CORRECT]
-    accuracy = (n_correct / n_answered) if n_answered else None
+    accuracy = (n_correct / n_evaluated) if n_evaluated else None
 
     e1_rows = [r for r in rows if r["error_class"] == E1_SIGNAL]
     # confusion pairs use the expected decision (string truth resolves to the
@@ -480,9 +506,14 @@ def summarize(rows: list[dict[str, Any]], top_k: int = 5) -> dict[str, Any]:
     return {
         "total": len(rows),
         "class_counts": {cls: counts.get(cls, 0) for cls in ALL_CLASSES},
-        "answered": n_answered,
+        "answered": n_evaluated,
         "correct": n_correct,
         "accuracy": accuracy,
+        "answer_ok": n_answer_ok,
+        "answer_accuracy": answer_accuracy,
+        "routable": len(routable),
+        "routed_ok": n_routed_ok,
+        "routing_correctness": routing_correctness,
         "e1_by_family": dict(e1_by_family),
         "e1_by_signal": dict(e1_by_signal),
         "e3_by_family": dict(e3_by_family),
@@ -503,17 +534,27 @@ def summarize(rows: list[dict[str, Any]], top_k: int = 5) -> dict[str, Any]:
 
 def render_markdown(summary: dict[str, Any], dataset_hash: str = "") -> str:
     counts = summary["class_counts"]
-    accuracy = summary["accuracy"]
-    accuracy_text = (
-        f"{accuracy * 100:.2f}%" if accuracy is not None else "N/A (no answered cases)"
+    answer_accuracy = summary["answer_accuracy"]
+    answer_text = (
+        f"{answer_accuracy * 100:.2f}%"
+        if answer_accuracy is not None
+        else "N/A (no cases with a known answer outcome)"
+    )
+    routing = summary["routing_correctness"]
+    routing_text = (
+        f"{routing * 100:.2f}%"
+        if routing is not None
+        else "N/A (no cases with a routing expectation)"
     )
     lines = [
         "# Misroute attribution report",
         "",
         f"- dataset_hash: `{dataset_hash or 'n/a'}`",
         f"- total cases: {summary['total']}",
-        f"- routed-outcome accuracy: **{accuracy_text}**"
-        f" ({summary['correct']}/{summary['answered']} answered cases)",
+        f"- answer accuracy: **{answer_text}**"
+        f" ({summary['answer_ok']}/{summary['answered']} known-answer cases)",
+        f"- routing correctness: **{routing_text}**"
+        f" ({summary['routed_ok']}/{summary['routable']} routable cases)",
         "",
         "## Class distribution",
         "",

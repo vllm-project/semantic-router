@@ -102,9 +102,19 @@ def test_summary_math():
         )
     )
     assert summary["total"] == 7
-    assert summary["answered"] == 4  # correct + e2 + e3 + suboptimal
+    # every case with a known answer outcome counts: the decision_mismatch
+    # and the answered policy_gap rows join the denominator; only the
+    # answer-unknown no_evidence case stays out
+    assert summary["answered"] == 6
+    assert summary["answer_ok"] == 3  # correct + suboptimal + policy_gap
+    assert summary["answer_accuracy"] == pytest.approx(0.5)
+    assert summary["routable"] == 5  # the policy_gap row has no expectation
+    assert summary["routed_ok"] == 2  # correct + e3_capability
+    assert summary["routing_correctness"] == pytest.approx(0.4)
+    # the ledger metric keeps its routed-outcome numerator over the fixed
+    # denominator: the decision_mismatch case now counts against it
     assert summary["correct"] == 1
-    assert summary["accuracy"] == pytest.approx(0.25)
+    assert summary["accuracy"] == pytest.approx(1 / 6)
     assert summary["class_counts"][DECISION_MISMATCH] == 1
     assert summary["class_counts"][E1_SIGNAL] == 0  # no signal truth in these cases
     # decision mismatch pair: expected math but the decision matched code
@@ -122,6 +132,29 @@ def test_summary_math():
     } in summary["e2_deviations_top"]
     assert summary["e1_by_family"] == {}
     assert summary["e1_by_signal"] == {}
+
+
+def test_decision_mismatch_counts_against_the_reported_metrics():
+    # one correct and one misrouted wrong answer must report 50%, not the
+    # 100% the answered-classes denominator produced for this pair
+    rows = attribute(
+        [
+            CaseInput.from_dict(
+                make_case("case-ok", "math", "math", "local/model-math", True), 0
+            ),
+            CaseInput.from_dict(
+                make_case("case-mm", "math", "code", "local/model-code", False), 1
+            ),
+        ],
+        POLICY,
+    )
+    summary = summarize(rows)
+    assert summary["answer_accuracy"] == pytest.approx(0.5)
+    assert summary["routing_correctness"] == pytest.approx(0.5)
+    assert summary["accuracy"] == pytest.approx(0.5)
+    text = render_markdown(summary)
+    assert "answer accuracy: **50.00%** (1/2 known-answer cases)" in text
+    assert "routing correctness: **50.00%** (1/2 routable cases)" in text
 
 
 def test_report_renders_family_aware_hints():
