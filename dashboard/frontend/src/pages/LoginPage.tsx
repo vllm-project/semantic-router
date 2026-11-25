@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useState } from 'react'
+import React, { FormEvent, useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Mail, UserRound } from 'lucide-react'
@@ -10,9 +10,12 @@ import { useAuth } from '../contexts/AuthContext'
 import { useSetup } from '../contexts/SetupContext'
 import { Button, Field, InputGroup, Label, Skeleton } from '../ui'
 import {
+  BOOTSTRAP_CLOSED_MESSAGE,
   MIN_PASSWORD_LENGTH,
   ROUTE_PRELOAD_GRACE_MS,
+  fetchBootstrapOpen,
   formatServerMessage,
+  onPageReturn,
   resolvePostAuthTarget,
   settleWithin,
   targetPathname,
@@ -149,24 +152,37 @@ const LoginPage: React.FC = () => {
   }
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await fetch('/api/auth/bootstrap/can-register', {
-          method: 'GET',
-        })
-        if (!response.ok) {
-          setBootstrapStatus('disabled')
-          return
-        }
-        const payload = (await response.json()) as { canRegister: boolean }
-        setBootstrapStatus(payload?.canRegister ? 'enabled' : 'disabled')
-      } catch {
-        setBootstrapStatus('disabled')
-      }
-    }
-
-    void load()
+    void fetchBootstrapOpen().then((open) => setBootstrapStatus(open ? 'enabled' : 'disabled'))
   }, [])
+
+  // The first admin may be created from another window or browser while this
+  // form is open. Recheck when the user returns so the page moves to sign-in
+  // instead of offering a form the backend will reject.
+  const pendingRef = useRef(pending)
+  useEffect(() => {
+    pendingRef.current = pending
+  })
+  useEffect(() => {
+    if (bootstrapStatus !== 'enabled') return undefined
+    let active = true
+    const recheck = () => {
+      if (pendingRef.current) return
+      void fetchBootstrapOpen().then((open) => {
+        // Unknown (network error) keeps the form; only a definite "closed" switches.
+        if (!active || open !== false || pendingRef.current) return
+        setBootstrapStatus('disabled')
+        setBootstrapStepIndex(0)
+        setBootstrapForm((current) => ({ ...current, password: '' }))
+        setError(BOOTSTRAP_CLOSED_MESSAGE)
+        setInvalidField(null)
+      })
+    }
+    const stop = onPageReturn(recheck)
+    return () => {
+      active = false
+      stop()
+    }
+  }, [bootstrapStatus])
 
   const showError = (message: string, field: 'email' | 'password' | null = null) => {
     setError(message)
@@ -244,10 +260,13 @@ const LoginPage: React.FC = () => {
       })
       if (!response.ok) {
         const message = await response.text()
-        if (response.status === 409) {
+        // 409 means another window created the first admin. Other refusals (for
+        // example 403 after setup was activated) also close the form, so recheck.
+        if (response.status === 409 || (await fetchBootstrapOpen()) === false) {
           setBootstrapStatus('disabled')
+          setBootstrapStepIndex(0)
           setLoginEmail(bootstrapForm.email.trim())
-          throw new Error('The first admin is already registered. Sign in to continue.')
+          throw new Error(BOOTSTRAP_CLOSED_MESSAGE)
         }
         throw new Error(formatServerMessage(message, `Request failed: ${response.status}`))
       }
