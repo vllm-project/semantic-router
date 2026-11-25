@@ -183,7 +183,7 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 			return nil
 		}
 	}
-	window := scan.windowState("")
+	window := scan.windowState(scanWindow{})
 	window.MaxTokens = c.Config.ModelDeployments[scan.deployment].ScanBudget()
 	window.Questions = callQuestions(scan.rules)
 	sent, err := json.Marshal(window)
