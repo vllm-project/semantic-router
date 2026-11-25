@@ -93,6 +93,119 @@ func TestResponseGuardCleanAnswerPasses(t *testing.T) {
 	}
 }
 
+// A Chat client receives every choice of an answer, so the guard reads each
+// one, and the first it blocks refuses them all without reading the rest.
+func TestResponseGuardReadsEveryChoice(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		action   string
+		answers  []string
+		blocked  bool
+		warnings string
+		reads    int32
+	}{
+		{"one clean choice", config.ResponseGuardBlock, []string{benignAnswer}, false, "", 1},
+		{"unsafe first choice", config.ResponseGuardBlock, []string{unsafeAnswer, benignAnswer}, true, "", 1},
+		{"unsafe second choice", config.ResponseGuardBlock, []string{benignAnswer, unsafeAnswer}, true, "", 2},
+		{"stops at the blocked choice", config.ResponseGuardBlock, []string{benignAnswer, unsafeAnswer, benignAnswer}, true, "", 2},
+		{"annotated second choice", config.ResponseGuardAnnotate, []string{benignAnswer, unsafeAnswer}, false, headers.WarningJailbreak, 2},
+		{"clean choices", config.ResponseGuardBlock, []string{benignAnswer, benignAnswer}, false, "", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			decider, calls := newAnswerJailbreakDecider(unsafeAnswer)
+			router, ctx := newResponseStageRouter(t, decider, "", tc.action)
+
+			plan := guardResponse(t, router, ctx, choicesResponse(tc.answers...))
+
+			if tc.blocked {
+				assertBlockedWith(t, plan, "jailbreak content detected")
+			} else {
+				assertDelivered(t, ctx, plan, tc.warnings)
+			}
+			if calls.Load() != tc.reads {
+				t.Fatalf("the decision model read %d answers, want %d", calls.Load(), tc.reads)
+			}
+			if tc.warnings != "" && ctx.ResponseGuard.cacheSkipReason() != "response_guard_annotated" {
+				t.Fatalf("cacheSkipReason() = %q, want the flagged choice kept out of the cache", ctx.ResponseGuard.cacheSkipReason())
+			}
+		})
+	}
+}
+
+// A note a rule writes for any choice heads every choice, so the cache may
+// keep the answer: the warning rides in its body.
+func TestResponseGuardNotesEveryChoice(t *testing.T) {
+	decider, _ := newAnswerJailbreakDecider(unsafeAnswer)
+	guard := jailbreakGuard(config.ResponseGuardAnnotate, "")
+	guard.Rules[0].Details = true
+	cfg := &config.RouterConfig{}
+	cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
+	cfg.JailbreakRules = []config.JailbreakRule{responseStageRule()}
+	cfg.Decisions = []config.Decision{keywordDecision(responseStageRouteName, guardPlugin(guard))}
+	router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, decider), responseStageRouteName)
+	response := choicesResponse(benignAnswer, unsafeAnswer)
+
+	assertDelivered(t, ctx, guardResponse(t, router, ctx, response), headers.WarningJailbreak)
+
+	for i, text := range append([]string{semanticAssistantContent(response)}, semanticAlternativeContents(response)...) {
+		if !strings.HasPrefix(text, "[Safety Warning]") {
+			t.Fatalf("choice %d = %q, want it headed by the guard's note", i, text)
+		}
+	}
+	if reason := ctx.ResponseGuard.cacheSkipReason(); reason != "" {
+		t.Fatalf("cacheSkipReason() = %q, want a noted answer cacheable", reason)
+	}
+}
+
+// The replay record names the choice whose read the guard acted on; the
+// first choice's outcomes stay as they are for a one-choice answer.
+func TestResponseGuardRecordsEachChoiceInReplay(t *testing.T) {
+	decider, _ := newAnswerJailbreakDecider(unsafeAnswer)
+	router, ctx := newResponseStageRouter(t, decider, "", config.ResponseGuardBlock)
+	recorder := startResponseStageReplay(t, router, ctx)
+
+	assertBlockedWith(t, guardResponse(t, router, ctx, choicesResponse(benignAnswer, unsafeAnswer)), "jailbreak content detected")
+	router.recordRouterReplayResponseGuard(ctx)
+
+	for _, tc := range []struct {
+		target, ref, choice, verdict string
+	}{
+		{responseStageSignalKey, "", "", "not_detected"},
+		{config.DecisionPluginResponseGuard, "rules[0]", "", "not_matched"},
+		{responseStageSignalKey, "", "1", "detected"},
+		{config.DecisionPluginResponseGuard, "rules[0]", "1", "matched"},
+	} {
+		var found []string
+		for _, outcome := range replayOutcomes(t, recorder, ctx.RouterReplayID) {
+			if outcome.Target == tc.target && outcome.TargetRef == tc.ref && outcome.Metadata["choice"] == tc.choice {
+				found = append(found, outcome.Verdict)
+			}
+		}
+		if len(found) != 1 || found[0] != tc.verdict {
+			t.Fatalf("%s %s choice %q verdicts = %v, want [%s]", tc.target, tc.ref, tc.choice, found, tc.verdict)
+		}
+	}
+}
+
+// A Chat backend answering n > 1 decodes its later choices as alternatives,
+// which the guard reads before the client receives any of them.
+func TestResponseGuardBlocksAnUnsafeChatChoice(t *testing.T) {
+	decider, _ := newAnswerJailbreakDecider(unsafeAnswer)
+	router, ctx := newResponseStageRouter(t, decider, "", config.ResponseGuardBlock)
+	ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
+	body := `{"id":"response_1","model":"source-model","choices":[` +
+		`{"index":0,"message":{"role":"assistant","content":"` + benignAnswer + `"},"finish_reason":"stop"},` +
+		`{"index":1,"message":{"role":"assistant","content":"` + unsafeAnswer + `"},"finish_reason":"stop"}],` +
+		`"usage":{"prompt_tokens":2,"completion_tokens":2,"total_tokens":4}}`
+
+	reply := router.handleNonStreamingResponseBody([]byte(body), ctx, 0, false)
+
+	immediate := reply.GetImmediateResponse()
+	if immediate == nil || immediate.GetStatus().GetCode() != 400 || strings.Contains(string(immediate.GetBody()), unsafeAnswer) {
+		t.Fatalf("reply = %+v, want the 400 refusal and none of the answer", reply)
+	}
+}
+
 // P1: hallucination_action: block passed validation but never blocked. A
 // response_guard rule with action: block blocks.
 func TestResponseGuardBlocksAnUngroundedAnswer(t *testing.T) {

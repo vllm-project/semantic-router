@@ -30,6 +30,9 @@ type responseConditions interface {
 type responseGuardRun struct {
 	conditions responseConditions
 	rules      []responseGuardRuleRun
+	// alternatives are the runs over the answer's other choices, which a Chat
+	// client receives too, up to the first one the guard blocked.
+	alternatives []*responseGuardRun
 	// live marks an answer the client received as it streamed, under a guard
 	// that neither blocks nor writes notes: the guard read it once the stream
 	// ended, after the response headers had left.
@@ -49,9 +52,10 @@ type responseGuardRuleRun struct {
 
 // runResponseGuard reads the response_guard rules of the plugins the request
 // runs over answer, in order, until one blocks, and returns nil when it runs
-// no guard. Without the recipe's classifier no rule can be read, so every
-// rule is unknown.
-func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *responseGuardRun {
+// no guard. It reads the answer's other choices, alternatives, the same way,
+// until one is blocked. Without the recipe's classifier no rule can be read,
+// so every rule is unknown.
+func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string, alternatives ...string) *responseGuardRun {
 	if ctx == nil {
 		return nil
 	}
@@ -59,6 +63,24 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 	if guard == nil {
 		return nil
 	}
+	run := r.readResponseGuard(ctx, guard, answer)
+	for _, alternative := range alternatives {
+		if run.blocking() != nil {
+			break
+		}
+		run.alternatives = append(run.alternatives, r.readResponseGuard(ctx, guard, alternative))
+	}
+	metrics.RecordPluginExecution(config.DecisionPluginResponseGuard, requestDecisionStateKey(ctx), run.outcome(), 0)
+	if slices.ContainsFunc(run.choiceRules(), func(rule responseGuardRuleRun) bool { return rule.state == decision.RuleUnknown }) {
+		metrics.RecordPluginError(config.DecisionPluginResponseGuard, "signal_unavailable")
+	}
+	traceResponseGuard(ctx, run.outcome())
+	return run
+}
+
+// readResponseGuard reads guard's rules over one answer, in order, until one
+// blocks.
+func (r *OpenAIRouter) readResponseGuard(ctx *RequestContext, guard *config.ResponseGuardPluginConfig, answer string) *responseGuardRun {
 	run := &responseGuardRun{}
 	classifier := r.classifierForRequest(ctx)
 	if classifier != nil {
@@ -88,11 +110,6 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 			break
 		}
 	}
-	metrics.RecordPluginExecution(config.DecisionPluginResponseGuard, requestDecisionStateKey(ctx), run.outcome(), 0)
-	if slices.ContainsFunc(run.rules, func(rule responseGuardRuleRun) bool { return rule.state == decision.RuleUnknown }) {
-		metrics.RecordPluginError(config.DecisionPluginResponseGuard, "signal_unavailable")
-	}
-	traceResponseGuard(ctx, run.outcome())
 	return run
 }
 
@@ -195,14 +212,28 @@ func ruleOutcomeName(state decision.RuleState) string {
 	return "not_matched"
 }
 
+// choiceRules are the rule outcomes over every choice the guard read: the
+// answer's, then each alternative's.
+func (run *responseGuardRun) choiceRules() []responseGuardRuleRun {
+	if len(run.alternatives) == 0 {
+		return run.rules
+	}
+	rules := slices.Clone(run.rules)
+	for _, alternative := range run.alternatives {
+		rules = append(rules, alternative.rules...)
+	}
+	return rules
+}
+
 // blocking is the rule that blocks the answer, or nil.
 func (run *responseGuardRun) blocking() *responseGuardRuleRun {
 	if run == nil {
 		return nil
 	}
-	for i := range run.rules {
-		if run.rules[i].action == config.ResponseGuardBlock {
-			return &run.rules[i]
+	rules := run.choiceRules()
+	for i := range rules {
+		if rules[i].action == config.ResponseGuardBlock {
+			return &rules[i]
 		}
 	}
 	return nil
@@ -214,7 +245,7 @@ func (run *responseGuardRun) warnings() []string {
 	if run == nil {
 		return nil
 	}
-	for _, rule := range run.rules {
+	for _, rule := range run.choiceRules() {
 		if rule.action != config.ResponseGuardAnnotate {
 			continue
 		}
@@ -234,7 +265,7 @@ func (run *responseGuardRun) notedCodes() []string {
 	if run == nil {
 		return nil
 	}
-	for _, rule := range run.rules {
+	for _, rule := range run.choiceRules() {
 		if rule.action != config.ResponseGuardAnnotate || !rule.details {
 			continue
 		}
@@ -336,15 +367,17 @@ func (run *responseGuardRun) responseGuardNote(code string) string {
 // applyResponseGuardNotes writes the notes of the annotating rules with
 // details at the head of the answer, and reports whether it changed.
 func (r *OpenAIRouter) applyResponseGuardNotes(run *responseGuardRun, response *llmprotocol.Response) bool {
+	return prependSemanticAssistantText(response, run.notePrefix())
+}
+
+// notePrefix is the text the notes add at the head of each choice, or "".
+func (run *responseGuardRun) notePrefix() string {
 	codes := run.notedCodes()
-	if len(codes) == 0 {
-		return false
-	}
 	notes := make([]string, len(codes))
 	for i, code := range codes {
 		notes[i] = run.responseGuardNote(code)
 	}
-	return prependSemanticAssistantText(response, strings.Join(notes, "\n\n"))
+	return strings.Join(notes, "\n\n")
 }
 
 // traceResponseGuard records on the request span what became of the answer

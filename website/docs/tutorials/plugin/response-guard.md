@@ -78,8 +78,13 @@ recipes:
 
 Rules are read in order, and the first rule that blocks ends the read. A
 response-stage signal is evaluated only when a rule reaches it, and once per
-answer however many rules read it. A request for a concrete model bypasses the
-recipe's signals, so it runs no guard, not even one in `global.plugins`.
+answer however many rules read it. An answer with several choices (Chat `n`
+above 1, or a `ratings` decision) is read choice by choice, so the signals are
+evaluated once per choice: the first choice a rule blocks refuses them all,
+and every choice's warnings and notes apply to the whole answer. Router Replay
+marks an outcome on a later choice with its `choice` index. A request for a
+concrete model bypasses the recipe's signals, so it runs no guard, not even one
+in `global.plugins`.
 
 The warning codes a rule adds are `hallucination` (`unverified_factual` when
 the answer could not be checked), `response_jailbreak`, and `response_guard`
