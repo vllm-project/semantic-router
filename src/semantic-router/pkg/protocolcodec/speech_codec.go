@@ -196,9 +196,9 @@ func speechResponseBypassError() error {
 // SpeechResponseMediaType is the media type of a Speech API response, read from
 // the request's response_format. The wire names belong to the codec; callers
 // that forward the audio (a fallback candidate's body) need the MIME type only.
-func SpeechResponseMediaType(request llmprotocol.Request) string {
+func SpeechResponseMediaType(request *llmprotocol.Request) string {
 	format := "mp3"
-	if request.SpeechGeneration != nil {
+	if request != nil && request.SpeechGeneration != nil {
 		if raw, ok := request.SpeechGeneration.Fields["response_format"]; ok {
 			var named string
 			if json.Unmarshal(raw, &named) == nil && named != "" {
