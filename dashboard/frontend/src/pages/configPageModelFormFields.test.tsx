@@ -29,9 +29,11 @@ describe('model form effective fields', () => {
     expect(markup).toContain('value="responses"')
     expect(markup).toContain('value="messages"')
     expect(markup).toContain('value="images"')
+    expect(markup).toContain('value="speech"')
+    expect(markup).toContain('value="systemone"')
     expect(markup).not.toContain('value="openai"')
     expect(markup).not.toContain('value="anthropic"')
-    expect(markup).not.toContain('value="speech"')
+    expect(markup).not.toContain('value="realtime"')
   })
 
   it('recomputes defaults from the current backend rather than freezing the opening value', () => {

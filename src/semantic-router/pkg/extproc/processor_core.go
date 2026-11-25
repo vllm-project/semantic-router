@@ -37,6 +37,9 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	// This guarantees no chunk accumulation, model detection, or buffered
 	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
 	if ctx.SkipProcessing {
+		if refused := r.skippedRequestRefusal(ctx); refused != nil {
+			return refused, nil
+		}
 		if ctx.FullDuplexRequestBody {
 			return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), v.RequestBody.GetEndOfStream()), nil
 		}
@@ -102,6 +105,13 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
 		finishRequestWork(ctx)
+		// The lookup's singleflight lease ends with the request: a store
+		// completes its key first, and an answer that will not store, a
+		// refusal or an error releases the key here instead of holding
+		// every follower until the lease expires.
+		if ctx != nil {
+			r.responseCacheService().ReleaseLease(ctx.CacheLease)
+		}
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}
@@ -165,6 +175,7 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 		// evidence that is no longer from the latest turns. The recorder is
 		// idempotent and empty usage stays non-attributable.
 		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
+		r.recordInterruptedStreamUsage(ctx)
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	r.recordHeldStreamOverMessageLimit(ctx, err)

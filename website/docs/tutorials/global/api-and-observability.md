@@ -151,7 +151,7 @@ global:
   attempts and Router model calls, such as the decision model's, made for
   those requests count too. A request without a session is a run of its own.
   A run unused for `idle_timeout_seconds` (default a day) starts again from
-  zero.
+  zero at its next request.
 - **A user budget** applies to each user `match` selects, as a rate-limit rule
   does: an empty or `*` `user` or `group` matches everyone. The user is the
   `authz.identity.user_id_header` value, which a listener keeps only when it
@@ -166,24 +166,68 @@ global:
   The call goes out only when that fits every budget. Calls in flight together
   each hold their reservation, so they cannot together spend past a budget.
 - **After the reply**, its priced usage (`x-vsr-cost`) replaces the
-  reservation. A reply without usage that can be priced is charged its
-  estimate, and a call no provider answered is charged nothing. A call that
-  costs more than its estimate can leave a budget below zero.
+  reservation. Each Looper call is charged its own usage at its model's price,
+  as the request's record prices it, so a run spends what Insights and
+  `vllm-sr usage` report for it. A reply without usage that can be priced is
+  charged its estimate, a stream cut short, such as by its client, is charged
+  the usage it reported before it stopped (settlement `partial_usage`), and a
+  call no provider answered is charged nothing. A call that costs more than
+  its estimate can leave a budget below zero.
 - **At the limit** the call is refused with `429` and the code
-  `budget_exceeded`, with `Retry-After` until a user budget's window starts
-  again. A request whose budget is already spent is refused before its signals
-  run. A fallback candidate that does not fit is skipped for the next one.
+  `budget_exceeded`. A request whose budget is already spent is refused before
+  its signals run. A fallback candidate that does not fit is skipped for the
+  next one. A Looper run that fails because a call was refused answers with
+  that call's refusal. In the run's attempt trace a refused call has the
+  reason `budget_exceeded` or `budget_unpriced`, and it is no call in the
+  record's cost.
+- **The message** names the budget, its limit, and what it has left for a
+  call now: the limit less what the budget spent and what calls in flight
+  hold, the figure `x-vsr-budget-remaining` reports. It then gives the spend
+  and the held amount on their own, so the limit less what is left is not
+  mistaken for the spend, for example
+  `out of budget: the run spend budget of 1.750000 has 1.734367 left (0.000600 spent, 0.015033 held by calls in flight), and this call is estimated at 1.920015`.
+  With no call in flight it gives the spend alone.
+- **Out of budget** means what the budget spent leaves no room for the call,
+  so no retry before the window starts again can succeed. The message starts
+  `out of budget`, the reply carries `x-should-retry: false`, and a user
+  budget's refusal carries `Retry-After` until its window starts again and
+  names that time in the message. On the Responses API the error's `type` is
+  `usage_limit_reached`, with `resets_at`, the window's start in Unix
+  seconds, and `x-codex-promo-message` repeats the message: Codex ends the
+  turn on that error and shows the message. On the Messages API the reply
+  carries `budget_exceeded` in
+  `anthropic-ratelimit-unified-overage-disabled-reason`, as Anthropic marks a
+  spend limit refusal: without it, Claude Code on a Claude login or a gateway
+  login presents any 429 as
+  `Server is temporarily limiting requests (not your usage limit)`.
+- **Held by calls in flight** means the spend alone leaves room, but the
+  reservations of other calls in flight do not. The message says so and asks
+  for a retry once they finish, with `Retry-After: 5` and
+  `x-should-retry: true`.
 - **A model with no price** in `currency` is refused with `403`
   `budget_unpriced` under `unpriced: refuse`, the default. `unpriced: allow`
   sends the call, spends nothing for it, and counts it in Replay.
 
-A provider's reply and a refusal carry `x-vsr-budget-remaining` and
-`x-vsr-budget-scope` (`run` or `user/<name>`) for the tightest budget of the
-request: on a buffered reply after the call's cost, on a stream after its
-reservation. The
-Replay record keeps the same in `cost_accounting.budget`, and a refused request
-is a `failed` record with `terminal_reason: budget_exceeded`. See
-[Router API errors](../../api/router.md#routing-errors).
+Once a request reaches the budgets, every reply to it carries
+`x-vsr-budget-remaining` and `x-vsr-budget-scope` (`run` or `user/<name>`) for
+the tightest budget of the request: a provider's reply, a refusal, and the
+Router's own answers, such as a Looper answer, a fallback chain whose candidates
+all failed, or a reply it could not read. A buffered reply reports the budget
+after the call's cost, a failed call's reply after its reservation ends, and a
+stream after its reservation. A Looper answer also carries `x-vsr-cost`, the
+price of all its calls when every one has a price. The Replay record keeps the
+same in `cost_accounting.budget`, where a Looper request's record counts every
+call of its run and each hop's record its own. A refused request is a `failed`
+record with `terminal_reason: budget_exceeded`, under the model the client
+asked for. See [Router API errors](../../api/router.md#routing-errors).
+
+What the harnesses do with a refusal, measured with Claude Code 2.1.325,
+Codex 0.166.0 and Pi 1.5.2:
+
+| Refusal | Claude Code | Codex | Pi |
+| --- | --- | --- | --- |
+| Out of budget, run or user window | Ends the turn at once. With an API key it shows `API Error: Request rejected (429) ·` and the message; with a Claude login or a gateway login, the message alone. | Ends the turn at once: `You’ve hit your usage limit.` with the message, then `or try again at` the window's start, or `or try again later.` for a run. | Ends the turn at once and prints the error with the message. |
+| Held by calls in flight | Retries, at least 5 seconds apart. | Retries every 5 seconds, five times, then prints `exceeded retry limit, last status: 429 Too Many Requests`. | Retries after 2, 4 and 8 seconds, then prints the error with the message. |
 
 The Router keeps the budgets in its own memory. A configuration reload keeps
 what was spent; a restart forgets it. Each Router counts alone, so behind

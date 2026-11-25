@@ -910,6 +910,7 @@
             "responses",
             "messages",
             "images",
+            "speech",
             "systemone",
             "openai",
             "anthropic"
@@ -3473,6 +3474,7 @@
               "responses",
               "messages",
               "images",
+              "speech",
               "systemone",
               "openai",
               "anthropic"
@@ -3497,6 +3499,9 @@
             "vllm-sr/5.0",
             "vllm-sr/4.0"
           ]
+        },
+        "prefix": {
+          "type": "string"
         },
         "models": {
           "items": {
@@ -6676,6 +6681,29 @@
               "type": "null"
             }
           ]
+        },
+        "max_estimated_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_estimated_cost": {
+          "oneOf": [
+            {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -6857,6 +6885,9 @@
         },
         "tool_results": {
           "type": "boolean"
+        },
+        "max_state_bytes": {
+          "type": "integer"
         },
         "request": {
           "type": "boolean"

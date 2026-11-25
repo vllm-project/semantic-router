@@ -1,7 +1,6 @@
 package store
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,30 +13,30 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// FileStore is a MemoryStore that writes each record to a JSON Lines file
-// once, when it ends (completed, failed or aborted), and reads the ended
-// records back when it opens: the last line of each, at most maxRecords of
-// them. A record still in progress is not on disk. What reaches an ended
-// record later, such as a late outcome or a review, is written when the file
-// is next rewritten: once it holds twice maxRecords lines, and when the store
-// closes. Reading the file back and rewriting it drop records older than the
-// TTL, which the running store still lists, as the memory store does. A line
-// cut short by a crash is skipped. The file is readable by its owner only, and
-// one process at a time holds it.
+// FileStore keeps live records in memory and persists ended records as JSON Lines.
+// One writer per path appends in batches and checkpoints the retained history.
 type FileStore struct {
 	*MemoryStore
 
-	mu    sync.Mutex
-	path  string
-	file  *os.File
-	lock  *os.File
-	lines int
-	limit int
-	refs  int
+	path string
+	lock *os.File
+	refs int
+
+	mu             sync.Mutex
+	limit          int
+	pending        []Record
+	rewritePending bool
+	writerStarted  bool
+	closed         bool
+	wake           chan struct{}
+	stop           chan struct{}
+	done           chan struct{}
+
+	file     *os.File
+	lines    int
+	closeErr error
 }
 
 // openFileStores lets every Router generation of a process share the store of
@@ -52,6 +51,17 @@ var openFileStores = struct {
 // to its owner, or shares the one this process has open there. It fails while
 // another process holds the file.
 func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) {
+	return openFileStore(path, maxRecords, ttlSeconds, true)
+}
+
+// PrepareFileStore opens or shares a store for a Router candidate. loadLimit
+// bounds the history loaded on a new open. The candidate must commit its
+// retention policy before serving, or close its reference without committing.
+func PrepareFileStore(path string, loadLimit, ttlSeconds int) (*FileStore, error) {
+	return openFileStore(path, loadLimit, ttlSeconds, false)
+}
+
+func openFileStore(path string, maxRecords, ttlSeconds int, activate bool) (*FileStore, error) {
 	path, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -60,10 +70,9 @@ func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) 
 	defer openFileStores.Unlock()
 	if store := openFileStores.byPath[path]; store != nil {
 		store.refs++
-		store.SetMaxRecords(maxRecords)
-		store.mu.Lock()
-		store.limit = store.maxRecords
-		store.mu.Unlock()
+		if activate {
+			store.CommitRetention(maxRecords)
+		}
 		return store, nil
 	}
 	store := &FileStore{MemoryStore: NewMemoryStore(maxRecords, ttlSeconds), path: path, refs: 1}
@@ -78,12 +87,35 @@ func OpenFileStore(path string, maxRecords, ttlSeconds int) (*FileStore, error) 
 		_ = store.lock.Close()
 		return nil, err
 	}
+	store.wake = make(chan struct{}, 1)
+	store.stop = make(chan struct{})
+	store.done = make(chan struct{})
+	if activate {
+		store.CommitRetention(maxRecords)
+	}
 	openFileStores.byPath[path] = store
 	return store, nil
 }
 
 // Path is the file the store keeps its records in.
 func (f *FileStore) Path() string { return f.path }
+
+// CommitRetention applies the serving Router's record limit. For a newly
+// prepared store it also starts the writer, so discarding a candidate that
+// opened the file cannot checkpoint its provisional history.
+func (f *FileStore) CommitRetention(maxRecords int) {
+	if maxRecords <= 0 {
+		maxRecords = DefaultMaxRecords
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.MemoryStore.SetMaxRecords(maxRecords)
+	f.limit = maxRecords
+	if !f.writerStarted {
+		f.writerStarted = true
+		go f.writeLoop()
+	}
+}
 
 // lockFile takes the lock that keeps a second process off a store's file. It
 // is a file of its own, which no rewrite replaces, and the lock is released
@@ -109,7 +141,7 @@ func (f *FileStore) load() error {
 		return err
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), rewritePrefix) {
+		if strings.HasPrefix(entry.Name(), f.rewritePrefix()) {
 			_ = os.Remove(filepath.Join(dir, entry.Name()))
 		}
 	}
@@ -154,113 +186,44 @@ func (f *FileStore) load() error {
 	return err
 }
 
-// rewritePrefix names the temporary file of a rewrite.
-const rewritePrefix = ".router-replay-"
+func (f *FileStore) rewritePrefix() string {
+	if filepath.Base(f.path) == "router-replay.jsonl" {
+		return ".router-replay-"
+	}
+	return filepath.Base(f.path) + ".rewrite-"
+}
 
 // expired reports whether a record is older than the store's TTL.
 func (f *FileStore) expired(record Record, now time.Time) bool {
 	return f.ttl > 0 && record.Timestamp.Before(now.Add(-time.Duration(f.ttl)*time.Second))
 }
 
-// appendLocked appends the record id holds to the file.
-func (f *FileStore) appendLocked(id string) error {
-	record, found, _ := f.MemoryStore.Get(context.Background(), id)
-	if !found {
-		return nil
-	}
-	line, err := json.Marshal(record)
-	if err != nil {
-		return err
-	}
-	if _, err = f.file.Write(append(line, '\n')); err != nil {
-		return err
-	}
-	// The record is written; a failed rewrite leaves the longer file in place
-	// and is tried again after another limit lines.
-	if f.lines++; f.lines >= 2*f.limit {
-		if err = f.compactLocked(); err != nil {
-			f.lines = f.limit
-			logging.Warnf("router replay could not rewrite %s: %v", f.path, err)
-		}
-	}
-	return nil
-}
-
-// compactLocked replaces the file with one line for each record kept.
-func (f *FileStore) compactLocked() error {
-	records, err := f.MemoryStore.List(context.Background())
-	if err != nil {
-		return err
-	}
-	dir := filepath.Dir(f.path)
-	tmp, err := os.CreateTemp(dir, rewritePrefix+"*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	writer, lines, now := bufio.NewWriter(tmp), 0, time.Now()
-	for i := len(records) - 1; i >= 0 && err == nil; i-- {
-		if !recordEnded(records[i].LifecycleState) || f.expired(records[i], now) {
-			continue
-		}
-		var line []byte
-		if line, err = json.Marshal(records[i]); err == nil {
-			_, err = writer.Write(append(line, '\n'))
-			lines++
-		}
-	}
-	if err = errors.Join(err, writer.Flush(), tmp.Sync(), tmp.Close()); err != nil {
-		return err
-	}
-	if err = os.Rename(tmp.Name(), f.path); err != nil {
-		return err
-	}
-	if err = syncDir(dir); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(f.path, os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return err
-	}
-	_ = f.file.Close()
-	f.file, f.lines = file, lines
-	return nil
-}
-
-// Add keeps the record, and writes it now when it has already ended.
+// Add publishes the record immediately and queues it if it has already ended.
 func (f *FileStore) Add(ctx context.Context, record Record) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.file == nil {
+	if f.closed {
 		return "", ErrStorageClosed
 	}
 	id, err := f.MemoryStore.Add(ctx, record)
 	if err == nil && recordEnded(record.LifecycleState) {
-		err = f.appendLocked(id)
+		f.queueRecord(id)
 	}
 	return id, err
 }
 
-// UpdateLifecycle ends the record, and writes it when this call ended it.
+// UpdateLifecycle queues the first transition to a terminal state.
 func (f *FileStore) UpdateLifecycle(ctx context.Context, id string, state string, endedAt time.Time, durationMS int64, reason string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.file == nil {
+	if f.closed {
 		return ErrStorageClosed
 	}
-	ended := f.ended(id)
-	if err := f.MemoryStore.UpdateLifecycle(ctx, id, state, endedAt, durationMS, reason); err != nil || ended || !f.ended(id) {
-		return err
+	changed, err := f.MemoryStore.updateLifecycle(id, state, endedAt, durationMS, reason)
+	if changed && recordEnded(state) {
+		f.queueRecord(id)
 	}
-	return f.appendLocked(id)
-}
-
-// ended reports whether the record id holds has ended.
-func (f *FileStore) ended(id string) bool {
-	f.MemoryStore.mu.RLock()
-	defer f.MemoryStore.mu.RUnlock()
-	record := f.byID[id]
-	return record != nil && recordEnded(record.LifecycleState)
+	return err
 }
 
 func recordEnded(state string) bool {
@@ -268,26 +231,29 @@ func recordEnded(state string) bool {
 }
 
 // Close releases this user's share of the store. Once no Router generation
-// uses it, it rewrites the file with the ended records, as they are now, and
-// closes it.
+// uses it, it checkpoints the ended records and closes the file. A prepared
+// store that never served closes without a checkpoint.
 func (f *FileStore) Close() error {
 	openFileStores.Lock()
 	defer openFileStores.Unlock()
 	if f.refs == 0 {
-		return nil
+		return f.closeErr
 	}
 	if f.refs--; f.refs > 0 {
 		return nil
 	}
 	delete(openFileStores.byPath, f.path)
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.file == nil {
-		return nil
+	f.closed = true
+	writerStarted := f.writerStarted
+	close(f.stop)
+	f.mu.Unlock()
+	if !writerStarted {
+		f.closeErr = errors.Join(f.file.Close(), f.lock.Close())
+		return f.closeErr
 	}
-	err := errors.Join(f.compactLocked(), f.file.Close(), f.lock.Close())
-	f.file, f.lock = nil, nil
-	return err
+	<-f.done
+	return f.closeErr
 }
 
 // syncDir makes a rename in dir durable.

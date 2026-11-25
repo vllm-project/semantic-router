@@ -94,6 +94,9 @@ type UpstreamResponse struct {
 	Header Header
 	// Body is the response body; nil when the response has none.
 	Body io.Reader
+	// Deadline is the upstream call's total deadline, for response phases
+	// that continue the call. Zero means there is no deadline to inherit.
+	Deadline time.Time
 }
 
 // Options configure an Engine.
@@ -233,6 +236,9 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 	}
 	session := plan.session
 	defer func() { plan.Evidence = session.Evidence() }()
+	if receiver, ok := session.(interface{ SetUpstreamDeadline(time.Time) }); ok {
+		receiver.SetUpstreamDeadline(resp.Deadline)
+	}
 
 	header := Header{{Name: ":status", Value: strconv.Itoa(resp.Status)}}
 	for _, field := range resp.Header {
@@ -261,7 +267,7 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 
 	body, err := readBounded(resp.Body, e.opts.MaxBufferedBodyBytes)
 	if err != nil {
-		return nil, err
+		return e.cutBody(ctx, session, err)
 	}
 	effect, err = session.ResponseBody(body, true)
 	if err != nil {
@@ -280,6 +286,25 @@ func (e *engine) Respond(ctx context.Context, plan *Plan, resp *UpstreamResponse
 		body = ApplyBodyMutation(body, effect.Body)
 	}
 	return clientResponse(header, body), nil
+}
+
+// cutBody answers for a buffered upstream body that failed to arrive whole:
+// with the session's answer when it gives one, else with err, which the
+// gateway ends the request on. A body over the buffer limit or a request its
+// client left keeps its error.
+func (e *engine) cutBody(ctx context.Context, session Session, err error) (*Response, error) {
+	cut, ok := session.(CutBodySession)
+	if !ok || ctx.Err() != nil || errors.Is(err, ErrBufferLimit) {
+		return nil, err
+	}
+	effect, cutErr := cut.ResponseBodyCut(err)
+	if cutErr != nil {
+		return nil, cutErr
+	}
+	if effect == nil || effect.Immediate == nil {
+		return nil, err
+	}
+	return RenderImmediate(effect.Immediate, e.opts.Limits), nil
 }
 
 func headerMutationOf(effect *Effect) *HeaderMutation {
