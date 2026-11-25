@@ -1059,6 +1059,19 @@ def test_training_export_refuses_unknown_split(tmp_path, target):
         export_training(store, run["id"])
 
 
+def test_require_priced_rejects_unpriced_target_in_plain_words(target):
+    document = manifest(target)
+    document["targets"][0].pop("prices")
+    with pytest.raises(ValueError) as raised:
+        plan(document)
+    message = str(raised.value)
+    assert message.startswith("Target single has no prices")
+    assert "Run quality only" in message
+    assert "add prices to the target" in message
+    document["cost_policy"] = "capability_only"
+    assert plan(document)["cost_policy"] == "capability_only"
+
+
 def test_capability_only_ignores_usd_cap_but_retains_measured_cost(tmp_path, target):
     store = Store(tmp_path)
     document = manifest(target)

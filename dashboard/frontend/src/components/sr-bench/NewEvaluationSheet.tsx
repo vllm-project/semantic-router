@@ -376,6 +376,8 @@ function Composer({
   const [limits, setLimits] = useState(rerun ? { ...rerun.limits } : { ...DEFAULT_LIMITS })
   function changeCostPolicy(value: 'require_priced' | 'capability_only') {
     setCostPolicy(value)
+    // A plan error from the previous policy (for example missing prices) no longer applies.
+    if (value !== costPolicy) setError('')
     if (value === 'capability_only')
       setLimits((previous) =>
         !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0

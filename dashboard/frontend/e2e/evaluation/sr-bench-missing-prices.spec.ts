@@ -8,6 +8,8 @@ const target: Target = {
   model: 'Qwen/Qwen3.8-27B',
   base_url: 'http://localhost:8000/v1',
 }
+const missingPriceError =
+  'Target unpriced-model has no prices, so the USD budget cannot be applied. Run quality only (cost_policy: capability_only), or add prices to the target.'
 const freePrice = { input: 0, cached_input: 0, cache_write: 0, output: 0 }
 const dataset = {
   id: 'd'.repeat(64),
@@ -58,7 +60,7 @@ async function setup(page: Page, registered = target) {
       if (manifest.cost_policy === 'require_priced' && !registered.prices?.[registered.model]) {
         await route.fulfill({
           status: 400,
-          json: { error: 'Known prices are required for this target.' },
+          json: { error: missingPriceError },
         })
         return
       }
@@ -126,7 +128,7 @@ for (const width of [1280, 390]) {
     await advanced.click()
     expect(state.plans).toEqual([])
     await page.getByRole('button', { name: 'Review plan', exact: true }).click()
-    await expect(page.getByRole('alert')).toHaveText('Known prices are required for this target.')
+    await expect(page.getByRole('alert')).toHaveText(missingPriceError)
     expect(state.plans).toHaveLength(1)
     expect(state.plans[0].cost_policy).toBe('require_priced')
     expect(state.plans[0].limits.max_cost_usd).toBe(12)
@@ -166,6 +168,26 @@ for (const width of [1280, 390]) {
     expect(state.unexpected).toEqual([])
   })
 }
+
+test('clears the missing-price plan error when Quality only is chosen on review', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  await chooseTarget(page)
+  await step(page, 'Continue')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText(missingPriceError)
+  const notice = page.getByRole('note', { name: 'Missing target prices' })
+  await notice.getByRole('button', { name: 'Use Quality only', exact: true }).click()
+  await expect(notice).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(state.plans).toHaveLength(1)
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(state.plans[1].cost_policy).toBe('capability_only')
+  expect(state.runs).toBe(0)
+  expect(state.unexpected).toEqual([])
+})
 
 for (const [name, prices] of [
   ['empty price map', {}],
