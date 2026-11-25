@@ -44,6 +44,35 @@ func TestImageFeatureCandidatesKeepUserPartsAcrossSplitTurn(t *testing.T) {
 	}
 }
 
+// Both image views come from one walk: the full list keeps history, tool-result
+// and generated images in request order, while the candidates stay the current
+// turn's top-level user images, bounded for decoder work.
+func TestRequestImagesCollectsBothViews(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/history.png"}
+	generated := llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &llmprotocol.GeneratedImage{
+		Result: &tinyPNG, OutputFormat: "png",
+	}}
+	request := userImageRequest(inline)
+	request.Messages = []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{generated}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Content: []llmprotocol.Content{inline}},
+		}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{inline}},
+	}
+	snapshot := extractSemanticRequestSignals(request)
+	inlineURL := "data:image/png;base64," + tinyPNG
+	wantAll := []string{"", inlineURL, inlineURL, inlineURL}
+	if !slices.Equal(snapshot.Images, wantAll) {
+		t.Fatalf("Images = %v, want every image in request order", snapshot.Images)
+	}
+	if got := snapshot.CurrentUserImages; !slices.Equal(got, []string{inlineURL}) {
+		t.Fatalf("CurrentUserImages = %v, want only the current user turn", got)
+	}
+}
+
 // A 1x1 PNG; small enough to inline and a valid image for the safety gate.
 var tinyPNG = base64.StdEncoding.EncodeToString([]byte{
 	0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
