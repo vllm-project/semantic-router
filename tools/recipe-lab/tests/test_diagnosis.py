@@ -139,27 +139,30 @@ def test_unobserved_site_never_makes_a_group_unreachable():
 
 def test_choice_predicate_evaluated_against_strongest_choice():
     config = {
-        "routing": {
-            "signals": {
-                "decision": [{"name": "domain", "question": {"type": "choice"}}]
-            },
-            "decisions": [
-                {
-                    "name": "only",
-                    "rules": {
-                        "operator": "AND",
-                        "conditions": [
-                            {
-                                "type": "decision",
-                                "name": "domain",
-                                "predicate": {"gte": 0.9},
-                            }
-                        ],
-                    },
-                    "fallback_model": "m",
-                }
-            ],
-        }
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {
+                    "systemone": [{"name": "domain", "question": {"type": "choice"}}]
+                },
+                "decisions": [
+                    {
+                        "name": "only",
+                        "rules": {
+                            "operator": "AND",
+                            "conditions": [
+                                {
+                                    "type": "systemone",
+                                    "name": "domain",
+                                    "predicate": {"gte": 0.9},
+                                }
+                            ],
+                        },
+                        "fallback_model": "m",
+                    }
+                ],
+            }
+        ]
     }
     rows = [
         {
@@ -277,7 +280,58 @@ def test_cli_diagnose_writes_artifacts(tmp_path, capsys):
     assert diagnosis["inputs"]["rows_hash"] == dataset_content_hash(rows_path)
     assert diagnosis["inputs"]["config_hash"] == dataset_content_hash(AGENT_RECIPE_MIN)
     assert diagnosis["inputs"]["source"] == "unit rows"
+    assert diagnosis["inputs"]["recipe"] == "default"
+    assert "- recipe: `default`" in (diag_dir / "diagnosis.md").read_text(
+        encoding="utf-8"
+    )
+    assert payload["recipe"] == "default"
     assert (diag_dir / "diagnosis.md").is_file()
+
+
+def test_cli_diagnose_names_the_recipe_of_a_multi_recipe_document(tmp_path, capsys):
+    # one recipe per public model: without a selection the diagnosis is
+    # ambiguous, and either selector names the recipe to diagnose
+    from recipe_lab.cli import main
+
+    rows_path = _write_rows(tmp_path)
+    base = _config()["recipes"][0]
+    config = {
+        "recipes": [
+            {**base, "name": "balanced"},
+            {**base, "name": "speed-first", "decisions": base["decisions"][:1]},
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/mom-blend"], "recipe": "balanced"},
+            {"model_names": ["vllm-sr/mom-flash"], "recipe": "speed-first"},
+        ],
+    }
+    config_path = tmp_path / "two.yaml"
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    common = ["--records", str(rows_path), "--config", str(config_path)]
+
+    def run(*selector: str) -> tuple[int, dict]:
+        out = tmp_path / "diag" / ("-".join(selector) or "none")
+        code = main(["diagnose", *common, "--output-dir", str(out), *selector])
+        captured = capsys.readouterr()
+        return code, {"out": captured.out, "err": captured.err, "dir": out}
+
+    code, first = run()
+    assert code == 2
+    assert "pass --recipe" in first["err"]
+    assert not first["dir"].exists()
+
+    code, by_name = run("--recipe", "speed-first")
+    assert code == 0
+    assert json.loads(by_name["out"])["recipe"] == "speed-first"
+    diagnosis = diagnose.load_diagnosis(by_name["dir"] / "diagnosis.json")
+    assert diagnosis["inputs"]["recipe"] == "speed-first"
+    assert diagnosis["decision_coverage"]["total_decisions"] == 1
+
+    code, by_model = run("--public-model", "vllm-sr/mom-blend")
+    assert code == 0
+    diagnosis = diagnose.load_diagnosis(by_model["dir"] / "diagnosis.json")
+    assert diagnosis["inputs"]["recipe"] == "balanced"
+    assert diagnosis["decision_coverage"]["total_decisions"] == 6
 
 
 def test_cli_diagnose_missing_records_exits_2(tmp_path):

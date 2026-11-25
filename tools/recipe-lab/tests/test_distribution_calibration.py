@@ -6,6 +6,7 @@ observed p75 (1.75) across all four sites, matching PR #5568.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -279,3 +280,61 @@ def test_old_value_never_proposed(tmp_path):
         from_value=2.5,
     )
     assert proposals == []
+
+
+def test_proposal_edits_the_recipe_the_diagnosis_names(tmp_path):
+    # one recipe per public model: the diagnosis names the recipe it read
+    # (same config hash), and the proposal moves only that recipe's sites
+    recipe = yaml.safe_load(AGENT_RECIPE_MIN.read_text(encoding="utf-8"))["recipes"][0]
+    # deep copies: shared nested objects would round-trip through YAML aliases
+    config = {
+        "recipes": [
+            {**copy.deepcopy(recipe), "name": "balanced"},
+            {**copy.deepcopy(recipe), "name": "speedy"},
+        ],
+        "entrypoints": [
+            {"model_names": ["vllm-sr/mom-blend"], "recipe": "balanced"},
+            {"model_names": ["vllm-sr/mom-flash"], "recipe": "speedy"},
+        ],
+    }
+    base_path = tmp_path / "two.yaml"
+    base_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+    diagnosis_path = tmp_path / "diagnosis.json"
+    diagnosis_path.write_text(
+        json.dumps(
+            {
+                "kind": "recipe-lab-diagnosis-v1",
+                "inputs": {
+                    "config_hash": dataset_content_hash(base_path),
+                    "recipe": "speedy",
+                },
+                "signal_distribution": {
+                    "signals": [
+                        {
+                            "key": "decision:difficulty",
+                            "signal": "difficulty",
+                            "n": 3,
+                            "values": [1.0, 1.5, 2.0],
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    base = yaml.safe_load(base_path.read_text(encoding="utf-8"))
+    proposals = distribution_calibration.propose_calibrated(
+        diagnose.load_diagnosis(diagnosis_path),
+        base,
+        "difficulty",
+        diagnosis_ref=f"diag:{diagnosis_path}@{dataset_content_hash(diagnosis_path)}",
+        config_hash=dataset_content_hash(base_path),
+        quantiles=[0.5],
+        from_value=2.5,
+    )
+    assert [p.basis for p in proposals] == ["difficulty gte 2.5 -> 1.5 (p50 of n=3)"]
+    moved = proposals[0].candidate
+    assert {site.path[:2] for site in moved.sites} == {("recipes", 1)}
+    balanced, speedy = moved.config["recipes"]
+    assert balanced == base["recipes"][0]
+    assert speedy != base["recipes"][1]

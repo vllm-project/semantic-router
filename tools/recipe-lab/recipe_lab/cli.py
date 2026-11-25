@@ -548,12 +548,15 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
         rare_pct=args.rare_pct,
         utilization_warn=args.utilization_warn,
         min_sample=args.min_sample,
+        recipe=args.recipe,
+        public_model=args.public_model,
     )
     json_path, md_path = write_diagnosis(diagnosis, args.output_dir)
     _print_json(
         {
             "diagnosis": str(json_path),
             "report": str(md_path),
+            "recipe": diagnosis["inputs"]["recipe"],
             "samples": len(rows),
             "dead_decisions": diagnosis["dead_decisions"],
             "rare_decisions": diagnosis["rare_decisions"],
@@ -2158,6 +2161,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="unlabeled diagnostic rows JSONL (collect-replays --unlabeled output)",
     )
     p_diag.add_argument("--config", required=True, help="base recipe config YAML")
+    _add_recipe_selectors(p_diag)
     p_diag.add_argument(
         "--output-dir",
         required=True,

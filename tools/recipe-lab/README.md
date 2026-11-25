@@ -165,12 +165,16 @@ Two label-free commands turn unlabeled traffic into a proposal basis:
   under-used range, `--min-sample` warns about small samples), and rule
   predicate sites no traffic ever satisfies (unreachable). It writes
   `diagnosis.json` (`recipe-lab-diagnosis-v1`, input-hashed, byte-stable -
-  the `next --diagnosis` input) and `diagnosis.md`.
+  the `next --diagnosis` input) and `diagnosis.md`. The diagnosis reads one
+  recipe of the canonical v0.5 document and records it as `inputs.recipe`;
+  a document with several recipes takes `--recipe <name>` or
+  `--public-model <name>` to name the one to diagnose.
 - **`propose-calibrated`** reads one signal's observed distribution from
   `diagnosis.json` and proposes rule threshold candidates at chosen quantiles
   (`--quantiles`) or at a target traffic share (`--target-share`, quantile
   `1 - share`). It delegates to the rule-level proposer, so sites sharing
-  (signal, op, value) move together. Each sidecar cites the diagnosis it came
+  (signal, op, value) move together, inside the recipe the diagnosis names.
+  Each sidecar cites the diagnosis it came
   from; a diagnosis whose config hash does not match `--base-config` is
   rejected (exit 2). `--from` restricts the move to sites currently at that
   value (the BUG-3 `2.5 -> 1.75` calibration).

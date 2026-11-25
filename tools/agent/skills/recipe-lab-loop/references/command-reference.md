@@ -76,8 +76,8 @@ stderr.
 Both commands need no ground truth: they turn unlabeled traffic into
 proposals.
 
-- `recipe-lab diagnose --records R --config C --output-dir D
-  [--expect-rare d1,d2] [--rare-pct P] [--min-sample N]
+- `recipe-lab diagnose --records R --config C [--recipe R | --public-model M]
+  --output-dir D [--expect-rare d1,d2] [--rare-pct P] [--min-sample N]
   [--utilization-warn U] [--source "..."]`
   Three checks over replay rows: decisions that never fire (dead) or fire
   under `--rare-pct` traffic share (rare; `--expect-rare` whitelists
@@ -88,14 +88,18 @@ proposals.
   predicate sites no traffic ever satisfies (unreachable). `--records` is
   the `collect-replays --unlabeled` output. Writes `diagnosis.json`
   (recipe-lab-diagnosis-v1, input-hashed, byte-stable - the
-  `next --diagnosis` input) and `diagnosis.md`.
+  `next --diagnosis` input) and `diagnosis.md`. The diagnosis reads one
+  recipe of the canonical v0.5 document (`recipes[]`) and records it as
+  `inputs.recipe`; a document with several recipes takes `--recipe <name>`
+  or `--public-model <name>` to name the one to diagnose.
 - `recipe-lab propose-calibrated --diagnosis D --base-config C --signal S
   [--from V] [--quantiles Q1,Q2 | --target-share F] [--op gte|gt|lte|lt]
   [--lo L] [--hi H] [--output-dir D]`
   Rule threshold candidates at the signal's observed distribution
   quantiles, or at a target traffic share (quantile `1 - share`). Uses the
-  rule-level proposer, so all rule sites sharing (signal, op, value) move
-  together; each candidate sidecar cites the diagnosis it came from, and a
+  rule-level proposer inside the recipe the diagnosis names, so all rule
+  sites sharing (signal, op, value) move together; each candidate sidecar
+  cites the diagnosis it came from, and a
   diagnosis whose config hash does not match `--base-config` is rejected
   (exit 2). `--from` restricts the move to sites currently at that value
   (the 2.5 -> 1.75 BUG-3 calibration).

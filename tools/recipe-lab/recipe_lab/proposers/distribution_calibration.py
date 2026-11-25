@@ -21,7 +21,8 @@ Each candidate sidecar cites the diagnosis it came from
 (`diag:<path>@sha256:<hex>#threshold.<decision>.<signal>`); the refs are
 verified at generation time, so a ledger never inherits an unverifiable one.
 A diagnosis whose config hash does not match the base config is rejected:
-stale evidence must not recalibrate a new config.
+stale evidence must not recalibrate a new config. The proposal edits the
+recipe the diagnosis names (`inputs.recipe`).
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from typing import Any
 from ..contract import ContractError
 from ..diagnose import DIAGNOSIS_KIND, percentile
 from ..insights import resolve_insight_refs
+from ..layout import select_recipe
 from . import rule_threshold
 
 _ANCHOR_SAFE = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
@@ -162,6 +164,11 @@ def propose_calibrated(
     diagnosis does not match the base config hash.
     """
     verify_diagnosis_config(diagnosis, config_hash)
+    # the diagnosis names the recipe it read; the hash check above makes
+    # sure the base config still holds it, so the proposal edits that recipe
+    recipe = select_recipe(
+        base_config, recipe=(diagnosis.get("inputs") or {}).get("recipe")
+    )
     entry = _signal_entry(diagnosis, signal_name)
     stored = entry.get("values")
     if not isinstance(stored, list) or not stored:
@@ -186,6 +193,7 @@ def propose_calibrated(
         lo=lo,
         hi=hi,
         ref_prefix=ref_prefix,
+        recipe=recipe,
     )
     notes = dict(targets)
     proposals = []
