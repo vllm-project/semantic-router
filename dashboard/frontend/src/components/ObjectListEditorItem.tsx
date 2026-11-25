@@ -91,6 +91,7 @@ function ObjectEditorFieldControl<TItem extends object>({
       id={fieldId}
       className="h-8 read-only:bg-surface-subtle read-only:text-muted-foreground"
       type={field.type === 'password' ? 'password' : 'text'}
+      autoComplete={field.type === 'password' ? 'new-password' : 'off'}
       value={readOnly && field.type === 'password' && value ? '••••••••' : stringValue(value)}
       onChange={(event) => onChange(event.target.value || (field.preserveEmpty ? '' : undefined))}
       placeholder={field.placeholder}

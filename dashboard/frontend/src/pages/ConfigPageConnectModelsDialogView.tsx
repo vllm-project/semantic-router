@@ -320,6 +320,7 @@ function ConnectionPanel({ controller }: Pick<Props, 'controller'>) {
               id={baseUrlId}
               type="url"
               value={controller.baseUrl}
+              autoComplete="off"
               onChange={(event) => controller.setBaseUrl(event.target.value)}
               placeholder="https://api.example.com/v1"
               className="font-mono text-[12.5px]"

@@ -351,6 +351,7 @@ export default function ConfigPageRouterStructuredEditor({
       className={styles.input}
       aria-label={schema.label}
       type={schema.kind === 'number' ? 'number' : schema.kind === 'password' ? 'password' : 'text'}
+      autoComplete={schema.kind === 'password' ? 'new-password' : 'off'}
       value={scalarValue(value)}
       min={schema.min}
       max={schema.max}

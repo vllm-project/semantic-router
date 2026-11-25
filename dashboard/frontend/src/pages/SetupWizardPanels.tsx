@@ -306,6 +306,7 @@ function ModelCard({
           >
             <Input
               id={`${model.id}-name`}
+              autoComplete="off"
               value={model.name}
               onChange={(event) => update('name', event.target.value)}
               placeholder="qwen/qwen3.5-rocm"
@@ -326,6 +327,7 @@ function ModelCard({
           >
             <Input
               id={`${model.id}-base-url`}
+              autoComplete="off"
               value={model.baseUrl}
               onChange={(event) => update('baseUrl', event.target.value)}
               placeholder={provider?.placeholder}
@@ -337,6 +339,7 @@ function ModelCard({
           <Field label="Endpoint label" htmlFor={`${model.id}-endpoint`} optional>
             <Input
               id={`${model.id}-endpoint`}
+              autoComplete="off"
               value={model.endpointName}
               onChange={(event) => update('endpointName', event.target.value)}
               placeholder="primary"
@@ -351,7 +354,8 @@ function ModelCard({
               value={model.accessKey}
               onChange={(event) => update('accessKey', event.target.value)}
               placeholder="API key, when the provider needs one"
-              autoComplete="off"
+              name={`${model.id}-provider-access-key`}
+              autoComplete="new-password"
               leading={<KeyRound />}
               className="pr-3"
             />
