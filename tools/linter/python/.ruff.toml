@@ -48,7 +48,7 @@ ignore = [
 # The development-loop modules port the historical implementation faithfully:
 # their deferred imports break import cycles on purpose, and the calibrated
 # thresholds read best inline next to the gates they size.
-"tools/recipe-lab/recipe_lab/{decision_summary,first_tool_action,headroom,objective,planner,planning_replay,planning_space,schedule,signature,speed_draft}.py" = [
+"tools/recipe-lab/recipe_lab/{decision_summary,first_tool_action,headroom,improver_eval,objective,planner,planning_replay,planning_space,schedule,search_accounting,search_protocol,signature,skill_replay,speed_draft,target_dev}.py" = [
   "PLC0415",
   "PLR2004",
 ]

@@ -11,7 +11,14 @@ from pathlib import Path
 import yaml
 
 if __package__:
-    from . import decision_summary, planner
+    from . import (
+        decision_summary,
+        improver_eval,
+        planner,
+        search_accounting,
+        search_protocol,
+        skill_replay,
+    )
     from . import schedule as experiment_schedule
     from . import signature as window_signature
     from .casebook import search_cases
@@ -36,9 +43,13 @@ if __package__:
     from .window_action import apply_window, load_space
 else:
     import decision_summary
+    import improver_eval
     import planner
     import schedule as experiment_schedule
+    import search_accounting
+    import search_protocol
     import signature as window_signature
+    import skill_replay
     from casebook import search_cases
     from dev_screen import screen_dev
     from first_tool_action import first_tool_edit
@@ -475,6 +486,14 @@ def main(argv=None, *, prog=None):
     nxt.add_argument("--symptom", action="append", default=[])
     nxt.add_argument("--schedule-card", type=Path, action="append", default=[])
     planner.add_arguments(subs)
+    improver_eval.add_arguments(subs)
+    search_accounting.add_arguments(subs)
+    skill_replay.add_arguments(
+        subs.add_parser(
+            "skill-replay",
+            help="compare two skills on the same historical development prefix",
+        )
+    )
     summary = subs.add_parser(
         "decision-summary",
         help="read a verified development decision without dispatching work",
@@ -529,6 +548,11 @@ def main(argv=None, *, prog=None):
     experiment_schedule.add_arguments(
         subs.add_parser("schedule", help="choose the next whole development episode")
     )
+    search_protocol.add_arguments(
+        subs.add_parser(
+            "search-preflight", help="check a matched-budget search protocol"
+        )
+    )
     room.add_argument("--manifest", required=True, type=Path)
     room.add_argument("--scope", required=True, choices=("dev", "retired-holdout"))
     room.add_argument(
@@ -557,6 +581,14 @@ def main(argv=None, *, prog=None):
             result = next_context(ledger, args.symptom, args.schedule_card)
         elif args.cmd in ("plan-space", "plan-dev"):
             result = planner.run(ledger, args)
+        elif args.cmd == "search-freeze":
+            result = improver_eval.freeze(ledger, args)
+        elif args.cmd == "search-enroll":
+            result = search_accounting.enroll(ledger, args)
+        elif args.cmd == "improver-eval":
+            result = improver_eval.evaluate(ledger, args)
+        elif args.cmd == "skill-replay":
+            result = skill_replay.run(ledger, args)
         elif args.cmd == "decision-summary":
             result = decision_summary.summarize(ledger, args.card)
         elif args.cmd == "propose":
@@ -569,9 +601,11 @@ def main(argv=None, *, prog=None):
             result = window_signature.signature(ledger, args)
         elif args.cmd == "schedule":
             result = experiment_schedule.schedule(ledger, args)
+        elif args.cmd == "search-preflight":
+            result = search_protocol.preflight(ledger, args)
         else:
             result = compare(ledger, args)
-        if args.cmd == "decision-summary" or (
+        if args.cmd in ("decision-summary", "improver-eval") or (
             args.cmd == "plan-dev" and args.probe_receipt
         ):
             # The canonical JSON on stdout is consumed by replay and enrollment.

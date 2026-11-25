@@ -570,3 +570,73 @@ before proposing an edit. A length finish alone does not trigger it.
 Supply one `--schedule-card` per study to pass completed decisions to the next
 proposer. The unpaired list always withholds assignment-bound measurements.
 A changed source receipt invalidates readback.
+
+### Check whether a matched-budget search comparison can start
+
+Use `search-preflight --protocol protocol.json` through the same CLI before
+comparing an existing skill, random search and a guided agent. A protocol
+specifies `schema: recipe-lab-search-preflight-v1`, the study, development
+parent (`based_on`), prefix record (`prefixes`), sibling space file and its
+SHA-256, integer `seed`, and an identical budget for each method
+(`episodes` and `proposal_model_tokens`). Proposal tokens measure the
+optimizer's work. They do not set limits on the task-solving agent.
+
+The `split_plans` object has a `dev` and a `holdout` entry. Set either to
+`null` until its split is allocated. A frozen entry supplies a sibling JSON
+`file` and its `sha256`. Each split file contains only its
+`schema: recipe-lab-search-split-v1`, study, split, the ordered methods
+`["existing_skill", "random", "guided"]`, and an `instruction_sha256` array
+of unique task fingerprints. Use common allocations for all three methods.
+The preflight checks overlap with the named development parent and the other
+allocation. The study owner must also exclude tasks used for earlier tuning.
+
+The existing protocol and command remain valid. In report v2 a historical
+prefix result with both split plans can reach `protocol_ready`. Top-level
+signatures still refer to the original `prefixes` record. Earlier v1 reports
+called this paperwork state `ready_for_comparison`.
+
+To measure action differences on the target workload, pass one or more
+verified development records and the number of distinct candidates each
+method may try. For example, with two trials per method:
+
+```bash
+python recipe_lab/loop.py --workspace "$WORK" search-preflight --protocol protocol.json \
+  --target-prefixes "$TARGET_DEV_RECORD" --candidate-trials-per-method 2
+```
+
+The target receipts must belong to the frozen dev allocation and the exact
+parent configuration identified by `based_on`. The historical prefix arm
+can retain its original configuration. The report identifies missing tasks,
+unknown coverage and the number of distinct new predicate signatures.
+Once the target records cover the allocation, the same dev instructions can
+serve as their own prefix source. The holdout is checked by allocation hashes.
+The seeded representatives in `comparison` then use the target prefixes.
+If two trials cover both distinct new actions, all methods can try the same
+set. Testing selection among final configurations requires more distinct
+choices than trials. An omitted trial count leaves that question open.
+
+When the allocation hashes raw instructions and the solver hashes
+rendered prompts, add `--target-dev-manifest PATH` and
+`--target-dev-manifest-sha256 SHA` from the independent dev packet export.
+Use `schema: recipe-lab-target-dev-manifest-v2`, the same `study`, `split: dev`,
+a `template` object with `file` and `sha256`, and a `tasks` list of objects
+with `instruction_sha256` and `instruction_file`. All file paths are relative
+to the manifest. The UTF-8 template accepts the placeholder `{instruction}`;
+it preserves line endings and whitespace in both files. The frozen task packet
+must record the same template path and digest in `solver_files`. Preflight
+reconstructs and checks each rendered prompt against the measured hash.
+The legacy SWE v1 manifest uses `prompt-template.txt` and per-task `repo` and
+`statement_file` to reconstruct the original solver's prompts. For solvers
+that receive the raw instruction directly, omit the manifest and preflight
+compares the instruction hashes directly.
+
+`target_actions_distinguished` describes observed predicates. Use the
+study's separate grader receipts and existing budget for execution decisions.
+A preflight reports `search_executed: false`. It leaves
+`paid_search_authorized` null because budget authorization belongs to the
+study owner.
+
+The `loop improver-eval` command prints the report location to standard error so its standard output remains usable as canonical evidence.
+
+For frozen development objectives, historical skill replay, prospective
+three-method enrollment and final scoring see [Search and evaluation](SEARCH.md).

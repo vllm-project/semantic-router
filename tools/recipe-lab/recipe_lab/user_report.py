@@ -385,12 +385,62 @@ def _depth(row):
     )
 
 
+def _holdout(row):
+    details = _hashes(
+        row,
+        (("freeze_sha256", "Study freeze"), ("manifest_sha256", "Holdout manifest")),
+    )
+    for arm in ("baseline", "direct_strong", "existing_skill", "random", "guided"):
+        stats = row["holdout"][arm]
+        details.append(
+            f"{arm.replace('_', ' ').capitalize()} had {_count(stats['strict_passes'])}/{_count(stats['episodes'])} strict passes."
+        )
+    for method, metadata in sorted(_object(row["methods"]).items()):
+        _choice(method, ("existing_skill", "random", "guided"))
+        details.append(
+            f"The {method.replace('_', ' ')} method delivered configuration SHA-256 {_hash(metadata['policy_sha256'])}."
+        )
+        if "dev_episodes" in metadata:
+            details.append(
+                f"Its search used {_count(metadata['dev_episodes'])} development episodes and "
+                f"{_count(metadata['reported_proposal_tokens'])} recorded proposal tokens."
+            )
+        for control in ("baseline", "direct_strong"):
+            result = row["versus_controls"][method][control]
+            comparison = (
+                f"{method.replace('_', ' ')} versus {control.replace('_', ' ')}"
+            )
+            if result["same_policy"] is True:
+                details.append(
+                    f"For {comparison}, the methods delivered the same policy."
+                )
+            else:
+                joint = _count(result["joint_successes"])
+                timing = (
+                    f"On {joint} joint successes the reduction in wall time was {_fmt(result['joint_seconds_saved'])} s."
+                    if joint
+                    else "There are no joint successes for a timing comparison."
+                )
+                details.append(
+                    f"For {comparison}, the candidate gained {len(_items(result['gained_strict_cells']))} passes and "
+                    f"lost {len(_items(result['lost_strict_cells']))}. {timing}"
+                )
+    return Finding(
+        "Evaluate frozen policies on holdout",
+        "Compare the search methods' frozen policies with the baseline recipe and direct strong model on reserved tasks.",
+        "The sealed study records independent holdout grades.",
+        details,
+        "Select a policy against the study's quality and latency requirements. A new workload needs its own evaluation.",
+    )
+
+
 _RENDER = {
     "recipe-lab-v05-speed-draft-v1": _draft,
     "recipe-lab-development-plan-v1": _probe,
     "recipe-lab-decision-summary-v1": _decision,
     "recipe-lab-sr-bench-run-v1": _bench,
     "recipe-lab-sr-bench-depth-v1": _depth,
+    "recipe-lab-improver-eval-v1": _holdout,
 }
 
 

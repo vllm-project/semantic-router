@@ -257,6 +257,15 @@ measurements without a completed schedule card, and keep report delivery on
 stderr. The workflow and its receipts are documented in
 [SCENARIOS.md](SCENARIOS.md) and [REFERENCE.md](REFERENCE.md#optimize-a-deployed-v05-recipe).
 
+## Matched-budget search evaluation
+
+To evaluate the optimizer itself, `search-preflight` checks the common search
+space and allocations. `search-enroll` reserves the three methods' trial
+slots. `search-freeze` fixes each selected configuration and the controls
+before `improver-eval` scores the held-out tasks. To evaluate a change to the
+agent's skill, `skill-replay` compares two versions on the same historical
+development evidence. [Search and evaluation guide](SEARCH.md)
+
 ## Cold start
 
 No existing config to tune? Two starter paths exist before any dataset is

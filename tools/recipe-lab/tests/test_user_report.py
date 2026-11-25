@@ -176,7 +176,7 @@ def test_gateway_probe_distinguishes_operator_evidence(status, kind, word):
     assert "Task quality and latency require graded cases" in report
 
 
-def test_development_comparison_and_decision_do_not_expose_case_inputs():
+def test_development_comparison_and_holdout_counts_do_not_expose_case_inputs():
     comparison = {
         "kind": "comparison",
         "split": "dev",
@@ -197,8 +197,34 @@ def test_development_comparison_and_decision_do_not_expose_case_inputs():
         "candidate_sha256": CONFIG,
         "cost": {"spent_episodes": 2, "budget_episodes": 4, "invalid_attempts": 0},
     }
-    report = render_report([comparison, decision])
-    for value in ("advance-to-holdout", "2 of 4 episodes", "invalid attempts"):
+    arms = ["baseline", "direct_strong", "existing_skill", "random", "guided"]
+    holdout = {
+        "schema": "recipe-lab-improver-eval-v1",
+        "freeze_sha256": CONFIG,
+        "holdout": {arm: {"strict_passes": 2, "episodes": 3} for arm in arms},
+        "methods": {arm: {"policy_sha256": CONFIG} for arm in arms[2:]},
+        "versus_controls": {
+            arm: {control: {"same_policy": True} for control in arms[:2]}
+            for arm in arms[2:]
+        },
+        "by_task": {"held-name": "raw task body"},
+    }
+    holdout["versus_controls"]["guided"]["baseline"] = {
+        "same_policy": False,
+        "gained_strict_cells": [["held-name", 1]],
+        "lost_strict_cells": [],
+        "joint_successes": 0,
+        "joint_seconds_saved": 0,
+    }
+    report = render_report([comparison, decision, holdout])
+    for value in (
+        "advance-to-holdout",
+        "2 of 4 episodes",
+        "2/3",
+        "same policy",
+        "Direct strong",
+        "no joint successes for a timing comparison",
+    ):
         assert value in report
     for private in ("held-name", "raw task body"):
         assert private not in report

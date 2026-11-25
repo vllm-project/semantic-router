@@ -101,10 +101,12 @@ _validating_cards = ContextVar("recipe_lab_validating_cards", default=frozenset(
 
 
 def protocol(ledger, path):
-    # Standalone development scheduling returns the checked card directly;
-    # the cross-method search layer (sub-issue 10) wraps it with
-    # search_accounting.historical_card.
-    return checked_protocol(ledger, path)
+    if __package__:
+        from .search_accounting import historical_card
+    else:
+        from search_accounting import historical_card
+    card, fingerprint, report, parent = checked_protocol(ledger, path)
+    return historical_card(ledger, card, fingerprint), fingerprint, report, parent
 
 
 def checked_protocol(ledger, path):
@@ -597,9 +599,11 @@ def replay_attempts(ledger, card, report, parent, state, attempt_file=None):
 def schedule(ledger, args):
     if __package__:
         from .loop import writer_lock
+        from .search_accounting import after_trial, before_trial, scoped_budget
     else:
         from loop import writer_lock
-    card, card_hash, report, parent = checked_protocol(ledger, args.card)
+        from search_accounting import after_trial, before_trial, scoped_budget
+    card, card_hash, report, parent = protocol(ledger, args.card)
     workspace = ledger.path.parent / "schedules" / card["study"]
     workspace.mkdir(parents=True, exist_ok=True)
     path = workspace / "state.json"
@@ -613,6 +617,11 @@ def schedule(ledger, args):
         )
         history = state["attempts"]
         enroll = "enrollment" not in state
+        registration = before_trial(
+            ledger, card["study"], card_hash, report["candidate_sha256"]
+        )
+        search_token = registration["enrollment"] if registration else None
+        card = scoped_budget(card, registration)
         if enroll:
             check(
                 not history,
@@ -620,6 +629,13 @@ def schedule(ledger, args):
             )
             state["enrollment"] = secrets.token_hex(32)
             state["historical_episodes"] = historical_episodes(ledger)
+            if search_token is not None:
+                state["search_enrollment"] = search_token
+        else:
+            check(
+                state.get("search_enrollment") == search_token,
+                "search enrollment differs from scheduled study",
+            )
         replay = replay_attempts(ledger, card, report, parent, state, args.attempt)
         if enroll or len(replay) != len(history):
             state["attempts"] = replay
@@ -631,6 +647,9 @@ def schedule(ledger, args):
             finally:
                 staging.unlink(missing_ok=True)
         plan = assigned_plan(card, report, replay, state["enrollment"])
+        after_trial(
+            ledger, card["study"], card_hash, plan["status"], plan["spent_episodes"]
+        )
         return {
             "study": card["study"],
             "card_sha256": card_hash,

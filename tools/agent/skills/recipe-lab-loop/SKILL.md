@@ -113,5 +113,19 @@ and `screen-dev`. Read `references/command-reference.md`'s development-loop
 section and the red-lines before proposing anything; the live acceptance
 walkthroughs live in `tools/recipe-lab/SCENARIOS.md`.
 
+## Search and skill evaluation
+
+To evaluate the optimizer itself, the same loop adds four commands:
+`search-preflight` checks the common search space, split allocations and
+budgets; `search-enroll` reserves the three methods' trial slots
+(`existing_skill`, `random`, `guided`); `search-freeze` fixes each selected
+configuration and the controls before any holdout grade is revealed;
+`improver-eval` reads the final paired grades against the baseline recipe
+and the direct strong model. For a change to this skill, `skill-replay`
+binds both versions' decisions to the same recorded development prefix and
+reports lost advancing candidates and the counterfactual episodes saved.
+See [Search and evaluation](../../../recipe-lab/SEARCH.md) and the
+[matched-budget checks](../../../recipe-lab/REFERENCE.md#check-whether-a-matched-budget-search-comparison-can-start).
+
 Run `make check` after changing recipe-lab code; skill changes follow the
 `tools/agent` structure checks and public-skill sync tests.
