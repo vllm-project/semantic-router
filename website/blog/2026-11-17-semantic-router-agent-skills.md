@@ -2,7 +2,7 @@
 slug: semantic-router-agent-skills
 title: "Agent skills for configuring and evaluating vLLM Semantic Router"
 description: "A focused skill collection for serving the Router, understanding its decision model, configuring recipes, diagnosing routes, and comparing measured runs."
-authors: [anupsharma]
+authors: [anupsharma, subin9]
 tags: [agents, routing, evaluation, benchmarking, configuration, semantic-router]
 ---
 
