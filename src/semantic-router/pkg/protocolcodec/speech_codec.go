@@ -216,7 +216,7 @@ func SpeechResponseMediaType(request *llmprotocol.Request) string {
 	case "flac":
 		return "audio/flac"
 	case "pcm":
-		return "audio/L16"
+		return "audio/pcm"
 	default:
 		return "audio/mpeg"
 	}
