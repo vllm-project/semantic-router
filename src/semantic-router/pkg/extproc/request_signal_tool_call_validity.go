@@ -7,7 +7,7 @@ import (
 )
 
 // countInvalidRecentToolCalls returns how many tool calls the request's last
-// assistant message carries that violate the schema of the tool they name:
+// assistant turn carries that violate the schema of the tool they name:
 // arguments that are not a JSON object, or that miss a required property. A
 // small model can keep emitting such calls late in a session until the client
 // harness terminates the conversation on its validation loop, so the router
@@ -33,13 +33,23 @@ func countInvalidRecentToolCalls(request *llmprotocol.Request) int {
 	if len(required) == 0 {
 		return 0
 	}
+	last := -1
 	for index := len(request.Messages) - 1; index >= 0; index-- {
-		message := request.Messages[index]
-		if message.Role != llmprotocol.RoleAssistant {
-			continue
+		if request.Messages[index].Role == llmprotocol.RoleAssistant {
+			last = index
+			break
 		}
-		invalid := 0
-		for _, content := range message.Content {
+	}
+	if last < 0 {
+		return 0
+	}
+	// Adjacent assistant messages are one turn: a Responses input carries each
+	// function_call item as its own message, and the codec joins them when it
+	// projects the turn. Counting only the last message would miss the calls
+	// of the items before it.
+	invalid := 0
+	for index := last; index >= 0 && request.Messages[index].Role == llmprotocol.RoleAssistant; index-- {
+		for _, content := range request.Messages[index].Content {
 			if content.Kind != llmprotocol.ContentToolCall || content.ToolCall == nil {
 				continue
 			}
@@ -50,9 +60,8 @@ func countInvalidRecentToolCalls(request *llmprotocol.Request) int {
 				invalid++
 			}
 		}
-		return invalid
 	}
-	return 0
+	return invalid
 }
 
 // requiredProperties reads a tool schema's required property names. A schema
