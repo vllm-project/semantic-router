@@ -209,6 +209,7 @@ def test_serve_starts_the_router_once_setup_is_activated(
     runtime_config, calls = setup_stack
     stack = resolve_runtime_stack()
     waited_unlocked = []
+    _record(runtime_config)
 
     started = []
 
@@ -223,6 +224,7 @@ def test_serve_starts_the_router_once_setup_is_activated(
 
     def wait(config, *, dashboard_running, on_waiting):
         assert dashboard_running()
+        assert pending_activation.read_pending_activation(config) is None
         on_waiting()
         # The Dashboard sees a CLI that waits to apply the activation.
         heartbeat = pending_activation.heartbeat_file(config)

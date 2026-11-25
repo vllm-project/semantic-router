@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 from cli.commands.runtime_paths import _runtime_config_filename, pending_restart_path
-from cli.pending_activation import ORIGIN_CLI, read_pending_activation
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation, record_file
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
@@ -288,6 +288,54 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         finally:
             self.run_cli(["stop"], timeout=120)
         self.print_test_result(True, "the next serve applied the change apply saved")
+
+    def test_failed_serve_preserves_pending_restart(self):
+        self.write_minimal_canonical_config(provider="openai")
+
+        def disable_tracing(document):
+            services = document.setdefault("global", {}).setdefault("services", {})
+            services["observability"] = {"tracing": {"enabled": False}}
+
+        self._edit_config(disable_tracing)
+        try:
+            self._serve()
+            self._edit_config(
+                lambda document: document["listeners"][0].update(port=65100)
+            )
+            saved = self._cli_json("config", "apply", "--config", "config.yaml")
+            self.assertEqual(saved["status"], "restart_required", saved)
+            runtime_config = Path(saved["saved"])
+            staged = runtime_config.read_bytes()
+            pending_file = record_file(runtime_config)
+            pending = pending_file.read_bytes()
+
+            code, stdout, stderr = self.run_cli(
+                [
+                    "serve",
+                    "--target",
+                    "docker",
+                    "--gateway",
+                    "standalone",
+                    "--config",
+                    "config.yaml",
+                    "--image-pull-policy",
+                    "never",
+                ],
+                env={"VLLM_SR_PORT_OFFSET": "500"},
+            )
+            self.assertEqual(code, 1, f"{stdout}\n{stderr}")
+            self.assertIn("host port 65600", stderr)
+
+            code, status, stderr = self.run_cli(
+                ["status", "router", "--target", "docker"]
+            )
+            self.assertEqual(code, 0, f"{status}\n{stderr}")
+            self.assertRegex(status, r"Router\s+Running")
+            self.assertIn("Restart required", status)
+            self.assertEqual(pending_file.read_bytes(), pending)
+            self.assertEqual(runtime_config.read_bytes(), staged)
+        finally:
+            self.run_cli(["stop"], timeout=120)
 
     def test_validate_runs_the_routers_own_validation(self):
         self.print_test_header(
