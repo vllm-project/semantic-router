@@ -41,6 +41,30 @@ recipes:
           - models:
               - model: general
 `,
+		// A decision that turns the inherited fast response off reaches model
+		// selection after all.
+		"disabled inherited fast response": `version: v0.5
+providers:
+  models:
+    - name: general
+      backend_refs:
+        - name: local
+          provider: openai-compatible
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+    plugins:
+      - type: fast_response
+        configuration:
+          message: Blocked.
+    decisions:
+      - name: chat
+        plugins:
+          - type: fast_response
+            configuration:
+              enabled: false
+              message: Blocked.
+`,
 		"ref with no providers": `version: v0.5
 recipes:
   - name: default
@@ -77,13 +101,20 @@ func TestDecisionsThatAnswerWithoutAModelNeedNoFallback(t *testing.T) {
 		"route": {Action: &DecisionAction{Type: DecisionActionRoute, Destination: "general"}},
 	}
 	for name, decision := range answers {
-		if !canonicalDecisionNamesAModel(decision) {
+		if !canonicalDecisionNamesAModel(decision, decision.Plugins) {
 			t.Errorf("%s: names no model, want one that needs none", name)
 		}
 	}
 	iterations := Decision{CandidateIterations: []CandidateIterationConfig{{Models: []ModelRef{{Model: "general"}}}}}
-	if canonicalDecisionNamesAModel(iterations) {
+	if canonicalDecisionNamesAModel(iterations, iterations.Plugins) {
 		t.Error("candidate iterations alone name no model the decision answers with")
+	}
+	inherited := []DecisionPlugin{{
+		Type:          DecisionPluginFastResponse,
+		Configuration: MustStructuredPayload(FastResponsePluginConfig{Message: "Blocked."}),
+	}}
+	if !canonicalDecisionNamesAModel(Decision{}, inherited) {
+		t.Error("a fast response its recipe layers in answers without a model")
 	}
 }
 
@@ -139,6 +170,25 @@ recipes:
           fusion:
             model: general
             analysis_models: [general]
+`,
+		// A recipe's default plugins reach its decisions, and an enabled
+		// fast_response among them answers without a model.
+		"inherited fast response": `version: v0.5
+providers:
+  models:
+    - name: general
+      backend_refs:
+        - name: local
+          provider: openai-compatible
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+    plugins:
+      - type: fast_response
+        configuration:
+          message: Blocked.
+    decisions:
+      - name: chat
 `,
 		"declared default": `version: v0.5
 providers:

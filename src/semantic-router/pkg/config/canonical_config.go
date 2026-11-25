@@ -463,7 +463,7 @@ func validateCanonicalReasoning(modelName string, reasoning *CanonicalReasoning)
 	return nil
 }
 
-func validateCanonicalDecisions(path string, decisions []Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel, defaultModel string) error {
+func validateCanonicalDecisions(path string, decisions []Decision, aliases map[string]CanonicalProviderModel, cards map[string]RoutingModel, defaultModel string, defaults []DecisionPlugin) error {
 	decisionNames := make(map[string]bool, len(decisions))
 	for _, decision := range decisions {
 		if decision.Name != "" {
@@ -476,7 +476,11 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 		if err := validateCanonicalDecisionModelRefs(path, decision, aliases, cards); err != nil {
 			return err
 		}
-		if !canonicalDecisionNamesAModel(decision) && len(aliases) > 0 &&
+		effective, err := effectiveDecisionPlugins(defaults, decision)
+		if err != nil {
+			return fmt.Errorf("%s.decisions[%s].plugins: %w", path, decision.Name, err)
+		}
+		if !canonicalDecisionNamesAModel(decision, effective) && len(aliases) > 0 &&
 			(defaultModel == "" || !canonicalDefaultModelExists(defaultModel, aliases, cards)) {
 			// The routing runtime falls back to the default model when a
 			// decision names none, so a document that declares models has to
@@ -493,13 +497,15 @@ func validateCanonicalDecisions(path string, decisions []Decision, aliases map[s
 
 // canonicalDecisionNamesAModel reports whether a decision answers with a model
 // of its own or bypasses the default-model fallback. Fusion can execute its
-// own analysis models. Fast responses and explicit routes also bypass the
-// fallback. Candidate iterations still resolve their turns through it.
-func canonicalDecisionNamesAModel(decision Decision) bool {
+// own analysis models. A fast response, declared here or layered in from its
+// recipe, and an explicit route also bypass the fallback. Candidate iterations
+// still resolve their turns through it. plugins are the decision's effective
+// ones.
+func canonicalDecisionNamesAModel(decision Decision, plugins []DecisionPlugin) bool {
 	if len(decision.ModelRefs) > 0 {
 		return true
 	}
-	if decision.GetFastResponseConfig() != nil {
+	if FastResponsePluginOf(plugins) != nil {
 		return true
 	}
 	if decision.Action != nil && decision.Action.Type == DecisionActionRoute {

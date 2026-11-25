@@ -55,7 +55,7 @@ func recipePath(name string) string {
 // its decisions, and the default recipe mirrored in the flat routing fields.
 // A configuration without recipes routes with an empty default recipe.
 func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) error {
-	if err := validateCanonicalRecipes(canonical); err != nil {
+	if err := validateCanonicalRecipes(cfg, canonical); err != nil {
 		return err
 	}
 	defaultRecipe, err := canonicalDefaultRecipe(canonical)
@@ -126,7 +126,7 @@ func (c *RouterConfig) mirrorDefaultRecipe() {
 	c.Fallback = profile.Fallback.Clone()
 }
 
-func validateCanonicalRecipes(canonical *CanonicalConfig) error {
+func validateCanonicalRecipes(cfg *RouterConfig, canonical *CanonicalConfig) error {
 	cards, err := canonicalModelCardIndex(canonical.Providers.Models)
 	if err != nil {
 		return err
@@ -160,7 +160,11 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 		if err := validatePluginLayer(path+".plugins", recipe.Plugins); err != nil {
 			return err
 		}
-		if err := validateCanonicalDecisions(path, recipe.Decisions, aliases, cards, canonicalProviderDefaults(canonical.Providers).DefaultModel); err != nil {
+		defaults, err := layerPlugins(cfg.GlobalPlugins, recipe.Plugins)
+		if err != nil {
+			return fmt.Errorf("%s.plugins: %w", path, err)
+		}
+		if err := validateCanonicalDecisions(path, recipe.Decisions, aliases, cards, canonicalProviderDefaults(canonical.Providers).DefaultModel, defaults); err != nil {
 			return err
 		}
 	}
