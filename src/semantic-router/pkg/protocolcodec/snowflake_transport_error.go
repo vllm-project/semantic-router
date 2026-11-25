@@ -42,9 +42,10 @@ func decodeSnowflakeTransportError(
 	}
 	return llmprotocol.TransportError{
 		Error: &llmprotocol.ProtocolError{
-			Category: snowflakeErrorCategory(wire.Code),
-			Code:     strings.TrimSpace(wire.Code),
-			Message:  wire.Message,
+			Category:       snowflakeErrorCategory(wire.Code),
+			Code:           strings.TrimSpace(wire.Code),
+			Message:        wire.Message,
+			ProviderFramed: true,
 		},
 		ProviderRequestID: strings.TrimSpace(wire.RequestID),
 	}, nil, nil
