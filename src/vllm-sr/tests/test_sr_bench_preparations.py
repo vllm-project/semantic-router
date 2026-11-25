@@ -373,7 +373,118 @@ def test_worker_failure_is_controlled_not_raw_credentials(tmp_path, monkeypatch)
     monkeypatch.setattr(worker, "ensure_dependencies", fail)
     state = tmp_path / "state.json"
     assert worker.run(tmp_path, state, {"benchmark": "mmlu-pro"}) == 1
-    assert json.loads(state.read_text()) == {
-        "phase": "failed",
-        "error_code": "dependencies",
-    }
+    value = json.loads(state.read_text())
+    assert value["phase"] == "failed"
+    assert value["error_code"] == "dependencies"
+    assert value["error_type"] == "CalledProcessError"
+    assert "--token <redacted>" in value["error_detail"]
+    assert "private" not in state.read_text()
+
+
+def test_redact_removes_credential_shaped_values(monkeypatch):
+    monkeypatch.setenv("HF_TOKEN", "plain-environment-credential")
+    text = runtime.redact(
+        "Authorization: Bearer abc.def token=xyz123 hf_abcdefghijk --api-key k9 "
+        "https://user:pass@example.test/x plain-environment-credential kept"
+    )
+    for secret in [
+        "abc.def",
+        "xyz123",
+        "hf_abcdefghijk",
+        "user:pass",
+        "environment",
+        "k9",
+    ]:
+        assert secret not in text
+    assert "kept" in text and "example.test/x" in text
+
+
+def test_worker_records_exception_class_and_detail(tmp_path, monkeypatch, capsys):
+    def fail(**kwargs):
+        raise RuntimeError("parquet schema mismatch")
+
+    monkeypatch.setattr(worker, "prepare_dataset", fail)
+    state = tmp_path / "state.json"
+    assert worker.run(tmp_path, state, {"benchmark": "simpleqa-verified"}) == 1
+    value = json.loads(state.read_text())
+    assert value["error_code"] == "dependencies"
+    assert value["error_type"] == "RuntimeError"
+    assert value["error_detail"] == "parquet schema mismatch"
+    assert "parquet schema mismatch" in capsys.readouterr().err
+
+
+def test_runtime_keeps_fixed_message_and_attaches_redacted_log_tail(
+    tmp_path, monkeypatch
+):
+    original = subprocess.Popen
+    monkeypatch.setenv("HF_TOKEN", "hf_privatecredential")
+
+    def spawn(command, **kwargs):
+        code = (
+            "import json,pathlib,sys\n"
+            "sys.stderr.write('x' * 10000 + '\\n')\n"
+            "sys.stderr.write('Traceback: KeyError token=leaked hf_privatecredential\\n')\n"
+            "pathlib.Path(sys.argv[1]).write_text(json.dumps({'phase': 'failed',"
+            " 'error_code': 'source', 'error_type': 'KeyError',"
+            " 'error_detail': \"'split' with Bearer secretvalue\"}))\n"
+            "sys.exit(1)\n"
+        )
+        return original([sys.executable, "-c", code, command[4]], **kwargs)
+
+    monkeypatch.setattr(runtime.subprocess, "Popen", spawn)
+    with pytest.raises(runtime.PreparationError) as raised:
+        runtime.execute({}, tmp_path, lambda phase: None, threading.Event())
+    assert str(raised.value).startswith("Dataset download failed.")
+    diagnostic = raised.value.diagnostic
+    assert len(diagnostic) <= runtime.MAX_DIAGNOSTIC_BYTES
+    assert "worker exit code: 1" in diagnostic
+    assert "KeyError: 'split' with Bearer <redacted>" in diagnostic
+    assert "Traceback: KeyError token=<redacted>" in diagnostic
+    for secret in ["leaked", "secretvalue", "privatecredential"]:
+        assert secret not in diagnostic
+
+
+@pytest.mark.parametrize("chained", [False, True])
+def test_service_logs_diagnostic_for_operators_but_not_clients(
+    tmp_path, caplog, chained
+):
+    def execute(body, store, progress, stop):
+        error = runtime.PreparationError(
+            "Dataset download failed.", "KeyError: 'split'\nworker log tail"
+        )
+        if not chained:
+            raise error
+        raise preparations.CollectionError("preparation_failed", str(error)) from error
+
+    manager = preparations.Preparations(tmp_path, execute)
+    with caplog.at_level("WARNING", logger=preparations.__name__):
+        job = wait_for(
+            manager, manager.submit({"benchmark": "mmlu-pro"})["id"], "failed"
+        )
+    assert job["error"] == "Dataset download failed."
+    assert "KeyError" not in json.dumps(job)
+    assert "KeyError: 'split'" in caplog.text
+    path = manager.root / (job["id"] + ".log")
+    assert "worker log tail" in path.read_text()
+    assert path.stat().st_mode & 0o777 == 0o600
+    manager.close()
+    reloaded = preparations.Preparations(tmp_path, execute)
+    assert reloaded.get(job["id"]) == job
+    reloaded.close()
+
+
+def test_service_logs_redacted_unexpected_error(tmp_path, caplog, monkeypatch):
+    monkeypatch.setenv("API_KEY", "service-private-value")
+
+    def execute(body, store, progress, stop):
+        raise OSError("connect failed with service-private-value")
+
+    manager = preparations.Preparations(tmp_path, execute)
+    with caplog.at_level("WARNING", logger=preparations.__name__):
+        job = wait_for(
+            manager, manager.submit({"benchmark": "mmlu-pro"})["id"], "failed"
+        )
+    assert "OSError" not in job["error"]
+    assert "OSError: connect failed with <redacted>" in caplog.text
+    assert "service-private-value" not in caplog.text
+    manager.close()

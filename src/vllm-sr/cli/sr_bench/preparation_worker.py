@@ -11,10 +11,12 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import traceback
 import uuid
 import venv
 from pathlib import Path
 
+from .preparation_runtime import redact
 from .sources import HF_SOURCES, prepare_dataset
 
 ARROW_PACKAGE = "pyarrow==18.1.0"
@@ -137,13 +139,22 @@ def run(store, state, request):
         dataset = prepare_dataset(**request, store=store, progress=progress)
         emit(state, "completed", dataset=dataset)
         return 0
-    except Exception:
+    except Exception as exc:
+        # The traceback goes to the worker log; the service redacts and bounds
+        # it before showing it to operators only. Clients see fixed codes.
+        traceback.print_exc()
         code = (
             "dependencies"
             if phase in {"checking_dependencies", "installing_dependencies"}
             else "source" if phase == "downloading" else "freeze"
         )
-        emit(state, "failed", error_code=code)
+        emit(
+            state,
+            "failed",
+            error_code=code,
+            error_type=type(exc).__name__,
+            error_detail=redact(str(exc))[:1000],
+        )
         return 1
 
 
