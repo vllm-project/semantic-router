@@ -62,6 +62,9 @@ type Observation struct {
 type nativeState struct {
 	State     json.RawMessage            `json:"state"`
 	Questions map[string]json.RawMessage `json:"questions"`
+	// Roles are the roles of an object state's parts: absent for the roles
+	// their keys name, null for none, else each part's role.
+	Roles json.RawMessage `json:"roles"`
 }
 
 // ParseNativeRequest admits explicit Decision 2.0 question types for auto, in
@@ -204,7 +207,7 @@ func (r *NativeRequest) addState(name string, state nativeState) error {
 					return errors.New("span label names must not be blank")
 				}
 			}
-			target, err := spanTarget(trimmed, question.Over)
+			target, err := spanTarget(trimmed, question.Over, state.Roles)
 			if err != nil {
 				return err
 			}
@@ -253,10 +256,13 @@ func optionNames(listed []keyed, criteria json.RawMessage) map[string]bool {
 // spanTarget is the text a span question reads when its request settles it: a
 // text state, or the text part of an object state that over names. Elsewhere
 // the model that answers picks the part and joins its keys, each family in its
-// own way, so auto could not tell which text a span is a range of. A text
-// state that holds a JSON object is as unsettled: Vela 2.0 reads it as that
-// object and counts into one of its parts, and other families read the text.
-func spanTarget(state, over json.RawMessage) (string, error) {
+// own way, so auto could not tell which text a span is a range of. Two more
+// requests are as unsettled. A text state that holds a JSON object: Vela 2.0
+// reads it as that object and counts into one of its parts, and other families
+// read the text. An object state whose parts have no roles (roles is null, as
+// for a vllm-sr/5.0 request that gives none): Vela 3.0 d3 reads it as one
+// text, its JSON, and counts into that, and other families read its parts.
+func spanTarget(state, over, roles json.RawMessage) (string, error) {
 	if target, isText := textOf(state); isText {
 		if holdsObject(target) {
 			return "", errors.New("auto checks a span against the text its question reads, and a model may read a text state that holds a JSON object as that object: send the object as the state and name a text part of it with over")
@@ -264,9 +270,14 @@ func spanTarget(state, over json.RawMessage) (string, error) {
 		return target, nil
 	}
 	var parts map[string]json.RawMessage
-	if name, named := textOf(over); named && json.Unmarshal(state, &parts) == nil {
-		if target, isText := textOf(parts[name]); isText {
-			return target, nil
+	if json.Unmarshal(state, &parts) == nil {
+		if string(roles) == "null" {
+			return "", errors.New("auto checks a span against the text its question reads, and a model may read an object state without roles as one text: give the parts of the state their roles")
+		}
+		if name, named := textOf(over); named {
+			if target, isText := textOf(parts[name]); isText {
+				return target, nil
+			}
 		}
 	}
 	return "", errors.New("auto checks a span against the text its question reads: send a text state, or name a text part of an object state with over")

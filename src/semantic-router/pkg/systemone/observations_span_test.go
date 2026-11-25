@@ -32,8 +32,8 @@ func spanGate(field string, threshold float64) *config.EscalateAccept {
 // Auto admits a span question by the labels it names and the text it reads: a
 // text state, or the text part of an object state that its over names. It
 // refuses a request that leaves the part to the model, a text state that a
-// model may read as an object, and a label without a name, and needs a model
-// that answers spans.
+// model may read as an object, an object state that a model may read as one
+// text, and a label without a name, and needs a model that answers spans.
 func TestAutoAdmitsASpanQuestionByItsLabelsAndTheTextItReads(t *testing.T) {
 	const (
 		parts = `{"request":"Who wrote it?","answer":"Tom did."}`
@@ -82,6 +82,43 @@ func TestAutoAdmitsASpanQuestionByItsLabelsAndTheTextItReads(t *testing.T) {
 	} {
 		if _, err := ParseNativeRequest(json.RawMessage(`{"model":"vllm-sr/auto","state":` + tc.state + `,"questions":{"pii":` + tc.question + `}}`)); err == nil {
 			t.Fatalf("%s accepted: %s over %s", name, tc.question, tc.state)
+		}
+	}
+
+	// Roles settle what a part of an object state is. With none (a null
+	// roles), Vela 3.0 d3 reads the object as one text, its JSON, and counts
+	// into that: Tom is [10,13) of {"user": "Tom"}, and [0,3) of the part.
+	const (
+		named  = `"state":{"user":"Tom"},"questions":{"pii":{"type":"span","over":"user","criteria":{"NAME":"A person's name"}}}`
+		spoken = `"state":"Tom","questions":{"pii":{"type":"span","criteria":{"NAME":"A person's name"}}}`
+	)
+	for name, tc := range map[string]struct {
+		request string
+		targets []string
+	}{
+		"roles its keys name":          {`{"model":"vllm-sr/auto",` + named + `}`, []string{"Tom"}},
+		"roles the request gives":      {`{"model":"vllm-sr/auto","roles":{"user":"user"},` + named + `}`, []string{"Tom"}},
+		"no roles":                     {`{"model":"vllm-sr/auto","roles":null,` + named + `}`, nil},
+		"no roles over a text state":   {`{"model":"vllm-sr/auto","roles":null,` + spoken + `}`, []string{"Tom"}},
+		"a batch whose entries differ": {`{"model":"vllm-sr/auto","states":{"a":{"roles":{"user":"user"},` + named + `},"b":{"roles":null,` + spoken + `}}}`, []string{"Tom", "Tom"}},
+		"a batch entry without roles":  {`{"model":"vllm-sr/auto","states":{"a":{"roles":{"user":"user"},` + named + `},"b":{"roles":null,` + named + `}}}`, nil},
+	} {
+		request, err := ParseNativeRequest(json.RawMessage(tc.request))
+		if (err == nil) != (tc.targets != nil) {
+			t.Fatalf("%s: error %v, want targets %v: %s", name, err, tc.targets, tc.request)
+		}
+		if err != nil {
+			if !strings.Contains(err.Error(), "an object state without roles") {
+				t.Fatalf("%s: refused for another reason: %v", name, err)
+			}
+			continue
+		}
+		var targets []string
+		for _, q := range request.Questions {
+			targets = append(targets, q.Target)
+		}
+		if !reflect.DeepEqual(targets, tc.targets) {
+			t.Fatalf("%s: targets %v, want %v", name, targets, tc.targets)
 		}
 	}
 }

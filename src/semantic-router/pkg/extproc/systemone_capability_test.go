@@ -21,10 +21,13 @@ import (
 // lists box questions and images; when no member does, the request is
 // refused before any call, with a detail naming what is missing and every
 // member. A set question and a span question go the same way, and their sets
-// and spans reach the client.
+// and spans reach the client. A span question whose text the members would not
+// read alike is refused before any call, on a vllm-sr/4.0 listener and on a
+// vllm-sr/5.0 one.
 func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
+		listener   string
 		visionCard string
 		request    string
 		answer     string
@@ -90,6 +93,29 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 			body:       []string{"invalid_request", "a text state that holds a JSON object", "send the object as the state"},
 		},
 		{
+			// A vllm-sr/5.0 request that gives no roles has none. Vela 3.0 d3
+			// then reads the object as one text, its JSON, and would answer
+			// Tom at [10,13) of {"user": "Tom"}; other families read the part
+			// and answer [0,3).
+			name:       "a span question over an object state without roles",
+			listener:   "vllm-sr/5.0",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","span"]}`,
+			request:    `{"model":"vllm-sr/auto","state":{"user":"Tom"},"questions":{"pii":{"type":"span","over":"user","instructions":"Find personal data.","criteria":{"NAME":"A person's name"}}}}`,
+			answer:     `"answers":{"pii":{"type":"noul","noul":0.97}},"spans":{"pii":[{"label":"NAME","start":10,"end":13,"text":"Tom","probability":0.97}]},"thresholds":{"pii":0.5}`,
+			status:     http.StatusBadRequest,
+			body:       []string{"invalid_request", "an object state without roles", "give the parts of the state their roles"},
+		},
+		{
+			// With roles every family reads the part that over names.
+			name:       "a span question over an object state with roles",
+			listener:   "vllm-sr/5.0",
+			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","span"]}`,
+			request:    `{"model":"vllm-sr/auto","state":{"user":"Tom"},"roles":{"user":"user"},"questions":{"pii":{"type":"span","over":"user","instructions":"Find personal data.","criteria":{"NAME":"A person's name"}}}}`,
+			answer:     `"answers":{"pii":{"type":"noul","noul":0.97}},"spans":{"pii":[{"label":"NAME","start":0,"end":3,"text":"Tom","probability":0.97}]},"thresholds":{"pii":0.5}`,
+			status:     http.StatusOK, posts: []string{"vision-native"},
+			body: []string{`"spans":{"pii":[{"label":"NAME","start":0,"end":3,"text":"Tom","probability":0.97}]}`},
+		},
+		{
 			name:       "a question type auto does not route",
 			visionCard: `{"id":"vision-native","surfaces":["decisions"],"question_types":["choice","noul","score","track"]}`,
 			request:    `{"model":"vllm-sr/auto","state":"Where does the car go?","questions":{"path":{"type":"track","instructions":"Follow the car."}}}`,
@@ -128,11 +154,15 @@ func TestSystemOneAutoRoutesByWhatMembersList(t *testing.T) {
 				}
 			}))
 			defer backend.Close()
+			schema := tc.listener
+			if schema == "" {
+				schema = "vllm-sr/4.0"
+			}
 			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`version: v0.5
 listeners:
   - name: native
     port: 8801
-    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: vllm-sr/4.0, models: [vllm-sr/auto]}}
+    apis: {chat_completions: {}, responses: {}, messages: {}, images: {}, systemone: {schema: %s, models: [vllm-sr/auto]}}
 providers:
   models:
     - name: text
@@ -164,7 +194,7 @@ recipes:
             stages:
               - {name: text, model: text}
               - {name: vision, model: vision}
-`, backend.URL, backend.URL)))
+`, schema, backend.URL, backend.URL)))
 			if err != nil {
 				t.Fatal(err)
 			}
