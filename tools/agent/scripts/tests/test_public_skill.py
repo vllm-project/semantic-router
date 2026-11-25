@@ -157,6 +157,39 @@ class PublicSkillTests(unittest.TestCase):
             ),
             [],
         )
+        self.assertEqual(
+            skill.sync(
+                skill.BENCHMARK_SOURCE,
+                skill.BENCHMARK_DESTINATION,
+                check=True,
+                public_origin=skill.BENCHMARK_PUBLIC_ORIGIN,
+                source_name="vllm-sr-benchmark",
+                public_name="vllm-sr-benchmark",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.COMPARE_SOURCE,
+                skill.COMPARE_DESTINATION,
+                check=True,
+                public_origin=skill.COMPARE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-compare-configurations",
+                public_name="vllm-sr-compare-configurations",
+            ),
+            [],
+        )
+        self.assertEqual(
+            skill.sync(
+                skill.TUNE_SOURCE,
+                skill.TUNE_DESTINATION,
+                check=True,
+                public_origin=skill.TUNE_PUBLIC_ORIGIN,
+                source_name="vllm-sr-tune-recipe",
+                public_name="vllm-sr-tune-recipe",
+            ),
+            [],
+        )
         source_refs = list((skill.SOURCE / "references").glob("*.md"))
         self.assertEqual(
             {path.name for path in source_refs},
