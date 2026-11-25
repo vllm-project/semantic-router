@@ -14,6 +14,7 @@ import pytest
 import yaml
 from recipe_lab.cli import main
 from recipe_lab.contract import ContractError
+from recipe_lab.layout import select_recipe
 from recipe_lab.proposers import rule_threshold
 from tests.test_cli import _write_frozen_spec
 
@@ -72,7 +73,7 @@ def test_signal_range_choice_is_binary():
 
 
 def test_signal_range_unknown_signal_requires_explicit_bounds():
-    with pytest.raises(ContractError, match="--lo/--hi"):
+    with pytest.raises(ContractError, match="not found in recipe 'default'"):
         rule_threshold.signal_range(_load_base(), "nonexistent")
 
 
@@ -110,7 +111,7 @@ def test_propose_deltas_moves_relative_to_old():
 
 def test_propose_deltas_rejects_mixed_old_values():
     base = _load_base()
-    base["routing"]["decisions"][5]["rules"] = {
+    base["recipes"][0]["decisions"][5]["rules"] = {
         "operator": "AND",
         "conditions": [
             {"type": "decision", "name": "difficulty", "predicate": {"gte": 1.0}}
@@ -122,7 +123,7 @@ def test_propose_deltas_rejects_mixed_old_values():
 
 def test_propose_from_filters_sites():
     base = _load_base()
-    base["routing"]["decisions"][5]["rules"] = {
+    base["recipes"][0]["decisions"][5]["rules"] = {
         "operator": "AND",
         "conditions": [
             {"type": "decision", "name": "difficulty", "predicate": {"gte": 1.0}}
@@ -347,6 +348,121 @@ def test_cli_values_and_deltas_are_exclusive(tmp_path):
                 str(tmp_path / "c"),
             ]
         )
+
+
+# ---- recipe selection in a multi-recipe document ----
+
+TWO_RECIPES = Path(__file__).resolve().parent / "fixtures" / "two_recipes.yaml"
+
+
+def test_cli_public_model_selects_the_recipe(tmp_path, capsys):
+    out_dir = tmp_path / "cands"
+    assert (
+        main(
+            [
+                "propose-rule-thresholds",
+                "--base-config",
+                str(TWO_RECIPES),
+                "--public-model",
+                "vllm-sr/mom-flash",
+                "--signal",
+                "depth",
+                "--values",
+                "0.5",
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        == 0
+    )
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["recipe"] == "speed-first"
+    applied = yaml.safe_load(Path(parsed["files"][0]).read_text(encoding="utf-8"))
+    depths = [
+        site.value
+        for name in ("balanced", "speed-first")
+        for site in rule_threshold.find_threshold_sites(
+            applied, select_recipe(applied, recipe=name)
+        )
+        if site.signal == "depth"
+    ]
+    assert depths == [0.6, 0.5]  # balanced is untouched, speed-first moved
+
+
+def test_cli_named_recipe_selects_the_recipe(tmp_path, capsys):
+    out_dir = tmp_path / "cands"
+    assert (
+        main(
+            [
+                "propose-thresholds",
+                "--base-config",
+                str(TWO_RECIPES),
+                "--recipe",
+                "balanced",
+                "--signal",
+                "depth",
+                "--deltas",
+                "0.1",
+                "--output-dir",
+                str(out_dir),
+            ]
+        )
+        == 0
+    )
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["recipe"] == "balanced"
+    applied = yaml.safe_load(Path(parsed["files"][0]).read_text(encoding="utf-8"))
+    defaults = [
+        signal["predicate"]["gte"]
+        for recipe in applied["recipes"]
+        for signal in recipe["signals"]["systemone"]
+    ]
+    assert defaults == [0.7, 0.2]
+
+
+def test_cli_several_recipes_without_a_selection_are_rejected(tmp_path):
+    with pytest.raises(
+        SystemExit, match="pass --recipe <name> or --public-model"
+    ) as caught:
+        main(
+            [
+                "propose-rule-thresholds",
+                "--base-config",
+                str(TWO_RECIPES),
+                "--signal",
+                "depth",
+                "--values",
+                "0.5",
+                "--output-dir",
+                str(tmp_path / "c"),
+            ]
+        )
+    # the error lists the recipes and the public models that serve them
+    assert "'balanced' (vllm-sr/mom-blend)" in str(caught.value)
+    assert not (tmp_path / "c").exists()
+
+
+def test_cli_recipe_and_public_model_are_exclusive(tmp_path, capsys):
+    with pytest.raises(SystemExit) as caught:
+        main(
+            [
+                "propose-rule-thresholds",
+                "--base-config",
+                str(TWO_RECIPES),
+                "--recipe",
+                "balanced",
+                "--public-model",
+                "vllm-sr/mom-blend",
+                "--signal",
+                "depth",
+                "--values",
+                "0.5",
+                "--output-dir",
+                str(tmp_path / "c"),
+            ]
+        )
+    assert caught.value.code == 2
+    assert "not allowed with argument" in capsys.readouterr().err
 
 
 # ---- run --validate and sidecar provenance ----

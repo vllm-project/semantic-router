@@ -54,6 +54,7 @@ from .contract import (
     dataset_content_hash,
 )
 from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_refs
+from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
 from .proposers import rule_threshold, threshold_search
 from .runner import (
@@ -76,6 +77,21 @@ from .splitting import (
 
 def _print_json(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False))
+
+
+def _add_recipe_selectors(parser: argparse.ArgumentParser) -> None:
+    """Name the recipe to edit when the base config declares several."""
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--recipe",
+        default=None,
+        help="recipe to edit (recipes[].name); defaults to the only recipe",
+    )
+    group.add_argument(
+        "--public-model",
+        default=None,
+        help="public model name; the recipe is the one its entrypoint serves",
+    )
 
 
 def _fail(message: str) -> None:
@@ -291,14 +307,16 @@ def cmd_propose(args: argparse.Namespace) -> int:
     if not deltas:
         _fail("--deltas must list at least one perturbation")
     try:
+        recipe = select_recipe(base, recipe=args.recipe, public_model=args.public_model)
         candidates = threshold_search.propose_thresholds(
-            base, args.signal, deltas, lo=args.lo, hi=args.hi
+            base, args.signal, deltas, lo=args.lo, hi=args.hi, recipe=recipe
         )
         paths = threshold_search.write_candidates(candidates, args.output_dir)
     except ContractError as exc:
         _fail(f"proposer error: {exc}")
     _print_json(
         {
+            "recipe": recipe.name,
             "signal": args.signal,
             "candidates": [c.summary() for c in candidates],
             "files": [str(p) for p in paths],
@@ -313,26 +331,31 @@ def cmd_propose_rule(args: argparse.Namespace) -> int:
             base = yaml.safe_load(fh)
     except (OSError, yaml.YAMLError) as exc:
         raise SystemExit(f"cannot read base config: {exc}") from exc
-    if args.list_sites:
-        sites = rule_threshold.find_threshold_sites(base)
-        if args.signal:
-            sites = [s for s in sites if s.signal == args.signal]
-        _print_json(
-            {
-                "sites": [
-                    {
-                        "decision": s.decision,
-                        "signal": s.signal,
-                        "op": s.op,
-                        "value": s.value,
-                        "negated": s.negated,
-                        "path": list(s.path),
-                    }
-                    for s in sites
-                ]
-            }
-        )
-        return 0
+    try:
+        recipe = select_recipe(base, recipe=args.recipe, public_model=args.public_model)
+        if args.list_sites:
+            sites = rule_threshold.find_threshold_sites(base, recipe)
+            if args.signal:
+                sites = [s for s in sites if s.signal == args.signal]
+            _print_json(
+                {
+                    "recipe": recipe.name,
+                    "sites": [
+                        {
+                            "decision": s.decision,
+                            "signal": s.signal,
+                            "op": s.op,
+                            "value": s.value,
+                            "negated": s.negated,
+                            "path": list(s.path),
+                        }
+                        for s in sites
+                    ],
+                }
+            )
+            return 0
+    except ContractError as exc:
+        raise SystemExit(f"proposer error: {exc}") from exc
     if not args.signal:
         raise SystemExit("propose-rule-thresholds: --signal is required")
     values = (
@@ -372,12 +395,14 @@ def cmd_propose_rule(args: argparse.Namespace) -> int:
             op=args.op,
             lo=args.lo,
             hi=args.hi,
+            recipe=recipe,
         )
         paths = rule_threshold.write_candidates(candidates, args.output_dir)
     except ContractError as exc:
         raise SystemExit(f"proposer error: {exc}") from exc
     _print_json(
         {
+            "recipe": recipe.name,
             "signal": args.signal,
             "candidates": [c.summary() for c in candidates],
             "files": [str(p) for p in paths],
@@ -1032,6 +1057,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_prop.add_argument(
         "--output-dir", required=True, help="directory for candidate config YAMLs"
     )
+    _add_recipe_selectors(p_prop)
     p_prop.set_defaults(func=cmd_propose)
 
     p_rule = sub.add_parser(
@@ -1100,6 +1126,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="directory for candidate config YAMLs (required when proposing)",
     )
+    _add_recipe_selectors(p_rule)
     p_rule.set_defaults(func=cmd_propose_rule)
 
     p_run = sub.add_parser(

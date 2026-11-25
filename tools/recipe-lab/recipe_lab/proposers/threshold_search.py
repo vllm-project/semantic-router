@@ -4,7 +4,10 @@ Deterministic by construction: the same base config + deltas always produce
 the same candidate set (recipe-lab design §Sub-issue 2). Each
 candidate is a full copy of the base recipe config with exactly one signal's
 predicate threshold moved — one variable per candidate, so a verdict can be
-attributed to that variable.
+attributed to that variable. The signal is looked up inside one recipe of the
+canonical v0.5 document (``recipes[].signals.<family>[]``); a document with
+several recipes needs the recipe selected by the caller (see
+:mod:`recipe_lab.layout`).
 
 Candidates carry provenance (proposer + the signal they touch) and are plain
 YAML config revisions: nothing here talks to a router or a model.
@@ -21,6 +24,7 @@ from typing import Any
 import yaml
 
 from ..contract import ContractError
+from ..layout import RecipeRef, find_signal, select_recipe
 
 
 @dataclass(frozen=True)
@@ -33,14 +37,6 @@ class ThresholdCandidate:
 
     def summary(self) -> str:
         return f"signal {self.signal_name!r} gte {self.old_value} -> {self.new_value}"
-
-
-def _decision_signal(config: dict[str, Any], signal_name: str) -> dict[str, Any]:
-    signals = config.get("routing", {}).get("signals", {}).get("decision", [])
-    for signal in signals:
-        if isinstance(signal, dict) and signal.get("name") == signal_name:
-            return signal
-    raise ContractError(f"decision signal {signal_name!r} not found in base config")
 
 
 def _predicate_value(signal: dict[str, Any]) -> float:
@@ -65,9 +61,16 @@ def propose_thresholds(
     ref_prefix: str = "config-rev",
     lo: float = 0.0,
     hi: float = 1.0,
+    recipe: RecipeRef | None = None,
 ) -> list[ThresholdCandidate]:
-    """Generate one candidate per delta, clamped to [lo, hi], baseline dropped."""
-    base_signal = _decision_signal(base_config, signal_name)
+    """Generate one candidate per delta, clamped to [lo, hi], baseline dropped.
+
+    ``recipe`` is the recipe whose signal is perturbed. Without it a document
+    with a single candidate recipe is assumed; several are a contract error.
+    """
+    if recipe is None:
+        recipe = select_recipe(base_config)
+    base_signal = find_signal(base_config, recipe, signal_name)
     old_value = _predicate_value(base_signal)
     candidates: list[ThresholdCandidate] = []
     seen: set[float] = set()
@@ -77,7 +80,7 @@ def propose_thresholds(
             continue  # the unchanged baseline is not a candidate
         seen.add(new_value)
         config = copy.deepcopy(base_config)
-        patched = _decision_signal(config, signal_name)
+        patched = find_signal(config, recipe, signal_name)
         patched["predicate"]["gte"] = new_value
         candidates.append(
             ThresholdCandidate(

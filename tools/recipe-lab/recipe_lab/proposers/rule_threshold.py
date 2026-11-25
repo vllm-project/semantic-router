@@ -10,6 +10,10 @@ sidecar so a later verdict can be attributed to the exact wiring change.
 
 Only decision rules are sites: the signal-level `predicate` default is not
 perturbed here. Deterministic by construction, like threshold_search.
+
+Rule sites are read inside one recipe of the canonical v0.5 document
+(``recipes[].decisions[]``); a document with several recipes needs the recipe
+selected by the caller (see :mod:`recipe_lab.layout`).
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ from typing import Any
 import yaml
 
 from ..contract import ContractError
+from ..layout import RecipeRef, find_signal, select_recipe
 
 _PRED_OPS = ("gte", "gt", "lte", "lt")
 
@@ -33,7 +38,7 @@ class ThresholdSite:
     """One predicate occurrence inside a decision's rules.
 
     `path` locates the predicate dict from the config root, e.g.
-    ("routing", "decisions", 1, "rules", "conditions", 1, "predicate").
+    ("recipes", 0, "decisions", 1, "rules", "conditions", 1, "predicate").
     """
 
     decision: str
@@ -62,11 +67,18 @@ class RuleThresholdCandidate:
         )
 
 
-def find_threshold_sites(config: dict[str, Any]) -> list[ThresholdSite]:
-    """Every decision-rule predicate site, in config order."""
+def find_threshold_sites(
+    config: dict[str, Any], recipe: RecipeRef | None = None
+) -> list[ThresholdSite]:
+    """Every decision-rule predicate site of the recipe, in config order.
+
+    Without ``recipe`` a document with a single candidate recipe is assumed;
+    several are a contract error.
+    """
+    if recipe is None:
+        recipe = select_recipe(config)
     sites: list[ThresholdSite] = []
-    decisions = config.get("routing", {}).get("decisions", [])
-    for d_idx, decision in enumerate(decisions):
+    for d_idx, decision in enumerate(recipe.get(config).get("decisions") or []):
         if not isinstance(decision, dict):
             continue
         rules = decision.get("rules")
@@ -76,7 +88,7 @@ def find_threshold_sites(config: dict[str, Any]) -> list[ThresholdSite]:
             rules,
             str(decision.get("name", f"decision-{d_idx}")),
             False,
-            ("routing", "decisions", d_idx, "rules"),
+            (*recipe.path, "decisions", d_idx, "rules"),
             sites,
         )
     return sites
@@ -105,11 +117,11 @@ def _walk(
                     sites,
                 )
         return
-    if node.get("type") != "decision":
-        return
+    # A condition without a predicate is a bare signal reference: it uses the
+    # signal-level default, whatever its signal family.
     predicate = node.get("predicate")
     if not isinstance(predicate, dict):
-        return  # a bare signal reference: it uses the signal-level default
+        return
     for op in _PRED_OPS:
         if op not in predicate:
             continue
@@ -141,20 +153,21 @@ def group_sites(
     return groups
 
 
-def signal_range(config: dict[str, Any], signal_name: str) -> tuple[float, float]:
+def signal_range(
+    config: dict[str, Any], signal_name: str, recipe: RecipeRef | None = None
+) -> tuple[float, float]:
     """Threshold bounds implied by the signal question; explicit --lo/--hi wins."""
-    signals = config.get("routing", {}).get("signals", {}).get("decision", [])
-    for signal in signals:
-        if isinstance(signal, dict) and signal.get("name") == signal_name:
-            question = signal.get("question") or {}
-            qtype = question.get("type")
-            if qtype == "score":
-                levels = question.get("levels") or []
-                if levels:
-                    return (0.0, float(len(levels) - 1))
-            elif qtype in ("noul", "choice", "set"):
-                return (0.0, 1.0)
-            break
+    if recipe is None:
+        recipe = select_recipe(config)
+    signal = find_signal(config, recipe, signal_name)
+    question = signal.get("question") or {}
+    qtype = question.get("type")
+    if qtype == "score":
+        levels = question.get("levels") or []
+        if levels:
+            return (0.0, float(len(levels) - 1))
+    elif qtype in ("noul", "choice", "set"):
+        return (0.0, 1.0)
     raise ContractError(
         f"cannot infer the threshold range for signal {signal_name!r}; pass --lo/--hi explicitly"
     )
@@ -173,6 +186,7 @@ def propose_rule_thresholds(
     lo: float | None = None,
     hi: float | None = None,
     ref_prefix: str = "config-rev",
+    recipe: RecipeRef | None = None,
 ) -> list[RuleThresholdCandidate]:
     """One candidate per target value; every selected site moves to it.
 
@@ -180,10 +194,17 @@ def propose_rule_thresholds(
     share one old value (otherwise the delta is ambiguous). Clamped to the
     signal range (or explicit lo/hi), rounded to 6 decimals, deduped, and the
     original value is never a candidate.
+
+    ``recipe`` is the recipe whose rules are edited. Without it a document
+    with a single candidate recipe is assumed; several are a contract error.
     """
     if values is None and deltas is None:
         raise ContractError("propose_rule_thresholds needs one of values or deltas")
-    sites = [s for s in find_threshold_sites(base_config) if s.signal == signal_name]
+    if recipe is None:
+        recipe = select_recipe(base_config)
+    sites = [
+        s for s in find_threshold_sites(base_config, recipe) if s.signal == signal_name
+    ]
     if from_value is not None:
         sites = [s for s in sites if s.value == float(from_value)]
     if op is not None:
@@ -222,7 +243,7 @@ def propose_rule_thresholds(
             f"({', '.join(str(v) for v in old_values)}); pass --values instead of --deltas"
         )
     if lo is None or hi is None:
-        range_lo, range_hi = signal_range(base_config, signal_name)
+        range_lo, range_hi = signal_range(base_config, signal_name, recipe)
         lo = range_lo if lo is None else lo
         hi = range_hi if hi is None else hi
     if values is not None:
