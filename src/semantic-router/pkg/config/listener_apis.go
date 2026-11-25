@@ -109,12 +109,16 @@ var listenerAPIPrefix = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+)+$`)
 
 // APIPath is the path a request to the listener asks for, as the API it
 // belongs to answers it: a path under one of the listener's API prefixes
-// without the prefix, any other path unchanged.
+// without the prefix, the model listing under any of them, any other path
+// unchanged.
 func (l Listener) APIPath(path string) string {
 	for name, entry := range l.APIs {
 		api, ok := apiregistry.Lookup(name)
 		if !ok {
 			continue
+		}
+		if apiregistry.ServesListing(entry.Prefix, path) {
+			return apiregistry.ModelsPath
 		}
 		if rest, ok := api.Unprefixed(entry.Prefix, path); ok {
 			return rest

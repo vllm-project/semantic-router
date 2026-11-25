@@ -25,6 +25,18 @@ def test_prefixed_api_is_also_served_under_its_prefix():
         assert not regex.fullmatch(path), path
 
 
+def test_model_listing_is_served_under_the_prefix_too():
+    regex = re.compile(served_path_regex(("messages",), {"messages": "/anthropic"}))
+    for path in ("/anthropic/v1/models", "/v1/models"):
+        assert regex.fullmatch(path), path
+    for path in (
+        "/anthropicx/v1/models",
+        "/anthropic/v1/modelsx",
+        "/anthropic/v1/models/",
+    ):
+        assert not regex.fullmatch(path), path
+
+
 def test_no_prefix_changes_nothing():
     assert served_path_regex(("messages",)) == served_path_regex(("messages",), {})
 
