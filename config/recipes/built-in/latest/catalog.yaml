@@ -2356,6 +2356,36 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/tencent/hy4-preview
+  - catalog: tencent/hy4
+    relationship: gateway
+    id: tencent/hy4
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.834
+      cached_input_per_1m: 0.042
+      completion_per_1m: 2.501
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://openrouter.ai/tencent/hy4
+  - catalog: tencent/hy4-flash
+    relationship: gateway
+    id: tencent/hy4-flash
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.07
+      cached_input_per_1m: 0.003
+      completion_per_1m: 0.281
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://openrouter.ai/tencent/hy4-flash
   - catalog: thinking-machines/inkling
     relationship: gateway
     id: thinkingmachines/inkling
@@ -10075,6 +10105,96 @@ models:
   - long_context
   - preview
   released_at: '2026-08-28'
+- id: tencent/hy4
+  display_name: Tencent Hy4
+  description: Open-weight Tencent Hy flagship MoE model with text, image, and video understanding and a one-million-token
+    context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4/tree/c10c0de5b6f850703fb0a90e65d1c32b558b9167
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 770B (49B active)
+  reasoning_family: hunyuan-hy4
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/README.md
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - multimodal
+  - agentic
+  released_at: '2026-11-04'
+- id: tencent/hy4-flash
+  display_name: Tencent Hy4 Flash
+  description: Cost-efficient open-weight Tencent Hy MoE model with text and image input and a one-million-token context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4-flash/tree/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 220B (12B active)
+  reasoning_family: hunyuan
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/README.md
+  tags:
+  - open_weights
+  - efficient
+  - moe
+  - multimodal
+  released_at: '2026-11-16'
 - id: tencent/hy3
   display_name: Tencent Hy3
   description: Open-weight Tencent Hy flagship MoE model for reasoning, coding, and productivity agents.
@@ -11820,6 +11940,24 @@ benchmarks:
     description: Vendor-published AutomationBench score using the stated benchmark release and harness.
   metrics:
   - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: mercor/apex-agents@1.1.0
+  display_name: APEX-Agents 1.1
+  domain: knowledge_work
+  source: https://huggingface.co/datasets/mercor/apex-agents-v1.1
+  default_profile: published-loop-250-steps
+  profiles:
+  - id: published-loop-250-steps
+    display_name: Published Loop agent, 250 steps
+    description: Vendor-published APEX-Agents 1.1 pass@1 with the official Loop reference agent at 250 steps per trial, which
+      is not comparable to the 100-step leaderboard harness. The ID names minor version 1.1; records keep the dataset patch
+      (1.1.1 or 1.1.2) unspecified when the source does not state it.
+  metrics:
+  - id: pass_at_1
     unit: proportion
     direction: higher_is_better
     range:
@@ -40157,6 +40295,220 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/tencent/Hy4-preview
+    redistributable: true
+- id: tencent/hy4-model-card-deep-swe@1.0.0
+  model: tencent/hy4
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    swe_harness: mini-swe-agent
+    sandbox: 8 CPU cores, 16 GB memory
+  metrics:
+    resolved: 0.749
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-terminal-bench-4-0@1.0.0
+  model: tencent/hy4
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: Terminal-Bench 4.0
+    terminal_harness: Claude Code
+    max_turns: 500
+    timeout_per_trial: 13 hours
+    sandbox: 16 CPUs, 32 GB RAM; one H100 for the three GPU-dependent tasks
+  metrics:
+    resolved: 0.444
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-apex-agents@1.0.0
+  model: tencent/hy4
+  benchmark: mercor/apex-agents@1.1.0
+  benchmark_profile: published-loop-250-steps
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: APEX-Agents v1.1 (pass@1)
+    harness: Loop (official reference agent)
+    max_steps: 250
+    benchmark_revision: unspecified_by_source
+  metrics:
+    pass_at_1: 0.752
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-automation-bench@1.0.0
+  model: tencent/hy4
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: AutomationBench v1.0.6
+    task_count: 600
+    harness: official AutomationBench method
+  metrics:
+    score: 0.562
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-humanitys-last-exam-tools@1.0.0
+  model: tencent/hy4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: HLE-Full (with tools)
+    hle_mode: full_with_tools
+  metrics:
+    accuracy: 0.591
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-flash-model-card-deep-swe@1.0.0
+  model: tencent/hy4-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    swe_harness: mini-swe-agent
+    sandbox: 8 CPU cores, 16 GB memory
+  metrics:
+    resolved: 0.646
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-terminal-bench-4-0@1.0.0
+  model: tencent/hy4-flash
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: Terminal-Bench 4.0
+    terminal_harness: Claude Code
+    max_turns: 500
+    timeout_per_trial: 13 hours
+    sandbox: 16 CPUs, 32 GB RAM; one H100 for the three GPU-dependent tasks
+  metrics:
+    resolved: 0.192
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-apex-agents@1.0.0
+  model: tencent/hy4-flash
+  benchmark: mercor/apex-agents@1.1.0
+  benchmark_profile: published-loop-250-steps
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: APEX-Agents v1.1 (pass@1)
+    harness: Loop (official reference agent)
+    max_steps: 250
+    benchmark_revision: unspecified_by_source
+  metrics:
+    pass_at_1: 0.631
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-automation-bench@1.0.0
+  model: tencent/hy4-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: AutomationBench v1.0.6
+    task_count: 600
+    harness: official AutomationBench method
+  metrics:
+    score: 0.522
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-humanitys-last-exam-tools@1.0.0
+  model: tencent/hy4-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: HLE-Full (with tools)
+    hle_mode: full_with_tools
+  metrics:
+    accuracy: 0.552
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
     redistributable: true
 - id: independent/hy3-critpt@1.0.0
   model: tencent/hy3

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from 'react'
 import { useHistory, useLocation } from '@docusaurus/router'
-import Translate from '@docusaurus/Translate'
+import Translate, { translate } from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import BrowseLayout from '@site/src/components/site/BrowseLayout'
 
@@ -249,7 +249,10 @@ export default function ModelsPage() {
             {
               key: 'explore',
               label: 'Explore',
-              items: sections,
+              items: [
+                ...sections,
+                { key: 'recipes', label: translate({ id: 'recipes.title', message: 'Recipes' }), to: '/recipes' },
+              ],
             },
           ]}
           sidebarLabel="Model Hub sections"
