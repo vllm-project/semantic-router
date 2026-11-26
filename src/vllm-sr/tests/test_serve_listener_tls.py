@@ -4,8 +4,13 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
-from cli import container_backend, container_start, container_start_runner, core
-from cli import runtime_lifecycle
+from cli import (
+    container_backend,
+    container_start,
+    container_start_runner,
+    core,
+    runtime_lifecycle,
+)
 from cli.commands import runtime_serve_config
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
