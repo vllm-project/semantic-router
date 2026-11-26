@@ -578,7 +578,7 @@ const config: Config = {
         },
         {
           label: 'Community',
-          to: '/community/team',
+          to: '/community/contributor-guide',
           className: 'nav-primary',
           position: 'left',
         },
@@ -639,6 +639,10 @@ const config: Config = {
             {
               label: 'Quick Start',
               to: '/docs/installation',
+            },
+            {
+              label: 'Contributor Guide',
+              to: '/community/contributor-guide',
             },
             {
               label: 'Governance',

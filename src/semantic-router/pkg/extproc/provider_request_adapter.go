@@ -12,11 +12,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// ollamaProviderType is the catalog provider id for Ollama. Ollama's OpenAI
-// layer reads the output limit only from max_tokens, and documents no
-// max_completion_tokens support:
+// maxTokensChatProviders are the catalog provider ids whose Chat Completions
+// API takes its output limit as max_tokens and documents no
+// max_completion_tokens.
+//
+// Ollama's OpenAI layer reads the output limit only from max_tokens:
 // https://github.com/ollama/ollama/blob/6383a0fa9cbf97494b847226e189f6e36b401a08/docs/api/openai-compatibility.mdx?plain=1#L224-L243
-const ollamaProviderType = "ollama"
+//
+// The LongCat API reference lists max_tokens as its only output limit:
+// https://longcat.ai/platform/docs/api/chat
+var maxTokensChatProviders = []string{"ollama", "longcat"}
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -44,7 +49,7 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	if dispatch != nil {
 		dispatch.reasoningMode = r.sentReasoningMode(dispatch, mutation, enabled)
 		dispatch.reasoningEffort = sentReasoningEffort(body, mutation, enabled)
-		body, err = adaptOllamaOutputLimit(body, dispatch.targetFormat, dispatch.profile)
+		body, err = adaptMaxTokensOutputLimit(body, dispatch.targetFormat, dispatch.profile)
 		if err != nil {
 			return body, err
 		}
@@ -129,11 +134,12 @@ func reportDroppedReasoningSummary(ctx *RequestContext, dispatch *providerDispat
 	}
 }
 
-// adaptOllamaOutputLimit moves the Chat codec's max_completion_tokens to the
-// max_tokens field Ollama reads, so the client's limit still caps generation.
-func adaptOllamaOutputLimit(body []byte, format llmprotocol.WireFormat, profile *config.ProviderProfile) ([]byte, error) {
+// adaptMaxTokensOutputLimit moves the Chat codec's max_completion_tokens to
+// the max_tokens field these providers read, so the client's limit still caps
+// generation.
+func adaptMaxTokensOutputLimit(body []byte, format llmprotocol.WireFormat, profile *config.ProviderProfile) ([]byte, error) {
 	if format != llmprotocol.OpenAIChatV1 || profile == nil ||
-		!strings.EqualFold(strings.TrimSpace(profile.Type), ollamaProviderType) {
+		!slices.Contains(maxTokensChatProviders, strings.ToLower(strings.TrimSpace(profile.Type))) {
 		return body, nil
 	}
 	limit := gjson.GetBytes(body, "max_completion_tokens")

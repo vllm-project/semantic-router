@@ -105,13 +105,18 @@ func (r *shadowDispatchRun) Close() {
 }
 
 func (r *shadowDispatchRun) primary(ctx context.Context, model string, ceiling time.Duration) (string, error) {
+	return r.primaryWithOutputLimit(ctx, model, ceiling, 0)
+}
+
+func (r *shadowDispatchRun) primaryWithOutputLimit(ctx context.Context, model string, ceiling time.Duration, maxTokens int) (string, error) {
 	sessionID := "e2e_shadow_" + uuid.NewString()
 	requestCtx, cancel := context.WithTimeout(ctx, ceiling)
 	defer cancel()
 	started := time.Now()
 	response, err := r.chat.Create(requestCtx, fixtures.ChatCompletionsRequest{
-		Model: model,
-		User:  "e2e-shadow-user",
+		Model:     model,
+		User:      "e2e-shadow-user",
+		MaxTokens: maxTokens,
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "Please say hello."},
 		},
@@ -232,9 +237,13 @@ func requireShadowOutcome(record *shadowReplayRecord, model, verdict, reason str
 		return fmt.Errorf("replay %s shadow target=%s/%s verdict=%s reason=%s, want model/%s %s/%s",
 			record.ID, outcome.Target, outcome.TargetRef, outcome.Verdict, outcome.Reason, model, verdict, reason)
 	}
+	attempts := "1"
+	if reason == "budget_exhausted" {
+		attempts = "0"
+	}
 	if outcome.Metadata["primary_model"] != shadowPrimaryModel ||
 		outcome.Metadata["shadow_model"] != model || outcome.Metadata["shadow_request_id"] == "" ||
-		outcome.Metadata["attempts"] != "1" {
+		outcome.Metadata["attempts"] != attempts {
 		return fmt.Errorf("replay %s unexpected shadow identity or attempts: %v", record.ID, outcome.Metadata)
 	}
 	if _, captured := outcome.Metadata["response_excerpt"]; captured {
@@ -246,7 +255,7 @@ func requireShadowOutcome(record *shadowReplayRecord, model, verdict, reason str
 			return fmt.Errorf("replay %s did not record the expected shadow response: %v", record.ID, outcome.Metadata)
 		}
 	} else {
-		if outcome.Metadata["error"] == "" {
+		if attempts != "0" && outcome.Metadata["error"] == "" {
 			return fmt.Errorf("replay %s failed shadow has no error detail", record.ID)
 		}
 		if _, present := outcome.Metadata["response_sha256"]; present {
