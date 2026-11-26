@@ -432,7 +432,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(
             openai_inventory["representative_models"],
-            ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
+            ["openai/gpt-6.2-astra", "openai/gpt-6.2-sol", "openai/gpt-6.1-terra"],
         )
 
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
@@ -938,6 +938,9 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "openai/gpt-5.4",
                 "openai/gpt-5.5",
                 "openai/gpt-6-astra",
+                "openai/gpt-6.2-astra",
+                "openai/gpt-6.2-sol",
+                "openai/gpt-6.1-terra",
                 "openai/gpt-5.6-luna",
                 "openai/gpt-5.6-sol",
                 "openai/gpt-5.6-terra",
