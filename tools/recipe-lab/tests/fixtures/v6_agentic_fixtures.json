@@ -98,14 +98,30 @@
       "completion_rate_by_task": {
         "Fix the failing test in src/limiter.py, then run the full suite.": 0.0,
         "Find the slowest build step and fix it. Delegate the search to a sub-agent.": 0.0,
-        "Profile the build and report the slowest step.": 0.0,
-        "Rename the helper function to parse_config.": 0.0
+        "Profile the build and report the slowest step.": 0.0
       },
       "prompt_tokens_per_message": 8,
       "completion_tokens_per_step": 2,
       "cached_tokens_per_step": 1
     },
     "google/gemini-3.1-pro": {
+      "completion_rate": 1.0,
+      "prompt_tokens_per_message": 12,
+      "completion_tokens_per_step": 6,
+      "cached_tokens_per_step": 2
+    },
+    "team/model-a": {
+      "completion_rate": 1.0,
+      "completion_rate_by_task": {
+        "Fix the failing test in src/limiter.py, then run the full suite.": 0.0,
+        "Find the slowest build step and fix it. Delegate the search to a sub-agent.": 0.0,
+        "Profile the build and report the slowest step.": 0.0
+      },
+      "prompt_tokens_per_message": 8,
+      "completion_tokens_per_step": 2,
+      "cached_tokens_per_step": 1
+    },
+    "team/model-b": {
       "completion_rate": 1.0,
       "prompt_tokens_per_message": 12,
       "completion_tokens_per_step": 6,

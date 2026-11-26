@@ -1376,12 +1376,14 @@ def test_v6_scenario_2_tuning(stack, recipe_lab_bin, tmp_path):
         diag_b / "diagnosis.json"
     ).read_bytes()
     diagnosis = json.loads((diag_a / "diagnosis.json").read_text(encoding="utf-8"))
-    # the AG4 agentic section keys on request structure (session phase /
-    # agent markers on the rows), not on the router-side protection
-    # switches: the probe rows carry a phase either way, so the section
-    # appears in both arms and the byte-identical assertion above proves
-    # the switch leaks nothing into the diagnosis
-    assert "agentic" in diagnosis
+    # a protection-disabled arm resolves no session identity, so the rows
+    # carry no session_policy block, and a healthy stack leaves no failed
+    # lifecycle either: the AG4 agentic section (phase distributions,
+    # separation, failures) is honestly absent - the W1 shape's own
+    # evidence. (A previous live run saw the section appear because one
+    # request errored into a failed lifecycle - environment noise, not the
+    # contract.)
+    assert "agentic" not in diagnosis
     assert diagnosis["decision_coverage"]["total_decisions"] == 3
 
     # attribute-session over the same records: a protection-disabled config
@@ -1576,7 +1578,11 @@ def test_v6_scenario_4_sub_agent(stack, recipe_lab_bin, tmp_path):
         fixtures=stack["fixtures"],
         run_tag="sub4",
         session_prefix="v6-sub4",
-        sub_agent_header="x-claude-code-agent-id",
+        # a GENERIC client's private agent header: the router maps the
+        # harness defaults even with no identity.headers configured (it
+        # reads x-claude-code-agent-id by default), so the unmapped-client
+        # premise needs a header name the router does not know
+        sub_agent_header="x-generic-agent-id",
         extra_headers={},
         max_tokens=64,
         max_steps=12,
