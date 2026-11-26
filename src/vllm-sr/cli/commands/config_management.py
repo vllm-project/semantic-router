@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import click
 import yaml
 
+from cli.commands.runtime_paths import ConfigSourceRevision
 from cli.local_stack_config import (
     LocalStack,
     local_stack,
@@ -100,6 +101,7 @@ def _restart_required(
     error: RouterManagementError,
     stack: LocalStack | None,
     config_path: Path,
+    source_revision: ConfigSourceRevision | None,
     plan: Any,
 ) -> None:
     reason = error.detail or str(error)
@@ -109,7 +111,9 @@ def _restart_required(
             "change; restart it with the new configuration (on Kubernetes, roll "
             "it out with `helm upgrade`)."
         )
-    runtime_config = save_pending_restart(stack, config_path, reason)
+    runtime_config = save_pending_restart(
+        stack, config_path, reason, expected_source=source_revision
+    )
     message = "Restart required: run `vllm-sr serve` to apply."
     click.echo(f"{message} ({reason})", err=True)
     _json(
@@ -254,6 +258,9 @@ def config_apply(
     """
 
     client = _client(endpoint, timeout, token_env)
+    source_revision = (
+        ConfigSourceRevision.capture(config_path) if mode == "replace" else None
+    )
     document, stack = _document_for(config_path, mode, endpoint)
     plan = None
     try:
@@ -269,7 +276,7 @@ def config_apply(
         mutation = client.apply_config(document, mode, current_etag)
     except RouterManagementError as error:
         if error.code == RESTART_REQUIRED:
-            _restart_required(error, stack, config_path, plan)
+            _restart_required(error, stack, config_path, source_revision, plan)
             return
         if error.timed_out:
             raise click.ClickException(_timeout_message(error, timeout)) from error

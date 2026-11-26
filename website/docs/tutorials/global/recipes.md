@@ -7,6 +7,9 @@ description: Define isolated routing policies that share provider models and pla
 
 ## Overview
 
+To start from a use case, [browse the maintained Recipes](/recipes) for
+copyable configurations, backend requirements, and decision-model evidence.
+
 A recipe is a complete routing-policy boundary. It owns the evidence and
 control flow used for one objective: signals, projections, decisions, routing
 strategy, selection or looper algorithms, and route-local plugins.

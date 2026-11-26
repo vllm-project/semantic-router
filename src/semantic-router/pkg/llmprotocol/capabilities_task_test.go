@@ -16,6 +16,17 @@ func TestRequiredCapabilitiesNoneToolChoiceDoesNotRequireImageGeneration(t *test
 	}
 }
 
+func TestRequiredCapabilitiesSpeechGenerationRequiresSpeech(t *testing.T) {
+	required := RequiredCapabilities(Request{SpeechGeneration: &SpeechGenerationOptions{}})
+	if !required.Supports(CapabilitySpeechGeneration) || required.Supports(CapabilityAudioOutput) {
+		t.Fatalf("speech request capabilities = %v", required.Names())
+	}
+	plain := RequiredCapabilities(Request{})
+	if plain.Supports(CapabilitySpeechGeneration) {
+		t.Fatalf("a request without speech options must not require speech_generation, got %v", plain.Names())
+	}
+}
+
 func TestRequiredCapabilitiesImageGenerationToolChoiceRequiresImageGeneration(t *testing.T) {
 	required := RequiredCapabilities(Request{
 		ToolChoice: ToolChoice{Mode: ToolChoiceImageGeneration},
@@ -32,13 +43,13 @@ func TestRequiredCapabilitiesImageGenerationToolChoiceRequiresImageGeneration(t 
 func TestCapabilitySetTaskCapabilities(t *testing.T) {
 	full := Capabilities(
 		CapabilityImageGeneration, CapabilityImageInput, CapabilityImageOutput,
-		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput,
+		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput, CapabilitySpeechGeneration,
 		CapabilityText, CapabilityTools, CapabilityStreaming, CapabilityReasoning,
 	)
 	task := full.TaskCapabilities()
 	for _, kept := range []Capability{
 		CapabilityImageGeneration, CapabilityImageInput, CapabilityImageOutput,
-		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput,
+		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput, CapabilitySpeechGeneration,
 	} {
 		if !task.Supports(kept) {
 			t.Fatalf("TaskCapabilities must keep %v, got %v", Capabilities(kept).Names(), task.Names())

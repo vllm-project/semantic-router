@@ -93,7 +93,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8249404269976304,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.10715996344286993,
+      "1": 0.8832936179984202,
+      "2": 0.009546418558709843
+     },
+     "score": 0.9023864551158399,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9988212351638305,
+     "probabilities": {
+      "code": 0.999214156775887,
+      "math": 0.0004541877644531009,
+      "other": 0.00033165545965989216
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8485108989318629,
+     "probabilities": {
+      "blue": 0.01638855223285304,
+      "green": 0.07647315398515546,
+      "other": 0.8863831741988972,
+      "red": 0.02075511958309427
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.009658104677119542,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.808620524534889,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8214131946282642,
      "legend": {
@@ -232,11 +278,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "cbff3a3cb0b074b6585fe9f747b9f9f5557a0e75",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -334,7 +386,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.7076136513409964,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.8406442278527584,
+      "1": 0.1237873118551476,
+      "2": 0.035568460292094047
+     },
+     "score": 0.1949242324393357,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.8597900311485498,
+     "probabilities": {
+      "code": 0.9065266874323665,
+      "math": 0.00010375383893566544,
+      "other": 0.09336955872869782
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4958523130644978,
+     "probabilities": {
+      "blue": 0.012339491672484788,
+      "green": 0.34060213320257515,
+      "other": 0.6218892347983733,
+      "red": 0.025169140326566745
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.029144610449626025,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.06436510985273622,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.7140624038875103,
      "legend": {
@@ -519,11 +617,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "18d61df78684675463af9ae732872478845c5a79",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -621,7 +725,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8080150303174845,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.1042435276734456,
+      "1": 0.8720100202116563,
+      "2": 0.023746452114898127
+     },
+     "score": 0.9195029244414525,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.986909304589457,
+     "probabilities": {
+      "code": 0.9912728697263047,
+      "math": 0.0027640990530916694,
+      "other": 0.005963031220603596
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.7623643978387742,
+     "probabilities": {
+      "blue": 0.023125933515915787,
+      "green": 0.12375771523516527,
+      "other": 0.8217732983790806,
+      "red": 0.031343052869838336
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.015408454490143216,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.3920358419418335,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8108517727937418,
      "legend": {
@@ -760,11 +910,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "521525effa79469d899a570726547dd7f00da3af",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -862,7 +1018,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.5341849039252073,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.716067573907005,
+      "1": 0.2573214548027949,
+      "2": 0.026610971290200094
+     },
+     "score": 0.3105433973831951,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9819918917540903,
+     "probabilities": {
+      "code": 0.9879945945027269,
+      "math": 0.0005583627740841048,
+      "other": 0.01144704272318904
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "green",
+     "confidence": 0.5507504594218737,
+     "probabilities": {
+      "blue": 0.014043667735686483,
+      "green": 0.6630628445664053,
+      "other": 0.26012449439128044,
+      "red": 0.06276899330662776
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.02145737646231279,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.045763422315158946,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.53260061735962,
      "legend": {
@@ -1001,11 +1203,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "a8d25a91ef75552803f7009d25b7bd435991abd9",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1103,7 +1311,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.6787285179015943,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.2050971726975042,
+      "1": 0.7858190119343962,
+      "2": 0.009083815368099626
+     },
+     "score": 0.8039866426705954,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9950435298964869,
+     "probabilities": {
+      "code": 0.9966956865976581,
+      "math": 0.0027747378124050896,
+      "other": 0.0005295755899368311
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.4687333812085286,
+     "probabilities": {
+      "blue": 0.06561133937226975,
+      "green": 0.3107379938207046,
+      "other": 0.6015500359063964,
+      "red": 0.022100630900629265
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.07982060075340865,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.39293789863586426,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.681414109650585,
      "legend": {
@@ -1334,11 +1588,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "a475367de0d8133a3c1a2a0dc12303d89cfa2ab4",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1436,7 +1696,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.356304492435473,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.4230396282121686,
+      "1": 0.5708696616236487,
+      "2": 0.00609071016418265
+     },
+     "score": 0.583051081952014,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9935363378271324,
+     "probabilities": {
+      "code": 0.995690891884755,
+      "math": 0.000861483692649506,
+      "other": 0.003447624422595445
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.592452364991297,
+     "probabilities": {
+      "blue": 0.009554123483705048,
+      "green": 0.29057374528941293,
+      "other": 0.6943392737434728,
+      "red": 0.0055328574834092115
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.001957629856519407,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.06469295318483456,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.3446695427906742,
      "legend": {
@@ -1575,11 +1881,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "3aeb1c22a5632aac72353c36b3d0111c40e7dbf4",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1677,7 +1989,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.8435346269773376,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.09769142696595613,
+      "1": 0.8956897513182251,
+      "2": 0.006618821715818776
+     },
+     "score": 0.9089273947498627,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9990523713488161,
+     "probabilities": {
+      "code": 0.9993682475658774,
+      "math": 0.00020209615911027104,
+      "other": 0.00042965627501229543
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.8927396716282513,
+     "probabilities": {
+      "blue": 0.02426857085795808,
+      "green": 0.04442715193692978,
+      "other": 0.9195547537211884,
+      "red": 0.011749523483923687
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.0024597477580192125,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.6534772710048339,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.8453487249107529,
      "legend": {
@@ -1816,11 +2174,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "689b3af198baaf6f11110be38a9daa7188dfd8ad",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  },
@@ -1918,7 +2282,53 @@
      "type": "noul"
     }
    },
-   "cpu:x86_64:avx512:bf16_native@bfloat16": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "difficulty": {
+     "confidence": 0.9842583702940302,
+     "legend": {
+      "0": "Trivial",
+      "1": "Moderate",
+      "2": "Hard"
+     },
+     "probabilities": {
+      "0": 0.00985711245400958,
+      "1": 0.9895055801960201,
+      "2": 0.00063730734997033
+     },
+     "score": 0.9907801948959607,
+     "type": "score"
+    },
+    "domain": {
+     "choice": "code",
+     "confidence": 0.9999964706376523,
+     "probabilities": {
+      "code": 0.9999976470917682,
+      "math": 8.855169898072566e-07,
+      "other": 1.4673912420488748e-06
+     },
+     "type": "choice"
+    },
+    "image_colour": {
+     "choice": "other",
+     "confidence": 0.9783053913429356,
+     "probabilities": {
+      "blue": 0.002688827867147571,
+      "green": 0.011857948944670538,
+      "other": 0.9837290435072017,
+      "red": 0.0017241796809801737
+     },
+     "type": "choice"
+    },
+    "image_photo": {
+     "noul": 0.003956902816410022,
+     "type": "noul"
+    },
+    "reasoning": {
+     "noul": 0.890027357412938,
+     "type": "noul"
+    }
+   },
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": {
     "difficulty": {
      "confidence": 0.9838519193276162,
      "legend": {
@@ -2103,11 +2513,17 @@
     }
    }
   },
+  "kernels": {
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": {
+    "zentorch": "2.14.1.0"
+   }
+  },
   "revision": "52ba9e7a00402f9560c7fba8c039608e7ddee7fb",
   "torch": {
    "cpu": "2.14.1+cpu",
    "cpu:x86_64:avx2:bf16_emulated@bfloat16": "2.14.1+cpu",
-   "cpu:x86_64:avx512:bf16_native@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16": "2.14.1+cpu",
+   "cpu:x86_64:avx512:bf16_native:amd@bfloat16": "2.14.1+cpu",
    "cpu@bfloat16": "2.14.1+cpu"
   }
  }

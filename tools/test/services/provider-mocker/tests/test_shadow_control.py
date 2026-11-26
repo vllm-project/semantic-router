@@ -118,6 +118,34 @@ async def test_malformed_shadow_shape_recovers_on_release(
 
 
 @pytest.mark.asyncio
+async def test_budget_shadow_counters_are_independent(controlled_app: FastAPI) -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=controlled_app),
+        base_url="http://simulator",
+    ) as client:
+        for scenario in ("budget-a", "budget-b", "timeout", "queue"):
+            response = await client.post(
+                "/v1/chat/completions",
+                json=chat_body(model=f"openai/shadow-{scenario}"),
+            )
+            assert response.status_code == HTTPStatus.OK
+
+        reset = await client.post(
+            "/debug/shadow/budget-a/reset", json={"mode": "healthy"}
+        )
+        assert reset.status_code == HTTPStatus.OK
+        for scenario, count in (
+            ("budget-a", 0),
+            ("budget-b", 1),
+            ("timeout", 1),
+            ("queue", 1),
+        ):
+            status = await client.get(f"/debug/shadow/{scenario}")
+            assert status.status_code == HTTPStatus.OK
+            assert status.json()["received"] == count
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("scenario", "payload", "expected_status"),
     [

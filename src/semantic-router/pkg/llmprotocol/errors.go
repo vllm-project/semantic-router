@@ -18,12 +18,17 @@ const (
 )
 
 type ProtocolError struct {
-	Category   ErrorCategory
-	Code       string
-	Message    string
-	Parameter  string
-	RetryAfter int64
-	Cause      error
+	Category  ErrorCategory
+	Code      string
+	Message   string
+	Parameter string
+	// ProviderFramed reports that Code, Message or Parameter was copied from a
+	// provider's error payload rather than authored by the Router. Those fields
+	// can echo request content, so diagnostic logs name only Category for such
+	// an error; the client still reads the fields it always read.
+	ProviderFramed bool
+	RetryAfter     int64
+	Cause          error
 }
 
 // TransportError is the protocol-neutral representation of an HTTP error
@@ -34,6 +39,14 @@ type TransportError struct {
 	Error             *ProtocolError
 	ProviderRequestID string
 }
+
+// ErrorDiagnostic is a Router-authored explanation attached to a ProtocolError's
+// cause. Its text is built from Router constants and counts, never from a
+// provider payload, so it is the only cause an operator log may print: a JSON
+// or transport error can echo provider input in its message.
+type ErrorDiagnostic string
+
+func (diagnostic ErrorDiagnostic) Error() string { return string(diagnostic) }
 
 func (err *ProtocolError) Error() string {
 	if err == nil {
