@@ -264,19 +264,7 @@ func scanSource(state modelservice.Request, size int) (string, int, func(scanWin
 			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
-	names := make([]string, 0, len(state.Parts))
-	for name := range state.Parts {
-		names = append(names, name)
-	}
-	slices.SortFunc(names, func(a, b string) int {
-		if (a == "request") != (b == "request") {
-			if a == "request" {
-				return 1
-			}
-			return -1
-		}
-		return strings.Compare(a, b)
-	})
+	names := scanPartNames(state.Parts)
 	var builder strings.Builder
 	parts := make([]scanPart, 0, len(names))
 	for index, name := range names {
@@ -293,6 +281,25 @@ func scanSource(state modelservice.Request, size int) (string, int, func(scanWin
 		request.Images, request.Videos = state.Images, state.Videos
 		return request
 	}
+}
+
+// scanPartNames orders named parts as the scan reads them, with the current
+// request last.
+func scanPartNames(parts map[string]string) []string {
+	names := make([]string, 0, len(parts))
+	for name := range parts {
+		names = append(names, name)
+	}
+	slices.SortFunc(names, func(a, b string) int {
+		if (a == "request") != (b == "request") {
+			if a == "request" {
+				return 1
+			}
+			return -1
+		}
+		return strings.Compare(a, b)
+	})
+	return names
 }
 
 // windowParts is the state a window of text carries: every named part it
