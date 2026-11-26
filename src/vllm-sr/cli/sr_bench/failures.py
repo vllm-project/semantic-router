@@ -15,6 +15,11 @@ def failure_reason(message):
         (("cancel",), "Request cancelled after the run stopped"),
         (("repeated output",), "Repeated output guard triggered"),
         (
+            ("no x-vsr-trace",),
+            "Router withheld its receipts; allow the worker's debug headers "
+            "(global.router.headers.debug)",
+        ),
+        (
             ("identity", "acknowledgement"),
             "Frozen runtime identity verification failed",
         ),

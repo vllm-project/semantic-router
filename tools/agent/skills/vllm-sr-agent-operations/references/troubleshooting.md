@@ -106,7 +106,7 @@ Find the symptom, run its check, apply its fix, and rerun the step that failed
 
 | Symptom | Check | Fix |
 | --- | --- | --- |
-| A MoM target fails with `Frozen runtime identity verification failed` | `global.router.headers.debug` | The run's receipts ride in `x-vsr-trace`. Allow the worker's requests (`debug: any` on a loopback stack), then plan again. |
+| A MoM target fails with `Router withheld its receipts` | `global.router.headers.debug` | The run's receipts ride in `x-vsr-trace`. Allow the worker's requests (`debug: any` on a loopback stack), then plan again. |
 | `Frozen output or call limit exceeded`; the call shows `Output token cap exceeded` | `vllm-sr benchmark show RUN_ID --call-id CALL_ID` | The answer was longer than `limits.max_output_tokens`. Raise it and `sampling.max_tokens` in a new plan. |
 | A target is unreachable from the worker | The worker runs in the stack's sr-bench container | Use `http://host.docker.internal:PORT/v1` for a server on the host and `http://vllm-sr-router-container:8899/v1` for the stack's own listener (`NAME-vllm-sr-router-container` for a named stack). |
 | MoM calls fail with 412 | The target's `config_hash` | It must be the active hash: `curl -s "$ROUTER_ORIGIN/api/v1/config/hash"` → `active_runtime_hash`. Register it and plan again. |

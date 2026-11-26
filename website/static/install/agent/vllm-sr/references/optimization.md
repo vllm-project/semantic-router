@@ -144,7 +144,7 @@ report.json` writes the quality, usage, latency and limitations.
   before you read the hash and plan; it changes the user's stack, so ask
   unless the user already allowed changes to it. Restore the previous value
   after the run when the user wants the trace off. Without it the run fails
-  with `Frozen runtime identity verification failed`.
+  with `Router withheld its receipts`.
 - `capability_only` permits unknown prices and so proves no savings; priced
   runs need complete `prices` on registered targets.
 - Repeating the same idempotency key returns the same run without new model
