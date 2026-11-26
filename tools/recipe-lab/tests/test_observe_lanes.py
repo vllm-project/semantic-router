@@ -148,16 +148,27 @@ def test_build_observation_config_invokes_init_and_disables_cache(tmp_path):
             out.write_text(
                 yaml.safe_dump(
                     {
-                        "version": "v0.3",
+                        "version": "v0.5",
                         "global": {
                             "services": providers["global"]["services"],
-                            "stores": {
-                                "response_cache": {
-                                    "enabled": True,
-                                    "backend_type": "memory",
-                                }
-                            },
+                            "stores": {"response_cache": {"backend_type": "memory"}},
                         },
+                        "recipes": [
+                            {
+                                "name": "balance",
+                                "decisions": [
+                                    {
+                                        "name": "frontier",
+                                        "plugins": [
+                                            {
+                                                "type": "response_cache",
+                                                "configuration": {},
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -183,9 +194,16 @@ def test_build_observation_config_invokes_init_and_disables_cache(tmp_path):
         Path(argv[argv.index("--bindings") + 1]).read_text(encoding="utf-8")
     )
     assert bindings_doc["frontier"][0]["model"]
-    # The generated config's cache was forced off.
+    # The generated config's cache was forced off: the response_cache plugin
+    # is stripped (the store block alone never enables caching in v0.5).
     config = yaml.safe_load(Path(result["config"]).read_text(encoding="utf-8"))
-    assert config["global"]["stores"]["response_cache"]["enabled"] is False
+    assert config["global"]["stores"]["response_cache"] == {"backend_type": "memory"}
+    mounted = [
+        plugin
+        for decision in config["recipes"][0]["decisions"]
+        for plugin in decision.get("plugins") or []
+    ]
+    assert all(plugin["type"] != "response_cache" for plugin in mounted)
     assert config["global"]["services"]["router_replay"]["store_backend"] == "memory"
     assert result["cache_disabled"] is True
     assert result["bundle_sha256"] == "sha256:bundle"

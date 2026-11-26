@@ -371,17 +371,12 @@ def test_cold_start_model_eval_chain_end_to_end(
     scaffold10 = yaml.safe_load(
         (work / "cands" / "scaffold-lambda-10.yaml").read_text(encoding="utf-8")
     )
-    # The current result_to_config emits recipes[].signals.domains; the
-    # donor-era script emitted routing.signals.domains.
-    scaffold_domains = (
-        [
-            domain
-            for recipe in scaffold10.get("recipes") or []
-            for domain in ((recipe.get("signals") or {}).get("domains") or [])
-        ]
-        or ((scaffold10.get("routing") or {}).get("signals") or {}).get("domains")
-        or []
-    )
+    # The script emits recipes[].signals.domains (the canonical layout).
+    scaffold_domains = [
+        domain
+        for recipe in scaffold10.get("recipes") or []
+        for domain in ((recipe.get("signals") or {}).get("domains") or [])
+    ]
     observed_labels = {domain["name"] for domain in scaffold_domains}
     sidecar10 = json.loads(
         (work / "cands" / "candidate-lambda-10.provenance.json").read_text(
@@ -406,12 +401,22 @@ def test_cold_start_model_eval_chain_end_to_end(
     leaders = {decision["model_refs"][0] for decision in sidecar0["decisions"]}
     assert {ALIAS_A, ALIAS_B} <= leaders
 
-    # Candidate hardening (C5): cache and tools off.
+    # Candidate hardening (C5): the removed cache/tools switches are gone.
+    # Caching engages only through a response_cache plugin and none is
+    # mounted; the tools integration is simply absent from the document.
     candidate0 = yaml.safe_load(
         (work / "cands" / "candidate-lambda-0.yaml").read_text(encoding="utf-8")
     )
-    assert candidate0["global"]["stores"]["response_cache"]["enabled"] is False
-    assert candidate0["global"]["integrations"]["tools"]["enabled"] is False
+    assert candidate0["global"]["stores"]["response_cache"] == {
+        "backend_type": "memory"
+    }
+    assert "integrations" not in candidate0["global"]
+    mounted = {
+        plugin["type"]
+        for decision in candidate0["recipes"][0]["decisions"]
+        for plugin in decision.get("plugins") or []
+    }
+    assert "response_cache" not in mounted
 
     # Live final verdict on the frozen split: the seed baseline keeps only
     # the math/physics share, the lambda-0 candidate answers everything.
@@ -532,7 +537,7 @@ def test_cold_start_template_chain_end_to_end(
     # demand. The bundle's decision model is intentionally NOT declared -
     # init copies the pinned deployment.
     providers = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {
                 "name": "gw",
@@ -548,6 +553,11 @@ def test_cold_start_template_chain_end_to_end(
                     "name": alias,
                     "provider_model_id": alias,
                     "api_format": "openai",
+                    "context_window_size": 262144,
+                    "max_output_tokens": 8192,
+                    "description": description,
+                    "capabilities": capabilities,
+                    "modalities": modalities,
                     "backend_refs": [
                         {
                             "name": f"{alias}-backend",
@@ -558,32 +568,23 @@ def test_cold_start_template_chain_end_to_end(
                         }
                     ],
                 }
-                for alias in (ALIAS_A, ALIAS_B)
+                for alias, description, capabilities, modalities in (
+                    (
+                        ALIAS_A,
+                        "cheap generalist",
+                        ["chat", "text", "vision", "tools"],
+                        {"input": ["text", "image"], "output": ["text"]},
+                    ),
+                    (
+                        ALIAS_B,
+                        "strong reasoning generalist",
+                        ["chat", "text", "tools"],
+                        {"input": ["text"], "output": ["text"]},
+                    ),
+                )
             ],
         },
-        "routing": {
-            "modelCards": [
-                {
-                    "name": ALIAS_A,
-                    "context_window_size": 262144,
-                    "max_output_tokens": 8192,
-                    "description": "cheap generalist",
-                    "capabilities": ["chat", "text", "vision", "tools"],
-                    "modality": "multimodal",
-                },
-                {
-                    "name": ALIAS_B,
-                    "context_window_size": 262144,
-                    "max_output_tokens": 8192,
-                    "description": "strong reasoning generalist",
-                    "capabilities": ["chat", "text", "tools"],
-                    "modality": "text",
-                },
-            ]
-        },
-        "global": {
-            "stores": {"response_cache": {"enabled": False, "backend_type": "memory"}}
-        },
+        "global": {"stores": {"response_cache": {"backend_type": "memory"}}},
     }
     providers_path = tmp_path / "providers.yaml"
     providers_path.write_text(

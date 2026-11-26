@@ -230,6 +230,7 @@ def _golden_scaffold() -> dict:
                     "provider_model_id": SMALL,
                     "api_format": "openai",
                     "external_model_ids": {"openai": SMALL},
+                    "capabilities": ["chat"],
                     "backend_refs": [
                         {
                             "name": f"{SMALL}-backend",
@@ -245,6 +246,7 @@ def _golden_scaffold() -> dict:
                     "provider_model_id": LARGE,
                     "api_format": "openai",
                     "external_model_ids": {"openai": LARGE},
+                    "capabilities": ["chat"],
                     "backend_refs": [
                         {
                             "name": f"{LARGE}-backend",
@@ -257,41 +259,38 @@ def _golden_scaffold() -> dict:
                 },
             ],
         },
-        "routing": {
-            "modelCards": [
-                {"name": SMALL, "capabilities": ["chat"], "modality": "ar"},
-                {"name": LARGE, "capabilities": ["chat"], "modality": "ar"},
-            ],
-            "signals": {
-                "domains": [
-                    {
-                        "name": "math",
-                        "description": "d",
-                        "mmlu_categories": ["math"],
-                        "model_scores": [
-                            _score(LARGE, 0.80, True),
-                            _score(SMALL, 0.58),
-                        ],
-                    },
-                    {
-                        "name": "business",
-                        "description": "d",
-                        "mmlu_categories": ["business"],
-                        "model_scores": [_score(SMALL, 0.68), _score(LARGE, 0.55)],
-                    },
-                    {
-                        "name": "other",
-                        "description": "d",
-                        "mmlu_categories": ["other"],
-                        "model_scores": [_score(SMALL, 0.67), _score(LARGE, 0.48)],
-                    },
-                ]
-            },
-            "decisions": [],
-        },
+        "recipes": [
+            {
+                "name": "default",
+                "signals": {
+                    "domains": [
+                        {
+                            "name": "math",
+                            "description": "d",
+                            "mmlu_categories": ["math"],
+                            "model_scores": [
+                                _score(LARGE, 0.80, True),
+                                _score(SMALL, 0.58),
+                            ],
+                        },
+                        {
+                            "name": "business",
+                            "description": "d",
+                            "mmlu_categories": ["business"],
+                            "model_scores": [_score(SMALL, 0.68), _score(LARGE, 0.55)],
+                        },
+                        {
+                            "name": "other",
+                            "description": "d",
+                            "mmlu_categories": ["other"],
+                            "model_scores": [_score(SMALL, 0.67), _score(LARGE, 0.48)],
+                        },
+                    ]
+                },
+                "decisions": [],
+            }
+        ],
         "global": {
-            "stores": {"response_cache": {"enabled": True, "ttl_seconds": 3600}},
-            "integrations": {"tools": {"enabled": True}},
             "model_catalog": {
                 "embeddings": {"semantic": {"mmbert_model_path": "x"}},
                 "modules": {"prompt_guard": {"enabled": True}},
@@ -400,8 +399,8 @@ def test_complete_candidate_golden(tmp_path):
     assert models[LARGE]["backend_refs"][0]["endpoint"] == "127.0.0.1:8002"
     assert models[SMALL]["pricing"] == {"prompt_per_1m": 0.1, "completion_per_1m": 0.4}
     assert "pricing" not in models[LARGE]
-    # The scaffold's model cards merge onto their providers.models[] entries
-    # (the modality keyword is a removed form and stays out).
+    # The models' card facts ride their providers.models[] entries verbatim
+    # (the removed routing.modelCards form is gone).
     assert models[SMALL]["capabilities"] == ["chat"]
     assert "modality" not in models[LARGE]
 
@@ -437,7 +436,7 @@ def test_complete_candidate_decision_name_collision(tmp_path):
         {"name": "x/y", "backend_refs": []},
         {"name": "x-y", "backend_refs": []},
     ]
-    scaffold["routing"]["signals"]["domains"] = [
+    scaffold["recipes"][0]["signals"]["domains"] = [
         {
             "name": "math",
             "description": "d",
@@ -489,17 +488,13 @@ def test_bootstrap_runs_real_result_to_config(tmp_path):
     )
 
     # C4: the real script's cost-aware ranking - lambda 0.1 flips history.
-    # The current script emits recipes[].signals.domains; the donor-era
-    # script emitted routing.signals.domains.
+    # The script emits recipes[].signals.domains (the canonical layout).
     def scaffold_domains(scaffold: dict) -> list[dict]:
-        domains = [
+        return [
             domain
             for recipe in scaffold.get("recipes") or []
             for domain in ((recipe.get("signals") or {}).get("domains") or [])
         ]
-        return domains or (
-            ((scaffold.get("routing") or {}).get("signals") or {}).get("domains") or []
-        )
 
     def top_model(scaffold: dict, label: str) -> str:
         by_name = {d["name"]: d for d in scaffold_domains(scaffold)}

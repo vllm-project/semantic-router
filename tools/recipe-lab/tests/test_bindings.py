@@ -220,7 +220,7 @@ def fake_run_json_factory(outputs: dict[str, str]):
         if "init" in argv:
             out = argv[argv.index("--output") + 1]
             Path(out).write_text(
-                outputs.get("init", "version: v0.3\n"), encoding="utf-8"
+                outputs.get("init", "version: v0.5\n"), encoding="utf-8"
             )
             return {"valid": True}
         return {"bundles": []}
@@ -458,7 +458,7 @@ def test_run_bindings_generates_and_validates_candidates(tmp_path, monkeypatch):
         captured.append(list(argv))
         if "init" in argv:
             out = Path(argv[argv.index("--output") + 1])
-            out.write_text("version: v0.3\n", encoding="utf-8")
+            out.write_text("version: v0.5\n", encoding="utf-8")
             return {"valid": True}
         return {"bundles": []}
 
@@ -693,7 +693,7 @@ def test_bindings_output_is_byte_stable(tmp_path, monkeypatch):
     def run_json(argv, *, timeout_s, what):
         if "init" in argv:
             Path(argv[argv.index("--output") + 1]).write_text(
-                "version: v0.3\n", encoding="utf-8"
+                "version: v0.5\n", encoding="utf-8"
             )
             return {"valid": True}
         return {"bundles": []}

@@ -10,7 +10,7 @@ silently degrades to pure accuracy when token costs are missing and only
 prints ``Warning: --cost-lambda ...``; this module rejects that warning
 with exit 2 so a lambda scan can never silently become a no-op. The
 profile's every calib label must appear in the scaffold's
-``routing.signals.domains`` (the labels drive the decisions).
+``recipes[].signals.domains`` (the labels drive the decisions).
 
 C5 (completion): the scaffold is deliberately incomplete (§3.2-2/3: empty
 decisions, one shared backend endpoint, cache and tools enabled) and is
@@ -236,18 +236,14 @@ def run_result_to_config(
 
 
 def _scaffold_domains(scaffold: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    # The current result_to_config.py emits the canonical layout
-    # (recipes[].signals.domains); the donor-era script and the handcrafted
-    # fixtures emit routing.signals.domains. Read either.
+    # result_to_config.py emits the canonical layout
+    # (recipes[].signals.domains); the removed top-level routing block is
+    # rejected by verify_scaffold.
     domains = [
         domain
         for recipe in scaffold.get("recipes") or []
         for domain in ((recipe.get("signals") or {}).get("domains") or [])
     ]
-    if not domains:
-        domains = ((scaffold.get("routing") or {}).get("signals") or {}).get(
-            "domains"
-        ) or []
     return {domain.get("name"): domain for domain in domains}
 
 
@@ -258,6 +254,12 @@ def verify_scaffold(
     labels: set[str],
 ) -> None:
     """The scaffold must cover every profile label and every spec alias."""
+    if "routing" in scaffold:
+        raise ContractError(
+            "scaffold carries the removed top-level routing block; recipe-lab "
+            "reads the canonical layout only (recipes[].signals.domains) - "
+            "migrate the producing script's output with `vllm-sr config migrate`"
+        )
     domains = _scaffold_domains(scaffold)
     missing = sorted(labels - set(domains))
     if missing:
@@ -472,23 +474,10 @@ def complete_candidate(
     scaffold_catalog.pop("system", None)
     model_catalog = {**seed_catalog, **scaffold_catalog}
     # Canonical v0.5 emission (the form `vllm-sr config validate` and the
-    # Router accept): the scaffold's model cards merge onto their
-    # providers.models[] entries, the top-level routing block becomes the
-    # default recipe, and the response-cache/tools switches become their
-    # plugin-based defaults.
+    # Router accept): the providers.models[] entries carry their own model
+    # facts, and the response-cache/tools switches become their plugin-based
+    # defaults.
     models = _provider_models(scaffold, spec)
-    entries = {model["name"]: model for model in models}
-    for card in (scaffold.get("routing") or {}).get("modelCards") or []:
-        entry = entries.get(card.get("name"))
-        if entry is None:
-            entry = {"name": card["name"]}
-            entries[card["name"]] = entry
-            models.append(entry)
-        for field, value in card.items():
-            # modality is a removed keyword form in every case; the router
-            # reads a model's media facts from capabilities/modalities.
-            if field not in ("name", "modality") and field not in entry:
-                entry[field] = value
     config: dict[str, Any] = {
         "version": "v0.5",
         "listeners": [

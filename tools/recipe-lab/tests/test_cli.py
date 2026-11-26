@@ -85,7 +85,7 @@ def test_observe_lanes_keeps_separate_configs_for_splits_and_retries(
     spec["template"] = {"bundle": "mom-v1", "recipe": "balance"}
     spec["models"] = [{"name": "test-model", "endpoint": "http://127.0.0.1:8001/v1"}]
     spec["providers_config"] = "providers.yaml"
-    (tmp_path / "providers.yaml").write_text("version: v0.3\n", encoding="utf-8")
+    (tmp_path / "providers.yaml").write_text("version: v0.5\n", encoding="utf-8")
     spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
     template = {
         "bundle": "mom-v1",
@@ -99,7 +99,7 @@ def test_observe_lanes_keeps_separate_configs_for_splits_and_retries(
     def exclusive_init(argv, **kwargs):
         output = Path(argv[argv.index("--output") + 1])
         with output.open("x", encoding="utf-8") as f:
-            f.write("version: v0.3\n")
+            f.write("version: v0.5\n")
         return {}
 
     monkeypatch.setattr(

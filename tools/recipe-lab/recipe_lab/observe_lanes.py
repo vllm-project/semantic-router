@@ -245,7 +245,7 @@ def observation_providers_config(
                     "Lane observation placeholder; answers are irrelevant."
                 ),
                 "capabilities": ["chat", "text"],
-                "modality": "text",
+                "modalities": {"input": ["text"], "output": ["text"]},
             }
         )
     return {
@@ -361,16 +361,14 @@ def build_observation_config(
         )
 
     # Evaluation guard: force the response cache off in the generated config.
+    # Caching engages through response_cache plugins (the store block alone
+    # never enables it), so the guard strips those plugins.
     config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
         raise ContractError(f"{config_path} is not a YAML mapping")
-    stores = (config.get("global") or {}).get("stores") or {}
-    cache = stores.get("response_cache")
-    cache_disabled = False
-    if isinstance(cache, dict) and cache.get("enabled"):
-        cache["enabled"] = False
+    cache_disabled = _strip_response_cache_plugins(config)
+    if cache_disabled:
         config_path.write_text(_yaml_text(config), encoding="utf-8")
-        cache_disabled = True
 
     return {
         "config": str(config_path),
@@ -382,6 +380,24 @@ def build_observation_config(
         "placeholder_bindings": bindings,
         "cache_disabled": cache_disabled,
     }
+
+
+def _strip_response_cache_plugins(config: dict[str, Any]) -> bool:
+    """Drop every response_cache plugin; True when the config carried any."""
+    stripped = False
+    global_plugins = ((config.get("global") or {}).get("plugins")) or []
+    kept = [p for p in global_plugins if p.get("type") != "response_cache"]
+    if len(kept) != len(global_plugins):
+        stripped = True
+        config.setdefault("global", {})["plugins"] = kept
+    for recipe in config.get("recipes") or []:
+        for decision in recipe.get("decisions") or []:
+            plugins = decision.get("plugins") or []
+            kept = [p for p in plugins if p.get("type") != "response_cache"]
+            if len(kept) != len(plugins):
+                stripped = True
+                decision["plugins"] = kept
+    return stripped
 
 
 def lane_for_decision(decision: str) -> str:
