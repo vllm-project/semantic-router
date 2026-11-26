@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
@@ -110,33 +111,34 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 		return rejectionErr
 	}
 
-	deployVersion, err := postDashboardDeploy(ctx, httpClient, baseURL, token, rollbackProbeFragment)
-	if err != nil {
-		return err
-	}
+	deploy, deployErr := deployCheckingRouter(ctx, client, opts, httpClient, baseURL, token, rollbackProbeFragment)
+	deployVersion := deploy.Version
 	if containsVersionID(versionsBefore, deployVersion) {
 		return fmt.Errorf("deploy returned version %s, which already existed before the journey; the ledger assertions below cannot be trusted", deployVersion)
 	}
 
-	// From here the active config carries the probe. If any later step fails,
-	// restore best-effort so the rest of the suite does not run against the
-	// journey's leftovers.
+	// From here the active config may carry the probe, even when the deploy
+	// failed after saving it. If any later step fails, restore best-effort so
+	// the rest of the suite does not run against the journey's leftovers.
 	restored := false
 	defer func() {
-		if restored {
+		if restored || deployVersion == "" {
 			return
 		}
 		if _, _, rollbackErr := postDashboardRollback(ctx, httpClient, baseURL, token, deployVersion); rollbackErr != nil && opts.Verbose {
 			fmt.Printf("[Dashboard] cleanup rollback to %s failed: %v\n", deployVersion, rollbackErr)
 		}
 	}()
+	if deployErr != nil {
+		return deployErr
+	}
 
 	configDeployed, err := fetchDashboardConfigYAML(ctx, httpClient, baseURL, token)
 	if err != nil {
 		return fmt.Errorf("read config after deploy: %w", err)
 	}
 	if bytes.Equal(configDeployed, configBefore) {
-		return fmt.Errorf("deploy returned success (version %s) but the served config is unchanged, so the rollback assertions below would be vacuous", deployVersion)
+		return fmt.Errorf("deploy saved version %s but the served config is unchanged, so the rollback assertions below would be vacuous", deployVersion)
 	}
 	if !strings.Contains(string(configDeployed), rollbackProbeDecision) {
 		return fmt.Errorf("deployed config does not contain the %s decision: %s", rollbackProbeDecision, truncateString(string(configDeployed), 400))
@@ -169,9 +171,8 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 	if err != nil {
 		return err
 	}
-	if rollbackStatus != http.StatusOK || rollbackResult.Status != "success" {
-		return fmt.Errorf("rollback to %s: expected 200 success, got %d %q (message: %s)",
-			deployVersion, rollbackStatus, rollbackResult.Status, truncateString(rollbackResult.Message, 300))
+	if _, answerErr := dashboardSaveConfirmed(rollbackStatus, rollbackResult); answerErr != nil {
+		return fmt.Errorf("rollback to %s: %w", deployVersion, answerErr)
 	}
 	if rollbackResult.Version != deployVersion {
 		return fmt.Errorf("rollback answered with version %q, expected %q", rollbackResult.Version, deployVersion)
@@ -209,6 +210,8 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"deploy_version":                  deployVersion,
+			"deploy_confirmed":                deploy.Confirmed,
+			"router_applied_deploy":           deploy.RouterApplied,
 			"config_bytes":                    len(configBefore),
 			"config_restored_byte_for_byte":   true,
 			"versions_before":                 len(versionsBefore),
@@ -225,43 +228,125 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 	return nil
 }
 
+// dashboardDeployOutcome is a probe deploy the Dashboard saved: the backup
+// version it minted, whether it reported the Router's confirmation, and
+// whether the Router's served config changed.
+type dashboardDeployOutcome struct {
+	Version       string
+	Confirmed     bool
+	RouterApplied bool
+}
+
+// dashboardSaveConfirmed reads the answer to a deploy or rollback: 200 success
+// is a config the Router confirmed, and 202 unconfirmed one the Router did not
+// judge within the Dashboard's wait. Anything else is a failed save.
+func dashboardSaveConfirmed(status int, result dashboardDeployResult) (bool, error) {
+	switch {
+	case status == http.StatusOK && result.Status == "success":
+		return true, nil
+	case status == http.StatusAccepted && result.Status == "unconfirmed":
+		return false, nil
+	}
+	return false, fmt.Errorf("expected 200 success or 202 unconfirmed, got %d %q (message: %s)",
+		status, result.Status, truncateString(result.Message, 300))
+}
+
+// deployCheckingRouter deploys the fragment and holds the Dashboard to its
+// answer against the Router's /api/v1/config/hash: a confirmed deploy must
+// change the config the Router serves. An unconfirmed one claims nothing, so
+// the outcome only records whether the Router took it. The outcome keeps the
+// backup version whenever the Dashboard named one, for the caller's cleanup.
+func deployCheckingRouter(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	httpClient *http.Client,
+	baseURL, token, fragment string,
+) (dashboardDeployOutcome, error) {
+	before, err := routerActiveRuntimeHash(ctx, client, opts)
+	if err != nil {
+		return dashboardDeployOutcome{}, fmt.Errorf("read the Router's config before the deploy: %w", err)
+	}
+	deploy, err := postDashboardDeploy(ctx, httpClient, baseURL, token, fragment)
+	if err != nil {
+		return deploy, err
+	}
+	after, err := routerActiveRuntimeHash(ctx, client, opts)
+	if err != nil {
+		return deploy, fmt.Errorf("read the Router's config after the deploy: %w", err)
+	}
+	deploy.RouterApplied = after != before
+	if deploy.Confirmed && !deploy.RouterApplied {
+		return deploy, fmt.Errorf("the Dashboard confirmed deploy %s, but the Router still serves runtime config %q", deploy.Version, before)
+	}
+	return deploy, nil
+}
+
+// routerActiveRuntimeHash reads the hash of the runtime config the Router serves.
+func routerActiveRuntimeHash(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, error) {
+	session, err := fixtures.OpenRouterAPISession(ctx, client, opts)
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	resp, err := getJSON(ctx, session.HTTPClient(30*time.Second), session.URL("/api/v1/config/hash"))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("expected /api/v1/config/hash status 200, got %d: %s", resp.StatusCode, truncateString(string(resp.Body), 300))
+	}
+	var hashes struct {
+		ActiveRuntimeHash string `json:"active_runtime_hash"`
+	}
+	if err := json.Unmarshal(resp.Body, &hashes); err != nil {
+		return "", fmt.Errorf("decode /api/v1/config/hash: %w", err)
+	}
+	return hashes.ActiveRuntimeHash, nil
+}
+
 // postDashboardDeploy deploys the fragment in merge mode and returns the
-// backup version the dashboard minted for the outgoing config.
-func postDashboardDeploy(ctx context.Context, client *http.Client, baseURL, token, fragment string) (string, error) {
+// backup version the dashboard minted for the outgoing config, also when the
+// answer is a failure, so the caller can roll back a save that landed.
+func postDashboardDeploy(ctx context.Context, client *http.Client, baseURL, token, fragment string) (dashboardDeployOutcome, error) {
 	payload, err := json.Marshal(map[string]string{
 		"yaml": fragment,
 		"mode": "merge",
 	})
 	if err != nil {
-		return "", err
+		return dashboardDeployOutcome{}, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/api/router/config/deploy", bytes.NewReader(payload))
 	if err != nil {
-		return "", err
+		return dashboardDeployOutcome{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	setDashboardAuth(req, token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("deploy request failed: %w", err)
+		return dashboardDeployOutcome{}, fmt.Errorf("deploy request failed: %w", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
 	_ = resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("expected 200 for the probe deploy, got %d: %s", resp.StatusCode, truncateString(string(body), 300))
-	}
 	var result dashboardDeployResult
 	if decodeErr := json.Unmarshal(body, &result); decodeErr != nil {
-		return "", fmt.Errorf("deploy response is not JSON: %w (body: %s)", decodeErr, truncateString(string(body), 300))
+		return dashboardDeployOutcome{}, fmt.Errorf("deploy answered %d without JSON: %w (body: %s)",
+			resp.StatusCode, decodeErr, truncateString(string(body), 300))
 	}
-	if result.Status != "success" || result.Version == "" {
-		return "", fmt.Errorf("expected a success response naming the backup version, got status %q version %q (message: %s)",
-			result.Status, result.Version, truncateString(result.Message, 300))
+	outcome := dashboardDeployOutcome{Version: result.Version}
+	confirmed, err := dashboardSaveConfirmed(resp.StatusCode, result)
+	if err != nil {
+		return outcome, fmt.Errorf("probe deploy: %w", err)
 	}
-	return result.Version, nil
+	if result.Version == "" {
+		return outcome, fmt.Errorf("probe deploy answered %q without the backup version", result.Status)
+	}
+	outcome.Confirmed = confirmed
+	return outcome, nil
 }
 
 // postDashboardRollback requests a rollback and returns the HTTP status with

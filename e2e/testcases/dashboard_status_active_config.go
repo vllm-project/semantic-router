@@ -141,23 +141,24 @@ func testDashboardStatusActiveConfig(ctx context.Context, client *kubernetes.Cli
 		return fmt.Errorf("read active projection before the journey: %w", err)
 	}
 
-	deployVersion, err := postDashboardDeploy(ctx, httpClient, baseURL, token, statusProbeFragment)
-	if err != nil {
-		return err
-	}
+	deploy, deployErr := deployCheckingRouter(ctx, client, opts, httpClient, baseURL, token, statusProbeFragment)
+	deployVersion := deploy.Version
 
-	// From here the active config carries the probe. If any later step fails,
-	// restore best-effort so the rest of the suite does not run against the
-	// journey's leftovers.
+	// From here the active config may carry the probe, even when the deploy
+	// failed after saving it. If any later step fails, restore best-effort so
+	// the rest of the suite does not run against the journey's leftovers.
 	restored := false
 	defer func() {
-		if restored {
+		if restored || deployVersion == "" {
 			return
 		}
 		if _, _, rollbackErr := postDashboardRollback(ctx, httpClient, baseURL, token, deployVersion); rollbackErr != nil && opts.Verbose {
 			fmt.Printf("[Dashboard] cleanup rollback to %s failed: %v\n", deployVersion, rollbackErr)
 		}
 	}()
+	if deployErr != nil {
+		return deployErr
+	}
 
 	configDeployed, err := fetchDashboardConfigYAML(ctx, httpClient, baseURL, token)
 	if err != nil {
@@ -168,7 +169,7 @@ func testDashboardStatusActiveConfig(ctx context.Context, client *kubernetes.Cli
 	}
 	hashDeployed := sha256Hex(configDeployed)
 	if hashDeployed == hashBefore {
-		return fmt.Errorf("deploy returned success (version %s) but the served config hash is unchanged, so the projection assertions below would be vacuous", deployVersion)
+		return fmt.Errorf("deploy saved version %s but the served config hash is unchanged, so the projection assertions below would be vacuous", deployVersion)
 	}
 
 	projectionDeployed, err := awaitDashboardActiveProjection(ctx, httpClient, baseURL, token, func(projection dashboardActiveProjection) bool {
@@ -195,9 +196,8 @@ func testDashboardStatusActiveConfig(ctx context.Context, client *kubernetes.Cli
 	if err != nil {
 		return err
 	}
-	if rollbackStatus != http.StatusOK || rollbackResult.Status != "success" {
-		return fmt.Errorf("rollback to %s: expected 200 success, got %d %q (message: %s)",
-			deployVersion, rollbackStatus, rollbackResult.Status, truncateString(rollbackResult.Message, 300))
+	if _, answerErr := dashboardSaveConfirmed(rollbackStatus, rollbackResult); answerErr != nil {
+		return fmt.Errorf("rollback to %s: %w", deployVersion, answerErr)
 	}
 	configRestored, err := fetchDashboardConfigYAML(ctx, httpClient, baseURL, token)
 	if err != nil {
@@ -238,6 +238,8 @@ func testDashboardStatusActiveConfig(ctx context.Context, client *kubernetes.Cli
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"deploy_version":                 deployVersion,
+			"deploy_confirmed":               deploy.Confirmed,
+			"router_applied_deploy":          deploy.RouterApplied,
 			"projection_version_before":      projectionBefore.ActiveVersion,
 			"projection_version_deployed":    projectionDeployed.ActiveVersion,
 			"projection_version_restored":    projectionRestored.ActiveVersion,
