@@ -15053,6 +15053,340 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.884
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.280",
+        "averaged_runs": 3,
+        "context_window": "512K",
+        "harness": "claude-code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.385
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.280",
+        "context_window": "512K",
+        "harness": "claude-code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-deepswe@1.0.0",
+      "metrics": {
+        "resolved": 0.646
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 3,
+        "context_window": "1M",
+        "harness": "mini-swe-agent",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.518
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "official evaluation code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "subset": "public",
+        "task_count": 600,
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.631
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.116",
+        "harness": "claude-code",
+        "maximum_output_tokens": "256K",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "subset": "full",
+        "thinking_mode": "enabled",
+        "tool_policy": "with_tools",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.708
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.595
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.889
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.9
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.03
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-deepswe@1.0.0",
+      "metrics": {
+        "resolved": 0.097
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.158
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.375
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "tool_policy": "with_tools",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/briefcase@1.0.0",
       "benchmark_profile": "independent-agent",
       "evidence": {
@@ -60783,6 +61117,804 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.884,
+          "status": "available",
+          "value": 0.884,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 88.4
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [
+        "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 88.4,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.884,
+          "status": "available",
+          "value": 0.884,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [
+        "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.889,
+          "status": "available",
+          "value": 0.889,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.708,
+          "status": "available",
+          "value": 0.708,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 70.8
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 70.8,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.708,
+          "status": "available",
+          "value": 0.708,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+        "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "meta/muse-spark-1.3",
       "provenance": [],
       "reasoning_effort": "minimal",
@@ -103185,6 +104317,115 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Open-weight multimodal Meituan MoE model for long-horizon coding and agentic work.",
+      "display_name": "LongCat-2.5",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5",
+        "type": "open_weights"
+      },
+      "family": "longcat-2.5",
+      "id": "meituan/longcat-2.5",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "1.6T (48B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "publisher": "Meituan / LongCat",
+      "reasoning_family": "longcat-2.5",
+      "released_at": "2026-11-02",
+      "revision": "60032d966e6369b822f0e61d2eff01368d38b111",
+      "tags": [
+        "open_weights",
+        "frontier",
+        "multimodal",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Meituan",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight Meituan MoE language model for long-context coding and agentic work.",
+      "display_name": "LongCat-2.0",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0",
+        "type": "open_weights"
+      },
+      "family": "longcat-2.0",
+      "id": "meituan/longcat-2.0",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "1.6T (48B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "publisher": "Meituan / LongCat",
+      "reasoning_family": "longcat-2.0",
+      "released_at": "2026-06-30",
+      "revision": "834bf5ffe3047aa9f6cc7a64a9bc068b146b8274",
+      "tags": [
+        "open_weights",
+        "moe",
+        "coding",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Meituan",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "structured_output",
         "vision",
         "audio",
@@ -109684,6 +110925,55 @@ const builtInCatalogJSON = `{
       "conformance": {
         "status": "unverified"
       },
+      "default_base_url": "https://api.longcat.chat/openai/v1",
+      "default_protocol": "openai/chat-completions@1",
+      "description": "LongCat models from Meituan through the LongCat API Platform.",
+      "display_name": "LongCat",
+      "id": "longcat",
+      "models": [
+        {
+          "catalog": "meituan/longcat-2.5",
+          "id": "LongCat-2.5",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "max_output_tokens": 262144
+          },
+          "verification": {
+            "source": "https://longcat.ai/platform/docs/api/chat",
+            "status": "claimed",
+            "verified_at": "2026-11-23"
+          }
+        }
+      ],
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "reasoning_transport": "thinking_object",
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
       "default_base_url": "https://api.meta.ai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Muse models through Meta's OpenAI-compatible Model API.",
@@ -111761,6 +113051,20 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/stepfun-ai/Step3-VL-10B",
             "status": "claimed",
             "verified_at": "2026-09-06"
+          }
+        },
+        {
+          "catalog": "meituan/longcat-2.0",
+          "id": "meituan-longcat/LongCat-2.0-FP8",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://docs.sglang.io/cookbook/autoregressive/Meituan/LongCat-2.0",
+            "status": "claimed",
+            "verified_at": "2026-11-23"
           }
         }
       ],
@@ -114434,6 +115738,26 @@ const builtInCatalogJSON = `{
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "longcat-2.0",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "disabled",
+      "id": "longcat-2.5",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
     },
     {
       "default_mode": "disabled",
