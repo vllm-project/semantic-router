@@ -22,6 +22,7 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/v1/messages/count_tokens` | Anthropic Messages | Counts with the Messages backend of the named model, or of the model that last served the session, at its `count_tokens` path; otherwise answers with its own estimate, which counts text by tokenizer-style pieces rather than bytes. No turn is routed or recorded. A recipe with candidate requirements, or with a decision that reads content (any signal but conversation shape and context size) or has a plugin, always gets the estimate. Rate limits, token budgets included, admit a count by its input before it is forwarded |
 | `POST` | `/v1/images/generations` | OpenAI Images | Routed on the prompt like any text request, and answered only by a decision whose `output` is an image. See [Images API](#images-api) |
+| `POST` | `/v1/audio/speech` | OpenAI Speech | Routed on the input text to a model with `api_format: speech`. The audio response is forwarded unchanged. See [Speech API](#speech-api) |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
 | `POST` | `/openai/responses` | Azure OpenAI Responses | Accepts the dated `api-version`; the model is in the request body and the Responses service must be enabled |
 | `POST` | `/openai/v1/responses` | Azure OpenAI Responses | The model is in the request body and the Responses service must be enabled |
@@ -356,6 +357,44 @@ with `400` `unsupported_capability` before any model is called, unless its
 [`request_params`](../tutorials/plugin/request-params) `max_n` caps `n` to 1
 or its `blocked_params` removes `n`.
 
+### Speech API
+
+```bash
+curl -sS http://localhost:8899/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "tts",
+    "input": "Hello from the Speech API.",
+    "voice": "alloy"
+  }' \
+  --output speech.wav
+```
+
+The Router routes a Speech API request on its `input` text, the same way it
+routes any other request on the user's text. The selected model must serve
+`api_format: speech` (catalog protocol `openai/audio-speech@1`). A chat,
+Responses, Messages or Images model fails closed with `unsupported_capability`
+before the backend is called.
+
+The response is the backend's audio bytes and response headers, forwarded
+unchanged. It is not a JSON completion. Response-side policy, the response
+cache, token limits and cost estimates do not apply, and the request completes
+with zero token usage. A non-2xx JSON error keeps the existing error path,
+including the backend's message.
+
+Request-text checks, such as PII detection and masking, still run, on `input`
+only. `input` is the text the Router decodes into the request and encodes back,
+so a masking rewrite reaches the backend. `instructions`, `ref_text` and the
+other fields are forwarded as sent and are not checked.
+
+`stream: true` and any `stream_format` are rejected. An unknown top-level field
+is a `400`. Named fields, including the vLLM-Omni extension object
+`extra_params`, are forwarded as sent. The Router rewrites only `model`.
+
+Built-in virtual models do not advertise this protocol. Point `model` at a
+concrete speech model. Plain vLLM does not serve `POST /v1/audio/speech`; the
+built-in catalog lists the protocol on the `vllm-omni` provider.
+
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
@@ -469,8 +508,8 @@ decision, or request content:
 | `image_route_required` | 400 | `invalid_request_error` | An [Images API](#images-api) request reached no decision whose output is an image. |
 | `image_generation_forbidden` | 400 | `invalid_request_error` | The matched decision answers with a generated image, and the request's `tool_choice` is `none`. |
 | `tool_selection_failed` | 503 | `server_error` | The matched decision's [tool selection](../tutorials/plugin/tools.md#selection) failed or timed out, and its `select.on_error` is `fail`. |
-| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget, its limit, what it has left and the estimate, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do. A user budget's refusal carries `Retry-After` until its window starts again. |
-| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. |
+| `budget_exceeded` | 429 | `rate_limit_error` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) does not cover the call's estimated cost, or has nothing left. The message names the budget and its limit, what it has left for the call now, as `x-vsr-budget-scope` and `x-vsr-budget-remaining` do, then what the budget spent and what calls in flight hold, and the call's estimate. When what the budget spent leaves no room, the message starts `out of budget` and the reply carries `x-should-retry: false`, with `Retry-After` until a user budget's window starts again; on the Responses API `error.type` is then `usage_limit_reached`, with `resets_at`, and on the Messages API the reply carries `anthropic-ratelimit-unified-overage-disabled-reason: budget_exceeded`. When only calls in flight hold the room, the reply asks for a retry with `Retry-After: 5` and `x-should-retry: true`. |
+| `budget_unpriced` | 403 | `permission_error` | The selected model has no price in the spend budgets' currency, and `budgets.unpriced` is `refuse`. The reply carries `x-should-retry: false`. |
 
 The Router logs each of these failures at `WARN`, under the request's
 `x-request-id`, with the code and its own reason: the model the request named,
@@ -594,7 +633,9 @@ List and aggregate requests accept filters such as `recipe`, `decision`,
 approval reviews, `request_kind=codex_approval_review`, `review_status`,
 `review_outcome`, and `review_risk`. `turn_id` matches a record's `turn_id` or
 `parent_turn_id`: the calls one Codex turn sent, and the approval reviews and
-subagent calls it started. `since` keeps the records at or after an RFC 3339
+subagent calls it started. `has_session=true` keeps the records that belong to
+a session, the ones the runs list folds into agent runs, so totals can cover
+exactly what a sessions view lists. `since` keeps the records at or after an RFC 3339
 timestamp, such as `2026-11-15T15:00:00Z` (send an offset's `+` as `%2B`), so
 the list and the aggregate cover one window; [`vllm-sr usage`](../tutorials/plugin/router-replay#usage-in-the-terminal)
 reads both that way. Pagination uses `limit`
@@ -720,10 +761,11 @@ costs; infrastructure charges and billing adjustments are excluded.
 | `pricing_source` | `configured` for the model's `providers.models[].pricing`, or `catalog_list_price` when none is set and the built-in catalog lists a price for the model's provider. A list price is an estimate. |
 | `caller_login` | The model's backends take the client's own login (`auth.credential: caller`). Its cost is what the tokens would cost at API prices, not what the client's plan charges. |
 | `unpriced_reason` | Why `actual_cost` is missing: `no_usage`, `pricing_not_configured`, or `counted_in_parent` for a Looper hop's own record. |
+| `partial_usage` | The usage is what a stream reported before it was cut short, by its client or its backend: the prompt in full, as Anthropic counts it in `message_start`, and the output only as far as the stream had counted it. `actual_cost` prices that much, the record counts as priced in `summary.coverage` and in the run view, and a spend budget charges that price (`settlement: partial_usage`). A stream that reported no usage before its end, as an OpenAI stream sends it last, keeps none. |
 | `baseline_source` | `configured_model`, `recipe_most_expensive` (the default), or `selected_model` for a direct request. |
 | `baseline_unavailable` | Why a priced record has no baseline: `pricing_not_configured` or `currency_mismatch`. A configured baseline that cannot be used never falls back to the default. |
 | `router_calls` | Model calls the Router made itself to answer the request, entries by task `kind` and `model`. |
-| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls, and the `settlement`: `usage`, `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
+| `budget` | The tightest [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) of the request: its `scope` (`run` or `user/<name>`), `currency`, `limit`, what it had `remaining` after the request, the `estimate` the call reserved, what the request was `charged` with its Router calls (a Looper request's with every call of its run, a hop's with its own), and the `settlement`: `usage`, `partial_usage` for a stream cut short, charged the usage it reported (`partial_usage` above), `estimate` for a reply without usage that can be priced, or `released` when no provider answered. A refused request is `charged` only what its Router calls cost, and has no `charged` when they cost nothing. `unpriced_calls` counts the calls with no price, which spent nothing. |
 
 A Looper request's cost is its calls, so its record has no `actual_cost` and one
 `router_calls` entry of kind `looper`: `calls`, the request's `prompt_tokens`
@@ -733,7 +775,10 @@ when its model has no price, it reported no usage or incomplete usage, it is in
 another currency than the first priced call, or no attempt trace kept it
 (`attempt_not_traced`: a call past the trace's bound of 100 calls or 64 KiB).
 Every Looper algorithm traces its calls, so each one is priced at its own
-model's rates. An unpriced call is never counted as free.
+model's rates. An unpriced call is never counted as free. An attempt a
+[spend budget](../tutorials/global/api-and-observability.md#spend-budgets)
+refused reached no model: its trace reason is `budget_exceeded` or
+`budget_unpriced`, and it is not counted in `calls`.
 
 Request-scoped runtime calls also appear here: `decision_model` for native
 questions and selections, `systemone` for remote System One exchanges, and
@@ -851,7 +896,7 @@ request lacks pricing.
 | `priced_records` | Records whose every cost has a price. |
 | `partly_priced_records` | Records with some costs priced, such as a Looper request with an unpriced call. |
 | `unpriced_records` | Records with no price at all. |
-| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced, or `price_not_recorded` for a record written before the Router recorded why. |
+| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced unless it is a stream cut short whose usage is priced (`cost_accounting.partial_usage`), or `price_not_recorded` for a record written before the Router recorded why. |
 | `looper_hop_records` | Records of Looper hops, left out of the three counts because the record of the request that made each hop counts its call. |
 | `list_price_records` | Priced records whose rate is a catalog list price. |
 | `caller_login_records` | Records served on a client's own login, priced or not. |
@@ -901,7 +946,8 @@ Replay lifecycle values describe what the recorder observed:
   upstream response failed. The record keeps the status the client received,
   and `terminal_reason` says why, as in the table below.
 - `aborted`: the stream ended without a valid terminal frame, for example
-  after a disconnect or timeout.
+  after a disconnect or timeout, or, behind Envoy, after a local reply of
+  Envoy's own, which the Router never sees.
 
 An HTTP `200` response header alone does not make a streaming record
 `completed`. A stream that reached its terminal frame does, even when the
@@ -910,13 +956,13 @@ asked to omit.
 
 | `terminal_reason` of a `failed` record | When |
 | --- | --- |
-| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A held stream's refusal arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
+| `request_rejected` | The Router refused the request after routing it, with a `4xx`: before it sent the request to a backend, such as for a capability the selected model's wire format lacks or a `fast_response` that sets `block: true`, or in place of the answer, such as a `response_guard` block. A stream's refusal, held or of a Looper answer, arrives as its error event and keeps the `200`. A guard overload is a refusal its client retries, whether as `429` or as `529`, and so is a fallback candidate that needs a delegated credential the request does not carry. |
 | `request_budget_exceeded` | The request does not fit the [request budget](#request-budget-errors) of any candidate. |
 | `budget_exceeded`, `budget_unpriced` | A [spend budget](../tutorials/global/api-and-observability.md#spend-budgets) refused the call before it was sent. |
 | `request_processing_failed` | The Router failed after routing. It answered with its own `5xx`, such as for a failed RAG retrieval, context compression that fails closed, a cached answer it cannot serve, a fast response it cannot encode, or a failed context recovery follow-up, or the request failed with an internal error. In standalone mode the record of such an error keeps the gateway's `500`. Behind Envoy, the ext_proc filter's `failure_mode_allow` decides what the client gets, so the record has no status. |
-| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output, and answers `502` in place of the upstream's `200`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
+| `upstream_invalid_response` | The Router cannot read or pass on the upstream answer, such as a cut body or one with no output whose stop does not explain it (an answer that ended its turn with nothing to say is an empty completion; see [Empty answers](../installation/protocol-compatibility#empty-answers)), and answers `502` in place of the upstream's `200`, also to a streaming client whose backend answered with one body instead of a stream. In standalone mode that includes a body the backend closes before its declared length; behind Envoy, Envoy answers such a body with its own `502` before the Router reads it, so that record ends `aborted`. A held stream it read to its end but could not rebuild an answer from ends this way too, under its `200`. |
 | `upstream_error_response` | The upstream answered with an error status, or its stream carried an error event, which keeps the `200` the stream began with. A fallback chain that ends without a success keeps the answer of its last attempt, in both modes. |
-| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, and, in both modes, a fallback chain whose last attempt did not answer. |
+| `upstream_<failure>` | No backend answered: in standalone mode, the gateway's `503` or `504` local reply, such as `upstream_connect_failure` or `upstream_reset`, once the fallback chain has tried its candidates, and, in both modes, a fallback chain whose last candidate, which the Router calls itself, did not answer. In standalone mode a buffered answer that a timeout stops partway ends `upstream_timeout` with the Router's `504`. Behind Envoy no candidate follows a first attempt that got no answer: the client gets Envoy's local reply, which the Router never sees, and the record ends `aborted` with `stream_ended_before_terminal_response` and no status, as for a client that left before the answer began. |
 
 ## Which port should I use?
 

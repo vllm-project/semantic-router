@@ -113,18 +113,16 @@ func chatToolCallReply(finish string, completionTokens int) string {
 		`"usage":{"prompt_tokens":20,"completion_tokens":%d,"total_tokens":%d}}`, finish, completionTokens, 20+completionTokens)
 }
 
-// chatToolCallStream is the stream of a call the output limit cut inside its
-// arguments, ending with finish.
-func chatToolCallStream(finish string) []string {
+func chatToolCallStream(finish, arguments, usage string) []string {
 	chunk := func(fields string) string {
 		return `data: {"id":"chatcmpl-limit","object":"chat.completion.chunk","created":1,"model":"worker",` + fields + "}\n\n"
 	}
 	return []string{
 		chunk(`"choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]`),
 		chunk(`"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"send_email","arguments":""}}]},"finish_reason":null}]`),
-		chunk(`"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"body\": \"Dear team, the review moves to ten."}}]},"finish_reason":null}]`),
+		chunk(fmt.Sprintf(`"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":%q}}]},"finish_reason":null}]`, arguments)),
 		chunk(`"choices":[{"index":0,"delta":{},"finish_reason":"` + finish + `"}]`),
-		chunk(`"choices":[],"usage":{"prompt_tokens":20,"completion_tokens":50,"total_tokens":70}`),
+		chunk(`"choices":[],"usage":` + usage),
 		"data: [DONE]\n\n",
 	}
 }
@@ -181,13 +179,42 @@ func TestToolCallStopAtTheRoutersOutputLimitReachesEveryClientAsALimitStop(t *te
 			// as some of its tool parsers end a call the limit cut.
 			for _, finish := range []string{"length", "tool_calls"} {
 				_, ctx = sendOutputLimitToolTurn(t, router, client, true)
-				body, _ = answerOutputLimitToolTurn(t, router, ctx, "text/event-stream", chatToolCallStream(finish)...)
+				reads := chatToolCallStream(finish, `{"body": "Dear team, the review moves to ten.`,
+					`{"prompt_tokens":20,"completion_tokens":50,"total_tokens":70}`)
+				body, _ = answerOutputLimitToolTurn(t, router, ctx, "text/event-stream", reads...)
 				for _, fragment := range streamed[client].limit {
 					require.Contains(t, body, fragment, "stream ending with %s", finish)
 				}
 				require.NotContains(t, body, streamed[client].toolCall[0], "stream ending with %s", finish)
 				require.NotContains(t, body, "invalid_stream_tool_arguments", "stream ending with %s", finish)
 			}
+		})
+	}
+}
+
+func TestChatStreamUsesOutputTokenAliasAtTheRequestLimit(t *testing.T) {
+	router := outputLimitToolRouter(t)
+	for _, test := range []struct {
+		name   string
+		usage  string
+		finish string
+	}{
+		{"alias reaches limit", `{"input_tokens":20,"output_tokens":50,"total_tokens":70}`, "length"},
+		{"alias below limit", `{"input_tokens":20,"output_tokens":49,"total_tokens":69}`, "tool_calls"},
+		{"canonical below limit", `{"prompt_tokens":20,"completion_tokens":49,"output_tokens":50,"total_tokens":69}`, "tool_calls"},
+		{"canonical reaches limit", `{"prompt_tokens":20,"completion_tokens":50,"output_tokens":49,"total_tokens":70}`, "length"},
+		{"canonical with an invalid alias", `{"prompt_tokens":20,"completion_tokens":50,"output_tokens":"unavailable","total_tokens":70}`, "length"},
+		{"null canonical counter", `{"prompt_tokens":20,"completion_tokens":null,"output_tokens":50,"total_tokens":20}`, "tool_calls"},
+		{"uppercase alias", `{"prompt_tokens":20,"OUTPUT_TOKENS":50,"total_tokens":20}`, "tool_calls"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			sent, ctx := sendOutputLimitToolTurn(t, router, llmprotocol.OpenAIChatV1, true)
+			require.Contains(t, string(sent), `"max_completion_tokens":50`)
+			reads := chatToolCallStream("tool_calls", `{"body":"The review moves to ten."}`, test.usage)
+			body, _ := answerOutputLimitToolTurn(t, router, ctx, "text/event-stream", reads...)
+			require.Contains(t, body, fmt.Sprintf(`"finish_reason":%q`, test.finish))
+			require.Equal(t, 1, strings.Count(body, `"finish_reason":"`))
+			require.Contains(t, body, "data: [DONE]\n\n")
 		})
 	}
 }

@@ -13,9 +13,15 @@ def padded(length: int) -> int:
 
 
 def cost(item: WorkItem) -> int:
-    """Tokens an item costs a forward: its token IDs, or the ``cost`` its family sets (images, audio)."""
+    """Tokens an item costs a forward: its token IDs, or the ``cost`` its family sets (images, audio).
+
+    A family's declared cost can be genuinely zero (a question whose share of
+    a shared state and own block both come out to zero), so only an unset
+    cost falls back to the token IDs; ``0 or len(item.ids)`` would silently
+    replace that declared zero.
+    """
     declared: int | None = getattr(item, "cost", None)
-    return declared or len(item.ids)
+    return declared if declared is not None else len(item.ids)
 
 
 def length_class(length: int) -> int:
@@ -39,7 +45,13 @@ def micro_batches(lengths: list[int], budget: int | None) -> list[list[int]]:
         raise ValueError("a single question exceeds the forward token budget")
     groups: list[list[int]] = []
     while order:
-        rows = budget // padded(lengths[order[0]])
+        padded_length = padded(lengths[order[0]])
+        if padded_length == 0:
+            # A zero cost adds nothing to the budget check below, and every
+            # row still in `order` is zero cost too (sorted longest first).
+            groups.append(sorted(order))
+            break
+        rows = budget // padded_length
         groups.append(sorted(order[:rows]))
         order = order[rows:]
     return groups

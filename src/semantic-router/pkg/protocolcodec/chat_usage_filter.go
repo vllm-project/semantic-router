@@ -15,6 +15,9 @@ import (
 // gains "usage": null and keeps its other bytes; other undecorated frames
 // retain their original bytes. A provider error event ends the public stream:
 // the filter drops it and every later frame, and UpstreamFailed reports it.
+// Tool-call argument fragments are additionally held until their call
+// finishes, so an upstream that dies mid-call cannot feed the client an
+// arguments string no JSON decoder can read.
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
@@ -30,6 +33,19 @@ type ChatUsageStreamFilter struct {
 	// the Router then reports as the stop, as the neutral stream decodes it.
 	outputLimit int64
 	held        *heldChatFinish
+	// Tool-call argument fragments held until their call finishes.
+	// releaseHeldToolFrames sends them verbatim when the call finishes as
+	// sent, and repairHeldToolCalls closes them when the stream ends without
+	// one.
+	heldFrames   [][]byte
+	heldFirst    []byte
+	heldOrder    []heldChatToolKey
+	heldCalls    map[heldChatToolKey]*heldChatToolCall
+	maximumDepth int
+	// The public filter can release its hold before the codec rejects the
+	// same read. Keep the prior frames available until the caller decides
+	// which output to send.
+	heldBeforeRead [][]byte
 }
 
 // heldChatFinish holds a frame that ends the choice for its tool calls and the
@@ -45,20 +61,50 @@ type chatFrameEvidence struct {
 	outputTokens   *int64 // the completion tokens of the frame's usage
 }
 
+// heldChatToolCall accumulates one streamed tool call's identity and argument
+// fragments. The key pairs the choice index with the call's index inside the
+// choice, because one choice can stream several calls in parallel.
+type heldChatToolKey struct {
+	choice int
+	tool   int
+}
+
+type heldChatToolCall struct {
+	id        string
+	name      string
+	callType  string
+	arguments []byte
+}
+
+// chatFilterToolCallWire is the tool-call delta the public filter reads to
+// hold a call's arguments together.
+type chatFilterToolCallWire struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
 // errChatUpstreamErrorFrame marks a provider error event. The filter drops it
 // and every frame after it; the Router sends its own error frame instead.
 var errChatUpstreamErrorFrame = errors.New("chat stream carried a provider error event")
 
 func NewChatUsageStreamFilter(limit int) *ChatUsageStreamFilter {
-	return NewChatPublicStreamFilter(limit, false)
+	return NewChatPublicStreamFilter(limit, false, llmprotocol.DefaultPolicy().Limits.JSONDepth)
 }
 
 // NewChatPublicStreamFilter preserves opted-in usage while removing provider
-// decorations that cannot appear in the public Chat response contract.
-func NewChatPublicStreamFilter(limit int, includeUsage bool) *ChatUsageStreamFilter {
+// decorations that cannot appear in the public Chat response contract. The
+// maximumDepth bounds the JSON a held call's arguments may nest when the
+// stream ends without a finish and the repair closes them.
+func NewChatPublicStreamFilter(limit int, includeUsage bool, maximumDepth int) *ChatUsageStreamFilter {
 	return &ChatUsageStreamFilter{
 		framer: newSSEFramer(limit), stripUsage: !includeUsage,
-		seenFinish: make(map[int]bool),
+		seenFinish:   make(map[int]bool),
+		maximumDepth: maximumDepth,
 	}
 }
 
@@ -72,6 +118,7 @@ func (filter *ChatUsageStreamFilter) Push(chunk []byte) ([]byte, error) {
 	if filter.finalized {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already finalized", nil)
 	}
+	filter.heldBeforeRead = filter.heldFrames
 	frames, err := filter.framer.Push(chunk)
 	if err != nil {
 		return nil, filter.poison(err)
@@ -105,11 +152,21 @@ func (filter *ChatUsageStreamFilter) Finalize() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	held, err := filter.releaseHeld(false)
+	if repaired, ok := filter.repairHeldToolCalls(); ok {
+		mainHeld, heldErr := filter.releaseHeld(false)
+		if heldErr != nil {
+			return nil, filter.poison(heldErr)
+		}
+		return append(append(output, mainHeld...), repaired...), nil
+	}
+	if released := filter.routeRelease(filter.releaseHeldToolFrames()); len(released) != 0 {
+		output = append(output, released...)
+	}
+	mainHeld, err := filter.releaseHeld(false)
 	if err != nil {
 		return nil, filter.poison(err)
 	}
-	output = append(output, held...)
+	output = append(output, mainHeld...)
 	output = append(output, filter.pendingTerminal...)
 	filter.pendingTerminal = nil
 	return output, nil
@@ -126,18 +183,19 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 		if filter.outputLimit > 0 {
 			evidence = &chatFrameEvidence{}
 		}
-		filtered, keep, hasData, terminal, err := filterChatUsageFrame(
+		filtered, keep, hasData, terminal, choices, err := filterChatUsageFrame(
 			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, evidence,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
 			if len(filter.pendingTerminal) == 0 {
 				filter.upstreamFailed = true
-				held, heldErr := filter.releaseHeld(false)
+				output.Write(filter.routeRelease(filter.releaseHeldToolFrames()))
+				mainHeld, heldErr := filter.releaseHeld(false)
 				if heldErr != nil {
 					return nil, filter.poison(heldErr)
 				}
-				output.Write(held)
+				output.Write(mainHeld)
 				continue
 			}
 			// After [DONE], an error event is data after the terminal, as before.
@@ -153,13 +211,26 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			))
 		}
 		if terminal {
-			held, heldErr := filter.releaseHeld(false)
+			output.Write(filter.routeRelease(filter.releaseHeldToolFrames()))
+			mainHeld, heldErr := filter.releaseHeld(false)
 			if heldErr != nil {
 				return nil, filter.poison(heldErr)
 			}
-			output.Write(held)
+			output.Write(mainHeld)
 			filter.pendingTerminal = append(filter.pendingTerminal[:0], filtered...)
 			continue
+		}
+		if keep && hasData && filter.holdToolFrame(filtered, choices) {
+			continue
+		}
+		// The held fragments go out only when the call's fate is decided: a
+		// finish reason completes or abandons the call, [DONE] and provider
+		// error events release below, and a stream that ends without either
+		// reaches the repair. Frames that carry no finish — usage-only
+		// chunks, empty deltas, content — say nothing about the call and
+		// keep the hold.
+		if keep && hasData && chatChoicesCarryFinish(choices) {
+			output.Write(filter.routeRelease(filter.releaseHeldToolFrames()))
 		}
 		passed, err := filter.pass(filtered, keep, first, evidence)
 		if err != nil {
@@ -168,6 +239,20 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 		output.Write(passed)
 	}
 	return output.Bytes(), nil
+}
+
+// routeRelease returns the released tool-argument frames, or queues them
+// behind the output limit's held frames when that hold is active, so both
+// holds emit the stream in arrival order.
+func (filter *ChatUsageStreamFilter) routeRelease(frames [][]byte) []byte {
+	if len(frames) == 0 {
+		return nil
+	}
+	if filter.held != nil {
+		filter.held.frames = append(filter.held.frames, frames...)
+		return nil
+	}
+	return bytes.Join(frames, nil)
 }
 
 // pass returns what the client gets now of a filtered frame. A frame that
@@ -210,12 +295,204 @@ func (filter *ChatUsageStreamFilter) releaseHeld(atLimit bool) ([]byte, error) {
 	return bytes.Join(held.frames, nil), nil
 }
 
+// holdToolFrame buffers a frame whose choices stream tool-call arguments. The
+// Router cannot know a call is complete until its finish arrives, so holding
+// the fragments keeps an upstream that dies mid-call from feeding the client
+// an arguments string no JSON decoder can read. A choice that already carries
+// its finish finished as sent. It reports whether the frame was held.
+func (filter *ChatUsageStreamFilter) holdToolFrame(frame []byte, choices []json.RawMessage) bool {
+	held := false
+	for _, raw := range choices {
+		var choice struct {
+			Index        *int    `json:"index"`
+			FinishReason *string `json:"finish_reason"`
+			Delta        struct {
+				ToolCalls []chatFilterToolCallWire `json:"tool_calls"`
+			} `json:"delta"`
+		}
+		if err := json.Unmarshal(raw, &choice); err != nil ||
+			choice.Index == nil || choice.FinishReason != nil || len(choice.Delta.ToolCalls) == 0 {
+			continue
+		}
+		held = true
+		for _, toolCall := range choice.Delta.ToolCalls {
+			key := heldChatToolKey{choice: *choice.Index, tool: toolCall.Index}
+			call := filter.heldCalls[key]
+			if call == nil {
+				call = &heldChatToolCall{}
+				if filter.heldCalls == nil {
+					filter.heldCalls = make(map[heldChatToolKey]*heldChatToolCall)
+				}
+				filter.heldCalls[key] = call
+				filter.heldOrder = append(filter.heldOrder, key)
+			}
+			if call.id == "" && toolCall.ID != "" {
+				call.id = toolCall.ID
+			}
+			if call.name == "" && toolCall.Function.Name != "" {
+				call.name = toolCall.Function.Name
+			}
+			if call.callType == "" && toolCall.Type != "" {
+				call.callType = toolCall.Type
+			}
+			call.arguments = append(call.arguments, toolCall.Function.Arguments...)
+		}
+	}
+	if held {
+		filter.heldFrames = append(filter.heldFrames, append([]byte(nil), frame...))
+		if filter.heldFirst == nil {
+			filter.heldFirst = append([]byte(nil), frame...)
+		}
+	}
+	return held
+}
+
+// releaseHeldToolFrames forgets the held frames and returns them in their
+// arrival order. The held frames carry no finish or usage, so sending them
+// verbatim preserves the bytes the provider sent.
+func (filter *ChatUsageStreamFilter) releaseHeldToolFrames() [][]byte {
+	frames := filter.heldFrames
+	filter.heldFrames = nil
+	filter.heldFirst = nil
+	filter.heldCalls = nil
+	filter.heldOrder = nil
+	return frames
+}
+
+// ReleaseHeldForAbort returns the tool-argument frames held before the read
+// that failed the stream, verbatim, and drops the rest. A stream failure
+// switches the client to the codec's frames, which carry only the failing
+// read's output, so the prefix earlier reads held back — the accepted part of
+// a call the provider later broke — must ride along or the client loses bytes
+// it would have received read by read. The frames the failing read held stay
+// dropped: the failure names them broken, as the pass-through filter's own
+// output was dropped on this path before the hold existed.
+func (filter *ChatUsageStreamFilter) ReleaseHeldForAbort() []byte {
+	if filter == nil {
+		return nil
+	}
+	prefix := filter.heldBeforeRead
+	filter.heldBeforeRead = nil
+	filter.releaseHeldToolFrames()
+	return bytes.Join(prefix, nil)
+}
+
+// repairHeldToolCalls closes the held calls when the stream ended without a
+// finish: an upstream that died mid-call leaves arguments that stop inside a
+// JSON object, and the members the model finished still close into a valid
+// call. The synthesized frames carry the complete arguments, the limit stop
+// the output limit's own cut uses and the [DONE] sentinel, so the client keeps
+// a call it can act on instead of a broken one. Anything the close cannot
+// finish releases verbatim instead.
+func (filter *ChatUsageStreamFilter) repairHeldToolCalls() ([]byte, bool) {
+	if filter.upstreamFailed || len(filter.pendingTerminal) != 0 || len(filter.heldCalls) == 0 {
+		return nil, false
+	}
+	envelope, ok := filter.heldCallEnvelope()
+	if !ok {
+		return nil, false
+	}
+	type repairedCall struct {
+		choice   int
+		tool     int
+		id       string
+		name     string
+		callType string
+		members  string
+	}
+	calls := make([]repairedCall, 0, len(filter.heldOrder))
+	for _, key := range filter.heldOrder {
+		call := filter.heldCalls[key]
+		if call.id == "" || call.name == "" {
+			return nil, false
+		}
+		members, ok := llmprotocol.TruncatedJSONObject(string(call.arguments), filter.maximumDepth)
+		if !ok {
+			return nil, false
+		}
+		calls = append(calls, repairedCall{
+			choice: key.choice, tool: key.tool, id: call.id, name: call.name,
+			callType: call.callType, members: members,
+		})
+	}
+	toolCallsByChoice := make(map[int][]map[string]any, len(calls))
+	choiceOrder := make([]int, 0, len(calls))
+	for _, call := range calls {
+		if _, seen := toolCallsByChoice[call.choice]; !seen {
+			choiceOrder = append(choiceOrder, call.choice)
+		}
+		callType := call.callType
+		if callType == "" {
+			callType = "function"
+		}
+		toolCallsByChoice[call.choice] = append(toolCallsByChoice[call.choice], map[string]any{
+			"index": call.tool,
+			"id":    call.id,
+			"type":  callType,
+			"function": map[string]any{
+				"name":      call.name,
+				"arguments": call.members,
+			},
+		})
+	}
+	deltaChoices := make([]map[string]any, 0, len(choiceOrder))
+	finishChoices := make([]map[string]any, 0, len(choiceOrder))
+	for _, choice := range choiceOrder {
+		deltaChoices = append(deltaChoices, map[string]any{
+			"index":         choice,
+			"delta":         map[string]any{"tool_calls": toolCallsByChoice[choice]},
+			"finish_reason": nil,
+		})
+		finishChoices = append(finishChoices, map[string]any{
+			"index":         choice,
+			"delta":         map[string]any{},
+			"finish_reason": "length",
+		})
+	}
+	deltaEncoded, err := json.Marshal(deltaChoices)
+	if err != nil {
+		return nil, false
+	}
+	finishEncoded, err := json.Marshal(finishChoices)
+	if err != nil {
+		return nil, false
+	}
+	envelope["choices"] = deltaEncoded
+	deltaFrame, err := encodeSSE("", envelope)
+	if err != nil {
+		return nil, false
+	}
+	envelope["choices"] = finishEncoded
+	finishFrame, err := encodeSSE("", envelope)
+	if err != nil {
+		return nil, false
+	}
+	filter.releaseHeldToolFrames()
+	return append(append(deltaFrame, finishFrame...), []byte("data: [DONE]\n\n")...), true
+}
+
+// heldCallEnvelope decodes the first held frame's envelope, so the synthesized
+// frames name the same response, model and creation the provider sent.
+func (filter *ChatUsageStreamFilter) heldCallEnvelope() (map[string]json.RawMessage, bool) {
+	parsed, err := parseSSEFrameAtPosition(filter.heldFirst, filter.framer.limit, false)
+	if err != nil || !parsed.HasData {
+		return nil, false
+	}
+	var envelope map[string]json.RawMessage
+	if err := decodeProviderWire(parsed.Data, &envelope, llmprotocol.DefaultPolicy()); err != nil {
+		return nil, false
+	}
+	delete(envelope, "choices")
+	return envelope, true
+}
+
 func (filter *ChatUsageStreamFilter) poison(err error) error {
 	if err != nil && filter.failure == nil {
 		filter.failure = err
 	}
 	filter.pendingTerminal = nil
 	filter.held = nil
+	filter.releaseHeldToolFrames()
 	return filter.failure
 }
 
@@ -252,6 +529,21 @@ func chatFinishAtOutputLimit(frame []byte, limit int, first bool) ([]byte, error
 	return encodeSSE(parsed.Event, object)
 }
 
+// chatChoicesCarryFinish reports whether any choice in the frame declares a
+// finish reason: the moment the call's fate is decided, the held fragments go
+// out verbatim with it.
+func chatChoicesCarryFinish(choices []json.RawMessage) bool {
+	for _, raw := range choices {
+		var choice struct {
+			FinishReason *string `json:"finish_reason"`
+		}
+		if json.Unmarshal(raw, &choice) == nil && choice.FinishReason != nil {
+			return true
+		}
+	}
+	return false
+}
+
 // chatChoicesEndForToolCalls reports choices that end choice 0 for its tool
 // calls.
 func chatChoicesEndForToolCalls(choices []json.RawMessage) bool {
@@ -269,38 +561,45 @@ func chatChoicesEndForToolCalls(choices []json.RawMessage) bool {
 }
 
 func chatUsageCompletionTokens(raw json.RawMessage) *int64 {
-	var usage struct {
-		CompletionTokens *int64 `json:"completion_tokens"`
-	}
+	var usage map[string]json.RawMessage
 	if json.Unmarshal(raw, &usage) != nil {
 		return nil
 	}
-	return usage.CompletionTokens
+	// Match Chat provider decoding: a present canonical counter takes precedence.
+	counter, present := usage["completion_tokens"]
+	if !present {
+		counter = usage["output_tokens"]
+	}
+	var tokens *int64
+	if counter == nil || json.Unmarshal(counter, &tokens) != nil {
+		return nil
+	}
+	return tokens
 }
 
 func filterChatUsageFrame(
 	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, evidence *chatFrameEvidence,
-) ([]byte, bool, bool, bool, error) {
+) ([]byte, bool, bool, bool, []json.RawMessage, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
-		return nil, false, false, false, err
+		return nil, false, false, false, nil, err
 	}
 	if !parsed.HasData {
-		return frame, true, false, false, nil
+		return frame, true, false, false, nil, nil
 	}
 	if bytes.Equal(bytes.TrimSpace(parsed.Data), []byte("[DONE]")) {
-		return frame, true, true, true, nil
+		return frame, true, true, true, nil, nil
 	}
 	var object map[string]json.RawMessage
 	if err := decodeProviderWire(parsed.Data, &object, llmprotocol.DefaultPolicy()); err != nil {
-		return nil, false, true, false, err
+		return nil, false, true, false, nil, err
 	}
 	if raw, failed := object["error"]; failed && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return nil, false, true, false, errChatUpstreamErrorFrame
+		return nil, false, true, false, nil, errChatUpstreamErrorFrame
 	}
 	changed, err := deleteChatServerMembers(object)
 	if err != nil {
-		return nil, false, true, false, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
+		return nil, false, true, false, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
 	}
 	if _, present := object["provider"]; present {
 		delete(object, "provider")
@@ -309,13 +608,13 @@ func filterChatUsageFrame(
 	var choices []json.RawMessage
 	if rawChoices, exists := object["choices"]; exists && !bytes.Equal(bytes.TrimSpace(rawChoices), []byte("null")) {
 		if err := json.Unmarshal(rawChoices, &choices); err != nil {
-			return nil, false, true, false, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
+			return nil, false, true, false, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
 		}
 	}
 	for index, rawChoice := range choices {
 		choice, removed, choiceErr := removeChatJSONFields(rawChoice, "native_finish_reason")
 		if choiceErr != nil {
-			return nil, false, true, false, choiceErr
+			return nil, false, true, false, nil, choiceErr
 		}
 		if removed {
 			choices[index] = choice
@@ -325,13 +624,13 @@ func filterChatUsageFrame(
 	var removedRepeatedFinish bool
 	choices, removedRepeatedFinish, err = removeRepeatedChatFinishChoices(choices, seenFinish)
 	if err != nil {
-		return nil, false, true, false, err
+		return nil, false, true, false, nil, err
 	}
 	changed = changed || removedRepeatedFinish
 	if changed && (len(choices) > 0 || removedRepeatedFinish) {
 		encoded, marshalErr := json.Marshal(choices)
 		if marshalErr != nil {
-			return nil, false, true, false, marshalErr
+			return nil, false, true, false, nil, marshalErr
 		}
 		object["choices"] = encoded
 	}
@@ -343,32 +642,32 @@ func filterChatUsageFrame(
 		}
 	}
 	if removedRepeatedFinish && len(choices) == 0 && (!hasUsage || bytes.Equal(bytes.TrimSpace(usage), []byte("null"))) {
-		return nil, false, true, false, nil
+		return nil, false, true, false, choices, nil
 	}
 	if hasUsage && stripUsage {
 		if len(choices) == 0 && !bytes.Equal(bytes.TrimSpace(usage), []byte("null")) {
-			return nil, false, true, false, nil
+			return nil, false, true, false, choices, nil
 		}
 		delete(object, "usage")
 		changed = true
 	} else if hasUsage && !bytes.Equal(bytes.TrimSpace(usage), []byte("null")) {
 		usage, changed, err = stripOpenRouterUsageDecorations(usage, changed)
 		if err != nil {
-			return nil, false, true, false, err
+			return nil, false, true, false, choices, err
 		}
 		object["usage"] = usage
 	} else if !hasUsage && !stripUsage {
 		if !changed {
 			frame, err = encodeNullUsageFrame(parsed.Event, parsed.Data)
-			return frame, err == nil, true, false, err
+			return frame, err == nil, true, false, choices, err
 		}
 		object["usage"] = json.RawMessage("null")
 	}
 	if !changed {
-		return frame, true, true, false, nil
+		return frame, true, true, false, choices, nil
 	}
 	filtered, err := encodeSSE(parsed.Event, object)
-	return filtered, err == nil, true, false, err
+	return filtered, err == nil, true, false, choices, err
 }
 
 // encodeNullUsageFrame gives a chunk without usage the "usage": null that

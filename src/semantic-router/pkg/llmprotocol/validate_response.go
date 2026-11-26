@@ -110,10 +110,11 @@ func validateResponseOutputCardinality(response Response, limits Limits) error {
 }
 
 // StopAllowsEmptyOutput reports a stop that explains a reply with no output: a
-// content filter, or an output limit spent before any output, such as on
-// reasoning the client asked to omit.
+// model that ended its turn with nothing to say, which Anthropic documents for
+// end_turn, a content filter, or an output limit spent before any output, such
+// as on reasoning the client asked to omit.
 func StopAllowsEmptyOutput(reason StopReason) bool {
-	return reason == StopContentFilter || StopsAtOutputLimit(reason)
+	return reason == StopEndTurn || reason == StopContentFilter || StopsAtOutputLimit(reason)
 }
 
 // StopsAtOutputLimit reports a stop at the output token limit or the end of the

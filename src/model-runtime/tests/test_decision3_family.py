@@ -35,11 +35,16 @@ CPU_TORCH_PINS = {
     "tools/docker/Dockerfile.extproc": r"ARG TORCH_CPU=torch==(\S+)",
     "tools/make/model-runtime.mk": r"MODEL_RUNTIME_TORCH \?= torch==(\S+)",
 }
-# One FP32 reference for every CPU (--dtype auto), and BF16 ones per CPU class (--dtype bfloat16).
+# One FP32 reference for every CPU, and BF16 ones per CPU class: --dtype auto
+# holds BF16 on a class with its own (AMD AVX-512 BF16), --dtype bfloat16 anywhere;
+# with zentorch's linear on that class, against the key naming it
+# (docs/records/cpu-zentorch-d3-bf16.md).
+ZENTORCH_BF16 = "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16"
 CPU_REFERENCES = {
     "cpu",
     "cpu@bfloat16",
-    "cpu:x86_64:avx512:bf16_native@bfloat16",
+    "cpu:x86_64:avx512:bf16_native:amd@bfloat16",
+    ZENTORCH_BF16,
     "cpu:x86_64:avx2:bf16_emulated@bfloat16",
 }
 
@@ -365,6 +370,27 @@ def test_videos_reach_the_model_and_count_as_input_tokens(d3_runtime, mp4_url, p
         d3_runtime, {"state": "What happens?", "questions": QUESTIONS, "videos": [clip]}
     )[1]
     assert again == seen
+
+
+def test_an_mpeg_ts_segment_is_read_as_the_same_clip_in_mp4(
+    d3_runtime, mp4_url, ts_url
+):
+    """A transport stream segment (``video/mp2t``), as a live stream cuts them, is a video like any other."""
+    segment = ts_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert segment.startswith("data:video/mp2t;base64,")
+    request = {"state": "What happens?", "questions": QUESTIONS}
+    text = call(d3_runtime, request)[1]
+    status, seen = call(d3_runtime, {**request, "videos": [segment]})
+    assert status == 200
+    assert seen["answers"] != text["answers"]
+    assert seen["usage"]["input_tokens"] > text["usage"]["input_tokens"]
+    decoded = vid.decode(segment)
+    assert decoded.fps == 8.0 and decoded.indices == (0, 4, 7, 11)
+    # The window decoder of box and track questions opens the segment as well.
+    assert next(iter(vid.decode_windows(segment, 1))) is not None
+    # The frames are those of the MP4, so the model answers as it answers the MP4.
+    clip = mp4_url(96, 64, frames=12, fps=8.0, seed=1)
+    assert call(d3_runtime, {**request, "videos": [clip]})[1] == seen
 
 
 @pytest.mark.parametrize(
@@ -699,6 +725,17 @@ def test_every_model_records_goldens_and_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
+    # --dtype auto holds BF16 on AMD AVX-512 BF16 CPUs, which have their own
+    # BF16 references; AVX2 ones have them too but emulate BF16, so stay FP32.
+    from vllm_srun.registry import builtin
+    from vllm_srun.supervision.readiness import recorded_at
+
+    goldens = builtin.golden(model.model_sha256, "decisions", {})
+    assert recorded_at(goldens, "bfloat16") == {
+        "cpu:x86_64:avx512:bf16_native:amd",
+        "cpu:x86_64:avx512:bf16_native:amd:zentorch",
+        "cpu:x86_64:avx2:bf16_emulated",
+    }
     assert set(model.kernel_choices) == devices
     for device in devices:
         choices = model.kernel_choices[device]
@@ -733,6 +770,9 @@ def test_cpu_references_are_recorded_with_the_pinned_pytorch():
             device_class = key.split("@")[0].split(":")[0]
             if device_class == "cpu" and version.split("+")[0] != pinned:
                 stale.append(f"{model.repo_id} {key}: {version}")
+        # A key naming a kernel library also records the library's version.
+        kernels = recorded[model.repo_id].get("kernels", {})
+        assert kernels.get(ZENTORCH_BF16, {}).get("zentorch"), model.repo_id
     assert not stale, f"CPU references not recorded with PyTorch {pinned}: {stale}"
 
 

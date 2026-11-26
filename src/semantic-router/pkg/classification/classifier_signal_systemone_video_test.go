@@ -27,8 +27,10 @@ func TestUnreadVideo(t *testing.T) {
 		"https://cdn.example/clip.mp4",
 		"data:VIDEO/MP4;base64,QUJD",
 		"data:video/mp4;codecs=avc1;base64,QUJD",
+		"data:video/mp2t;base64,QUJD",
+		"data:video/avi;base64,QUJD",
 	})
-	want := []string{"data:video/mp4;base64,QUJD", "data:VIDEO/MP4;base64,QUJD"}
+	want := []string{"data:video/mp4;base64,QUJD", "data:VIDEO/MP4;base64,QUJD", "data:video/mp2t;base64,QUJD"}
 	if !slices.Equal(videos, want) || !incomplete {
 		t.Fatalf("decodedVideos = %q, %v; want %q", videos, incomplete, want)
 	}

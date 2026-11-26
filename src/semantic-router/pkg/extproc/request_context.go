@@ -96,25 +96,28 @@ type RequestContext struct {
 	CacheExactFingerprint         string
 	CacheCompatibilityFingerprint string
 	CacheIdentity                 cache.CacheIdentity
-	CacheSelectedModel            string
-	CacheSemanticSafe             bool
-	CacheReadBypass               bool
-	CacheWriteBypass              bool
-	CacheMaxAgeSeconds            *int
-	CacheWriteTTLSeconds          *int
-	ContextCompressionApplied     bool
-	ContextCompressionBefore      int
-	ContextCompressionAfter       int
-	ContextCompressionMessages    int
-	ContextCompressionFormat      string
-	ContextCompressionOmitted     int
-	ContextCompressionSkipReason  string
-	StartTime                     time.Time
-	ProcessingStartTime           time.Time
-	RoutingLatency                time.Duration
-	RequestCost                   float64
-	RequestCostCurrency           string
-	RequestCostPriced             bool
+	// CacheLease is the lookup's singleflight lease; Process releases it when
+	// the request ends, unless a store completed its key first.
+	CacheLease                   cache.SingleflightLease
+	CacheSelectedModel           string
+	CacheSemanticSafe            bool
+	CacheReadBypass              bool
+	CacheWriteBypass             bool
+	CacheMaxAgeSeconds           *int
+	CacheWriteTTLSeconds         *int
+	ContextCompressionApplied    bool
+	ContextCompressionBefore     int
+	ContextCompressionAfter      int
+	ContextCompressionMessages   int
+	ContextCompressionFormat     string
+	ContextCompressionOmitted    int
+	ContextCompressionSkipReason string
+	StartTime                    time.Time
+	ProcessingStartTime          time.Time
+	RoutingLatency               time.Duration
+	RequestCost                  float64
+	RequestCostCurrency          string
+	RequestCostPriced            bool
 	// spend is the request's place in the spend budgets; nil without any.
 	spend *requestSpend
 	// Streaming detection
@@ -293,6 +296,8 @@ type RequestContext struct {
 	// fallbackExecutedByCaller is set when the native gateway runs the
 	// request's fallback chain; the response phases then never fall back.
 	fallbackExecutedByCaller bool
+	// nativeFallbackResponse awaits validation after a candidate's 2xx headers.
+	nativeFallbackResponse *nativeFallbackResponse
 	// fallbackLastFailure is the last fallback candidate's failed upstream
 	// answer; a chain that ends without a success answers the client with it.
 	fallbackLastFailure *failedAttempt
@@ -320,6 +325,16 @@ type RequestContext struct {
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
+	// protectionKeyApart marks a request protection holds under a key of its
+	// own in the session: a subagent's or a side request's.
+	protectionKeyApart bool
+	// dispatchReasoningMode and dispatchReasoningEffort are the reasoning the
+	// request's provider dispatch carried; empty while nothing was sent.
+	dispatchReasoningMode   string
+	dispatchReasoningEffort string
+	// committedSessionDecision is the ownership the dispatch committed, which a
+	// fallback candidate that answers takes over.
+	committedSessionDecision *sessiontelemetry.SessionDecisionParams
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -464,6 +479,12 @@ type RequestContext struct {
 	// only, like ApprovalReview.
 	SessionTitleRequest bool
 	sessionName         string
+	// cancelAbandonedWork stops request-scoped background work if the response
+	// ends early. Completed responses allow that work to finish on its own.
+	cancelAbandonedWork      context.CancelFunc
+	responseComplete         bool
+	bufferedResponseComplete bool
+
 	// Looper context
 	LooperRequest   bool                  // True only for a request-graph hop: in process, or token-authenticated
 	Hop             *routing.Hop          // The routing context of a hop served in process

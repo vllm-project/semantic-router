@@ -26,13 +26,16 @@ import (
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
@@ -70,7 +73,7 @@ func TestGenerateConfigYAMLIncludesBackendTargetAndLoRACatalog(t *testing.T) {
 							Port: 8000,
 						},
 					},
-					Weight: 100,
+					Weight: ptr.To(100),
 				},
 			},
 		},
@@ -1198,6 +1201,166 @@ func TestReconcileHPA(t *testing.T) {
 
 	if hpa.Spec.MaxReplicas != 10 {
 		t.Errorf("expected maxReplicas 10, got %d", hpa.Spec.MaxReplicas)
+	}
+}
+
+func TestReconcileHPADisabledOnlyDeletesOwnedHPA(t *testing.T) {
+	tests := []struct {
+		name        string
+		owned       bool
+		wantDeleted bool
+	}{
+		{name: "foreign HPA with the same name is left alone", owned: false, wantDeleted: false},
+		{name: "HPA controlled by the SemanticRouter is deleted", owned: true, wantDeleted: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := runtime.NewScheme()
+			_ = scheme.AddToScheme(s)
+			_ = vllmv1alpha1.AddToScheme(s)
+
+			sr := &vllmv1alpha1.SemanticRouter{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test",
+					Namespace: "default",
+					UID:       types.UID("sr-uid"),
+				},
+				Spec: vllmv1alpha1.SemanticRouterSpec{
+					Autoscaling: vllmv1alpha1.AutoscalingSpec{
+						Enabled: ptr.To(false),
+					},
+				},
+			}
+
+			existing := &autoscalingv2.HorizontalPodAutoscaler{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      sr.Name,
+					Namespace: sr.Namespace,
+				},
+				Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+					ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "other-app",
+					},
+					MaxReplicas: 3,
+				},
+			}
+			if tt.owned {
+				if err := controllerutil.SetControllerReference(sr, existing, s); err != nil {
+					t.Fatalf("SetControllerReference() failed: %v", err)
+				}
+			}
+
+			cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, existing).Build()
+			r := &SemanticRouterReconciler{
+				Client: cl,
+				Scheme: s,
+			}
+
+			if err := r.reconcileHPA(context.Background(), sr); err != nil {
+				t.Fatalf("reconcileHPA() failed: %v", err)
+			}
+
+			got := &autoscalingv2.HorizontalPodAutoscaler{}
+			err := cl.Get(context.Background(), types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, got)
+			if tt.wantDeleted {
+				if !apierrors.IsNotFound(err) {
+					t.Fatalf("expected owned HPA to be deleted, got err=%v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("expected foreign HPA to be kept, got err=%v", err)
+			}
+			if got.Spec.ScaleTargetRef.Name != "other-app" {
+				t.Errorf("foreign HPA was modified: scaleTargetRef.name=%q", got.Spec.ScaleTargetRef.Name)
+			}
+		})
+	}
+}
+
+// staleHPAClient returns a fixed (stale) copy of the HPA on Get, the way an
+// informer cache can lag behind the API server.
+type staleHPAClient struct {
+	client.Client
+	stale *autoscalingv2.HorizontalPodAutoscaler
+}
+
+func (c *staleHPAClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+	if hpa, ok := obj.(*autoscalingv2.HorizontalPodAutoscaler); ok {
+		c.stale.DeepCopyInto(hpa)
+		return nil
+	}
+	return c.Client.Get(ctx, key, obj, opts...)
+}
+
+func TestReconcileHPADisabledStaleReadKeepsReplacementHPA(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = scheme.AddToScheme(s)
+	_ = vllmv1alpha1.AddToScheme(s)
+
+	sr := &vllmv1alpha1.SemanticRouter{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test",
+			Namespace: "default",
+			UID:       types.UID("sr-uid"),
+		},
+		Spec: vllmv1alpha1.SemanticRouterSpec{
+			Autoscaling: vllmv1alpha1.AutoscalingSpec{
+				Enabled: ptr.To(false),
+			},
+		},
+	}
+
+	// The cluster now holds a foreign HPA that replaced ours under the same name.
+	replacement := &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sr.Name,
+			Namespace: sr.Namespace,
+			UID:       types.UID("foreign-hpa-uid"),
+		},
+		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
+			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+				Name:       "other-app",
+			},
+			MaxReplicas: 3,
+		},
+	}
+	fakeClient := fake.NewClientBuilder().WithScheme(s).WithObjects(sr, replacement).Build()
+
+	// The cache still returns the old HPA that the SemanticRouter controlled.
+	stale := &autoscalingv2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            sr.Name,
+			Namespace:       sr.Namespace,
+			UID:             types.UID("old-owned-hpa-uid"),
+			ResourceVersion: "1",
+		},
+	}
+	if err := controllerutil.SetControllerReference(sr, stale, s); err != nil {
+		t.Fatalf("SetControllerReference() failed: %v", err)
+	}
+
+	r := &SemanticRouterReconciler{
+		Client: &staleHPAClient{Client: fakeClient, stale: stale},
+		Scheme: s,
+	}
+
+	err := r.reconcileHPA(context.Background(), sr)
+	if !apierrors.IsConflict(err) {
+		t.Fatalf("reconcileHPA() error = %v, want a Conflict so the reconcile is retried", err)
+	}
+
+	got := &autoscalingv2.HorizontalPodAutoscaler{}
+	if err := fakeClient.Get(context.Background(), types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, got); err != nil {
+		t.Fatalf("expected the replacement HPA to be kept, got err=%v", err)
+	}
+	if got.UID != replacement.UID {
+		t.Errorf("HPA UID = %q, want the replacement %q", got.UID, replacement.UID)
 	}
 }
 

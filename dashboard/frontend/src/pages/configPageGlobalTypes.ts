@@ -234,6 +234,7 @@ export interface RouterCoreConfig {
   model_selection?: ModelSelectionConfig
   learning?: RouterLearningConfig
   allow_lossy_translation?: string[]
+  allow_request_extension_fields?: string[]
 }
 
 export interface CanonicalServiceGlobalConfig {

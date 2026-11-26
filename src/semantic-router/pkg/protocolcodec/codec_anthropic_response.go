@@ -102,6 +102,9 @@ func anthropicContentUnknownFields(raw json.RawMessage, policy llmprotocol.Polic
 	}
 	dropped := make(map[string]struct{})
 	for _, block := range blocks {
+		if _, carried := decodeAnthropicServerToolBlock(block); carried {
+			continue // A server tool block reaches its client as written.
+		}
 		_, fields := stripUnknownUpstreamFields(block, reflect.TypeOf(anthropicContentWire{}))
 		addUnknownFieldPaths(dropped, "content[]", fields)
 	}
@@ -128,7 +131,7 @@ func anthropicResponseMetadataDiagnostics(wire anthropicResponseWire, policy llm
 func decodeAnthropicResponseResource(wire anthropicResponseWire, policy llmprotocol.Policy) (llmprotocol.Response, error) {
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
 	if wire.Error != nil {
-		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Type), Code: wire.Error.Type, Message: wire.Error.Message}
+		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Type), Code: wire.Error.Type, Message: wire.Error.Message, ProviderFramed: true}
 		response.StopReason = llmprotocol.StopError
 	}
 	contents, err := decodeAnthropicResponseContent(wire.Content, policy)
@@ -449,6 +452,7 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 		Error: &llmprotocol.ProtocolError{
 			Category: decodeProviderErrorCategory(wire.Error.Type),
 			Code:     wire.Error.Type, Message: wire.Error.Message,
+			ProviderFramed: true,
 		},
 		ProviderRequestID: wire.RequestID,
 	}, diagnostics, nil

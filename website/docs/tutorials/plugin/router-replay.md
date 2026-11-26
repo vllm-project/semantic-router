@@ -28,18 +28,22 @@ capture limits that match the data you are allowed to keep.
 ### Keep records across restarts
 
 Without a store in `global.services.router_replay`, Replay uses the `file`
-store. It writes each record once, when the request ends (completed, failed or
-aborted), to `.vllm-sr/router-replay.jsonl` in the configuration file's
-directory, a file only its owner can read, and reads the records back when the
-Router starts, so the **Requests** page keeps its history across restarts and
-configuration reloads. `vllm-sr serve` mounts that directory from the host, so the file
-outlives the Router container.
+store. Requests appear immediately on the **Requests** page. When a request
+ends (completed, failed or aborted), a background writer batches it into
+`.vllm-sr/router-replay.jsonl` beside the configuration file. Only the file's
+owner can read it. Router generations share this store across configuration
+reloads. `vllm-sr serve` mounts the directory from the host, so the next Router
+can read the history when it starts.
 
-- **In progress.** A request still in progress when the Router crashes is not
-  in the file. What reaches a record after its request ends, such as a late
-  outcome or a review, is written when the file is next rewritten: when the
-  Router stops, and whenever the file reaches twice as many lines as the
-  records it keeps.
+- **Persistence.** A graceful shutdown writes the retained, ended records,
+  including late outcomes and reviews. A crash can lose in-progress requests,
+  recent completions still waiting to be written, and updates since the last
+  rewrite.
+- **Slow or unavailable storage.** Requests continue recording in memory.
+  When the pending batch fills, the writer replaces the file with a snapshot
+  of the retained, ended records. Records evicted before that snapshot can
+  be lost. The writer also rewrites at twice the retention limit and retries
+  from memory after a write error.
 - **Size.** The file keeps at most 1,000 records, or `max_records` when that
   is lower. A record of routing data takes about 8 KB, so the file stays near
   8 MB and reaches about 16 MB just before a rewrite. The `memory` backend
@@ -125,7 +129,7 @@ decision, model, signals, scores, timing, token usage and ids.
 
 - **`none`** keeps no request or response text, whatever
   `capture_request_body`, `capture_response_body`, `capture_tool_results` and
-  the shadow's `capture_response_body` say, and reads nothing for personal
+  the shadow’s `capture.enabled` say, and reads nothing for personal
   data, so Replay adds no work for the decision model.
 - **`raw`** keeps what the capture switches allow without checking it, so
   records can hold secrets and personal data. Restrict who reads them with
@@ -258,7 +262,7 @@ max_prompt_bytes: 65536 # the prompt; 0 keeps it whole
   it kept the whole prompt. Set `max_prompt_bytes: 0` to keep whole prompts.
 - **Under `none`** a record keeps no prompt, as before.
 
-A shadow's `capture_response_body: true` now keeps its excerpt of the shadow's
+A shadow's `capture.enabled: true` now keeps its excerpt of the shadow's
 answer under `raw` only; under `verified` the outcome keeps the answer's sizes
 and SHA-256 alone. See [Replay and audit capture](#replay-and-audit-capture).
 :::
@@ -476,9 +480,9 @@ data. Capture only what you need, and restrict access with `replay.read` and
 ## Shadow
 
 The `shadow` block sends a bounded, sampled copy of the decision's approved
-request to a candidate model, and keeps the outcome on the replay record. The
-primary response is never changed or delayed, and the shadow runs only while
-the decision records replays.
+request to a group of candidate models, and keeps each outcome on the replay
+record. The primary response is never changed or delayed, and the shadow runs
+only while the decision records replays.
 
 Promoting a model needs evidence from production-shaped requests: offline
 evaluation misses real prompts, and a gray release exposes users to an
@@ -495,12 +499,11 @@ What the shadow copy carries:
   model's family. It is addressed like the primary would address that backend,
   including a profile's `chat_path` and an Azure OpenAI `api_version` query.
 - **No streaming.** It is always sent non-streaming.
-- **Trace headers only.** Only the W3C `traceparent` and `tracestate` headers
-  are propagated. Client headers, `baggage` included, are not.
-- **No primary credentials.** Decision header mutations stay on the primary
-  path unless `forward_headers` names them. Known credential carriers and
-  each profile's `auth.header` are dropped even when listed, and only the
-  Router's own static credentials for the shadow backend are used.
+- **Trace context.** W3C `traceparent` and `tracestate` are propagated. Client
+  headers, including `baggage`, are never copied.
+- **Decision headers.** `forward_headers` allows specific decision header
+  mutations. Credential headers stay on the primary path. Each candidate uses
+  its own backend credentials and TLS settings.
 - **No redirects.** The call goes only to the configured backend address; a
   redirect answer is never followed.
 
@@ -521,61 +524,80 @@ The `shadow` block replaces the `shadow_dispatch` plugin;
 
 ### Configure the shadow
 
+Declare `shadow` on the decision's Replay plugin. The parent `enabled` switch
+controls recording and dispatch; `shadow` has no separate `enabled` field.
+Every declared shadow block is validated, even with Replay disabled or
+`sample_rate: 0`.
+
 ```yaml
 plugins:
   - type: router_replay
     configuration:
       enabled: true
       shadow:
-        model: candidate-model
+        models: [candidate-a, candidate-b]
         sample_rate: 0.05
-        max_concurrency: 2
-        max_queue_depth: 8
-        timeout_seconds: 30
-        max_response_bytes: 1048576
-        max_retries: 0
-        capture_response_body: false
-        max_capture_bytes: 4096
-        tls_skip_verify: false
-        forward_headers: []
+        execution:
+          max_concurrency: 2
+          max_queue_size: 8
+          timeout: 30s
+        budget:
+          max_response_bytes: 2097152
+          # max_estimated_tokens: 16384
+          # max_estimated_cost: 0.01
+        capture:
+          enabled: false
+          max_bytes: 8192
 ```
+
+Here `N` is the number of configured models. All integer bounds must be positive.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `model` | required | Configured logical model that receives the shadow copy. Must have a backend in `providers.models`. |
-| `sample_rate` | `1.0` | Fraction of eligible requests to shadow, in `[0, 1]`. `0` keeps the shadow declared but never dispatches. |
-| `max_concurrency` | `2` | In-flight shadow calls for this decision. |
-| `max_queue_depth` | `8` | Calls waiting for a slot. Anything beyond is dropped with reason `queue_full`. |
-| `timeout_seconds` | `30` | Deadline for queue wait plus execution, shared by all retries. |
-| `max_response_bytes` | `1048576` | Largest shadow response body that is read. Larger bodies fail with `response_too_large`. |
-| `max_retries` | `0` | Extra attempts on transport errors or retryable statuses. Capped at `3`. |
-| `capture_response_body` | `false` | Store a bounded excerpt of the shadow text in the outcome, under `prompt_capture: raw` only. Off by default; only sizes, tokens, and a SHA-256 are kept. |
-| `max_capture_bytes` | `4096` | Excerpt bound when capture is on. |
-| `tls_skip_verify` | `false` | Skip certificate verification for an https shadow backend signed by an internal CA. This setting applies only to the shadow HTTP client; it does not configure primary backend transport. |
-| `forward_headers` | `[]` | Decision `header_mutation` names the shadow copy may carry, matched case-insensitively. Nothing else a decision sets for the primary backend is forwarded, so a custom credential such as `X-Internal-Token` stays on the primary path. Known credential carriers (`Authorization`, `Proxy-Authorization`, `Cookie`, `x-api-key`, `api-key`, `x-goog-api-key`, the `x-user-*-key` headers) are rejected at config load and dropped at run time even if listed. |
+| `models` | required | 1–8 distinct, non-empty logical model names, each with a backend in `providers.models`. A single candidate also uses a list. |
+| `sample_rate` | `1.0` | Optional fraction in `[0, 1]`. One sampling decision covers the group; `0` disables dispatch. |
+| `execution.max_concurrency` | `2` | In-flight candidate HTTP calls, shared across requests for the same recipe and decision. |
+| `execution.max_queue_size` | `8` | Pending request groups for the same recipe and decision, shared across requests. Counts groups, not candidates. |
+| `execution.timeout` | `30s` | Shared group deadline, including queue wait and all candidate calls. Positive duration, at most `5m`. |
+| `budget.max_response_bytes` | `N × 1048576` | Aggregate response byte budget, divided before dispatch among effective candidates. Minimum `2 × N`: each candidate reserves one byte to detect an oversized response. |
+| `budget.max_estimated_tokens` | — | Optional. Maximum total estimated input and reserved output tokens for the sampled Shadow group. |
+| `budget.max_estimated_cost` | — | Optional. Maximum estimated spend for the sampled Shadow group, in `global.services.budgets.currency` (USD by default). |
+| `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
+| `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
+| `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
 
-A shadow is skipped, with a metric but no outcome, when the request is
-sampled out or when the primary dispatch already selected the shadow model. A
+For either limit, the Router estimates input tokens and reserves output tokens from the limit sent to the backend. If the outgoing request omits the output limit, the Router uses the model's `max_output_tokens` or, if unset, `global.services.budgets.output_reserve_tokens` (default 4096). The token limit sums both quantities across candidates. The cost limit prices them using each model's rates. A token limit alone requires no pricing.
+
+The Router skips the group if either configured limit is exceeded, a cost-limited candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. When a cost limit is configured, Replay records the estimated cost for attempted calls and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
+
+The old flat shadow fields are rejected; use the nested structure above.
+
+The primary model is excluded from the group. Each remaining candidate makes
+at most one call, without retries. Candidates wait for concurrency slots under
+the same deadline. Byte allowances are assigned before dispatch and are not
+refunded on failure. Replay records token usage when the backend reports it.
+
+Requests sampled out or left with no candidates produce metrics only. A
 decision whose algorithm is an executor (`escalate`, `fusion`, `remom`,
 `ratings` or `workflows`) rejects a shadow at config load, because the shadow
 runs only on single-model provider dispatch.
 
 ### Fail-open behavior
 
-The request path does one non-blocking slot check and returns; everything
-else runs in a bounded worker after the primary dispatch response has been
-built. A slow, unavailable, malformed or overloaded shadow endpoint can't
-change the primary response or its latency. Every shadow ends in exactly one
-result:
+The request path does one non-blocking group admission check and returns;
+everything else runs in bounded workers after the primary dispatch response
+has been built. The primary path never waits for candidate responses. Slow or
+failed candidates leave the primary response unchanged. Each candidate ends
+in one result:
 
 | Result | Reasons |
 | --- | --- |
 | `completed` | `completed` |
-| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
+| `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
 | `sampled_out` | `sampled_out` |
 
-A request that needs a modality the shadow model's card omits, such as an image sent to a text-only model, is dropped with `backend_lacks_capability` and never reaches the shadow backend. A shadow model with no recognized declaration is not gated.
+A request that needs a modality the shadow model's card omits, such as an image sent to a text-only model, skips that candidate with `backend_lacks_capability`. Other eligible candidates still run. A shadow model with no recognized declaration is not gated.
 
 - **Metrics.** Results and reasons are exported as
   `sr_shadow_dispatch_total{decision,result,reason}`, with
@@ -585,6 +607,9 @@ A request that needs a modality the shadow model's card omits, such as an image 
   structured `shadow_dispatch_dropped` event, not a replay write, so an
   overloaded shadow lane can't add load to the replay store.
 
+Candidates reserve space in Replay's bounded result queue before calling a
+model; a full queue produces `replay_queue_full`.
+
 ### Interpreting failures
 
 A `failed` outcome does not always say something about the candidate model. Read the reason together with `status_code`, `attempts`, and the truncated `error` in the outcome metadata:
@@ -592,17 +617,17 @@ A `failed` outcome does not always say something about the candidate model. Read
 | Meaning | Reasons | How to read it |
 | --- | --- | --- |
 | Candidate rejected the request | `upstream_status` with a 4xx `status_code` | The shadow model could not accept the approved request, for example an unsupported parameter or a context window that is too small. Count it against the candidate. |
-| Candidate health or capacity | `upstream_status` with a 5xx `status_code`, `timeout`, `transport_error` | The backend was unreachable, overloaded, or too slow within `timeout_seconds` after `max_retries`. This measures the deployment, not answer quality. |
+| Candidate health or capacity | `upstream_status` with a 5xx `status_code`, `timeout`, `transport_error` | The backend was unreachable, overloaded, or too slow within the group's `execution.timeout`. This measures the deployment, not answer quality. |
 | Candidate tried to redirect | `redirect_rejected` with a 3xx `status_code` | The backend answered with a redirect. The router never follows it, so the prompt and the shadow credential only reached the configured backend. Point the shadow model at the backend's final address. |
-| Candidate output problem | `malformed_response`, `response_too_large` | The backend answered but the body was not a valid response for its wire format or exceeded `max_response_bytes`. |
+| Candidate output problem | `malformed_response`, `response_too_large` | The backend answered but the body was not a valid response for its wire format or exceeded its share of `budget.max_response_bytes`. |
 | Router-side, not about the candidate | `backend_unresolved`, `credential_unresolved`, `encode_failed` | The router could not build or address the shadow call. Fix the configuration and exclude these from any candidate comparison. |
 
 `dropped` and `sampled_out` never reach the replay record. They mean the router chose not to send the shadow, so they carry no signal about the candidate model and are visible only in metrics and logs.
 
 ### Replay and audit capture
 
-Completed and failed shadows append one outcome to the primary request's
-replay record. Outcomes are append-only:
+Each completed or failed candidate appends one outcome to the primary
+request's replay record. Outcomes are append-only:
 
 | Part | Holds |
 | --- | --- |
@@ -611,11 +636,9 @@ replay record. Outcomes are append-only:
 
 Replay redaction applies to shadow outcomes as it does to the rest of the
 record: viewers without content rights see the routing and timing fields, but
-not `target_ref`, `reason` or `metadata`. The shadow's `capture_response_body`
-is its own, and keeps its excerpt only under `raw`, which alone keeps the
-primary's answer: generated text can repeat the prompt, and `verified` checks
-the prompt only. Under `none` and `verified` no record keeps one. Keep it off
-unless the replay store and its readers are cleared for prompt-level content.
+not `target_ref`, `reason` or `metadata`. Shadow excerpts require both `shadow.capture.enabled: true` and
+`prompt_capture: raw`. Under `none` and `verified`, the shadow outcome keeps
+its sizes and hash without the output text.
 See the fragment:
 [`config/fragments/plugin/router-replay/shadow.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/shadow.yaml).
 
@@ -701,8 +724,8 @@ digests in the manifest:
 - **Versions.** The manifest is `shadow-dataset.v2` and the tasks are
   `shadow-judge-tasks.v2`. A `shadow-dataset.v1` manifest is refused.
 - **Shadow text** comes from the captured excerpt, so the shadow decision
-  needs `capture_response_body` on, and a `max_capture_bytes` large enough for
-  whole answers.
+  needs `shadow.capture.enabled` on, and a `shadow.capture.max_bytes` large
+  enough for every candidate's share to hold a whole answer.
 
 Pairs that are left out are counted by reason:
 
@@ -786,6 +809,21 @@ thread, whose agent and session ids are equal, is `main`. A viewer without
 so a subagent's call shows `hidden` there.
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
+
+A record's `selected_model` is the model whose answer the request got, and
+`reasoning_mode` and `reasoning_effort` the reasoning it was sent with. When a
+[fallback](../../installation/model-configuration#fall-back-to-another-model)
+candidate answers in place of the routed model, the record names the
+candidate, and its `fallback` outcome keeps every attempt with the routed model
+as `initial_model`. `reasoning_mode` is `on` or `off` where the Router wrote
+reasoning for the model, a model with a reasoning family that the decision's
+controls reached, and empty for a request passed through with the client's
+reasoning fields as sent, such as one to a model without a reasoning family.
+`reasoning_effort` is empty when no effort level was sent: for a decision that
+turns reasoning off, a backend whose reasoning switch carries no level, or a
+request the Router answered itself, such as a blocked one, which has no mode
+either. A Looper request's own record carries neither, while each hop's record
+keeps what that hop was sent with.
 
 The page's **Sessions** view groups the records by harness session. Each session
 opens into its agents, the main agent first and every subagent under the agent
@@ -1022,7 +1060,11 @@ recipes: the same summary in `run` and every call in time order in `calls`.
 Without `replay.detail` a run keeps its tree, labels, markers and counts, and
 loses what its records would: the session name, the prompt, the agent hashes,
 the reasons and the text of reported outcomes. The runs list reads the filtered
-records whole, so bound it with `since` on a large PostgreSQL store.
+records whole, so bound it with `since` on a large PostgreSQL store. On
+PostgreSQL the run read leaves each record's request and response bodies,
+prompt, tool definitions and tool payloads in the database, which for a long
+agent session are most of what its records hold, and reads one prompt, the
+task's.
 
 In **Requests**, the **Agent runs** tab lists one row per run: its session name or
 task, the harness, the agents, the models, the outcome, the cost and duration,
@@ -1032,11 +1074,27 @@ legend and step panel, and a record's route, routing, candidate scores, cost
 text and session history, with the configured name beside it, in its tooltip,
 or in parentheses after it. A run opens as a timeline: a lane per agent in
 tree order, a dashed tick where a subagent started, and consecutive calls of
-one agent on one model drawn as one segment with its calls' markers, so a run
-of hundreds of calls reads as a few blocks. A segment lists its calls, and a call shows its decision
-and signals, model and effort, tokens and cost, status and reason, with a link
-to its record. The table of every call is one click further. A record page
-opens its run with **Open run**.
+one agent on one model drawn as one segment, so a run of hundreds of calls
+reads as a few blocks, over an axis of round clock times. A strip above the
+lanes marks the calls' events, each kind with its own icon and color:
+compaction, which also rules a line through every lane and reads its name,
+subagent start, image, guard flag or refusal, failure, and model switch.
+Events of one kind too close to tell apart share a marker with a count, and
+markers of different kinds move apart instead of merging, so each kind keeps
+a marker at every zoom; each marker has a hover card and opens its call. The
+legend names every model and event in words, and an event in it moves the
+timeline to the next call that has it. A segment lists its calls, and a call
+shows its decision and signals, model and effort, tokens and cost, status and
+reason, with a link to its record. The table of every call is one click
+further, its events as the same labelled badges, and the request list and a
+session's turns show them too. A record page opens its run with **Open run**.
+
+Money on the **Requests** page reads in one currency: where a range holds
+records priced in a currency and in plain units (`XXX`, from rates set without
+a currency), the totals, a session's cost and a run's add the currency only,
+and count the rest as unpriced in a hint whose tooltip says which. The
+**Breakdown** opens the requests by agent harness, model and decision as three
+cards; the summary row above it holds the totals.
 
 With [tracing](../global/api-and-observability#observability) on, the
 Router's request span carries `session.id`, `vsr.harness`, `vsr.agent.id`,

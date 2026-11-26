@@ -37,7 +37,7 @@ domains:
       - README.md
       - CONTRIBUTING.md
       - website/**
-    checks: [make docs-check-translation-coverage]
+    checks: [make docs-check-translation-coverage, make docs-i18n-shell-test]
     verifications: []
 
   generated-model-catalog:

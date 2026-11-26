@@ -1,6 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, ChevronDown, FileCode2, Info, Loader2, RefreshCw, Send } from 'lucide-react'
+import {
+  ArrowRight,
+  ChevronDown,
+  FileCode2,
+  Info,
+  Loader2,
+  RefreshCw,
+  Send,
+  TriangleAlert,
+} from 'lucide-react'
 import {
   Alert,
   Badge,
@@ -17,6 +26,7 @@ import {
   cn,
 } from '../ui'
 import type { SetupActivationState, SetupStep, SetupValidationState } from './setupWizardSupport'
+import type { SetupRouterReadiness } from './setupRouterReadiness'
 
 interface ReviewActivatePanelProps {
   routeLabel: string
@@ -299,6 +309,8 @@ export function SetupSuccessView({
   defaultModel,
   summary,
   leaving,
+  readiness,
+  activationMessage,
   onTest,
   onDashboard,
 }: {
@@ -306,9 +318,62 @@ export function SetupSuccessView({
   defaultModel: string
   summary: string
   leaving: boolean
+  readiness: SetupRouterReadiness
+  activationMessage?: string | null
   onTest: () => void
   onDashboard: () => void
 }) {
+  if (readiness.state !== 'ready') {
+    const stopped = readiness.state === 'stopped'
+    return (
+      <div
+        className="flex h-full flex-col items-center justify-center px-6 py-10 text-center sm:px-10"
+        role="status"
+        aria-live="polite"
+      >
+        <span
+          className={cn(
+            'grid size-[60px] place-items-center rounded-full',
+            stopped ? 'bg-destructive-soft text-destructive' : 'bg-primary-soft text-primary',
+          )}
+        >
+          {stopped ? (
+            <TriangleAlert className="size-7" aria-hidden />
+          ) : (
+            <Loader2 className="size-7 animate-spin" aria-hidden />
+          )}
+        </span>
+        <div className="mt-8 flex w-full max-w-xl flex-col items-center">
+          <h2 className="text-xl font-semibold tracking-[-0.02em]">
+            {stopped ? 'Your router is not running' : 'Starting your router'}
+          </h2>
+          <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-muted-foreground">
+            {stopped
+              ? 'Setup was saved, but the Router did not start. Check the `vllm-sr serve` output for the start-up error, fix it, and run `vllm-sr serve` again. This page updates when the Router is up.'
+              : 'Setup was saved. Apps can call the router once it is ready; this page updates on its own.'}
+          </p>
+          {readiness.detail || activationMessage ? (
+            <div className="mt-5 w-full text-left">
+              <Alert
+                tone={stopped ? 'danger' : 'neutral'}
+                title={stopped ? 'Router status' : 'Start-up progress'}
+              >
+                {readiness.detail || activationMessage}
+              </Alert>
+            </div>
+          ) : null}
+          <p className="mt-4 text-xs text-muted-foreground">{summary}</p>
+          <div className="mt-8 flex flex-wrap justify-center gap-2">
+            <Button size="lg" variant="outline" onClick={onDashboard} loading={leaving}>
+              Go to dashboard
+              {leaving ? null : <ArrowRight />}
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-10 text-center sm:px-10">
       <div className="relative grid place-items-center">

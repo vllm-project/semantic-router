@@ -1,8 +1,10 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -194,24 +196,73 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 			return nil, err
 		}
 		if len(arguments) > 0 && string(arguments) != event.ToolCall.Arguments {
-			return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_tool_arguments_mismatch", "upstream final tool arguments do not match streamed arguments", nil)
+			// A stream that ends mid-call closes the members the model finished:
+			// the final arguments replace the streamed fragments when they are
+			// exactly the close of that prefix, and anything else is an upstream
+			// that changed its mind.
+			if closed, ok := llmprotocol.TruncatedJSONObject(string(arguments), state.policy.Limits.JSONDepth); !ok || closed != event.ToolCall.Arguments {
+				return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_tool_arguments_mismatch", "upstream final tool arguments do not match streamed arguments", nil)
+			}
+			if state.closedToolArguments == nil {
+				state.closedToolArguments = make(map[int]string)
+			}
+			state.closedToolArguments[event.ItemIndex] = string(arguments)
 		}
 		arguments = []byte(event.ToolCall.Arguments)
 	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
-			return nil, nonObjectToolArgumentsError()
+			return nil, nonObjectToolArgumentsErrorWithShape(arguments)
 		}
 		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
 		// then send the partial call with a max_tokens or length stop. Its stop
 		// reason arrives after the item ends, so the terminal event decides.
 		state.cutToolArguments = true
+		state.cutToolArgumentsEvidence = toolArgumentsEvidence(arguments)
 	}
 	return arguments, nil
 }
 
-func nonObjectToolArgumentsError() error {
-	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+// nonObjectToolArgumentsErrorWithCause rejects a completed tool call whose
+// arguments are not a JSON object. The cause never reaches the client frame;
+// it is the diagnostic the stream-failure log keeps.
+func nonObjectToolArgumentsErrorWithCause(cause error) error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", cause)
+}
+
+// nonObjectToolArgumentsErrorWithShape describes what was rejected without
+// recording it: tool arguments can carry file contents, commands or user data
+// headed to a tool, so the failure keeps their length and shape only, matching
+// the stream-failure logging contract that keeps payloads out of the log. The
+// cause never reaches the client frame; it tells a model-generation anomaly
+// (prose, leaked markup) from a codec splice one (a JSON fragment).
+func nonObjectToolArgumentsErrorWithShape(arguments []byte) error {
+	return nonObjectToolArgumentsErrorWithCause(toolArgumentsEvidence(arguments))
+}
+
+// toolArgumentsEvidence names rejected arguments by length and shape only.
+func toolArgumentsEvidence(arguments []byte) error {
+	return llmprotocol.ErrorDiagnostic(fmt.Sprintf("arguments length %d, shape %s", len(arguments), toolArgumentsShape(arguments)))
+}
+
+// toolArgumentsShape classifies the first non-space byte of the rejected
+// arguments, which separates the likely origins without retaining the text.
+func toolArgumentsShape(arguments []byte) string {
+	trimmed := bytes.TrimLeft(arguments, " \t\r\n")
+	if len(trimmed) == 0 {
+		return "empty"
+	}
+	switch trimmed[0] {
+	case '{':
+		return "object fragment"
+	case '[':
+		return "array fragment"
+	case '"', '\'':
+		return "quoted text"
+	case '<':
+		return "markup"
+	}
+	return "plain text"
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -282,7 +333,7 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 		return llmprotocol.Event{}, err
 	}
 	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsErrorWithCause(state.cutToolArgumentsEvidence)
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {
@@ -516,9 +567,12 @@ func usageEvidenceRank(provenance llmprotocol.UsageProvenance) int {
 	}
 }
 
-func (state *streamState) finalize(reason error) ([]llmprotocol.Event, error) {
+func (state *streamState) finalize(reason error) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	if state.terminal {
-		return nil, nil
+		return nil, nil, nil
+	}
+	if events, diagnostics, repaired := state.repairCutToolCall(); repaired {
+		return events, diagnostics, nil
 	}
 	if reason == nil {
 		reason = errors.New("upstream stream ended without a terminal event")
@@ -526,9 +580,52 @@ func (state *streamState) finalize(reason error) ([]llmprotocol.Event, error) {
 	protocolError := streamFinalizationError(reason, "upstream stream ended before completion")
 	event, err := state.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: protocolError, StopReason: llmprotocol.StopError})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return []llmprotocol.Event{event}, nil
+	return []llmprotocol.Event{event}, nil, nil
+}
+
+// repairCutToolCall closes the one tool call whose arguments an upstream stream
+// end cut short without a limit signal. Its identity streamed complete and its
+// arguments stop inside a JSON object, so the members the model finished still
+// close into a valid call: the item completes with that close, and the stream
+// ends with the limit stop the output limit's own cut uses, plus an approximated
+// diagnostic naming the repair. The public Chat filter holds the streamed
+// fragments, so a same-format client sees only the closed call; a translated
+// client sees the close as the final arguments of the call it was already
+// reading. Several pending calls, a missing identity, or arguments that are not
+// a cut object keep the stream's failure.
+func (state *streamState) repairCutToolCall() ([]llmprotocol.Event, llmprotocol.Diagnostics, bool) {
+	if len(state.toolArguments) != 1 {
+		return nil, nil, false
+	}
+	index, arguments := -1, []byte(nil)
+	for itemIndex, pending := range state.toolArguments {
+		index, arguments = itemIndex, pending
+	}
+	members, ok := llmprotocol.TruncatedJSONObject(string(arguments), state.policy.Limits.JSONDepth)
+	if !ok {
+		return nil, nil, false
+	}
+	completed, err := state.next(llmprotocol.Event{
+		Type:      llmprotocol.EventOutputItemCompleted,
+		ItemIndex: index,
+		ToolCall:  &llmprotocol.ToolCall{Arguments: members},
+	})
+	if err != nil {
+		return nil, nil, false
+	}
+	terminal, err := state.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: llmprotocol.StopMaxTokens})
+	if err != nil {
+		return nil, nil, false
+	}
+	diagnostics := appendDiagnostics(nil, llmprotocol.Diagnostics{{
+		Source: state.context.Source,
+		Field:  "tool_call.arguments",
+		Action: llmprotocol.DiagnosticApproximated,
+		Reason: "upstream ended the stream mid-call without a limit signal; the arguments were closed at the stream end",
+	}}, state.policy.Limits.Diagnostics)
+	return []llmprotocol.Event{completed, terminal}, diagnostics, true
 }
 
 func streamFinalizationError(reason error, incompleteMessage string) *llmprotocol.ProtocolError {

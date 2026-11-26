@@ -432,7 +432,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(
             openai_inventory["representative_models"],
-            ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
+            ["openai/gpt-6.2-astra", "openai/gpt-6.2-sol", "openai/gpt-6.1-terra"],
         )
 
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
@@ -524,6 +524,114 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             evaluations["independent/ernie-4.5-300b-a47b-critpt@1.0.0"]["metrics"],
             {"score": 0},
         )
+
+    def test_tencent_hy4_cards_keep_published_harness_evidence(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        hy4_models = {"tencent/hy4", "tencent/hy4-flash"}
+        published_benchmarks = {
+            "datacurve/deep-swe@1.1.0",
+            "harbor/terminal-bench@4.0.0",
+            "mercor/apex-agents@1.1.0",
+            "zapier/automation-bench@1.0.6",
+            "cais/humanitys-last-exam@1.0.0",
+        }
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, hy4_models)
+        self.assertEqual(
+            buckets,
+            {
+                ("tencent/hy4", "high", "vendor_claimed"): published_benchmarks,
+                ("tencent/hy4-flash", "enabled", "vendor_claimed"): (
+                    published_benchmarks
+                ),
+            },
+        )
+        apex_records = [
+            evaluation
+            for evaluation in resources["evaluations"]
+            if evaluation["model"] in hy4_models
+            and evaluation["benchmark"] == "mercor/apex-agents@1.1.0"
+        ]
+        self.assertEqual(len(apex_records), 2)
+        for evaluation in apex_records:
+            self.assertEqual(
+                evaluation["benchmark_profile"], "published-loop-250-steps"
+            )
+            self.assertEqual(evaluation["subject"]["max_steps"], 250)
+            self.assertEqual(
+                evaluation["subject"]["benchmark_revision"], "unspecified_by_source"
+            )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        openrouter_ids = {
+            binding["catalog"]: binding["id"]
+            for binding in providers["openrouter"]["models"]
+            if binding.get("catalog") in hy4_models
+        }
+        self.assertEqual(
+            openrouter_ids,
+            {"tencent/hy4": "tencent/hy4", "tencent/hy4-flash": "tencent/hy4-flash"},
+        )
+
+    def test_nemotron_3_5_bf16_cards_bind_exact_checkpoint_evidence(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        checkpoints = {
+            "nvidia/nemotron-3.5-super-vl": (
+                "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+            ),
+            "nvidia/nemotron-3.5-bolt": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+        }
+        expected_benchmarks = {
+            "nvidia/nemotron-3.5-super-vl": {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "livecodebench/livecodebench@6.0.0",
+                "swe-bench/verified@1.0.0",
+                "swe-bench/pro@1.0.0",
+                "harbor/terminal-bench@2.1.0",
+            },
+            "nvidia/nemotron-3.5-bolt": {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "cais/humanitys-last-exam@1.0.0",
+                "scicode-bench/scicode@1.0.0",
+                "harbor/terminal-bench@2.1.0",
+                "scale/mcp-atlas@1.0.0",
+            },
+        }
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, set(checkpoints))
+        self.assertEqual(
+            buckets,
+            {
+                ("nvidia/nemotron-3.5-super-vl", "high", "vendor_claimed"): (
+                    expected_benchmarks["nvidia/nemotron-3.5-super-vl"]
+                ),
+                ("nvidia/nemotron-3.5-bolt", "unspecified", "vendor_claimed"): (
+                    expected_benchmarks["nvidia/nemotron-3.5-bolt"]
+                ),
+            },
+        )
+        for evaluation in resources["evaluations"]:
+            if evaluation["model"] in checkpoints:
+                self.assertEqual(
+                    evaluation["subject"]["variant"], checkpoints[evaluation["model"]]
+                )
+                self.assertEqual(evaluation["subject"]["precision"], "BF16")
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        vllm_bindings = {
+            binding["catalog"]: binding
+            for binding in providers["vllm"]["models"]
+            if binding.get("catalog") in checkpoints
+        }
+        self.assertEqual(
+            {model_id: binding["id"] for model_id, binding in vllm_bindings.items()},
+            {
+                model_id: f"nvidia/{checkpoint}"
+                for model_id, checkpoint in checkpoints.items()
+            },
+        )
+        for binding in vllm_bindings.values():
+            self.assertEqual(binding["relationship"], "self_hosted")
 
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
@@ -779,6 +887,14 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ["adaptive", "disabled"],
         )
         self.assertEqual(families["claude-effort-opt-in"]["default_mode"], "disabled")
+        for family, default_mode in (
+            ("longcat-2.0", "enabled"),
+            ("longcat-2.5", "disabled"),
+        ):
+            self.assertEqual(families[family]["type"], "chat_template_kwargs")
+            self.assertEqual(families[family]["parameter"], "enable_thinking")
+            self.assertEqual(families[family]["modes"], ["enabled", "disabled"])
+            self.assertEqual(families[family]["default_mode"], default_mode)
         self.assertEqual(families["kimi-k3"]["levels"], ["low", "high", "max"])
         self.assertEqual(families["kimi-k3"]["default"], "max")
         self.assertEqual(families["hunyuan-hy4"]["levels"], ["high"])
@@ -835,9 +951,14 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "xai/grok-4.6": "grok-4.6",
             "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
+            "tencent/hy4": "hunyuan-hy4",
+            "tencent/hy4-flash": "hunyuan",
             "moonshot/kimi-k3": "kimi-k3",
+            "moonshot/kimi-k3.1-pro": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",
+            "meituan/longcat-2.5": "longcat-2.5",
+            "meituan/longcat-2.0": "longcat-2.0",
             "meta/muse-glimmer-30b": "muse-glimmer",
             "mistral/mistral-medium-3.5": "mistral-none-high",
             "mistral/mistral-small-4": "mistral-none-high",
@@ -855,6 +976,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
+            "nvidia/nemotron-3.5-super-vl": "nemotron-ultra",
+            "nvidia/nemotron-3.5-bolt": "nemotron-ultra",
         }
         self.assertEqual(
             {
@@ -867,6 +990,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             providers["anthropic"]["reasoning_transport"], "output_config_effort"
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
+        self.assertEqual(providers["longcat"]["reasoning_transport"], "thinking_object")
         zai_bindings = {
             binding["catalog"]: binding for binding in providers["zai"]["models"]
         }
@@ -927,6 +1051,9 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "openai/gpt-5.4",
                 "openai/gpt-5.5",
                 "openai/gpt-6-astra",
+                "openai/gpt-6.2-astra",
+                "openai/gpt-6.2-sol",
+                "openai/gpt-6.1-terra",
                 "openai/gpt-5.6-luna",
                 "openai/gpt-5.6-sol",
                 "openai/gpt-5.6-terra",

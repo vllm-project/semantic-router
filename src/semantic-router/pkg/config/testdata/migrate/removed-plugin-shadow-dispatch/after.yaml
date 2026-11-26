@@ -21,7 +21,9 @@ recipes:
               enabled: true
               capture_response_body: true
               shadow:
-                model: candidate
+                models:
+                  - candidate
                 sample_rate: 0.05
-                max_concurrency: 2
-                timeout_seconds: 30
+                execution:
+                  max_concurrency: 2
+                  timeout: 30s
