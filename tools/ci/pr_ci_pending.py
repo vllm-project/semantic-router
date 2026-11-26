@@ -18,6 +18,7 @@ from pr_ci_shared import (
     pages,
     presentation,
     publisher_ready,
+    qualification_only_rules,
     validate_plan,
     verdict,
 )
@@ -233,6 +234,8 @@ def output(snapshot, text):
 
 def repair(client, repo, run_id, trigger, *, event=None, dry_run=False):
     original_snapshot = collect(client, repo, run_id)
+    if qualification_only_rules(client, repo, original_snapshot["pull"]["base"]["ref"]):
+        return {"ignored": "legacy PR Gate is no longer required"}
     baseline = signature(original_snapshot)
 
     def fresh():

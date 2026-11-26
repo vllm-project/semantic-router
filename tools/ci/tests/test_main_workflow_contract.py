@@ -399,7 +399,7 @@ class PullRequestGateContractTests(unittest.TestCase):
             " && startsWith(github.head_ref, 'mergify/merge-queue/')) }}",
         )
 
-    def test_stable_gate_only_accepts_complete_eligible_qualification(self) -> None:
+    def test_stable_gate_requires_current_reconciliation(self) -> None:
         step = self.gate["steps"][0]
         self.assertEqual(self.gate["needs"], "ci")
         self.assertEqual(
@@ -410,18 +410,18 @@ class PullRequestGateContractTests(unittest.TestCase):
             step["env"]["PUBLISHER_READY"], "${{ needs.ci.outputs.publisher_ready }}"
         )
         head, source = "a" * 40, "b" * 40
-        qualified = f"{head}:{source}:10:2"
+        reconciled = f"{head}:{source}:10:2"
         strict_cases = (
-            ("true", "false", "success", qualified, 0),
-            ("true", "false", "success", "", 1),  # Pending or partial approval.
+            ("true", "false", "success", reconciled, 0),
+            ("true", "false", "success", "", 1),  # No current Gate evidence.
             ("true", "true", "success", "", 1),  # Ordinary draft plan.
             ("true", "false", "success", f"{head}:{source}:10:1", 1),
             ("true", "false", "success", f"{head}:{source}:11:2", 1),
             ("true", "false", "success", f"{source}:{source}:10:2", 1),
             ("true", "false", "success", f"{head}:{head}:10:2", 1),
-            ("true", "false", "skipped", qualified, 1),
-            ("true", "false", "failure", qualified, 1),
-            ("true", "false", "cancelled", qualified, 1),
+            ("true", "false", "skipped", reconciled, 1),
+            ("true", "false", "failure", reconciled, 1),
+            ("true", "false", "cancelled", reconciled, 1),
             ("false", "true", "success", "", 1),  # Legacy PR Gate rejects draft plans.
             ("false", "null", "success", "", 1),
             ("false", "false", "success", "", 0),
@@ -452,7 +452,7 @@ class PullRequestGateContractTests(unittest.TestCase):
                         "GITHUB_SHA": source,
                         "GITHUB_RUN_ID": "10",
                         "GITHUB_RUN_ATTEMPT": "2",
-                        "QUALIFIED_REVISION": revision,
+                        "RECONCILED_REVISION": revision,
                     },
                     capture_output=True,
                     text=True,

@@ -75,6 +75,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.commit_statuses = []
         self.status_writes = []
+        self.rules = []
+        self.classic_protection = False
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
@@ -146,6 +148,10 @@ class Client:
             return copy.deepcopy(self.pull)
         if path.startswith(f"commits/{HEAD}/statuses?"):
             return copy.deepcopy(self.commit_statuses)
+        if path.startswith("rules/branches/main"):
+            return copy.deepcopy(self.rules)
+        if path == "branches/main":
+            return {"protection": {"enabled": self.classic_protection}}
         if path.startswith("check-runs/"):
             identity = int(path.rsplit("/", 1)[1])
             return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
@@ -248,6 +254,82 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_after_cutover_automatic_ci_reports_only_one_pending_gate(self):
+        client = Client()
+        new_checks = [
+            {"context": name, "integration_id": APP_ID}
+            for name in ("PR Qualification", "CI Execution")
+        ]
+        client.rules = [
+            {
+                "type": "required_status_checks",
+                "parameters": {"required_status_checks": new_checks},
+            }
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "awaiting-approval")
+        self.assertIsNone(result["check"])
+        self.assertFalse(client.checks)
+        self.assertEqual([s["state"] for s in client.status_writes], ["pending"])
+        self.assertTrue(
+            any("/ci run" in payload.get("body", "") for _, payload, _ in client.writes)
+        )
+
+    def test_native_rerun_without_legacy_gate_fences_the_current_attempt(self):
+        client = Client()
+        client.commit_statuses = [
+            {
+                "context": "PR Qualification",
+                "state": "success",
+                "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/1",
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+        ]
+        client.run.update(run_attempt=2, status="in_progress", conclusion=None)
+        client.rules = [
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [
+                        {"context": name, "integration_id": APP_ID}
+                        for name in ("PR Qualification", "CI Execution")
+                    ]
+                },
+            }
+        ]
+        reconcile(client, REPO, 101)
+        self.assertFalse(client.checks)
+        self.assertEqual([s["state"] for s in client.status_writes], ["pending"])
+        self.assertTrue(client.status_writes[0]["target_url"].endswith("/attempts/2"))
+
+    def test_incomplete_cutover_preserves_the_legacy_gate(self):
+        for classic, contexts in (
+            (False, ["PR Qualification", "CI Execution", "PR Gate"]),
+            (False, ["PR Qualification"]),
+            (True, ["PR Qualification", "CI Execution"]),
+        ):
+            with self.subTest(classic=classic, contexts=contexts):
+                client = Client()
+                client.classic_protection = classic
+                client.rules = [
+                    {
+                        "type": "required_status_checks",
+                        "parameters": {
+                            "required_status_checks": [
+                                {"context": name, "integration_id": APP_ID}
+                                for name in contexts
+                            ]
+                        },
+                    }
+                ]
+                reconcile(client, REPO, 101)
+                self.assertEqual(
+                    [check["name"] for check in client.checks], ["PR Gate"]
+                )
+                self.assertEqual(
+                    [s["state"] for s in client.status_writes], ["pending"]
+                )
+
     def test_qualification_survives_compatibility_write_failure(self):
         for operation, state in (("check-runs", "success"), ("comments", "pending")):
             with self.subTest(operation=operation):

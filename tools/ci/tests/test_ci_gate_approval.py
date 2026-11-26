@@ -24,6 +24,10 @@ from execution_batches import (  # noqa: E402
 )
 from test_ci_artifact_selection import write_builds, write_receipts  # noqa: E402
 from test_ci_gate import SHA, completed  # noqa: E402
+from manual_ci import (  # noqa: E402
+    qualification_attempt_ready,
+    qualification_status_url,
+)
 
 BASE = "b" * 40
 HEAD = "c" * 40
@@ -286,15 +290,53 @@ class GateApprovalCLITests(unittest.TestCase):
         self.assertEqual(report["run_attempt"], 2)
 
     def test_explicit_allow_deferred_exits_zero_without_reporting_passed(self):
-        result = self.run_gate("--allow-deferred", PR_HEAD_SHA=HEAD)
+        result = self.run_gate(
+            "--allow-deferred", PR_HEAD_SHA=HEAD, CI_PLAN_RUN="12345:2"
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(
             json.loads(self.report.read_text())["status"], "awaiting-approval"
         )
         self.assertIn("passed=false\n", self.outputs.read_text())
-        self.assertNotIn("qualified_revision=", self.outputs.read_text())
+        self.assertIn(
+            f"reconciled_revision={HEAD}:{SHA}:12345:2\n", self.outputs.read_text()
+        )
 
-    def test_partial_cli_approval_does_not_report_qualified_revision(self):
+    def test_native_execution_needs_a_current_pending_status_on_a_rerun(self):
+        repo = "example/router"
+        for attempt, prior, prior_run, prior_attempt, allowed in (
+            (1, None, 0, 0, True),
+            (1, "success", 12344, 1, False),
+            (1, "pending", 12345, 1, True),
+            (2, None, 0, 0, False),
+            (2, "success", 12345, 1, False),
+            (2, "success", 12345, 2, False),
+            (2, "pending", 12345, 1, False),
+            (2, "pending", 12344, 2, False),
+            (2, "pending", 12345, 2, True),
+        ):
+            with self.subTest(attempt=attempt, prior=prior, prior_run=prior_run):
+                status = (
+                    {
+                        "state": prior,
+                        "target_url": qualification_status_url(
+                            repo, prior_run, prior_attempt
+                        ),
+                    }
+                    if prior
+                    else {}
+                )
+                with patch(
+                    "manual_ci.latest_qualification_status", return_value=status
+                ):
+                    self.assertEqual(
+                        qualification_attempt_ready(
+                            object(), repo, HEAD, 12345, attempt
+                        ),
+                        allowed,
+                    )
+
+    def test_partial_cli_approval_reconciles_without_qualifying(self):
         plan, receipts, builds = completed(
             PATHS,
             full=True,
@@ -305,10 +347,15 @@ class GateApprovalCLITests(unittest.TestCase):
         self.plan_path.write_text(json.dumps(plan))
         write_receipts(self.results, plan, receipts)
         write_builds(self.results, builds)
-        result = self.run_gate("--allow-deferred", PR_HEAD_SHA=HEAD)
+        result = self.run_gate(
+            "--allow-deferred", PR_HEAD_SHA=HEAD, CI_PLAN_RUN="12345:2"
+        )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("status=awaiting-approval\n", self.outputs.read_text())
-        self.assertNotIn("qualified_revision=", self.outputs.read_text())
+        self.assertIn("passed=false\n", self.outputs.read_text())
+        self.assertIn(
+            f"reconciled_revision={HEAD}:{SHA}:12345:2\n", self.outputs.read_text()
+        )
 
     def test_complete_cli_reports_success_without_allow_deferred(self):
         self.plan, receipts, builds = completed(
@@ -334,9 +381,11 @@ class GateApprovalCLITests(unittest.TestCase):
                 self.assertIn("status=success\n", outputs)
                 self.assertIn("passed=true\n", outputs)
                 if plan_run == "12345:2":
-                    self.assertIn(f"qualified_revision={HEAD}:{SHA}:12345:2\n", outputs)
+                    self.assertIn(
+                        f"reconciled_revision={HEAD}:{SHA}:12345:2\n", outputs
+                    )
                 else:
-                    self.assertNotIn("qualified_revision=", outputs)
+                    self.assertNotIn("reconciled_revision=", outputs)
 
     def test_allow_deferred_does_not_hide_a_missing_receipt(self):
         removed = next(self.results.rglob(f"{self.receipts[0]['id']}.json"))

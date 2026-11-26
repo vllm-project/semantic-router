@@ -468,10 +468,13 @@ def main() -> int:
         if (
             pr_head
             and plan.get("draft") is False
-            and verdict.passed
+            and (
+                verdict.passed
+                or (args.allow_deferred and verdict.status == "awaiting-approval")
+            )
             and os.environ.get("CI_PLAN_RUN") == run_identity
         ):
-            outputs["qualified_revision"] = (
+            outputs["reconciled_revision"] = (
                 f"{pr_head}:{report['source_sha']}:{run_identity}"
             )
         with Path(path).open("a") as stream:

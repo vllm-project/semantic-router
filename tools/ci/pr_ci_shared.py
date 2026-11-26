@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from urllib.parse import urlencode
+import subprocess
+from urllib.parse import quote, urlencode
 
 import manual_ci as _manual_ci
 from manual_ci import (
@@ -22,6 +23,7 @@ pages = _manual_ci.pages
 publisher_ready = _manual_ci.status_publisher_available
 
 CHECK = "PR Gate"
+EXECUTION_CHECK = "CI Execution"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
 PREFIX = "semantic-router-ci:"
 APP_ID = 15368  # GitHub Actions; also the branch-protection check owner.
@@ -29,6 +31,35 @@ SHA = re.compile(r"[0-9a-f]{40}")
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_.-]{1,160}")
 MAX_IDENTIFIERS = 1000
 COMMENT_ITEM_LIMIT = 30
+
+
+def qualification_only_rules(client, repo: str, branch: str) -> bool:
+    """Keep the compatibility publisher until both replacement checks are required."""
+    base = quote(branch, safe="")
+    try:
+        required = [
+            (check["context"], check.get("integration_id"))
+            for rule in pages(client, f"repos/{repo}/rules/branches/{base}")
+            if rule["type"] == "required_status_checks"
+            for check in rule["parameters"]["required_status_checks"]
+        ]
+        if any(name == CHECK for name, _ in required) or not {
+            (_manual_ci.PR_QUALIFICATION_CONTEXT, APP_ID),
+            (EXECUTION_CHECK, APP_ID),
+        }.issubset(required):
+            return False
+        # Classic branch protection applies independently of rulesets.
+        protection = client.request(f"repos/{repo}/branches/{base}")["protection"]
+        return protection["enabled"] is False
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        OSError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ):
+        return False
 
 
 def current_pull(client, repo: str, run: dict) -> dict | None:

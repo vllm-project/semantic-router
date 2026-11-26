@@ -33,6 +33,7 @@ from pr_ci_shared import (
     CAPABILITIES,
     CHECK,
     COMMENT_ITEM_LIMIT,
+    EXECUTION_CHECK,
     IDENTIFIER,
     MARKER,
     MAX_IDENTIFIERS,
@@ -47,6 +48,7 @@ from pr_ci_shared import (
     pages,
     presentation,
     publisher_ready,
+    qualification_only_rules,
     validate_plan,
     verdict,
 )
@@ -181,7 +183,6 @@ def publish(
     result = {
         "pr": pull["number"],
         "state": state,
-        "check": None if state == "legacy" else payload,
     }
     if state != "legacy":
         result["qualification_status"] = {
@@ -195,6 +196,10 @@ def publish(
             publish_qualification_status(client, repo, pull, run, plan, result)
             if result.get("qualification_status_ignored") == "superseded":
                 return {"ignored": "superseded while preparing status"}
+    legacy_gate = state != "legacy" and not qualification_only_rules(
+        client, repo, pull["base"]["ref"]
+    )
+    result["check"] = payload if legacy_gate else None
     comments = pages(client, f"repos/{repo}/issues/{pull['number']}/comments")
     owned = [
         item
@@ -216,7 +221,7 @@ def publish(
     if dry_run:
         return result
     visible_checks = (
-        owned_checks(client, repo, pull, latest=True) if state != "legacy" else []
+        owned_checks(client, repo, pull, latest=True) if legacy_gate else []
     )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
@@ -225,7 +230,7 @@ def publish(
         return {"ignored": "superseded while preparing status"}
     if state == "success" and not qualifies_for_merge(repo, current, plan):
         return {"ignored": "PR became draft while preparing its Gate"}
-    if state != "legacy":
+    if legacy_gate:
         fresh_checks = owned_checks(client, repo, pull)
         current_checks = [c for c in fresh_checks if c.get("external_id") == external]
         if payload["status"] == "in_progress" and any(
@@ -337,9 +342,11 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         return {"ignored": "no matching current open pull request"}
     checks = owned_checks(client, repo, pull)
     if run.get("status") != "completed":
-        # On the first attempt, the required check is already Expected/pending.
-        # Do not invent the source identity before Plan has produced it.
-        if not checks:
+        # No earlier verdict needs fencing on a fresh head. Once legacy
+        # publishing is off, the commit status identifies earlier attempts.
+        if not checks and not latest_qualification_status(
+            client, repo, run["head_sha"]
+        ):
             return {"ignored": "first attempt is still preparing its plan"}
         return publish(
             client, repo, pull, run, "running", None, checks, dry_run=dry_run
@@ -378,7 +385,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError) as error:
-        if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
+        if not checks and not any(job.get("name") == EXECUTION_CHECK for job in jobs):
             raise
         state = "failure"
         if (

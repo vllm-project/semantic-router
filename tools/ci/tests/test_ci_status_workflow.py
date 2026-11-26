@@ -46,7 +46,8 @@ class CIStatusWorkflowTests(unittest.TestCase):
         reconcile_step = next(
             step for step in gate["steps"] if "check_ci_gate.py" in step.get("run", "")
         )
-        execution = self.workflows["pr.yml"].jobs["pr-gate"]["steps"][0]
+        execution_job = self.workflows["pr.yml"].jobs["pr-gate"]
+        execution, checkout, freshness = execution_job["steps"]
         planner = self.workflows["ci-changes.yml"]
         plan_job = planner.jobs["plan"]
         self.assertEqual(
@@ -71,22 +72,31 @@ class CIStatusWorkflowTests(unittest.TestCase):
         head = "${{ github.event.pull_request.head.sha }}"
         self.assertEqual(reconcile_step["env"]["PR_HEAD_SHA"], head)
         self.assertEqual(
-            gate["outputs"]["qualified_revision"],
-            "${{ steps." + reconcile_step["id"] + ".outputs.qualified_revision }}",
+            gate["outputs"]["reconciled_revision"],
+            "${{ steps." + reconcile_step["id"] + ".outputs.reconciled_revision }}",
         )
         self.assertEqual(
-            shared.events["workflow_call"]["outputs"]["qualified_revision"]["value"],
-            "${{ jobs.gate.outputs.qualified_revision }}",
+            shared.events["workflow_call"]["outputs"]["reconciled_revision"]["value"],
+            "${{ jobs.gate.outputs.reconciled_revision }}",
         )
         self.assertEqual(execution["env"]["PR_HEAD_SHA"], head)
         self.assertEqual(
-            execution["env"]["QUALIFIED_REVISION"],
-            "${{ needs.ci.outputs.qualified_revision }}",
+            execution["env"]["RECONCILED_REVISION"],
+            "${{ needs.ci.outputs.reconciled_revision }}",
         )
         self.assertIn(
             '"$PR_HEAD_SHA:$GITHUB_SHA:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"',
             execution["run"],
         )
+        self.assertEqual(
+            execution_job["permissions"], {"contents": "read", "statuses": "read"}
+        )
+        self.assertEqual(
+            freshness["if"], "needs.ci.outputs.strict_ci_execution == 'true'"
+        )
+        self.assertEqual(checkout["if"], freshness["if"])
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertIn("qualification_attempt_ready(", freshness["run"])
 
     def test_event_resolution_precedes_one_shared_qualification_lock(self):
 

@@ -39,8 +39,8 @@ on:
         value: ${{ jobs.plan.outputs.strict_ci_execution }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
-      qualified_revision:
-        value: ${{ jobs.gate.outputs.qualified_revision }}
+      reconciled_revision:
+        value: ${{ jobs.gate.outputs.reconciled_revision }}
       publish_images:
         value: ${{ jobs.plan.outputs.publish_images }}
       publish_helm:
@@ -380,7 +380,7 @@ jobs:
     needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator-source, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     outputs:
-      qualified_revision: ${{ steps.reconcile.outputs.qualified_revision }}
+      reconciled_revision: ${{ steps.reconcile.outputs.reconciled_revision }}
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m pip install PyYAML==6.0.3

@@ -218,11 +218,11 @@ behavior was verified.
 
 Affected source and component checks start automatically. Expensive image,
 model, service, and deployment checks need a committer's authorization. When
-only that authorization is missing, **PR Gate** stays pending with
+only that authorization is missing, the qualification check stays pending with
 **Waiting for committer approval**. A single bot comment on the PR lists the
 remaining checks and the command to authorize them; it is updated as the PR
 changes. Waiting does not occupy a runner. Actual test or evidence failures
-remain failures, and the Gate succeeds only when all required evidence passes.
+remain failures. **PR Qualification** succeeds once all required evidence passes.
 
 Contributors without repository write permission do not need to authorize CI
 and cannot do so. A committer with current `write`, `maintain`, or `admin`
@@ -253,8 +253,8 @@ with **CI source evidence unavailable**. Diagnostics identify this boundary as
 an unavailable object does not prove that qualification succeeded.
 
 The command handler reacts with 👀 when it receives a request and 🚀 after it
-successfully triggers the PR workflow. The rocket means CI was started, not that
-tests passed; **PR Gate** reports the final result. Rejected requests receive 😕
+successfully triggers the PR workflow. **PR Qualification** reports the final
+result. Rejected requests receive 😕
 and a short bot reply explaining the reason and next step, including when the
 requester lacks permission. Feedback appears when the command handler starts.
 
