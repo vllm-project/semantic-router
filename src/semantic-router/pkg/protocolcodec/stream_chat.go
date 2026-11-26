@@ -541,6 +541,29 @@ func isExactGatewayKeepalive(chunk chatChunkWire) bool {
 		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
+// RequireStreamableCandidates rejects a request for several choices that the
+// backend would stream over Chat. The Chat stream decoder reads choice index 0
+// only, so without this check the backend generates every choice and the
+// client gets the decoder's error only at the backend's end of stream.
+func RequireStreamableCandidates(format llmprotocol.WireFormat, request llmprotocol.Request) error {
+	if format != llmprotocol.OpenAIChatV1 || !request.Stream {
+		return nil
+	}
+	if request.CandidateCount == nil || *request.CandidateCount <= 1 {
+		return nil
+	}
+	return errStreamMultipleChoices()
+}
+
+func errStreamMultipleChoices() error {
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUnsupportedFeature,
+		"stream_multiple_choices",
+		"streaming multiple choices is unsupported",
+		nil,
+	)
+}
+
 func validateChatStreamChunk(chunk chatChunkWire) error {
 	if err := validateChatStreamEnvelope(chunk); err != nil {
 		return err
@@ -549,12 +572,7 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		return err
 	}
 	if len(chunk.Choices) > 1 {
-		return llmprotocol.NewError(
-			llmprotocol.ErrorUnsupportedFeature,
-			"stream_multiple_choices",
-			"streaming multiple choices is unsupported",
-			nil,
-		)
+		return errStreamMultipleChoices()
 	}
 	for _, choice := range chunk.Choices {
 		if choice.FinishReason != nil && !validChatFinishReason(*choice.FinishReason) {
@@ -657,7 +675,7 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 
 func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
 	if choice.Index != 0 {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "stream_multiple_choices", "streaming multiple choices is unsupported", nil)
+		return nil, errStreamMultipleChoices()
 	}
 	events, err := decoder.decodeChoiceTextEvents(choice)
 	if err != nil {
