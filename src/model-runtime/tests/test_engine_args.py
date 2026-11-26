@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 
 import pytest
 from starlette.testclient import TestClient
@@ -672,6 +673,50 @@ def test_runtime_preserves_distinct_unnamed_package_aliases(
         assert [item["id"] for item in data] == [
             qwen3_package.name,
             qwen35_package.name,
+        ]
+        for item, served in zip(data, runtime.served, strict=True):
+            assert runtime.lookup(item["id"]) is served
+    finally:
+        runtime.stop()
+
+
+def test_runtime_lookup_prefers_advertised_id_over_alias(
+    tmp_path, qwen3_package, qwen35_package
+):
+    colliding_package_b = tmp_path / "Decision-2.0-Tiny-Qwen3"
+    shutil.copytree(qwen35_package, colliding_package_b)
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(model=str(qwen3_package), device="cpu"),
+                ModelConfig(model=str(colliding_package_b), device="cpu"),
+            )
+        )
+    )
+    runtime.start(background=False)
+    try:
+        assert runtime.served[0].model is not None
+        assert runtime.served[1].model is not None
+        assert runtime.served[0].model.info.id == colliding_package_b.name
+        assert runtime.served[1].served_id == colliding_package_b.name
+
+        cards = runtime.model_cards()
+        assert [card["id"] for card in cards] == [
+            qwen3_package.name,
+            colliding_package_b.name,
+        ]
+        assert runtime.lookup(qwen3_package.name) is runtime.served[0]
+        assert runtime.lookup(colliding_package_b.name) is runtime.served[1]
+        assert runtime.lookup(runtime.served[1].model.info.id) is runtime.served[1]
+
+        client = TestClient(create_app(runtime))
+        response = client.get("/v1/models")
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert [item["id"] for item in data] == [
+            qwen3_package.name,
+            colliding_package_b.name,
         ]
         for item, served in zip(data, runtime.served, strict=True):
             assert runtime.lookup(item["id"]) is served

@@ -1187,6 +1187,9 @@ class Runtime:
         if not isinstance(name, str):
             raise RuntimeServiceError("invalid_request", "model must be a string")
         for served in self.served:
+            if served.served_id == name:
+                return served
+        for served in self.served:
             if served.accepts(name):
                 return served
         raise RuntimeServiceError(
