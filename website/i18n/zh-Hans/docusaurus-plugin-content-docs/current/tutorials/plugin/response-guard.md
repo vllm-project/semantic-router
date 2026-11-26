@@ -71,6 +71,7 @@ recipes:
 | `rules[].action` | `block` 以 HTTP 403 拒绝回答，流式回答则以流的错误事件拒绝；`annotate` 交付回答，并在 `x-vsr-warnings` 中写入该规则的警告码；`none` 只记录结果。 |
 | `rules[].details` | 配合 `annotate`，在回答开头再写一条说明。幻觉说明会列出不被支持的片段。 |
 | `on_unknown` | 规则读取的响应阶段信号无法读取时（检测器失败或超时、回答没有文本，或没有可对照的依据上下文）该规则怎么做：`block`、`annotate`（默认）或 `none`。 |
+| `hold_stream` | 扣住流式回答直到守卫读完，使只做 `annotate` 的守卫的警告码也能进入 `x-vsr-warnings`。会增加首 token 延迟；默认 `false` 保持真正的流式传输。详见[流式回答](#streamed-answers)。 |
 | `enabled` | `false` 关闭决策从 `global.plugins` 或其配方插件继承的守卫，此时不要求 `rules`。 |
 
 规则按顺序读取，第一条拦截的规则结束读取。响应阶段信号只在规则读到它时才求值，并且无论多少规则读取它，每个回答只求值一次。请求具体模型时绕过配方信号，因此不运行任何守卫，包括 `global.plugins` 中的守卫。
@@ -90,7 +91,7 @@ recipes:
 
 ## 流式回答 {#streamed-answers}
 
-能拒绝或改写回答的守卫（含 `block` 规则、带 `details` 的 `annotate` 规则，或 `on_unknown: block`）同样作用于流式回答。这类决策的客户端请求流式响应时（Chat Completions、Responses 或 Messages 上的 `stream: true`），Router 会扣住模型的流，直到流结束、守卫读完整个回答。客户端随后收到以下之一：
+能拒绝或改写回答的守卫（含 `block` 规则、带 `details` 的 `annotate` 规则、`on_unknown: block`，或设置了 `hold_stream: true` 的守卫）同样作用于流式回答。这类决策的客户端请求流式响应时（Chat Completions、Responses 或 Messages 上的 `stream: true`），Router 会扣住模型的流，直到流结束、守卫读完整个回答。客户端随后收到以下之一：
 
 - 模型流出的原始事件，包括 usage 块和终止事件，守卫的警告码写入 `x-vsr-warnings`；
 - 对带 `details` 的规则，回答开头带有守卫说明的回答事件；
@@ -98,7 +99,7 @@ recipes:
 
 在 Envoy 之后，Router 只为这些请求要求缓冲响应体；独立运行时，Router 自行缓冲响应体。代价是首 token 时间：模型完成之前客户端收不到任何内容，因此长回答必须在客户端和所有代理的空闲超时之内完成。被扣住的回答上限为 64 MiB，即 Router 接受任何模型响应的大小，Envoy 自身的缓冲上限先于它生效。更大的回答不经读取即以同样的流错误拒绝；没有得到完整回答就结束的流只发送它的失败信息：守卫没有读过的内容不会到达客户端。
 
-规则只做不带 `details` 的 `annotate` 或只记录（`none`）的守卫保持真正的流式传输：客户端在生成过程中即收到回答，守卫在流结束后读取它并把结果记录在 [Router Replay](./router-replay) 中，但它的警告码无法进入 `x-vsr-warnings`，因为响应头已随第一个 token 发出。
+规则只做不带 `details` 的 `annotate` 或只记录（`none`）的守卫默认保持真正的流式传输：客户端在生成过程中即收到回答，守卫在流结束后读取它并把结果记录在 [Router Replay](./router-replay) 中，但它的警告码无法进入 `x-vsr-warnings`，因为响应头已随第一个 token 发出。对此类守卫设置 `hold_stream: true`，即可按上文扣住其流式回答：客户端收到模型的事件，并在 `x-vsr-warnings` 中拿到守卫的警告码，代价是首 token 延迟，并适用同样的限制（64 MiB、空闲超时、Envoy 缓冲上限）。该选项只作用于设置它的守卫，不改变任何其他守卫，也不改变默认行为。
 
 Router Replay 用 `stream: buffered` 或 `stream: unbuffered` 记录流式回答的结果。`x-vsr-trace` 以 `response_guard` 携带守卫的结果，被扣住的流还带有 `buffered`；`llm_response_guard_buffered_total` 按决策和结果统计被扣住的流：`passed`、`annotated`、`blocked`、`over_limit` 或 `incomplete`。
 

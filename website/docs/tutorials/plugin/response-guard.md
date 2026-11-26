@@ -74,6 +74,7 @@ recipes:
 | `rules[].action` | `block` refuses the answer with HTTP 400, an `invalid_request_error` with code `response_blocked` in the client's protocol, or with the stream's error event for a streamed answer; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
 | `rules[].details` | With `annotate`, also writes a note at the head of the answer. The hallucination note names the unsupported spans. |
 | `on_unknown` | What a rule does when a response-stage signal it reads could not be read: the detector failed or timed out, the answer had no text, or there was no grounding context to check it against. `block`, `annotate` (the default) or `none`. |
+| `hold_stream` | Hold a streamed answer until the guard has read all of it, so an annotate-only guard's codes reach `x-vsr-warnings`. Costs time to first token; default `false` keeps true streaming. See [Streamed Answers](#streamed-answers). |
 | `enabled` | `false` turns off the guard a decision inherits from `global.plugins` or its recipe's plugins; `rules` is then not required. |
 
 Rules are read in order, and the first rule that blocks ends the read. A
@@ -111,7 +112,8 @@ and
 ## Streamed Answers
 
 A guard that can refuse or rewrite an answer (a `block` rule, an `annotate`
-rule with `details`, or `on_unknown: block`) applies to streamed answers too.
+rule with `details`, `on_unknown: block`, or a guard with `hold_stream: true`)
+applies to streamed answers too.
 When the client of such a decision asks for a stream (`stream: true` on Chat
 Completions, Responses or Messages), the Router holds the model's stream
 until it ends and the guard has read the whole answer. The client then
@@ -138,10 +140,15 @@ complete answer sends only its failure: nothing the guard has not read
 reaches the client.
 
 A guard whose rules only `annotate` without `details` or record (`none`)
-keeps true streaming. The client receives the answer as it is generated; the
-guard reads it once the stream ends and records the outcome in
+keeps true streaming by default. The client receives the answer as it is
+generated; the guard reads it once the stream ends and records the outcome in
 [Router Replay](./router-replay), but its codes cannot reach
-`x-vsr-warnings`, which left with the first token.
+`x-vsr-warnings`, which left with the first token. Set `hold_stream: true` on
+such a guard to hold its streamed answers as described above: the client then
+gets the model's events with the guard's codes in `x-vsr-warnings`, at the
+cost of time to first token and the same bounds (64 MiB, idle timeouts,
+Envoy's buffer limit). The opt-in changes no other guard and leaves the
+default unchanged.
 
 Router Replay records the outcomes of a streamed answer with `stream:
 buffered` or `stream: unbuffered`. `x-vsr-trace` carries the guard's outcome

@@ -100,6 +100,13 @@ function getResponseGuardPluginFieldSchema(): FieldSchema[] {
       description:
         'What a rule does when a response-stage signal it reads could not be read (default annotate)',
     },
+    {
+      key: 'hold_stream',
+      label: 'Hold stream',
+      type: 'boolean',
+      description:
+        'Hold a streamed answer until the guard reads it so annotate-only codes reach x-vsr-warnings (costs time to first token)',
+    },
   ]
 }
 

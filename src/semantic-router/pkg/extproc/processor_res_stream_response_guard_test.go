@@ -169,6 +169,7 @@ func TestOnlyAnEnforcingGuardBuffersAStreamedAnswer(t *testing.T) {
 		{"annotate with details", &config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: jailbreak, Action: config.ResponseGuardAnnotate, Details: true}}}, true},
 		{"on_unknown block", &config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: jailbreak, Action: config.ResponseGuardNone}}, OnUnknown: config.ResponseGuardBlock}, true},
 		{"annotate", &config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: jailbreak, Action: config.ResponseGuardAnnotate}}}, false},
+		{"annotate with hold_stream", &config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: jailbreak, Action: config.ResponseGuardAnnotate}}, HoldStream: true}, true},
 		{"none", &config.ResponseGuardPluginConfig{Rules: []config.ResponseGuardRule{{When: jailbreak, Action: config.ResponseGuardNone}}, OnUnknown: config.ResponseGuardNone}, false},
 		{"no guard", nil, false},
 	} {
@@ -597,4 +598,60 @@ func chatStreamContent(stream string) string {
 		}
 	}
 	return content.String()
+}
+
+// With hold_stream an annotate-only guard holds the stream: the client still
+// gets the model's events, but now with the guard's codes in x-vsr-warnings,
+// the hold counted, and replay recording the stream as buffered. Without the
+// opt-in the same guard keeps true streaming (TestNonEnforcingGuardKeepsTrue
+// Streaming). Details stay off: no note is written into the answer.
+func TestHoldStreamOptInLetsAnnotateOnlyCodesReachWarnings(t *testing.T) {
+	for _, format := range guardProtocols {
+		t.Run(string(format), func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.KeywordRules = []config.KeywordRule{responseStageKeyword()}
+			cfg.JailbreakRules = []config.JailbreakRule{responseStageRule()}
+			cfg.Decisions = []config.Decision{keywordDecision(responseStageRouteName, guardPlugin(config.ResponseGuardPluginConfig{
+				Rules: []config.ResponseGuardRule{{
+					When:   config.RuleNode{Type: config.SignalTypeJailbreak, Name: responseStageRuleName},
+					Action: config.ResponseGuardAnnotate,
+				}},
+				HoldStream: true,
+			}))}
+			router, ctx := routerWithSelectedDecision(cfg, responseStageClassifier(t, cfg, newJailbreakDecider(0.95)), responseStageRouteName)
+			recorder := startResponseStageReplay(t, router, ctx)
+			streamingClient(ctx, format)
+			ctx.Headers[headers.VSRDebug] = "true"
+			before := bufferedCount(ctx, "annotated")
+			parts := streamOf(format, unsafeAnswer)
+
+			if mode := answerHeaders(t, router, ctx, "text/event-stream").GetModeOverride().GetResponseBodyMode(); mode != http_ext.ProcessingMode_BUFFERED {
+				t.Fatalf("response body mode = %v, want BUFFERED", mode)
+			}
+			client, replies := answerBody(t, router, ctx, whole(parts))
+
+			// The whole stream is delivered: answer, usage, terminal event.
+			if want := streamedThroughUnguarded(t, format, parts); client != want {
+				t.Fatalf("client stream =\n%s\nwant the stream as it streams unguarded:\n%s", client, want)
+			}
+			// The codes ride on the body phase's warnings header, and the
+			// answer itself carries no note (details stays false).
+			if warnings := bodyPhaseHeader(replies[0], headers.VSRWarnings); !strings.Contains(warnings, headers.WarningJailbreak) {
+				t.Fatalf("%s = %q, want %q", headers.VSRWarnings, warnings, headers.WarningJailbreak)
+			}
+			if trace := bodyPhaseHeader(replies[0], headers.VSRTrace); !strings.Contains(trace, "response_guard=annotated;buffered") {
+				t.Fatalf("%s = %q, want the annotated outcome of a buffered stream", headers.VSRTrace, trace)
+			}
+			if got := bufferedCount(ctx, "annotated"); got != before+1 {
+				t.Fatalf("llm_response_guard_buffered_total{outcome=annotated} = %v, want %v", got, before+1)
+			}
+			rule := outcomeFor(t, guardOutcomes(t, recorder, ctx), config.DecisionPluginResponseGuard, "rules[0]")
+			if rule.Verdict != "matched" || rule.Metadata["action"] != config.ResponseGuardAnnotate || rule.Metadata["stream"] != responseGuardStreamBuffered {
+				t.Fatalf("rule outcome = %+v, want matched and annotated on a buffered stream", rule)
+			}
+			if matched, _ := ctx.ResponseGuard.jailbreakFinding(); !matched {
+				t.Fatal("the guard did not read the streamed answer")
+			}
+		})
+	}
 }

@@ -5975,6 +5975,9 @@
             "annotate",
             "none"
           ]
+        },
+        "hold_stream": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,

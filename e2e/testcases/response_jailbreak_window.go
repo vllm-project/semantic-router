@@ -22,6 +22,9 @@ const (
 	// route-action profile.
 	responseJailbreakEntrypoint = "vllm-sr/response-guard"
 	responseJailbreakWarnProbe  = "__response_warn_probe__"
+	// responseJailbreakWarnHoldProbe selects the decision whose guard opted
+	// into holding annotated streams (hold_stream).
+	responseJailbreakWarnHoldProbe = "__response_warn_hold_probe__"
 
 	// provider-mocker echoes the prompt back as the assistant message, and the
 	// echo puts the prompt last, so anything at the end of the prompt is at

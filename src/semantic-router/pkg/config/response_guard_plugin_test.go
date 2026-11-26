@@ -34,3 +34,35 @@ global:
 		t.Fatalf("err = %v, want the default guard's undeclared signal refused", err)
 	}
 }
+
+// An annotate-only guard opts into holding a streamed answer with hold_stream,
+// without changing the default or an unrelated guard's behavior.
+func TestResponseGuardHoldStreamOptIn(t *testing.T) {
+	jailbreak := RuleNode{Type: SignalTypeJailbreak, Name: "jailbreak"}
+	annotate := ResponseGuardPluginConfig{
+		Rules: []ResponseGuardRule{{When: jailbreak, Action: ResponseGuardAnnotate}},
+	}
+	if annotate.Enforces() {
+		t.Fatal("an annotate-only guard holds a stream by default")
+	}
+	annotate.HoldStream = true
+	if !annotate.Enforces() {
+		t.Fatal("hold_stream did not make an annotate-only guard enforce")
+	}
+	// A guard that already holds needs no opt-in, and the opt-in leaves other
+	// rules' actions unchanged.
+	blocking := ResponseGuardPluginConfig{
+		Rules:      []ResponseGuardRule{{When: jailbreak, Action: ResponseGuardBlock}},
+		HoldStream: true,
+	}
+	if !blocking.Enforces() {
+		t.Fatal("a blocking guard must hold a stream")
+	}
+	none := ResponseGuardPluginConfig{
+		Rules:      []ResponseGuardRule{{When: jailbreak, Action: ResponseGuardNone}},
+		HoldStream: true,
+	}
+	if !none.Enforces() {
+		t.Fatal("hold_stream must hold even when the rule only records")
+	}
+}
