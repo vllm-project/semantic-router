@@ -536,6 +536,20 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
     expect_rare = [
         part.strip() for part in str(args.expect_rare).split(",") if part.strip()
     ]
+    agent_requests = None
+    if args.agent_requests:
+        try:
+            with Path(args.agent_requests).open("r", encoding="utf-8") as fh:
+                manifest = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise SystemExit(f"cannot read agent-request manifest: {exc}") from exc
+        entries = manifest.get("agent_requests") if isinstance(manifest, dict) else None
+        if not isinstance(entries, list):
+            raise SystemExit(
+                'agent-request manifest must hold {"agent_requests": [...]}: '
+                f"{args.agent_requests}"
+            )
+        agent_requests = entries
     diagnosis = build_diagnosis(
         rows,
         config,
@@ -548,6 +562,7 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
         rare_pct=args.rare_pct,
         utilization_warn=args.utilization_warn,
         min_sample=args.min_sample,
+        agent_requests=agent_requests,
         recipe=args.recipe,
         public_model=args.public_model,
     )
@@ -2194,6 +2209,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=DEFAULT_UTILIZATION_WARN,
         help="warn when a known-range signal uses less of its range than this",
+    )
+    p_diag.add_argument(
+        "--agent-requests",
+        default=None,
+        help=(
+            'agentic request manifest JSON ({"agent_requests": [...]}, Z9) that '
+            "upgrades the AG4 separation check from record markers to a "
+            "request-id join"
+        ),
     )
     p_diag.set_defaults(func=cmd_diagnose)
 
