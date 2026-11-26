@@ -1,13 +1,18 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
@@ -64,6 +69,57 @@ func TestChatDispatchRejectsStreamingMultipleChoices(t *testing.T) {
 	client := router.encodeImmediateResponseForClient(response, ctx).GetImmediateResponse().GetBody()
 	require.Contains(t, string(client), `"code":"stream_multiple_choices"`)
 	require.Contains(t, string(client), `"type":"invalid_request_error"`)
+}
+
+// Every streamed candidate count above one is refused, not only n=2, and the
+// refusal is recorded for the client's protocol.
+func TestChatDispatchRejectsEveryStreamedCandidateCountAboveOne(t *testing.T) {
+	for _, n := range []int64{2, 3, 32} {
+		t.Run(fmt.Sprintf("n%d", n), func(t *testing.T) {
+			ctx, body, err := streamMultipleChoicesDispatch(t, streamChoicesProbe{
+				backend: llmprotocol.OpenAIChatV1, stream: true, n: llmprotocol.Int64(n),
+			})
+			require.Error(t, err, "n=%d with stream:true was dispatched: %s", n, body)
+			var protocolError *llmprotocol.ProtocolError
+			require.ErrorAs(t, err, &protocolError)
+			require.Equal(t, llmprotocol.ErrorUnsupportedFeature, protocolError.Category)
+			require.Equal(t, "stream_multiple_choices", protocolError.Code)
+			require.Same(t, protocolError, ctx.ImmediateProtocolError)
+		})
+	}
+}
+
+// Native fallback qualifies each candidate with the same dispatch check, so a
+// streamed n>1 request never becomes a fallback call to a Chat candidate.
+func TestNativeFallbackSkipsStreamingMultipleChoices(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		n        int64
+		wantCall bool
+	}{{"n2", 2, false}, {"n1", 1, true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
+			session.ctx.SemanticRequest.Stream = true
+			session.ctx.SemanticRequest.CandidateCount = llmprotocol.Int64(tc.n)
+			session.ctx.ExpectStreamingResponse = true
+			step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
+			require.NoError(t, err)
+			if !tc.wantCall {
+				require.Nil(t, step.Call, "fallback body: %s", fallbackCallBody(step.Call))
+				return
+			}
+			require.NotNil(t, step.Call)
+			require.Equal(t, "model-fallback-1", step.Call.Route)
+			require.Contains(t, string(step.Call.Request.Body), `"stream":true`)
+		})
+	}
+}
+
+func fallbackCallBody(call *routing.Call) string {
+	if call == nil {
+		return ""
+	}
+	return string(call.Request.Body)
 }
 
 // Requests whose reply the Chat decoders can read still reach the backend: one
