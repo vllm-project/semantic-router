@@ -224,6 +224,169 @@
   - open_weights
   - multimodal
   released_at: '2026-04-02'
+- id: google/gemma-4-12b-it
+  display_name: Gemma 4 12B IT
+  description: Google's encoder-free Gemma 4 instruction model for text, image, and audio workloads.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-12B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/google/gemma-4-12B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-26b-a4b-it
+  display_name: Gemma 4 26B A4B IT
+  description: Google's mixture-of-experts Gemma 4 instruction model with roughly 4B active parameters.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 26B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+- id: google/gemma-4-e4b-it
+  display_name: Gemma 4 E4B IT
+  description: Google's compact Gemma 4 instruction model with 4.5B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/google/gemma-4-E4B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-e2b-it
+  display_name: Gemma 4 E2B IT
+  description: Google's smallest Gemma 4 instruction model with 2.3B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E2B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 5.1B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/google/gemma-4-E2B-it
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemma-3-27b-it
   display_name: Gemma 3 27B IT
   description: Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.

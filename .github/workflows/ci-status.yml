@@ -64,6 +64,7 @@ jobs:
       contents: read
       actions: read
       checks: write
+      statuses: write
       issues: write
       # PR guidance uses /issues APIs but still writes to a PR resource.
       pull-requests: write

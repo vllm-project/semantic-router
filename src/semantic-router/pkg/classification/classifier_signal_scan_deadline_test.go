@@ -373,7 +373,9 @@ func rereadScan(text string, asked askedRule, windows []scanWindow) *guardScan {
 	scan := &guardScan{
 		text: text, size: 1024, overlap: 128, rereadMargin: config.DefaultScanWindowRereadMargin, rules: []askedRule{asked}, cut: len(windows),
 		windows: windows, responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
-		windowState: func(window string) modelservice.Request { return modelservice.Request{State: window} },
+		windowState: func(window scanWindow) modelservice.Request {
+			return modelservice.Request{State: text[window.start:window.end]}
+		},
 	}
 	scan.done[0] = true
 	return scan

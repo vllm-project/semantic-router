@@ -105,6 +105,13 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		r.finishRequestSpend(ctx)
 		releaseStreamedBody(ctx)
 		finishRequestWork(ctx)
+		// The lookup's singleflight lease ends with the request: a store
+		// completes its key first, and an answer that will not store, a
+		// refusal or an error releases the key here instead of holding
+		// every follower until the lease expires.
+		if ctx != nil {
+			r.responseCacheService().ReleaseLease(ctx.CacheLease)
+		}
 		if retErr != nil && ctx != nil {
 			sendHeldHeaderReplyBeforeError(stream, ctx)
 		}

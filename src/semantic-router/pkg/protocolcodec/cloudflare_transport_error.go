@@ -61,9 +61,10 @@ func decodeCloudflareTransportError(
 		code = strconv.Itoa(int(*detail.Code))
 	}
 	return llmprotocol.TransportError{Error: &llmprotocol.ProtocolError{
-		Category: cloudflareErrorCategory(code),
-		Code:     code,
-		Message:  detail.Message,
+		Category:       cloudflareErrorCategory(code),
+		Code:           code,
+		Message:        detail.Message,
+		ProviderFramed: true,
 	}}, diagnostics, nil
 }
 

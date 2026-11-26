@@ -49,6 +49,7 @@ from ...plugins.base import BranchBatch, Expired, ForwardBatch, ImageInputs, Vid
 from ...plugins.decisions import RequestPlan
 from ...systemone import QUESTION_TYPES, read_question, track_rate, valid_state
 from . import composed, prompt
+from . import images as img
 from . import videos as vid
 from .family import (
     COST_SMOOTHING,
@@ -217,6 +218,34 @@ class StateOnceModel(Decision3Model):
         assets: dict[str, Any],
         decisions: int | None = None,
     ) -> RequestPlan[Item]:
+        """``_plan_composed`` with ``box_padding``; planned again without it when a padded Box would be refused
+        for its length or the padded state would put the request over its cap, so padding never refuses a
+        request that fits as sent."""
+        args = (state, questions, images, videos, assets, decisions)
+        if self.box_padding is None:
+            return self._plan_composed(*args, pad=False)
+        padded: set[str] = set()
+        try:
+            plan = self._plan_composed(*args, pad=True, padded=padded)
+        except RequestError:
+            if not padded:
+                raise
+            return self._plan_composed(*args, pad=False)
+        if padded & set(plan.errors):
+            return self._plan_composed(*args, pad=False)
+        return plan
+
+    def _plan_composed(
+        self,
+        state: Any,
+        questions: dict[str, Any],
+        images: list[Any],
+        videos: list[Any] | None,
+        assets: dict[str, Any],
+        decisions: int | None = None,
+        pad: bool = False,
+        padded: set[str] | None = None,
+    ) -> RequestPlan[Item]:
         """A request with ``assets`` (System One references) and Box questions (``composed``).
 
         State uses are hoisted (``[image k]`` after the request's images); a
@@ -310,6 +339,13 @@ class StateOnceModel(Decision3Model):
                 )
             except QuestionError as exc:
                 errors[question_id] = question_error(kind, exc)
+        frames = (
+            self._pad_image_boxes(built, image_boxes, hoisted, front, media)
+            if pad
+            else {}
+        )
+        if padded is not None:
+            padded.update(frames)
         items: list[Item] = []
         accepted = []
         for entry in built:
@@ -354,6 +390,7 @@ class StateOnceModel(Decision3Model):
                     readouts=readouts,
                     block_images=block_images,
                     at=at,
+                    box_frame=frames.get(question_id),
                     temperature=temperature if kind in QUESTION_TYPES else None,
                 )
             )
@@ -384,6 +421,41 @@ class StateOnceModel(Decision3Model):
             own,
             unread=shared is None and not accepted,
         )
+
+    def _pad_image_boxes(
+        self,
+        built: list[Any],
+        image_boxes: set[str],
+        hoisted: Any,
+        front: list[Any],
+        media: RequestMedia | None,
+    ) -> dict[str, tuple[float, float, float, float]]:
+        """With ``box_padding``, each image Box over the state's one image and none of its own branches from a
+        state of that image padded on its short axis (#7011); the other questions keep the photo as sent.
+        Returns where the photo sits in the padded image, by question ID.
+        """
+        if (
+            self.box_padding is None
+            or self.settings is None
+            or media is None
+            or len(front) != 1
+            or not image_boxes
+        ):
+            return {}
+        found = img.pad_short_axis(media.images[0], self.box_padding, self.settings)
+        if found is None:
+            return {}
+        image, frame = found
+        padded = self._composed_state(hoisted, 1, 0, RequestMedia((image,)))
+        if padded is None:
+            return {}
+        frames = {}
+        for index, entry in enumerate(built):
+            question_id, block_images = entry[0], entry[7]
+            if question_id in image_boxes and not block_images:
+                built[index] = (question_id, padded, *entry[2:])
+                frames[question_id] = frame
+        return frames
 
     def _read_state_block(
         self, hoisted: Any, images: int, videos: int

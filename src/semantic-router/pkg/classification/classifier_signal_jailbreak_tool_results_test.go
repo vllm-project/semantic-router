@@ -19,7 +19,7 @@ func jailbreakAnswering(choice string) *fakeDecider {
 		other = "jailbreak"
 	}
 	return newFakeDecider(map[string]modelservice.Answer{
-		presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: choice, Probabilities: map[string]float64{choice: 0.97, other: 0.03}},
+		presetQuestionID(presets.Jailbreak): {Type: "choice", Choice: choice, Probabilities: map[string]float64{choice: 0.97, other: 0.03}, InputCoverage: "complete"},
 	})
 }
 

@@ -306,6 +306,7 @@ func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name 
 		serving.Models, _ = listener.LLMModels()
 		serving.ListsLLM = servesAnyLLM(listener)
 		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+		serving.APIPath = listener.APIPath
 		serving.Gate = listenerGate(listener)
 		serving.UnservedRoute = listenerUnservedRoute(listener)
 		return

@@ -11,6 +11,7 @@ import stat
 import tempfile
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -65,6 +66,35 @@ def _shared_with_dashboard(info: os.stat_result) -> bool:
     )
 
 
+def _chmod_directory_without_following(
+    directory: Path, mode: int, expected: os.stat_result
+) -> os.stat_result:
+    """Set a directory's mode through a descriptor that never follows symlinks.
+
+    ``os.chmod(..., follow_symlinks=False)`` relies on glibc >= 2.32 emulating
+    ``fchmodat(AT_SYMLINK_NOFOLLOW)`` and raises ``NotImplementedError`` on older
+    glibc. Opening with ``O_NOFOLLOW`` and calling ``fchmod`` works everywhere
+    and changes exactly the inode that was inspected. The pathname is checked
+    again afterwards, while the descriptor still pins the inode, so a path
+    swapped during ``fchmod`` is refused instead of returned as secured.
+    """
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open(directory, flags)
+    try:
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+            raise OSError(errno.ESTALE, "directory changed while hardening", directory)
+        os.fchmod(fd, mode)
+        secured = os.fstat(fd)
+        current = os.lstat(directory)
+        if (current.st_dev, current.st_ino) != (secured.st_dev, secured.st_ino):
+            raise OSError(errno.ESTALE, "directory changed while hardening", directory)
+        return secured
+    finally:
+        os.close(fd)
+
+
 def _create_or_harden_private_directory(
     directory: Path, *, parents: bool = False
 ) -> Path:
@@ -108,12 +138,13 @@ def _create_or_harden_private_directory(
         return directory
     if stat.S_IMODE(info.st_mode) != _PRIVATE_DIRECTORY_MODE:
         try:
-            os.chmod(directory, _PRIVATE_DIRECTORY_MODE, follow_symlinks=False)
+            secured_info = _chmod_directory_without_following(
+                directory, _PRIVATE_DIRECTORY_MODE, info
+            )
         except (NotImplementedError, OSError) as error:
             raise ValueError(
                 f"Runtime state directory permissions cannot be secured: {directory}"
             ) from error
-        secured_info = directory.lstat()
         if (
             not stat.S_ISDIR(secured_info.st_mode)
             or secured_info.st_uid != current_user_id
@@ -534,6 +565,36 @@ def _load_provenance(path: Path) -> dict[str, str] | None:
     return document
 
 
+@dataclass(frozen=True)
+class ConfigSourceRevision:
+    stat: os.stat_result
+    data: bytes
+
+    @classmethod
+    def capture(cls, path: Path) -> ConfigSourceRevision:
+        with path.open("rb") as source:
+            return cls(os.fstat(source.fileno()), source.read())
+
+
+def read_config_source(path: Path, expected: ConfigSourceRevision | None) -> bytes:
+    """Read the source, refusing a revision different from the one planned."""
+    if expected is None:
+        return path.read_bytes()
+    current = ConfigSourceRevision.capture(path)
+    original = expected.stat
+    if (
+        not os.path.samestat(current.stat, original)
+        or current.stat.st_mtime_ns != original.st_mtime_ns
+        or current.stat.st_ctime_ns != original.st_ctime_ns
+        or current.data != expected.data
+    ):
+        raise ValueError(
+            f"Config source changed while applying {path}. "
+            "Run `vllm-sr config apply` again to plan the current file."
+        )
+    return current.data
+
+
 def materialize_runtime_config(
     source_config_path: Path,
     effective_data: bytes,
@@ -543,6 +604,7 @@ def materialize_runtime_config(
     replace_active: bool = False,
     preserve_unchanged_source: bool = False,
     before_replace: Callable[[], None] | None = None,
+    expected_source: ConfigSourceRevision | None = None,
 ) -> Path:
     """Reconcile one runtime-owned active config without overwriting edits.
 
@@ -559,10 +621,13 @@ def materialize_runtime_config(
     ``preserve_unchanged_source`` retains resolved startup resources when the
     authored source bytes are unchanged. Any source edit selects a fresh source
     document; this does not merge old overrides into new authoring.
+
+    ``expected_source`` checks the file revision used by a prior plan before
+    publishing a replacement or updating provenance.
     """
 
     source_config_path = source_config_path.expanduser().absolute()
-    source_data = source_config_path.read_bytes()
+    source_data = read_config_source(source_config_path, expected_source)
     runtime_config_path = _runtime_config_output_path(
         source_config_path,
         state_root_dir=state_root_dir,
