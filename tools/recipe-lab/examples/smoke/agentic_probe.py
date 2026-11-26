@@ -230,6 +230,10 @@ class AgentRunner:
         self,
         *,
         router: str,
+        # the request body's model: through a router this stays vllm-sr/auto
+        # (the router resolves the entrypoint); a direct backend drive names
+        # the model so the backend's own model-keyed behavior applies
+        model: str = "vllm-sr/auto",
         mgmt: str,
         fixtures: dict,
         run_tag: str,
@@ -240,6 +244,7 @@ class AgentRunner:
         max_steps: int,
     ) -> None:
         self.router = router
+        self.model = model
         self.mgmt = mgmt
         self.fixtures = fixtures
         self.run_tag = run_tag
@@ -298,7 +303,7 @@ class AgentRunner:
                 f"{self.session_prefix}-{fixture}-{agent}-{step}-{self.run_tag}"
             )
             body: dict = {
-                "model": "vllm-sr/auto",
+                "model": self.model,
                 "max_tokens": self.max_tokens,
                 "messages": messages,
             }

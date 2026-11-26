@@ -505,17 +505,22 @@ class LiveArmCli:
         self._seq += 1
         return f"v6-{kind}-{self._seq}"
 
-    def _drive(self, router_url: str, run_id: str) -> list[dict]:
+    def _drive(
+        self, router_url: str, run_id: str, *, model: str = "vllm-sr/auto"
+    ) -> list[dict]:
         """The AG8 scripted agent client, in process, through one endpoint.
 
-        The probe fixes the routed model name itself (the Router resolves the
-        entrypoint); there is no per-arm model override to pass.
+        Through a router the request model stays vllm-sr/auto (the Router
+        resolves the entrypoint); a single-model reference drive names its
+        model directly, so the mock's model-keyed completion behavior - the
+        per-task abandonment the fixtures declare - applies to it.
         """
         from agentic_probe import AgentRunner
 
         fixtures = self._fixtures()
         runner = AgentRunner(
             router=router_url,
+            model=model,
             # no management API on a direct drive; the replay dump degrades
             # to an empty list on its own
             mgmt="http://127.0.0.1:1",
@@ -566,7 +571,7 @@ class LiveArmCli:
 
     def _run_reference(self, alias: str, manifest: dict) -> dict:
         run_id = self._next_id(alias.replace("/", "-"))
-        transcript = self._drive(self.mock_endpoint, run_id)
+        transcript = self._drive(self.mock_endpoint, run_id, model=alias)
         task_scores = {
             name: 1.0 if ok else 0.0
             for name, ok in _task_success(transcript, self._fixtures()).items()
