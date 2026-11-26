@@ -112,7 +112,7 @@ def _candidate_config(
         },
     }
     decisions = []
-    for decision in fixture["routing"]["decisions"]:
+    for decision in fixture["recipes"][0]["decisions"]:
         entry = dict(decision)
         entry["plugins"] = [dict(replay_plugin)]
         decisions.append(entry)
@@ -123,6 +123,8 @@ def _candidate_config(
             "name": model,
             "provider_model_id": model,
             "api_format": "openai",
+            "context_window_size": 131072,
+            "capabilities": ["chat", "text"],
             "backend_refs": [
                 {
                     "name": "mock-backend",
@@ -139,17 +141,8 @@ def _candidate_config(
         backend_ref("google/gemini-2.5-flash-lite"),
         backend_ref("google/gemini-3.1-pro"),
     ]
-    # the recipe's modelCards name more models than this candidate provides;
-    # the router rejects a modelCard no provider model backs, so keep only
-    # the cards the mock backend actually serves
-    provided = {model["name"] for model in backend_refs}
-    model_cards = [
-        card
-        for card in fixture["routing"]["modelCards"]
-        if card.get("name") in provided
-    ]
     config = {
-        "version": "v0.3",
+        "version": "v0.5",
         "listeners": [
             {"name": "http", "address": "0.0.0.0", "port": 8899, "timeout": "1200s"}
         ],
@@ -184,11 +177,13 @@ def _candidate_config(
             },
         },
         "providers": {"models": backend_refs},
-        "routing": {
-            "modelCards": model_cards,
-            "signals": fixture["routing"]["signals"],
-            "decisions": decisions,
-        },
+        "recipes": [
+            {
+                "name": fixture["recipes"][0]["name"],
+                "signals": fixture["recipes"][0]["signals"],
+                "decisions": decisions,
+            }
+        ],
         "entrypoints": [{"model_names": ["vllm-sr/auto"], "recipe": "default"}],
     }
     path = tmp_path / f"{name}.yaml"

@@ -896,7 +896,7 @@ def _observe_opt_out_config(stack: dict) -> Path:
     candidate is eliminated through the DEFAULT drift ceiling (0.2), which
     its 2-releases-per-5-sessions rate exceeds."""
     broken = copy.deepcopy(_load(stack["work"] / "cold-start.yaml"))
-    for decision in broken["routing"]["decisions"]:
+    for decision in broken["recipes"][0]["decisions"]:
         if decision["name"] == "simple_general_local":
             decision["adaptations"] = {"mode": "observe"}
     return _write_config(stack, broken, "negative-observe")
@@ -904,7 +904,7 @@ def _observe_opt_out_config(stack: dict) -> Path:
 
 def _decision_models(config: dict) -> dict[str, str]:
     return {
-        d["name"]: d["modelRefs"][0]["model"] for d in config["routing"]["decisions"]
+        d["name"]: d["modelRefs"][0]["model"] for d in config["recipes"][0]["decisions"]
     }
 
 
@@ -1224,7 +1224,7 @@ def test_v6_scenario_1_cold_start(stack, recipe_lab_bin, tmp_path):
     # references and R computed from the observed shares. The candidate arm
     # is the SAME router the determinism drives used (one arm per config)
     all_weak = _load(cold_start)
-    for decision in all_weak["routing"]["decisions"]:
+    for decision in all_weak["recipes"][0]["decisions"]:
         decision["modelRefs"][0]["model"] = MODEL_A
     all_weak_path = _write_config(stack, all_weak, "all-weak")
     registry = {
