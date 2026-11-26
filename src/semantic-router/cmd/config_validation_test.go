@@ -50,12 +50,17 @@ recipes:
 
 func runValidation(t *testing.T, document string) (int, configValidationReport) {
 	t.Helper()
+	return runValidationAs(t, document, config.GatewayStandalone)
+}
+
+func runValidationAs(t *testing.T, document string, gateway config.GatewayMode) (int, configValidationReport) {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
 	if err := os.WriteFile(path, []byte(document), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	status := validateConfigFile(path, config.GatewayStandalone, false, &out)
+	status := validateConfigFile(path, gateway, false, &out)
 	var report configValidationReport
 	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 		t.Fatalf("stdout is not one JSON report: %q", out.String())
@@ -164,5 +169,56 @@ func TestValidateConfigLeavesAKeyFileToTheServingRouter(t *testing.T) {
 	document = strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(document)
 	if status, report := runValidation(t, document); status != 0 || !report.Valid {
 		t.Fatalf("status %d, report %+v: a key file that is not mounted here must not fail validation", status, report)
+	}
+}
+
+// httpsBackendConfig is a loadable document whose one backend is the HTTPS
+// endpoint, with a private CA and server name, and the global block.
+func httpsBackendConfig(endpoint, global string) string {
+	backend := "        - name: local\n" +
+		"          endpoint: " + endpoint + "\n" +
+		"          provider: vllm\n" +
+		"          tls:\n" +
+		"            ca_file: /etc/vllm-sr/local-ca.pem\n" +
+		"            server_name: tls-backend.test\n"
+	document := strings.Replace(outputValidationConfig, "        - endpoint: 127.0.0.1:8000\n", backend, 1)
+	return strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(document) + global
+}
+
+// -validate-config refuses an HTTPS backend IP only where startup does: a
+// standalone Router that routes. An ext_proc Router only logs it, and a
+// Router with routing disabled builds no upstream.
+func TestValidateConfigRefusesAnHTTPSBackendIPWhereStartupDoes(t *testing.T) {
+	const refused = "providers.models[text-model].backend_refs[0] HTTPS endpoint must use a DNS hostname"
+	routingDisabled := "global:\n  router:\n    enabled: false\n"
+	cases := []struct {
+		name     string
+		gateway  config.GatewayMode
+		endpoint string
+		global   string
+		refuse   bool
+	}{
+		{"standalone IPv4", config.GatewayStandalone, "https://127.0.0.1:8000/v1", "", true},
+		{"standalone IPv6", config.GatewayStandalone, "https://[::1]:8000/v1", "", true},
+		{"standalone hostname", config.GatewayStandalone, "https://localhost:8000/v1", "", false},
+		{"ext_proc IPv4", config.GatewayExtProc, "https://127.0.0.1:8000/v1", "", false},
+		{"standalone IPv4 without routing", config.GatewayStandalone, "https://127.0.0.1:8000/v1", routingDisabled, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, report := runValidationAs(t, httpsBackendConfig(tc.endpoint, tc.global), tc.gateway)
+			if !tc.refuse {
+				if status != 0 || !report.Valid {
+					t.Fatalf("status %d, report %+v: the Router starts with this document", status, report)
+				}
+				return
+			}
+			if status != 1 || report.Valid {
+				t.Fatalf("status %d, report %+v: the Router refuses this document at startup", status, report)
+			}
+			if !strings.Contains(report.Error, refused) {
+				t.Fatalf("error %q is not the startup error %q", report.Error, refused)
+			}
+		})
 	}
 }

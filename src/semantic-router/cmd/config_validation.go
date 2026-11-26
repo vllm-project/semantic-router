@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // configValidationReport is what -validate-config prints: the verdict of the
@@ -77,5 +78,16 @@ func validateConfigInto(report *configValidationReport, data []byte, gateway con
 		return err
 	}
 	report.Warnings = append(report.Warnings, config.Warnings(cfg)...)
-	return config.ValidateGatewayCapabilities(cfg, mode)
+	if err := config.ValidateGatewayCapabilities(cfg, mode); err != nil {
+		return err
+	}
+	// A standalone Router refuses to start when its upstream topology does
+	// not compile; in ext_proc mode Envoy carries the traffic and the Router
+	// only logs it. See upstreamPart.
+	if mode == config.GatewayStandalone && cfg.RoutingEnabled() {
+		if _, err := upstream.Compile(cfg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
