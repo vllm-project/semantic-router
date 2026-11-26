@@ -12,11 +12,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// ollamaProviderType is the catalog provider id for Ollama. Ollama's OpenAI
-// layer reads the output limit only from max_tokens, and documents no
-// max_completion_tokens support:
+// maxTokensChatProviders are the catalog provider ids whose Chat Completions
+// API takes its output limit as max_tokens and documents no
+// max_completion_tokens.
+//
+// Ollama's OpenAI layer reads the output limit only from max_tokens:
 // https://github.com/ollama/ollama/blob/6383a0fa9cbf97494b847226e189f6e36b401a08/docs/api/openai-compatibility.mdx?plain=1#L224-L243
-const ollamaProviderType = "ollama"
+//
+// The LongCat API reference lists max_tokens as its only output limit:
+// https://longcat.ai/platform/docs/api/chat
+var maxTokensChatProviders = []string{"ollama", "longcat"}
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -37,11 +42,14 @@ func (r *OpenAIRouter) adaptProviderRequest(
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
 			"the selected backend has no effective reasoning-off control", nil)
 	}
+	enabled := dispatch != nil && dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch)
 	if mutation != nil {
-		r.observeReasoningMutation(mutation, dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch))
+		r.observeReasoningMutation(mutation, enabled)
 	}
 	if dispatch != nil {
-		body, err = adaptOllamaOutputLimit(body, dispatch.targetFormat, dispatch.profile)
+		dispatch.reasoningMode = r.sentReasoningMode(dispatch, mutation, enabled)
+		dispatch.reasoningEffort = sentReasoningEffort(body, mutation, enabled)
+		body, err = adaptMaxTokensOutputLimit(body, dispatch.targetFormat, dispatch.profile)
 		if err != nil {
 			return body, err
 		}
@@ -49,6 +57,40 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	reportDroppedReasoningSummary(ctx, dispatch, encoded, body)
 	r.reportApproximatedReasoningDisplay(ctx, dispatch)
 	return body, nil
+}
+
+// sentReasoningMode is on or off where the Router wrote reasoning for the
+// dispatched model: the reasoning projection rewrote the request, or the
+// decision's controls went to a model with a reasoning family. A request passed
+// through with its reasoning as the client sent it, such as one to a model
+// without a reasoning family, carries no mode of the Router's.
+func (r *OpenAIRouter) sentReasoningMode(dispatch *providerDispatch, mutation *reasoningRequestMutation, enabled bool) string {
+	if mutation == nil && (dispatch.decisionName == "" || r.getModelReasoningFamily(dispatch.effectiveBackendModel()) == nil) {
+		return ""
+	}
+	if enabled {
+		return "on"
+	}
+	return "off"
+}
+
+// sentReasoningEffort is the reasoning effort a provider request carries:
+// the one the reasoning projection wrote when it rewrote the request's
+// reasoning, none when it turned reasoning off, and otherwise the effort the
+// request was encoded with, which reaches the backend as the client sent it.
+func sentReasoningEffort(body []byte, mutation *reasoningRequestMutation, enabled bool) string {
+	if mutation != nil {
+		if !enabled {
+			return ""
+		}
+		return mutation.appliedEffort
+	}
+	for _, path := range [...]string{"reasoning_effort", "reasoning.effort", "output_config.effort"} {
+		if effort := gjson.GetBytes(body, path); effort.Type == gjson.String {
+			return effort.String()
+		}
+	}
+	return ""
 }
 
 // reportApproximatedReasoningDisplay records an Anthropic summarized or updates
@@ -92,11 +134,12 @@ func reportDroppedReasoningSummary(ctx *RequestContext, dispatch *providerDispat
 	}
 }
 
-// adaptOllamaOutputLimit moves the Chat codec's max_completion_tokens to the
-// max_tokens field Ollama reads, so the client's limit still caps generation.
-func adaptOllamaOutputLimit(body []byte, format llmprotocol.WireFormat, profile *config.ProviderProfile) ([]byte, error) {
+// adaptMaxTokensOutputLimit moves the Chat codec's max_completion_tokens to
+// the max_tokens field these providers read, so the client's limit still caps
+// generation.
+func adaptMaxTokensOutputLimit(body []byte, format llmprotocol.WireFormat, profile *config.ProviderProfile) ([]byte, error) {
 	if format != llmprotocol.OpenAIChatV1 || profile == nil ||
-		!strings.EqualFold(strings.TrimSpace(profile.Type), ollamaProviderType) {
+		!slices.Contains(maxTokensChatProviders, strings.ToLower(strings.TrimSpace(profile.Type))) {
 		return body, nil
 	}
 	limit := gjson.GetBytes(body, "max_completion_tokens")

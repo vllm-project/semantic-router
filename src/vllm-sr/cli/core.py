@@ -819,15 +819,14 @@ def show_status(service: str = "all"):
     echo(f"Detailed logs: vllm-sr logs <{'|'.join(services)}>")
 
 
-def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
-    """What a saved config waits for before the stack serves it, if anything."""
+def _mounted_state_dir(container_name: str) -> str | None:
+    """The host directory *container_name* mounts as the stack's state dir."""
 
-    setup_waiting = container_status(stack_layout.router_container_name) == "created"
     try:
-        mounts = inspect_container_mounts(stack_layout.dashboard_container_name)
+        mounts = inspect_container_mounts(container_name)
     except ContainerMountsUnavailableError:
         return None
-    state_dir = next(
+    return next(
         (
             mount.get("Source")
             for mount in mounts
@@ -835,6 +834,15 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
         ),
         None,
     )
+
+
+def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
+    """What a saved config waits for before the stack serves it, if anything."""
+
+    setup_waiting = container_status(stack_layout.router_container_name) == "created"
+    state_dir = _mounted_state_dir(stack_layout.dashboard_container_name)
+    has_dashboard = state_dir is not None
+    state_dir = state_dir or _mounted_state_dir(stack_layout.router_container_name)
     if not state_dir:
         return None
     runtime_config = Path(state_dir) / _runtime_config_filename(stack_layout.stack_name)
@@ -845,7 +853,7 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
             "`vllm-sr serve` to apply it"
             + (f" ({pending.detail})." if pending.detail else ".")
         )
-    if not setup_waiting:
+    if not setup_waiting or not has_dashboard:
         return None
     if pending is not None:
         return "Setup is complete; run `vllm-sr serve` to start the Router."

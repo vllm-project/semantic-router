@@ -1,7 +1,7 @@
 ---
 title: "vela3-flash"
 sidebar_label: "vela3-flash"
-sidebar_position: 5
+sidebar_position: 6
 description: "Vela 3.0 on d3-flash: a 9B decision model with trained adapters for the built-in questions and spans."
 custom_edit_url: null
 ---
@@ -57,9 +57,10 @@ This model has no calibrated thresholds: a built-in question without a
 Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
+- NVIDIA Ada (sm_89) (`cuda:sm_89`)
 - AMD GPU (ROCm) (`rocm`)
 
-On a CPU or an NVIDIA GPU no reference is recorded, so the model serves
+On a CPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.
 
 [Choose a model](model-runtime/get-started/choose-a-model.md#hardware) lists the

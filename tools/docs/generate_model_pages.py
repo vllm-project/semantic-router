@@ -40,7 +40,9 @@ BEGIN = "<!-- BEGIN GENERATED MODEL TABLE -->"
 END = "<!-- END GENERATED MODEL TABLE -->"
 
 # The precision ``--dtype auto`` runs per family and backbone, on a GPU and on
-# a CPU (each family's ``DtypePolicy``; website engine-args "Precision").
+# a CPU (each family's ``DtypePolicy``; website engine-args "Precision"). A
+# family in CPU_BF16_FAMILIES computes BF16 instead on a CPU class that
+# computes BF16 natively and has its own BF16 references (``dtypes.on_host``).
 PRECISION = {
     ("decision3", "qwen3_5_text"): ("BF16", "FP32"),
     ("vela3_d3", "qwen3_5_text"): ("BF16", "FP32"),
@@ -51,7 +53,9 @@ PRECISION = {
     ("vela2", "qwen3_5_text"): ("BF16", "FP32"),
     ("vela2", "modernbert"): ("FP32", "FP32"),
     ("vela3", "ultrabert"): ("FP32", "FP32"),
+    ("vela3_pico", "ultrabert"): ("FP32", "FP32"),
 }
+CPU_BF16_FAMILIES = frozenset({"decision3", "vela3_d3"})
 BYTES = {"BF16": 2, "FP32": 4}
 BACKBONES = {
     "qwen3": "Qwen3",
@@ -63,10 +67,17 @@ BACKBONES = {
 # (``Accelerator.golden_reference``); a reference recorded at another
 # ``--dtype`` than ``auto`` carries it after ``@`` (``readiness.qualified``).
 DTYPES = {"bfloat16": "BF16"}
+# Hardware keys that also name the approximate kernels their answers were
+# computed with (``dtypes.with_kernels``): a CPU class's, not a class of their own.
+KERNEL_KEYS = frozenset({"cpu:x86_64:avx512:bf16_native:amd:zentorch"})
 DEVICES = {
     "cpu": "CPU",
     "cpu:x86_64:avx2:bf16_emulated": "x86-64 CPU with AVX2 (BF16 emulated)",
     "cpu:x86_64:avx512:bf16_native": "x86-64 CPU with AVX-512 BF16",
+    "cpu:x86_64:avx512:bf16_native:amd": "AMD x86-64 CPU with AVX-512 BF16",
+    "cpu:x86_64:avx512:bf16_native:amd:zentorch": (
+        "AMD x86-64 CPU with AVX-512 BF16, with zentorch's linear"
+    ),
     "rocm": "AMD GPU (ROCm)",
     "rocm:gfx942": "AMD Instinct MI300X or MI325X (gfx942)",
     "cuda": "NVIDIA GPU (CUDA)",
@@ -76,6 +87,23 @@ DEVICES = {
     "npu:Ascend950DT": "Ascend 950DT",
 }
 CLASSES = {"cpu": "a CPU", "rocm": "an AMD GPU", "cuda": "an NVIDIA GPU"}
+
+
+def device_class_key(key: str) -> str:
+    """``key``'s device-class reference key, keeping its ``--dtype`` suffix."""
+    device, at, dtype = key.partition("@")
+    return f"{device.split(':', 1)[0]}{at}{dtype}"
+
+
+def class_and_hardware(references: list[str]) -> bool:
+    """Whether a hardware reference and its device class's are both recorded."""
+    recorded = set(references)
+    return any(
+        key != device_class_key(key) and device_class_key(key) in recorded
+        for key in recorded
+    )
+
+
 REDUCED = {
     "float32-packed": "a pre-packed FP32 copy of its linear layers on x86 CPUs with oneDNN",
     "bfloat16": "a BF16 copy of its linear layers",
@@ -149,6 +177,23 @@ class Model:
     @property
     def precision(self) -> tuple[str, str]:
         return PRECISION[(self.family, self.backbone)]
+
+    @property
+    def cpu_bf16(self) -> list[str]:
+        """The CPU classes on which ``--dtype auto`` computes BF16: native BF16 and their own BF16 reference.
+
+        A key that also names kernels (``…:amd:zentorch``) is its class's, not another class.
+        """
+        if self.family not in CPU_BF16_FAMILIES:
+            return []
+        return sorted(
+            key.partition("@")[0]
+            for key in self.references
+            if key.startswith("cpu:")
+            and key.endswith("@bfloat16")
+            and ":bf16_native" in key
+            and key.partition("@")[0] not in KERNEL_KEYS
+        )
 
 
 def fail(message: str) -> None:
@@ -411,7 +456,7 @@ def load_models() -> list[Model]:
                 calibration=calibration.get(repo, {}),
                 editorial=text,
                 family_dir=family["dir"],
-                family_label=family["label"],
+                family_label=text.get("family_label", family["label"]),
                 trained=item["family"] in trained,
                 quantizable=item["family"] in quantizable,
                 records=text.get("records", []),
@@ -502,7 +547,19 @@ def deploy_section(model: Model) -> list[str]:
                 "image's PyTorch has no CPU LAPACK, which this backbone needs there.",
                 "",
             ]
-        if value == "cpu" and "cpu@bfloat16" in model.references:
+        if value == "cpu" and model.cpu_bf16:
+            classes = " or ".join(f"an {DEVICES[key]}" for key in model.cpu_bf16)
+            lines += [
+                f"On {classes}, a CPU class with its own BF16 reference,",
+                f"it computes in BF16: {gigabytes(model.parameters, 'BF16')} of weights. Any other CPU computes",
+                f"it in FP32: {gigabytes(model.parameters, 'FP32')}, twice that. On a CPU that computes BF16",
+                "natively a request takes 1.2 to 3.5 times as long in FP32, the larger sizes",
+                "the most; on one that emulates BF16 (AVX2) FP32 is 3 to 6 times faster.",
+                "`--dtype float32` computes in FP32 on every CPU, and `--dtype bfloat16` in",
+                "BF16, checked against the BF16 reference of its CPU class (see Hardware).",
+                "",
+            ]
+        elif value == "cpu" and "cpu@bfloat16" in model.references:
             lines += [
                 f"A CPU computes it in FP32: {gigabytes(model.parameters, 'FP32')} of weights, twice its",
                 "BF16 size. On a CPU that computes BF16 natively (AVX-512 BF16 or AMX) a",
@@ -591,7 +648,11 @@ def render_page(model: Model) -> str:
         + (
             f"{gpu} on every device"
             if gpu == cpu
-            else f"{gpu} on a GPU, {cpu} on a CPU"
+            else (
+                f"{gpu} on a GPU and on {' or '.join(f'an {DEVICES[key]}' for key in model.cpu_bf16)}, {cpu} on other CPUs"
+                if model.cpu_bf16
+                else f"{gpu} on a GPU, {cpu} on a CPU"
+            )
         )
         + " |",
         f"| Weights | about {gigabytes(model.parameters, gpu)} at {gpu}"
@@ -678,9 +739,17 @@ def render_page(model: Model) -> str:
                 lines += [
                     f"- {DEVICES[key.partition('@')[0]]} (`{key}`)" for key in others
                 ]
+                if dtype == "bfloat16" and model.cpu_bf16:
+                    lines += [
+                        "",
+                        "At `--dtype auto`, "
+                        + " or ".join(f"an {DEVICES[key]}" for key in model.cpu_bf16)
+                        + " also computes",
+                        "in BF16 and compares them with its own BF16 reference.",
+                    ]
         classes = {key.split(":", 1)[0] for key in published}
         missing = [CLASSES[c] for c in CLASSES if c not in classes]
-        if any(":" in key for key in model.references):
+        if class_and_hardware(model.references):
             lines += [
                 "",
                 "Where a hardware reference and its device class's are both recorded, the",

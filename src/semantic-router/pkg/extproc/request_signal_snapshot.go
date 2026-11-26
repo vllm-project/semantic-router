@@ -23,8 +23,8 @@ type requestSignalSnapshot struct {
 	FirstAudio        string
 	// Turns are the user and assistant messages with text, in order; the
 	// last user one is the current turn (PriorTurns). Images are every image
-	// the request carries (requestImages); UserVideos are the inline videos
-	// of the last user message.
+	// the request carries (requestImages); UserVideos are every video the
+	// request carries (requestVideos), unreadable ones as empty strings.
 	Turns      []classification.ConversationTurn
 	Images     []string
 	UserVideos []string
@@ -55,6 +55,10 @@ type requestSignalSnapshot struct {
 	LastAssistantToolCall     bool
 	LastUserAfterToolResult   bool
 	ToolFailures              classification.ToolFailureCount
+	// InvalidToolCalls is the invalid_tool_call fact: tool calls in the last
+	// assistant message whose arguments miss a required property of the tool
+	// they name (or are not a JSON object at all).
+	InvalidToolCalls int
 	// sourceFormat is the request's wire format and toolCalls its tool calls
 	// by ID, from which ToolFailures reads what each result answers.
 	sourceFormat llmprotocol.WireFormat

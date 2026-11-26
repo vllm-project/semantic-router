@@ -67,7 +67,11 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 		// A cut call's arguments stop inside an object; the stream state decides it at the terminal event.
 		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) &&
 			!isTruncatedJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
-			return invalidProviderResponse("invalid_stream_tool_arguments", "Responses function-call done arguments must be a JSON object")
+			return invalidProviderResponseWithCause(
+				"invalid_stream_tool_arguments",
+				"Responses function-call done arguments must be a JSON object",
+				toolArgumentsEvidence([]byte(complete)),
+			)
 		}
 		decoder.toolArguments[index] = []byte(complete)
 		decoder.toolArgumentsDone[index] = true
@@ -84,6 +88,7 @@ func applyResponsesStart(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseStarted
 	if wire.Response != nil {
 		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+		event.CreatedAt = responsesCreatedTime(wire.Response.CreatedAt)
 	}
 }
 
@@ -331,6 +336,7 @@ func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) err
 	if upstreamError != nil {
 		event.Error.Category = decodeProviderErrorCategory(upstreamError.Code)
 		event.Error.Code, event.Error.Message = upstreamError.Code, upstreamError.Message
+		event.Error.ProviderFramed = true
 	}
 	return nil
 }
@@ -345,12 +351,15 @@ func applyResponsesTransportFailure(event *llmprotocol.Event, wire responsesEven
 	if wire.Code != nil {
 		event.Error.Code = *wire.Code
 		event.Error.Category = decodeProviderErrorCategory(*wire.Code)
+		event.Error.ProviderFramed = true
 	}
 	if wire.Message != "" {
 		event.Error.Message = wire.Message
+		event.Error.ProviderFramed = true
 	}
 	if wire.Param != nil {
 		event.Error.Parameter = *wire.Param
+		event.Error.ProviderFramed = true
 	}
 }
 
@@ -359,7 +368,8 @@ func (decoder *responsesStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	terminalEvents, err := decoder.finalize(reason)
+	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
+	diagnostics = appendDiagnostics(diagnostics, finalizeDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
 }

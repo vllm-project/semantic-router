@@ -30,6 +30,7 @@ const (
 	Responses       Name = "responses"
 	Messages        Name = "messages"
 	Images          Name = "images"
+	Speech          Name = "speech"
 	SystemOne       Name = "systemone"
 )
 
@@ -93,29 +94,42 @@ type API struct {
 	Aliases []string
 }
 
+// unservedModelsSetting is the route policy of the APIs a client may name
+// any model on.
+var unservedModelsSetting = Setting{Name: "unserved_models", Summary: "route models the API does not serve to one of its models instead of refusing them"}
+
 var registry = []API{
 	{
 		Name: ChatCompletions, Summary: "OpenAI Chat Completions", Paths: []string{"/v1/chat/completions"}, Kind: KindLLM,
 		Pattern:         `^(/v1/chat/completions|/openai/v1/chat/completions|/openai/deployments/.+/chat/completions)$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIChatV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true, Aliases: []string{"openai"},
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Responses, Summary: "OpenAI Responses", Paths: []string{"/v1/responses"}, Kind: KindLLM,
 		Pattern:         `^(/v1/responses(/[^/]+(/input_items)?)?|/openai/responses|/openai/v1/responses)$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIResponsesV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Messages, Summary: "Anthropic Messages", Paths: []string{"/v1/messages", "/v1/messages/count_tokens"}, Kind: KindLLM,
 		Pattern:         `^/v1/messages(/count_tokens)?$`,
 		Schemas:         []Schema{{ID: SchemaAnthropic20230601, WireFormat: llmprotocol.AnthropicMessagesV1}},
 		ListenerDefault: SchemaAnthropic20230601, UpstreamDefault: SchemaAnthropic20230601, DefaultOn: true, Aliases: []string{"anthropic"},
+		Settings: []Setting{unservedModelsSetting},
 	},
 	{
 		Name: Images, Summary: "OpenAI Images", Paths: []string{"/v1/images/generations"}, Kind: KindLLM,
 		Pattern:         `^/v1/images/generations$`,
 		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAIImagesV1}},
+		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
+	},
+	{
+		Name: Speech, Summary: "OpenAI Speech", Paths: []string{"/v1/audio/speech"}, Kind: KindLLM,
+		Pattern:         `^/v1/audio/speech$`,
+		Schemas:         []Schema{{ID: SchemaOpenAIV1, WireFormat: llmprotocol.OpenAISpeechV1}},
 		ListenerDefault: SchemaOpenAIV1, UpstreamDefault: SchemaOpenAIV1, DefaultOn: true,
 	},
 	{
@@ -285,6 +299,20 @@ var patterns = func() map[Name]*regexp.Regexp {
 func (a API) Serves(path string) bool {
 	pattern, ok := patterns[a.Name]
 	return ok && pattern.MatchString(normalizePath(path))
+}
+
+// Unprefixed is the path of the API's request under a listener's prefix for
+// the API, as the API answers it without the prefix; false when the path
+// is not the API's under that prefix.
+func (a API) Unprefixed(prefix, path string) (string, bool) {
+	if prefix == "" {
+		return "", false
+	}
+	rest, ok := strings.CutPrefix(normalizePath(path), prefix)
+	if !ok || !a.Serves(rest) {
+		return "", false
+	}
+	return rest, true
 }
 
 func normalizePath(path string) string {

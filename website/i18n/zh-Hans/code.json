@@ -11,6 +11,108 @@
   "nav.primary.community": {
     "message": "社区"
   },
+  "recipes.title": {
+    "message": "路由配方"
+  },
+  "recipes.description": {
+    "message": "从所需的路由行为出发，选择并验证维护中的配置。"
+  },
+  "recipes.eyebrow": {
+    "message": "路由目录"
+  },
+  "recipes.byUseCase": {
+    "message": "按使用场景浏览"
+  },
+  "recipes.examplesIntro": {
+    "message": "这些示例只配置路由，不会启动推理服务。改用示例前，请查看对应的要求与限制。"
+  },
+  "recipes.all": {
+    "message": "全部配方"
+  },
+  "recipes.general": {
+    "message": "通用路由"
+  },
+  "recipes.agents": {
+    "message": "编程与智能体"
+  },
+  "recipes.privacy": {
+    "message": "隐私与安全"
+  },
+  "recipes.reasoning": {
+    "message": "推理与验证"
+  },
+  "recipes.multimodal": {
+    "message": "视觉与多模态"
+  },
+  "recipes.cost": {
+    "message": "成本与延迟"
+  },
+  "recipes.feedback": {
+    "message": "反馈与恢复"
+  },
+  "recipes.retrieval": {
+    "message": "检索"
+  },
+  "recipes.resultCount": {
+    "message": "符合条件的配方：{count}"
+  },
+  "recipes.entrypoints": {
+    "message": "入口点"
+  },
+  "recipes.decisionModel": {
+    "message": "决策模型"
+  },
+  "recipes.embeddingModel": {
+    "message": "嵌入模型"
+  },
+  "recipes.behavior": {
+    "message": "路由行为"
+  },
+  "recipes.evaluation": {
+    "message": "评测"
+  },
+  "recipes.source": {
+    "message": "源文件"
+  },
+  "recipes.requirementsAndLimits": {
+    "message": "要求与限制"
+  },
+  "recipes.backends": {
+    "message": "示例使用的提供商模型："
+  },
+  "recipes.experimental": {
+    "message": "实验性"
+  },
+  "recipes.fullRequirements": {
+    "message": "在模型卡中查看完整要求"
+  },
+  "recipes.configuration": {
+    "message": "配置与命令"
+  },
+  "recipes.runFromRepo": {
+    "message": "按照模型卡配置后端与环境，再从仓库根目录运行以下命令。"
+  },
+  "recipes.quickStart": {
+    "message": "配方快速入门"
+  },
+  "recipes.decisionModels": {
+    "message": "决策模型"
+  },
+  "recipes.modelEvidence": {
+    "message": "这里列出示例实际配置的决策模型及信号问题，不代表每个模型变体都支持这些任务。请在 System One 查阅已校准、零样本和不支持的特性，在模型库查阅提供商模型的状态及评测依据。"
+  },
+  "recipes.supportMatrix": {
+    "message": "System One 支持与校准"
+  },
+  "recipes.compatibility": {
+    "message": "问题兼容性"
+  },
+  "recipes.modelHub": {
+    "message": "模型库"
+  },
+  "recipes.questionTypes": {
+    "message": "问题类型："
+  },
   "theme.ErrorPageContent.title": {
     "message": "页面已崩溃。",
     "description": "The title of the fallback page when the page crashed"
@@ -1185,6 +1287,15 @@
   "contributing.subtitle": {
     "message": "我们欢迎社区贡献！以下是你可以帮助改进 vLLM Semantic Router 的方式。"
   },
+  "contributing.guide.title": {
+    "message": "第一次来？先读贡献者指南。"
+  },
+  "contributing.guide.description": {
+    "message": "13 页内容，讲清 vLLM Semantic Router 如何运作、你可以在哪里参与，以及如何从第一个 Pull Request 成长为维护者。"
+  },
+  "contributing.guide.link": {
+    "message": "阅读指南 →"
+  },
   "contributing.waysToContribute": {
     "message": "贡献方式"
   },
@@ -2115,6 +2226,156 @@
   "visionPaper.heroDescription": {
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
+  "paperViewer.chapters.label": {
+    "message": "章节"
+  },
+  "contributorGuide.meta.title": {
+    "message": "贡献者指南"
+  },
+  "contributorGuide.meta.description": {
+    "message": "vLLM Semantic Router 如何运作、你可以在哪里参与，以及如何从第一个 Pull Request 成长为维护者。"
+  },
+  "contributorGuide.page.title": {
+    "message": "贡献者指南"
+  },
+  "contributorGuide.page.description": {
+    "message": "vLLM Semantic Router 如何运作、你可以在哪里参与，以及如何从第一个 Pull Request 成长为维护者。"
+  },
+  "contributorGuide.start.label": {
+    "message": "开始"
+  },
+  "contributorGuide.start.title": {
+    "message": "三种开始方式"
+  },
+  "contributorGuide.start.description": {
+    "message": "在浏览器里体验，在自己的机器上运行，或者加入一个工作组一起构建。"
+  },
+  "contributorGuide.start.try.title": {
+    "message": "体验"
+  },
+  "contributorGuide.start.try.description": {
+    "message": "在 {site} 选一个示例，它会在浏览器中实时运行，首次使用即可获得免费密钥。"
+  },
+  "contributorGuide.start.run.title": {
+    "message": "运行"
+  },
+  "contributorGuide.start.run.description": {
+    "message": "用 {script} 脚本安装，再通过 {command} 启动本地服务栈。"
+  },
+  "contributorGuide.start.build.title": {
+    "message": "构建"
+  },
+  "contributorGuide.start.build.description": {
+    "message": "找到你的工作组，认领一个 AVAILABLE 状态的 issue，然后提交一个聚焦的 Pull Request。"
+  },
+  "contributorGuide.read.label": {
+    "message": "指南"
+  },
+  "contributorGuide.read.title": {
+    "message": "阅读指南"
+  },
+  "contributorGuide.read.description": {
+    "message": "第 1 版，2026 年 11 月，共 13 页（英文）。可以直接跳到某一章，也可以用方向键翻页。"
+  },
+  "contributorGuide.chapter.whatItIs": {
+    "message": "vLLM-SR 是什么"
+  },
+  "contributorGuide.chapter.whatItIs.description": {
+    "message": "问题与目标"
+  },
+  "contributorGuide.chapter.architecture": {
+    "message": "架构"
+  },
+  "contributorGuide.chapter.architecture.description": {
+    "message": "从一次请求到合适的模型"
+  },
+  "contributorGuide.chapter.moduleDesign": {
+    "message": "模块设计"
+  },
+  "contributorGuide.chapter.moduleDesign.description": {
+    "message": "路由流水线与代码仓库"
+  },
+  "contributorGuide.chapter.modelFamilies": {
+    "message": "两大模型家族"
+  },
+  "contributorGuide.chapter.modelFamilies.description": {
+    "message": "Vela 与 Decision"
+  },
+  "contributorGuide.chapter.workGroups": {
+    "message": "工作组"
+  },
+  "contributorGuide.chapter.workGroups.description": {
+    "message": "七个负责方，一个系统"
+  },
+  "contributorGuide.chapter.directions": {
+    "message": "按优先级排列的方向"
+  },
+  "contributorGuide.chapter.directions.description": {
+    "message": "每个工作组接下来要做什么"
+  },
+  "contributorGuide.chapter.join": {
+    "message": "加入工作组"
+  },
+  "contributorGuide.chapter.join.description": {
+    "message": "申请、认领、交付"
+  },
+  "contributorGuide.chapter.grow": {
+    "message": "与项目共同成长"
+  },
+  "contributorGuide.chapter.grow.description": {
+    "message": "提交者与维护者"
+  },
+  "contributorGuide.chapter.contact": {
+    "message": "联系我们"
+  },
+  "contributorGuide.chapter.contact.description": {
+    "message": "链接与社区"
+  },
+  "contributorGuide.contact.label": {
+    "message": "联系我们"
+  },
+  "contributorGuide.contact.title": {
+    "message": "一起来构建它"
+  },
+  "contributorGuide.contact.description": {
+    "message": "选一个工作组，认领一个任务，来打个招呼。每一个首次提交的 Pull Request，我们都会认真评审。"
+  },
+  "contributorGuide.links.repository": {
+    "message": "代码仓库"
+  },
+  "contributorGuide.links.documentation": {
+    "message": "文档"
+  },
+  "contributorGuide.links.workGroups": {
+    "message": "工作组"
+  },
+  "contributorGuide.links.joinGuide": {
+    "message": "加入指南"
+  },
+  "contributorGuide.links.weeklyIssues": {
+    "message": "每周 Issue"
+  },
+  "contributorGuide.links.roadmap": {
+    "message": "路线图问卷"
+  },
+  "contributorGuide.links.models": {
+    "message": "模型"
+  },
+  "contributorGuide.links.tryIt": {
+    "message": "在线体验"
+  },
+  "contributorGuide.links.chat": {
+    "message": "聊天"
+  },
+  "contributorGuide.links.chat.text": {
+    "message": "vLLM Slack 中的 #semantic-router 频道"
+  },
+  "contributorGuide.links.meetings": {
+    "message": "社区会议"
+  },
+  "contributorGuide.links.meetings.text": {
+    "message": "每月两次社区会议，分别面向亚太和美洲时区"
+  },
   "homepage.meta.description": {
     "message": "面向模型与算力的开放、可编程决策层。"
   },
@@ -2447,6 +2708,75 @@
   },
   "community.contributors.range.all.caption": {
     "message": "仓库全量历史"
+  },
+  "community.layout.eyebrow": {
+    "message": "社区"
+  },
+  "community.layout.sidebarLabel": {
+    "message": "社区栏目"
+  },
+  "community.nav.group.startHere": {
+    "message": "从这里开始"
+  },
+  "community.nav.item.contributorGuide": {
+    "message": "贡献者指南"
+  },
+  "community.nav.group.people": {
+    "message": "人员"
+  },
+  "community.nav.group.howWeWork": {
+    "message": "协作方式"
+  },
+  "community.nav.item.team": {
+    "message": "开源团队"
+  },
+  "community.nav.item.steeringCommittee": {
+    "message": "指导委员会"
+  },
+  "community.nav.item.workGroups": {
+    "message": "工作组"
+  },
+  "community.nav.item.leaderboard": {
+    "message": "排行榜"
+  },
+  "community.nav.item.governance": {
+    "message": "治理"
+  },
+  "community.nav.item.contributing": {
+    "message": "参与贡献"
+  },
+  "community.nav.item.codeOfConduct": {
+    "message": "行为准则"
+  },
+  "community.team.pageTitle": {
+    "message": "项目团队"
+  },
+  "community.team.pageDescription": {
+    "message": "vLLM Semantic Router 的维护者、提交者与荣誉提交者"
+  },
+  "community.team.title": {
+    "message": "项目团队"
+  },
+  "community.team.description": {
+    "message": "负责 vLLM Semantic Router 的健康、质量与持续发展的人员。"
+  },
+  "community.team.maintainers.title": {
+    "message": "维护者"
+  },
+  "community.team.maintainers.description": {
+    "message": "项目级负责人，负责制定工程方向、批准发布、处理技术升级事项并管理仓库访问权限。"
+  },
+  "community.team.committers.title": {
+    "message": "提交者"
+  },
+  "community.team.committers.description": {
+    "message": "活跃的受信任贡献者，负责评审变更、承担具体实现领域、分诊 issue，并推动项目持续向前。"
+  },
+  "community.team.emeritus.title": {
+    "message": "荣誉提交者"
+  },
+  "community.team.emeritus.description": {
+    "message": "曾为项目做出贡献的前活跃提交者。本名册依据 GitHub 活动在滚动三个月窗口内刷新，当前窗口为 {fromDate} 至 {toDate}。"
   },
   "theme.SearchBar.section.docs": {
     "message": "文档"
@@ -3033,6 +3363,12 @@
   },
   "homepage.finalCta.docsDetail": {
     "message": "从安装到发出第一个请求。"
+  },
+  "homepage.finalCta.contribute": {
+    "message": "与我们共建"
+  },
+  "homepage.finalCta.contributeDetail": {
+    "message": "从第一个 Pull Request 到维护者。"
   },
   "homepage.sovereigntyAI.label": {
     "message": "Sovereignty AI"

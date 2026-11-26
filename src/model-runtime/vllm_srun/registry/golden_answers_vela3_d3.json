@@ -1,6 +1,53 @@
 {
  "vllm-sr/vela3-flash": {
   "answers": {
+   "cuda:sm_89": {
+    "attack": {
+     "choice": "benign",
+     "confidence": 0.5787154671358388,
+     "probabilities": {
+      "benign": 0.7893577335679194,
+      "jailbreak": 0.21064226643208067
+     },
+     "type": "choice"
+    },
+    "contact": {
+     "noul": 0.9926739070435489,
+     "type": "noul"
+    },
+    "domain": {
+     "choice": "health",
+     "confidence": 0.9946401131163191,
+     "probabilities": {
+      "biology": 0.002023907949749382,
+      "business": 4.1209704391311736e-05,
+      "chemistry": 0.0010582992608304588,
+      "computer science": 2.6917436245637006e-05,
+      "economics": 2.3946844837196377e-05,
+      "engineering": 4.957999460902219e-05,
+      "health": 0.9949974389085644,
+      "history": 3.174293834391568e-05,
+      "law": 5.062918763112038e-05,
+      "math": 3.318120953702767e-05,
+      "other": 0.0015049616559904431,
+      "philosophy": 3.816581135248881e-05,
+      "physics": 2.0560146895891467e-05,
+      "psychology": 6.635814808720395e-05,
+      "religion": 3.3100802934481156e-05
+     },
+     "type": "choice"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.9935159675469614,
+     "probabilities": {
+      "legal": 0.0002609218092653739,
+      "medical": 0.9956773116979744,
+      "other": 0.004061766492760294
+     },
+     "type": "choice"
+    }
+   },
    "rocm": {
     "attack": {
      "choice": "benign",
@@ -51,6 +98,7 @@
   },
   "revision": "af48828de3f9769795d8fc5c42d6cc337a1816b0",
   "torch": {
+   "cuda:sm_89": "2.10.0+cu128",
    "rocm": "2.12.0+git6bbd260"
   }
  },
@@ -206,6 +254,53 @@
      "type": "choice"
     }
    },
+   "npu": {
+    "attack": {
+     "choice": "benign",
+     "confidence": 0.9813948268113979,
+     "probabilities": {
+      "benign": 0.990697413405699,
+      "jailbreak": 0.009302586594301063
+     },
+     "type": "choice"
+    },
+    "contact": {
+     "noul": 0.9466888440967829,
+     "type": "noul"
+    },
+    "domain": {
+     "choice": "health",
+     "confidence": 0.9976086171668138,
+     "probabilities": {
+      "biology": 0.001500754730888518,
+      "business": 1.5347988637448793e-05,
+      "chemistry": 0.00015360371589690248,
+      "computer science": 7.501894729341555e-06,
+      "economics": 6.4038604136109065e-06,
+      "engineering": 3.3237825786913426e-05,
+      "health": 0.9977680426890262,
+      "history": 1.1955193237112346e-05,
+      "law": 2.4060243915968068e-05,
+      "math": 1.4423080730617455e-05,
+      "other": 0.00036344490880402415,
+      "philosophy": 2.216265234570662e-05,
+      "physics": 9.91147679135693e-06,
+      "psychology": 4.04609854017639e-05,
+      "religion": 2.8688753394490908e-05
+     },
+     "type": "choice"
+    },
+    "topic": {
+     "choice": "medical",
+     "confidence": 0.9966202471268019,
+     "probabilities": {
+      "legal": 0.0001306727798626129,
+      "medical": 0.997746831417868,
+      "other": 0.002122495802269342
+     },
+     "type": "choice"
+    }
+   },
    "rocm": {
     "attack": {
      "choice": "benign",
@@ -257,6 +352,7 @@
   "revision": "bbc0206efbbbee5d41955b429e98238b5ad32252",
   "torch": {
    "cuda:sm_89": "2.15.0+cu132",
+   "npu": "2.10.0+cpu",
    "rocm": "2.12.0+git6bbd260"
   }
  },

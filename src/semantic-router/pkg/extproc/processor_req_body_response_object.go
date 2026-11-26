@@ -67,8 +67,17 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	// items of its own input, which decode after them. The earlier request's
 	// top-level instructions are not carried over.
 	at := max(0, len(request.Instructions)-instructionInputItems(input))
-	request.Instructions = slices.Insert(request.Instructions, at, history.Instructions...)
-	request.Messages = append(history.Messages, request.Messages...)
+	instructions := slices.Insert(slices.Clone(request.Instructions), at, history.Instructions...)
+	for index := at + len(history.Instructions); index < len(instructions); index++ {
+		instructions[index].Position += len(history.Messages)
+	}
+	continued := *request
+	continued.Messages = slices.Concat(history.Messages, request.Messages)
+	if err := llmprotocol.RefuseUnansweredToolCalls(continued); err != nil {
+		return false, err
+	}
+	request.Instructions = instructions
+	request.Messages = continued.Messages
 	return true, nil
 }
 

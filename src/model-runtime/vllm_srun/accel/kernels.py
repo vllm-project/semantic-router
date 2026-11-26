@@ -35,12 +35,44 @@ class Kernel:
 
 @dataclass
 class KernelSet:
-    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants."""
+    """The kernels one device uses; ``select`` honours ``allow_approximate`` and the model's variants.
+
+    ``approximate_slots`` narrows ``allow_approximate`` to the named slots, for a family
+    whose records cover only some of the device's approximate kernels; None allows every slot.
+    """
 
     device: str
     available: dict[str, list[Kernel]] = field(default_factory=dict)
     allow_approximate: bool = False
+    approximate_slots: frozenset[str] | None = None
     variants: dict[str, str] = field(default_factory=dict)
+
+    def consent(
+        self, consents: bool | frozenset[str], exact_only: bool = False
+    ) -> None:
+        """Allow the approximate kernels a family consents to: every slot, or the named ones."""
+        self.allow_approximate = not exact_only and bool(consents)
+        self.approximate_slots = consents if isinstance(consents, frozenset) else None
+
+    def approximate_sources(self) -> tuple[str, ...]:
+        """Where the approximate kernels ``select`` picks come from, sorted."""
+        return tuple(
+            sorted(
+                {
+                    kernel.source
+                    for name in self.available
+                    if self.has(name)
+                    for kernel in (self.select(name),)
+                    if not kernel.exact
+                }
+            )
+        )
+
+    def allows(self, name: str) -> bool:
+        """Whether this slot may run an approximate kernel."""
+        return self.allow_approximate and (
+            self.approximate_slots is None or name in self.approximate_slots
+        )
 
     def register(self, kernel: Kernel) -> None:
         self.available.setdefault(kernel.name, []).insert(0, kernel)
@@ -53,9 +85,7 @@ class KernelSet:
         candidates = self.available.get(name, [])
         for variant in dict.fromkeys((self.variants.get(name), None)):
             for kernel in candidates:
-                if kernel.variant == variant and (
-                    kernel.exact or self.allow_approximate
-                ):
+                if kernel.variant == variant and (kernel.exact or self.allows(name)):
                     return kernel
         raise KeyError(f"no kernel registered for {name!r} on {self.device}")
 

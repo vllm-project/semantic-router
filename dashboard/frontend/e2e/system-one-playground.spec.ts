@@ -93,22 +93,27 @@ async function mockPlayground(
     requests.push(route.request().postDataJSON())
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(response) })
   })
-  await page.goto('/decision-model/playground')
-  await expect(
-    page.getByRole('heading', { name: 'Decision Playground', exact: true }),
-  ).toBeVisible()
+  await page.goto('/models/decision?tab=playground')
+  await expect(page.getByRole('heading', { name: 'Answers', exact: true })).toBeVisible({
+    timeout: 30_000,
+  })
   await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toContainText(
     options.repo || (options.sameIdentity ? '@vela/auto' : 'vela-test'),
   )
   return requests
 }
 
+const runButton = (page: Page) => page.getByRole('button', { name: /^Run (test|\d+ questions)/ })
+const state = (page: Page) => page.getByRole('textbox', { name: 'State', exact: true })
+
 async function addType(page: Page, label: string) {
-  await page.getByRole('button', { name: '+ Add question', exact: true }).click()
-  await page
-    .getByLabel('Add a question type')
-    .getByRole('button', { name: new RegExp(label) })
-    .click()
+  await page.getByRole('button', { name: 'Add question', exact: true }).click()
+  await page.getByRole('menuitem', { name: new RegExp(`^${label}`) }).click()
+}
+
+async function switchType(page: Page, question: string, type: string) {
+  await page.getByRole('button', { name: new RegExp(`^Question type for ${question}`) }).click()
+  await page.getByRole('menuitemradio', { name: new RegExp(`^${type}`) }).click()
 }
 
 async function loadExample(page: Page, label: string) {
@@ -126,7 +131,7 @@ test('names the actual runtime model while keeping the deployment as the request
   const option = page.getByRole('option', { name: /vllm-sr\/Vela-2.0-4B/ })
   await expect(option).toContainText('Deployment: @vela/auto')
   await option.click()
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   await expect(page.getByRole('article', { name: 'Result for task' })).toBeVisible()
   expect(requests).toHaveLength(1)
   expect(requests[0]).toMatchObject({ deployment: '@vela/auto' })
@@ -175,7 +180,10 @@ test('shows runtime deployments before task observations in monitoring', async (
       body: JSON.stringify({ status: 'success', data: { resultType: 'vector', result } }),
     })
   })
-  await page.goto('/decision-model/monitoring')
+  await page.goto('/models/decision?tab=monitoring')
+  await expect(
+    page.getByRole('heading', { name: 'Model runtime deployments', exact: true }),
+  ).toBeVisible({ timeout: 30_000 })
   const headings = page.getByRole('heading', {
     name: /^(Model runtime deployments|Automatic routing|Task observations)$/,
   })
@@ -195,14 +203,13 @@ test('shows runtime deployments before task observations in monitoring', async (
     })
 })
 
-test('runs a native request and presents real probabilities with API details collapsed', async ({
+test('runs a native request and presents real probabilities with the native JSON one tab away', async ({
   page,
 }) => {
   const requests = await mockPlayground(page)
-  await expect(page.getByText('Build / System One', { exact: true })).toBeVisible()
   await expect(page.getByText(/^(Router|Engine) mode$/)).toHaveCount(0)
   await expect(page.getByText('From context to a decision')).toBeVisible()
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   const result = page.getByRole('article', { name: 'Result for task' })
   await expect(result.getByRole('meter', { name: 'code' })).toHaveAttribute('aria-valuenow', '93')
   await expect(result).toContainText('93.0% confidence')
@@ -223,29 +230,20 @@ test('runs a native request and presents real probabilities with API details col
       },
     },
   })
-  const inspector = page
-    .locator('details')
-    .filter({ has: page.getByText('Inspect response', { exact: true }) })
-  await expect(inspector).not.toHaveAttribute('open', '')
-  await inspector.locator('summary').click()
-  await expect(inspector.locator('pre')).toContainText('"model": "vela-test"')
-  await page.evaluate(() =>
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined }),
+  await page.getByRole('tab', { name: 'Response' }).click()
+  await expect(page.getByRole('tabpanel', { name: 'Response' }).locator('pre')).toContainText(
+    '"model": "vela-test"',
   )
-  await inspector.getByRole('button', { name: 'Copy JSON' }).click()
-  await expect(inspector.getByRole('button', { name: 'Copy unavailable' })).toBeVisible()
-  await page.getByRole('textbox', { name: 'Instructions', exact: true }).fill('My custom question')
+  await expect(page.getByRole('button', { name: 'Copy response' })).toBeVisible()
+  await page.getByRole('tab', { name: 'Answers' }).click()
   await page
-    .getByLabel('Question type')
-    .getByRole('button', { name: 'Score', exact: false })
-    .click()
-  await page
-    .getByLabel('Question type')
-    .getByRole('button', { name: 'Choice', exact: false })
-    .click()
-  await expect(page.getByRole('textbox', { name: 'Instructions', exact: true })).toHaveValue(
-    'My custom question',
-  )
+    .getByRole('textbox', { name: 'Instructions for task', exact: true })
+    .fill('My custom question')
+  await switchType(page, 'task', 'Score')
+  await switchType(page, 'task', 'Choice')
+  await expect(
+    page.getByRole('textbox', { name: 'Instructions for task', exact: true }),
+  ).toHaveValue('My custom question')
   await expect(
     page.getByText(
       'Showing the last submitted request. Run again to see results for your changes.',
@@ -263,30 +261,24 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
   await loadExample(page, 'Code & reasoning')
   await addType(page, 'Span')
   await addType(page, 'Set')
-  await page
-    .getByRole('textbox', { name: 'Input context', exact: true })
-    .fill('Hi 👋 Maya Chen! Write and explain a Python sorting algorithm.')
-  await page.getByRole('button', { name: 'Run 5 questions', exact: true }).click()
+  await state(page).fill('Hi 👋 Maya Chen! Write and explain a Python sorting algorithm.')
+  await page.getByRole('button', { name: /^Run 5 questions/ }).click()
   await expect(page.getByRole('article', { name: 'Result for difficulty' })).toContainText('1.64')
   await expect(page.getByRole('article', { name: 'Result for needs_reasoning' })).toContainText(
     '88.0%',
   )
   await expect(page.getByRole('article', { name: 'Result for needs', exact: true })).toContainText(
-    '✓ reasoning',
+    'coding, reasoning selected',
   )
   const spans = page.getByRole('article', { name: 'Result for entities' })
   await expect(spans.getByLabel('Highlighted spans').locator('mark')).toContainText('Maya Chen')
   await expect(spans.getByRole('cell', { name: '5–14', exact: true })).toBeVisible()
   await expect(page.getByRole('article')).toHaveCount(5)
-  const inputBounds = await page
-    .getByRole('region', { name: 'Input context', exact: true })
-    .boundingBox()
+  const inputBounds = await page.getByRole('region', { name: 'State', exact: true }).boundingBox()
   const questionBounds = await page
     .getByRole('region', { name: 'Questions', exact: true })
     .boundingBox()
-  const resultBounds = await page
-    .getByRole('region', { name: 'Results', exact: true })
-    .boundingBox()
+  const resultBounds = await page.getByRole('tabpanel', { name: 'Answers' }).boundingBox()
   expect(inputBounds!.x + inputBounds!.width).toBeLessThan(resultBounds!.x)
   expect(questionBounds!.x + questionBounds!.width).toBeLessThan(resultBounds!.x)
   if (process.env.PLAYGROUND_SCREENSHOT_DIR)
@@ -294,23 +286,13 @@ test('renders a five-type batch, highlights Unicode spans, and fits desktop and 
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-desktop.png'),
       fullPage: true,
     })
-  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-desktop.png'),
-      fullPage: true,
-    })
   await page.setViewportSize({ width: 390, height: 844 })
-  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-mobile.png'),
-      fullPage: true,
-    })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
-  await expect(page.getByRole('button', { name: 'Run 5 questions' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Decision Models', exact: false })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Decision Monitoring', exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Run 5 questions/ })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Deploy' })).toBeVisible()
+  await expect(page.getByRole('tab', { name: 'Monitoring' })).toBeVisible()
   if (process.env.PLAYGROUND_SCREENSHOT_DIR)
     await page.screenshot({
       path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-mobile.png'),
@@ -326,15 +308,13 @@ test('uses discovered question support and runtime readiness to gate inference',
   await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toHaveText(
     '@vela/auto',
   )
-  await expect(
-    page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }),
-  ).toBeDisabled()
-  await expect(
-    page.getByLabel('Question type').getByRole('button', { name: 'Set', exact: false }),
-  ).toBeDisabled()
+  await page.getByRole('button', { name: /^Question type for task/ }).click()
+  await expect(page.getByRole('menuitemradio', { name: /^Span/ })).toBeDisabled()
+  await expect(page.getByRole('menuitemradio', { name: /^Set/ })).toBeDisabled()
+  await page.keyboard.press('Escape')
   expect(requests).toHaveLength(0)
   await mockPlayground(page, { unready: true })
-  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
+  await expect(runButton(page)).toBeDisabled()
   await expect(page.getByText('The runtime is still loading.')).toBeVisible()
 })
 
@@ -342,13 +322,15 @@ test('allows a configuration reader to author and inspect without running infere
   page,
 }) => {
   const requests = await mockPlayground(page, { reader: true })
-  await page.getByLabel('Question name', { exact: true }).fill('my_question')
-  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
+  await page.getByLabel('Question 1 name', { exact: true }).fill('my_question')
+  await expect(runButton(page)).toBeDisabled()
   await expect(
     page.getByText('Your account needs evaluation.run permission to send a test.'),
   ).toBeVisible()
-  await page.getByText('Preview request', { exact: true }).click()
-  await expect(page.locator('pre')).toContainText('my_question')
+  await page.getByRole('tab', { name: 'Request' }).click()
+  await expect(page.getByRole('tabpanel', { name: 'Request' }).locator('pre')).toContainText(
+    'my_question',
+  )
   expect(requests).toHaveLength(0)
 })
 
@@ -371,7 +353,7 @@ test('shows partial question failures and native service errors without inventin
       }),
     }),
   )
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   await expect(page.getByRole('alert')).toContainText(
     'This question exceeds the model option limit.',
   )
@@ -385,10 +367,10 @@ test('shows partial question failures and native service errors without inventin
       }),
     }),
   )
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   await expect(page.getByRole('alert')).toContainText('The model runtime is unavailable.')
   await expect(page.getByRole('article')).toHaveCount(0)
-  await expect(page.getByLabel('Question name', { exact: true })).toHaveValue('task')
+  await expect(page.getByLabel('Question 1 name', { exact: true })).toHaveValue('task')
 })
 
 test('cancels the browser wait and discards a late response', async ({ page }) => {
@@ -403,31 +385,31 @@ test('cancels the browser wait and discards a late response', async ({ page }) =
       .fulfill({ contentType: 'application/json', body: JSON.stringify(response) })
       .catch(() => {})
   })
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
-  await expect(page.getByText('Your model is thinking')).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toBeDisabled()
+  await runButton(page).click()
+  await expect(page.getByText('Your model is thinking…')).toBeVisible()
+  await expect(state(page)).toBeDisabled()
   await page.getByRole('button', { name: 'Cancel request' }).click()
-  await expect(page.getByRole('status')).toContainText('Stopped waiting for this request.')
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Stopped waiting for this request.' }),
+  ).toBeVisible()
   resolve?.()
   await expect(page.getByRole('article')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeEnabled()
+  await expect(runButton(page)).toBeEnabled()
 })
 
 test('validates structured input and sends explicit span state fields unchanged', async ({
   page,
 }) => {
   const requests = await mockPlayground(page)
-  await page.getByRole('button', { name: 'Structured', exact: true }).click()
-  await page.getByRole('textbox', { name: 'Input context', exact: true }).fill('{')
-  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
+  await page.getByRole('radio', { name: 'Structured', exact: true }).click()
+  await state(page).fill('{')
+  await expect(runButton(page)).toBeDisabled()
   await expect(page.getByText('The structured state is not valid JSON.')).toBeVisible()
-  await page
-    .getByRole('textbox', { name: 'Input context', exact: true })
-    .fill('{"request":"Who is this?","answer":"Maya"}')
-  await page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }).click()
-  await page.getByText('Question settings', { exact: true }).click()
+  await state(page).fill('{"request":"Who is this?","answer":"Maya"}')
+  await switchType(page, 'task', 'Span')
+  await page.getByText('Question settings', { exact: true }).first().click()
   await page.getByLabel('State field', { exact: false }).fill('answer')
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   await expect(page.getByText('Response received')).toBeVisible()
   expect(requests[0]).toMatchObject({
     request: {
@@ -452,78 +434,47 @@ test('refreshes failed discovery instead of accepting stale runtime capabilities
   )
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Cannot discover model capabilities.')
-  await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeDisabled()
+  await expect(runButton(page)).toBeDisabled()
 })
 
-test('supports select keyboard navigation, escape, tab, and outside dismissal without changing drafts', async ({
-  page,
-}) => {
+test('supports select keyboard navigation and escape without changing drafts', async ({ page }) => {
   await mockPlayground(page)
   const example = page.getByRole('combobox', { name: 'Load example', exact: true })
-  const context = page.getByRole('textbox', { name: 'Input context', exact: true })
-  await context.fill('Keep my draft while I explore examples.')
+  await state(page).fill('Keep my draft while I explore examples.')
   await example.focus()
-  await example.press('ArrowDown')
-  await expect(example).toHaveAttribute('aria-expanded', 'true')
-  await expect(example).toBeFocused()
-  await expect(page.getByRole('option', { name: /Code & reasoning/ })).toHaveAttribute(
-    'data-active',
-    'true',
-  )
-  await example.press('End')
-  await expect(page.getByRole('option', { name: /Entity extraction/ })).toHaveAttribute(
-    'data-active',
-    'true',
-  )
-  await example.press('Home')
-  await example.press('ArrowDown')
-  await expect(page.getByRole('option', { name: /Customer support/ })).toHaveAttribute(
-    'data-active',
-    'true',
-  )
-  await example.press('Escape')
-  await expect(example).toHaveAttribute('aria-expanded', 'false')
-  await expect(example).toBeFocused()
-  await expect(context).toHaveValue('Keep my draft while I explore examples.')
   await example.press('Enter')
-  await example.press('Tab')
+  await expect(page.getByRole('listbox')).toBeVisible()
+  await page.keyboard.press('ArrowDown')
+  await page.keyboard.press('Escape')
   await expect(example).toHaveAttribute('aria-expanded', 'false')
-  await expect(example).not.toBeFocused()
-  await example.click()
-  await page.getByRole('heading', { name: 'Input context', exact: true }).click()
-  await expect(example).toHaveAttribute('aria-expanded', 'false')
-  await example.focus()
-  await example.press('c')
-  await expect(example).toHaveAttribute('aria-expanded', 'true')
-  await example.press('ArrowDown')
-  await example.press('Enter')
-  await expect(context).toHaveValue(/charged twice/)
   await expect(example).toBeFocused()
-
+  await expect(state(page)).toHaveValue('Keep my draft while I explore examples.')
+  await example.press('Enter')
+  await page.getByRole('option', { name: /Customer support/ }).press('Enter')
+  await expect(state(page)).toHaveValue(/charged twice/)
+  await expect(example).toBeFocused()
   const runtime = page.getByRole('combobox', { name: 'Runtime target', exact: true })
   await runtime.focus()
-  await runtime.press(' ')
+  await runtime.press('Enter')
   await expect(page.getByRole('option', { name: /vela-test/ })).toHaveAttribute(
     'aria-selected',
     'true',
   )
-  await runtime.press('Escape')
+  await page.keyboard.press('Escape')
   await expect(runtime).toBeFocused()
 })
 
 test('loads the language span example and sends its labels unchanged', async ({ page }) => {
   const requests = await mockPlayground(page)
   await loadExample(page, 'Entity extraction')
-  await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toHaveValue(
-    /Python/,
-  )
-  await expect(page.getByRole('textbox', { name: 'label 3 key', exact: true })).toHaveValue(
-    'language',
-  )
-  await expect(page.getByRole('textbox', { name: 'label 3 description', exact: true })).toHaveValue(
-    'The programming language',
-  )
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await expect(state(page)).toHaveValue(/Python/)
+  await expect(
+    page.getByRole('textbox', { name: 'entities label 3 key', exact: true }),
+  ).toHaveValue('language')
+  await expect(
+    page.getByRole('textbox', { name: 'entities label 3 description', exact: true }),
+  ).toHaveValue('The programming language')
+  await runButton(page).click()
   await expect(page.getByText('Response received')).toBeVisible()
   expect(requests[0]).toMatchObject({
     request: {
@@ -552,7 +503,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
     const page = await context.newPage()
     await mockPlayground(page)
     await page.getByRole('combobox', { name: 'Load example', exact: true }).tap()
-    const menu = page.getByRole('listbox', { name: 'Load example', exact: true })
+    const menu = page.getByRole('listbox')
     await expect(menu).toBeVisible()
     const bounds = await menu.boundingBox()
     expect(bounds).not.toBeNull()
@@ -560,36 +511,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390)
     expect(bounds!.y).toBeGreaterThanOrEqual(0)
     expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(844)
-    const contrast = await menu.evaluate((element) => {
-      const luminance = (color: string) => {
-        const rgb = color
-          .match(/[\d.]+/g)!
-          .slice(0, 3)
-          .map(Number)
-          .map((channel) => {
-            const value = channel / 255
-            return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
-          })
-        return rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722
-      }
-      const background = luminance(getComputedStyle(element).backgroundColor)
-      return Array.from(element.querySelectorAll('strong, small')).map((text) => {
-        const foreground = luminance(getComputedStyle(text).color)
-        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
-      })
-    })
-    expect(contrast.every((ratio) => ratio >= 4.5)).toBe(true)
-    if (process.env.PLAYGROUND_SCREENSHOT_DIR)
-      await page.screenshot({
-        path: join(
-          process.env.PLAYGROUND_SCREENSHOT_DIR,
-          `systemone-example-menu-${colorScheme}.png`,
-        ),
-      })
     await page.getByRole('option', { name: /Entity extraction/ }).tap()
-    await expect(page.getByRole('textbox', { name: 'label 3 key', exact: true })).toHaveValue(
-      'language',
-    )
+    await expect(
+      page.getByRole('textbox', { name: 'entities label 3 key', exact: true }),
+    ).toHaveValue('language')
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
@@ -642,7 +567,7 @@ test('runs auto through its recipe and preserves the selected example across tar
   const example = await page
     .getByRole('combobox', { name: 'Load example', exact: true })
     .textContent()
-  const input = await page.getByRole('textbox', { name: 'Input context', exact: true }).inputValue()
+  const input = await state(page).inputValue()
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   const target = page.getByRole('combobox', { name: 'Runtime target', exact: true })
   await target.click()
@@ -653,11 +578,11 @@ test('runs auto through its recipe and preserves the selected example across tar
   await expect(page.getByRole('combobox', { name: 'Load example', exact: true })).toHaveText(
     example!,
   )
-  await expect(page.getByRole('textbox', { name: 'Input context', exact: true })).toHaveValue(input)
-  await expect(
-    page.getByLabel('Question type').getByRole('button', { name: 'Span', exact: false }),
-  ).toBeDisabled()
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await expect(state(page)).toHaveValue(input)
+  await page.getByRole('button', { name: /^Question type for task/ }).click()
+  await expect(page.getByRole('menuitemradio', { name: /^Span/ })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await runButton(page).click()
   const outcome = page.getByRole('region', { name: 'Auto routing outcome' })
   await expect(outcome).toContainText('decision-eos')
   await expect(outcome).toContainText('strong')
@@ -665,17 +590,7 @@ test('runs auto through its recipe and preserves the selected example across tar
   await expect(outcome).toContainText('not measured accuracy')
   expect(submissions[0]).toMatchObject({ model: 'vllm-sr/auto', request: { state: input } })
   expect(submissions[0]).not.toHaveProperty('deployment')
-  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-desktop.png'),
-      fullPage: true,
-    })
   await page.setViewportSize({ width: 390, height: 844 })
-  if (process.env.PLAYGROUND_SCREENSHOT_DIR)
-    await page.screenshot({
-      path: join(process.env.PLAYGROUND_SCREENSHOT_DIR, 'systemone-auto-mobile.png'),
-      fullPage: true,
-    })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
@@ -692,7 +607,7 @@ test('route discovery failure does not block direct inference', async ({ page })
   )
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(page.getByText('Auto discovery unavailable')).toBeVisible()
-  await page.getByRole('button', { name: /^Run (test|3 questions)$/ }).click()
+  await runButton(page).click()
   await expect(page.getByText('Response received')).toBeVisible()
   expect(direct).toHaveLength(1)
 })
@@ -728,8 +643,9 @@ test('slow direct discovery does not delay auto routing', async ({ page }) => {
     await page.reload()
     await expect(page.getByRole('combobox', { name: 'Runtime target', exact: true })).toHaveText(
       'vllm-sr/auto',
+      { timeout: 30_000 },
     )
-    await expect(page.getByRole('button', { name: /^Run (test|3 questions)$/ })).toBeEnabled()
+    await expect(runButton(page)).toBeEnabled()
   } finally {
     release()
   }

@@ -40,7 +40,7 @@ test('selects Builder sidebar entities with the keyboard', async ({ page }) => {
   await page.route('**/api/router/config/yaml', (route) => route.fulfill({ body: config }))
   await page.goto('/builder')
 
-  const home = page.getByRole('button', { name: 'Dashboard', exact: true })
+  const home = page.getByRole('button', { name: 'Overview', exact: true })
   const modelA = page.getByRole('button', { name: /^model-a\b/ })
   const modelB = page.getByRole('button', { name: /^model-b\b/ })
   await expect(modelB).toBeVisible()

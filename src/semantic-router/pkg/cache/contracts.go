@@ -67,7 +67,9 @@ func (p CachePartition) Key() string {
 func joinPartitionParts(parts ...string) string {
 	escaped := make([]string, len(parts))
 	for index, part := range parts {
-		escaped[index] = strings.ReplaceAll(part, ":", "%3A")
+		// Escape '%' before ':' so the encoding stays injective: a part holding
+		// the literal "%3A" must not produce the same token as a part holding ':'.
+		escaped[index] = strings.ReplaceAll(strings.ReplaceAll(part, "%", "%25"), ":", "%3A")
 	}
 	return strings.Join(escaped, ":")
 }

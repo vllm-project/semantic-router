@@ -373,7 +373,9 @@ func rereadScan(text string, asked askedRule, windows []scanWindow) *guardScan {
 	scan := &guardScan{
 		text: text, size: 1024, overlap: 128, rereadMargin: config.DefaultScanWindowRereadMargin, rules: []askedRule{asked}, cut: len(windows),
 		windows: windows, responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
-		windowState: func(window string) modelservice.Request { return modelservice.Request{State: window} },
+		windowState: func(window scanWindow) modelservice.Request {
+			return modelservice.Request{State: text[window.start:window.end]}
+		},
 	}
 	scan.done[0] = true
 	return scan
@@ -697,7 +699,7 @@ func TestTheRunsOfAReplanLeaveOutTheHeadAndTheTail(t *testing.T) {
 // read when that window was, and says why it was not when it was not.
 func TestAWindowReadInPlaceOfOthersCoversThem(t *testing.T) {
 	asked := askedRule{signalType: config.SignalTypeJailbreak, rule: config.SystemOneRule{Name: "prompt_attack"}}
-	answered := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {Type: "noul", Noul: 0.1}}}
+	answered := modelservice.Response{Answers: map[string]modelservice.Answer{asked.questionID(): {Type: "noul", Noul: 0.1, InputCoverage: "complete"}}}
 	scan := &guardScan{
 		cut: 4,
 		windows: []scanWindow{

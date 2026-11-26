@@ -53,9 +53,9 @@ func TestAgentFactsReadCapturedHarnessHeaders(t *testing.T) {
 			want: classification.AgentFacts{Role: main, Harness: cc, RequestClass: "compaction"},
 		},
 		{
-			name:    "a request class from another client is no class",
+			name:    "a request class from another client is not read",
 			headers: map[string]string{"session-id": cxSession, "thread-id": cxSession, "x-claude-code-request-class": "auxiliary"},
-			want:    classification.AgentFacts{Role: main, Harness: cx},
+			want:    classification.AgentFacts{Role: main, Harness: cx, RequestClass: config.AgentRequestClassMain},
 		},
 		{
 			name: "claude code custom subagent",
@@ -67,7 +67,7 @@ func TestAgentFactsReadCapturedHarnessHeaders(t *testing.T) {
 		{
 			name:    "codex root thread",
 			headers: map[string]string{"session-id": cxSession, "thread-id": cxSession},
-			want:    classification.AgentFacts{Role: main, Harness: cx},
+			want:    classification.AgentFacts{Role: main, Harness: cx, RequestClass: config.AgentRequestClassMain},
 		},
 		{
 			name: "codex spawned agent",
@@ -75,7 +75,7 @@ func TestAgentFactsReadCapturedHarnessHeaders(t *testing.T) {
 				"session-id": cxSession, "thread-id": "01a1e34e-685e-70f1-9d78-dccc14907d6e",
 				"x-codex-parent-thread-id": cxSession, "x-openai-subagent": "collab_spawn",
 			},
-			want: classification.AgentFacts{Role: subagent, Harness: cx, Type: "collab_spawn"},
+			want: classification.AgentFacts{Role: subagent, Harness: cx, Type: "collab_spawn", RequestClass: config.AgentRequestClassSubagent},
 		},
 		{
 			name: "codex review child",
@@ -83,12 +83,12 @@ func TestAgentFactsReadCapturedHarnessHeaders(t *testing.T) {
 				"session-id": "01a1e352-9a79-7921-8b06-dc8c3c2170c9", "thread-id": "01a1e352-9acf-7f60-900e-d91726ad5675",
 				"x-openai-subagent": "review",
 			},
-			want: classification.AgentFacts{Role: subagent, Harness: cx, Type: "review"},
+			want: classification.AgentFacts{Role: subagent, Harness: cx, Type: "review", RequestClass: config.AgentRequestClassSubagent},
 		},
 		{
 			name: "codex turn metadata alone",
 			turn: codexreview.Turn{SessionID: cxSession, ThreadID: "child", TurnID: "turn"},
-			want: classification.AgentFacts{Role: subagent, Harness: cx},
+			want: classification.AgentFacts{Role: subagent, Harness: cx, RequestClass: config.AgentRequestClassSubagent},
 		},
 		{
 			name: "a type header without a subagent names no type",

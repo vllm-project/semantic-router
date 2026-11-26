@@ -102,8 +102,10 @@ type guardScan struct {
 	// order is the cut's reading order (scanOrder), turned by turn.
 	order []int
 	turn  int
-	// windowState is the state a window's call reads.
-	windowState func(window string) modelservice.Request
+	// windowState is the state a window's call reads, from the window's place
+	// in text: a state of named parts keeps them, so a window read from the
+	// middle of the history is not presented as one undifferentiated turn.
+	windowState func(window scanWindow) modelservice.Request
 	// parallel bounds the windows in flight.
 	parallel int
 	// refusing are the rules a window that makes them match ends the
@@ -116,7 +118,12 @@ type guardScan struct {
 	responses []modelservice.Response
 	errs      []error
 	done      []bool
-	latency   float64
+	// reused are the windows whose answers an earlier request's read of the
+	// same input gave (windowVerdicts), which took no time; verdicts keys the
+	// scan's windows there, nil for a scan that keeps none.
+	reused   []bool
+	verdicts *scanVerdictKeys
+	latency  float64
 	// waiting are the re-reads that wait for the windows still unread, and
 	// rank the highest rank the scan's windows took.
 	waiting []waitingReread
@@ -185,6 +192,7 @@ func newGuardScan(deployment string, state modelservice.Request, budget scanBudg
 		size: size, grown: grown, most: most, overlap: overlap, rereadMargin: budget.rereadMargin,
 		order: scanOrder(len(windows), offset), turn: offset, windowState: windowState, parallel: budget.parallel, stop: func() {},
 		responses: make([]modelservice.Response, len(windows)), errs: make([]error, len(windows)), done: make([]bool, len(windows)),
+		reused: make([]bool, len(windows)),
 	}
 }
 
@@ -215,15 +223,29 @@ func cutScanWindows(text string, size, most, overlap int) ([]scanWindow, int) {
 	return windows, grown
 }
 
+// scanPartSeparator separates two parts in the text a scan windows, as the
+// non-windowed state separates them.
+const scanPartSeparator = "\n\n"
+
+// scanPart is one named part's byte range in that text.
+type scanPart struct {
+	name       string
+	start, end int
+}
+
 // scanSource is the text a state's windows cover, the window size that
 // leaves room for what every window carries besides, and how a window
 // becomes a state. A response-stage state reads its answer in windows, each
 // with a view of the rest; any other reads all of its text, the current
-// turn last.
-func scanSource(state modelservice.Request, size int) (string, int, func(string) modelservice.Request) {
+// turn last. A state of named parts keeps its parts in every window, each
+// carrying the part text the window covers, so the model reads the same
+// named parts it reads when the state fits one window rather than one
+// joined string with the history/request boundary gone.
+func scanSource(state modelservice.Request, size int) (string, int, func(scanWindow) modelservice.Request) {
 	if state.Parts == nil {
-		return state.State, size, func(window string) modelservice.Request {
-			return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+		text := state.State
+		return text, size, func(window scanWindow) modelservice.Request {
+			return modelservice.Request{State: text[window.start:window.end], Images: state.Images, Videos: state.Videos}
 		}
 	}
 	if answer, ok := state.Parts["answer"]; ok {
@@ -234,16 +256,38 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 			}
 		}
 		others = boundedState(others, size/4, config.DefaultRoutingViewHeadShare)
-		return answer, size - stateBytes(others), func(window string) modelservice.Request {
-			parts := map[string]string{"answer": window}
+		return answer, size - stateBytes(others), func(window scanWindow) modelservice.Request {
+			parts := map[string]string{"answer": answer[window.start:window.end]}
 			for name, text := range others.Parts {
 				parts[name] = text
 			}
 			return modelservice.Request{Parts: parts, Images: state.Images, Videos: state.Videos}
 		}
 	}
-	names := make([]string, 0, len(state.Parts))
-	for name := range state.Parts {
+	names := scanPartNames(state.Parts)
+	var builder strings.Builder
+	parts := make([]scanPart, 0, len(names))
+	for index, name := range names {
+		if index > 0 {
+			builder.WriteString(scanPartSeparator)
+		}
+		start := builder.Len()
+		builder.WriteString(state.Parts[name])
+		parts = append(parts, scanPart{name: name, start: start, end: builder.Len()})
+	}
+	text := builder.String()
+	return text, size, func(window scanWindow) modelservice.Request {
+		request := windowParts(text, parts, window)
+		request.Images, request.Videos = state.Images, state.Videos
+		return request
+	}
+}
+
+// scanPartNames orders named parts as the scan reads them, with the current
+// request last.
+func scanPartNames(parts map[string]string) []string {
+	names := make([]string, 0, len(parts))
+	for name := range parts {
 		names = append(names, name)
 	}
 	slices.SortFunc(names, func(a, b string) int {
@@ -255,13 +299,25 @@ func scanSource(state modelservice.Request, size int) (string, int, func(string)
 		}
 		return strings.Compare(a, b)
 	})
-	texts := make([]string, len(names))
-	for index, name := range names {
-		texts[index] = state.Parts[name]
+	return names
+}
+
+// windowParts is the state a window of text carries: every named part it
+// covers, under the same name and with the part text the window holds. A
+// window that covers no part at all, which only a state of empty parts can
+// produce, reads as the window text so the call is still about something.
+func windowParts(text string, parts []scanPart, window scanWindow) modelservice.Request {
+	windowed := make(map[string]string, len(parts))
+	for _, part := range parts {
+		start, end := max(part.start, window.start), min(part.end, window.end)
+		if start < end {
+			windowed[part.name] = text[start:end]
+		}
 	}
-	return strings.Join(texts, "\n\n"), size, func(window string) modelservice.Request {
-		return modelservice.Request{State: window, Images: state.Images, Videos: state.Videos}
+	if len(windowed) == 0 {
+		return modelservice.Request{State: text[window.start:window.end]}
 	}
+	return modelservice.Request{Parts: windowed}
 }
 
 // scanWindowsOf cuts text into windows of at most size bytes, each starting
@@ -348,9 +404,12 @@ func (scan *guardScan) windowCalls(ctx context.Context) []*systemOneCall {
 	calls := make([]*systemOneCall, len(scan.order))
 	for rank, index := range scan.order {
 		window := scan.windows[index]
-		request := scan.windowState(scan.text[window.start:window.end])
+		request := scan.windowState(window)
 		request.Window, request.Parallel = rank+1, scan.parallel
-		calls[rank] = &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index}
+		calls[rank] = &systemOneCall{
+			deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index,
+			verdict: scan.verdictKey(window),
+		}
 		scan.pace.reads[index], scan.pace.cancels[index] = context.WithCancelCause(ctx)
 	}
 	for index := range scan.cut {
@@ -432,6 +491,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 	var readers []func()
 	for _, scan := range scans {
 		scan.refusing = c.refusingRules(scan.rules)
+		scan.verdicts = c.newScanVerdictKeys(scan)
 		scan.stop = stop
 		scan.pace.stage, scan.pace.started, scan.pace.deadline = stage, started, deadline
 		calls := scan.windowCalls(ctx)
@@ -446,7 +506,11 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 			var response modelservice.Response
 			var latency float64
 			err := readCtx.Err()
+			kept := false
 			if err == nil {
+				response, kept = c.keptWindow(call)
+			}
+			if err == nil && !kept {
 				if slots != nil {
 					slots <- struct{}{}
 				}
@@ -454,6 +518,7 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 				if slots != nil {
 					<-slots
 				}
+				c.keepWindow(call, response, err)
 			}
 			if err != nil {
 				err = windowError(readCtx, err)
@@ -641,9 +706,13 @@ func (scan *guardScan) addWindowLocked(window scanWindow, rank int) *systemOneCa
 	scan.responses = append(scan.responses, modelservice.Response{})
 	scan.errs = append(scan.errs, nil)
 	scan.done = append(scan.done, false)
-	request := scan.windowState(scan.text[window.start:window.end])
+	scan.reused = append(scan.reused, false)
+	request := scan.windowState(window)
 	request.Window, request.Parallel = rank, scan.parallel
-	return &systemOneCall{deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0}
+	return &systemOneCall{
+		deployment: scan.deployment, request: request, rules: scan.rules, scan: scan, window: index, reread: window.first < 0,
+		verdict: scan.verdictKey(window),
+	}
 }
 
 // refusingRules are the rules among rules whose match in one window refuses
@@ -765,6 +834,11 @@ func (scan *guardScan) answersTo(question string) ([]windowAnswer, int, string) 
 			reason = "missing_answer"
 		case answer.Error != "":
 			reason = answer.Error
+		case answer.InputCoverage != "complete":
+			// A window's call succeeding says nothing about how much of the
+			// window it read: the answer covers the window only when the
+			// model proved it read all of it.
+			reason = "input_coverage_unknown"
 		default:
 			answered = true
 			read = append(read, windowAnswer{answer: answer, window: index})

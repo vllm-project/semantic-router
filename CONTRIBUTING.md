@@ -3,6 +3,11 @@
 Thank you for contributing. This guide covers the repository workflow; the
 public installation guide is at <https://vllm-sr.ai/docs/installation/>.
 
+New to the project? Start with the
+[Contributor Guide](https://vllm-sr.ai/community/contributor-guide): how
+vLLM Semantic Router works, which Work Group owns each area, and how to grow
+from your first pull request to maintainer.
+
 ## Before you start
 
 Install:
@@ -10,7 +15,8 @@ Install:
 - Docker or Podman;
 - Make;
 - Git; and
-- Python 3.10 or newer for the CLI, tests, or training tools you plan to use.
+- Python 3.10 or newer for the CLI and tests, and Python 3.11 or newer for the
+  training projects under `src/training/`.
 
 Clone the repository:
 
@@ -260,6 +266,21 @@ Mergify places a pull request in the merge queue only after at least two
 reviewers with `write`, `maintain`, or `admin` repository permission approve
 it, all required checks pass, and all review conversations are resolved.
 
+GitHub requests the repository-wide reviewers in `.github/CODEOWNERS` when a
+non-draft PR is ready for review. After the linked issue is accepted and its
+single `wg/*` owner is synchronized to the PR, Community Label Sync requests
+one Lead of that Working Group, rotating among the group's Leads by PR number.
+It skips the PR author and the repository-wide reviewers, and requests no one
+while a Lead of the group is already requested or has reviewed. With each
+request it keeps one PR comment that names the requested Lead and up to two
+other Leads of the group; mention them in a reply to speed up the review. Only
+Leads who are Maintainers or Committers with write access are requested,
+because only their approvals count toward the two the merge queue needs. The
+rosters are maintained in `tools/ci/community_reviewers.py`; update them when
+a Lead joins or leaves a group or their repository access changes.
+Cross-Workgroup changes may need additional specialist reviewers. Working
+Group membership alone does not grant repository review or merge authority.
+
 ### Troubleshoot the merge queue
 
 Check the **Mergify Merge Queue** check or Mergify's **Merge Queue Status**
@@ -278,6 +299,24 @@ Summary check shows the effective conditions, including inherited requirements.
   can be normal. Mergify checks each PR on a draft pull request that merges it
   onto current `main`, and that run needs no new `/ci run`.
   Avoid pushing while queued: a push restarts PR Gate, which the queue requires.
+- **Draft CI passed and `PR Gate` is still missing.** Open the queue draft
+  linked in the Mergify status and confirm its `Pull Request` run succeeded.
+  In the repository's **Actions** tab, look for `PR CI Status` runs created
+  around that time. When the resolver log is available, match its `run_id`
+  to the draft's `Pull Request` run. Check whether **Resolve qualification
+  identity** or **Publish PR qualification status** is still queued or
+  pending.
+
+  If Mergify reports **Checks timed out**, keep the original PR and draft
+  links, the draft head SHA, the qualification run and attempt, and the
+  queue deadline. Include any matching publisher runs and their job start
+  times, if available. If publication finished without a Gate, keep the
+  publisher's logs for diagnosis.
+
+  Once Gate publication is making progress again, a maintainer can consider
+  requeueing the original PR. First confirm its current head has a green
+  `PR Gate`, the required approvals still hold, and all review conversations
+  are resolved.
 - **Unresolved review conversation:** every review thread must be resolved,
   including threads marked **Outdated** after a push or branch update. Use
   the **Conversations** menu on **Files changed** to find them. The PR author
@@ -335,6 +374,15 @@ Summary check shows the effective conditions, including inherited requirements.
   stop and retain the evidence; do not change native failures to success or
   neutral. This is a controlled recovery path, not a guarantee that every
   branch update resolves every check conflict.
+
+- **Waiting Gate disappears after a Community rerun:** the trusted publisher
+  can restore a verified current-attempt pending Gate without another branch
+  push or manual Actions rerun. It keeps the check pending and preserves the
+  existing `/ci run` guidance; it does not authorize CI, publish success, or
+  replace a completed verdict. Recovery must confirm the replacement in the
+  latest check set before retiring the original pending check. An uncertain
+  write or visibility result stops repeated creation. Retain the qualification
+  run/attempt and check IDs for Maintainer investigation of #5866.
 
 To recover from a branch-update failure, merge upstream `main` into your PR
 branch and push it, or use GitHub's **Update branch** button when available.

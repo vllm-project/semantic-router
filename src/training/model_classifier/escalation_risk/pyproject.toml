@@ -2,7 +2,7 @@
 name = "escalation-risk"
 version = "0.0.0"
 description = "Environment for the escalation risk classifier under src/training/model_classifier/escalation_risk"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     # Lower bounds are the ones in requirements.txt; upper bounds stop at the next major.
     "numpy>=1.26,<3",

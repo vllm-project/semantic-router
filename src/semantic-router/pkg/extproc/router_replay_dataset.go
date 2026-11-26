@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -33,10 +34,11 @@ var errRouterReplayDatasetTooLarge = fmt.Errorf(
 // manifest holds identity and digests only, never prompt or response text, so
 // it carries no payload a replay reader could not already list.
 func (r *OpenAIRouter) handleRouterReplayDatasetAPI(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) *ext_proc.ProcessingResponse {
-	_, manifest, _, failure := r.buildRouterReplayDataset(method, rawQuery)
+	_, manifest, _, failure := r.buildRouterReplayDataset(ctx, method, rawQuery)
 	if failure != nil {
 		return failure
 	}
@@ -48,6 +50,7 @@ func (r *OpenAIRouter) handleRouterReplayDatasetAPI(
 // starts here, so they all describe the same examples. A non-nil response is
 // the error to return.
 func (r *OpenAIRouter) buildRouterReplayDataset(
+	ctx context.Context,
 	method string,
 	rawQuery string,
 ) (url.Values, shadowdataset.Manifest, []routerreplay.RoutingRecord, *ext_proc.ProcessingResponse) {
@@ -68,7 +71,7 @@ func (r *OpenAIRouter) buildRouterReplayDataset(
 		return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
 	}
 
-	records, err := r.queryRouterReplayDatasetRecords(filters)
+	records, err := r.queryRouterReplayDatasetRecords(ctx, filters)
 	if err != nil {
 		if errors.Is(err, errRouterReplayDatasetTooLarge) {
 			return nil, shadowdataset.Manifest{}, nil, r.createErrorResponse(400, err.Error())
@@ -127,12 +130,14 @@ func parseShadowDatasetPolicy(values url.Values) (shadowdataset.Policy, error) {
 // captured bodies, because an example needs the digests the router recorded on
 // the observation rather than the summary a list page returns.
 func (r *OpenAIRouter) queryRouterReplayDatasetRecords(
+	ctx context.Context,
 	filters routerReplayFilters,
 ) ([]routerreplay.RoutingRecord, error) {
 	var records []routerreplay.RoutingRecord
 	total := 0
 	for _, reader := range r.routerReplayReaders() {
 		page, supported, err := reader.QueryPage(
+			ctx,
 			filters.storageFilters(),
 			routerReplayDatasetMaxRecords+1,
 			0,

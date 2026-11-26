@@ -938,6 +938,7 @@ def test_listener_apis_are_named_by_the_api_registry():
         "responses",
         "messages",
         "images",
+        "speech",
     )
     for models in ([], [""], [" padded "], ["one", "one"]):
         with pytest.raises(PydanticValidationError):
@@ -988,6 +989,54 @@ def test_listener_apis_are_named_by_the_api_registry():
             PydanticValidationError, match="run `vllm-sr config migrate`"
         ):
             Listener(name="public", port=8000, **removed)
+
+
+def test_listener_llm_apis_route_unserved_models():
+    listener = Listener(
+        name="public",
+        port=8000,
+        apis={
+            "chat_completions": {
+                "models": ["vllm-sr/auto"],
+                "unserved_models": {"policy": "route", "route_to": "vllm-sr/auto"},
+            },
+            "messages": {"unserved_models": {"policy": "reject"}},
+        },
+    )
+    assert listener.apis["chat_completions"].unserved_models.route_to == "vllm-sr/auto"
+    for apis, message in (
+        (
+            {"chat_completions": {"unserved_models": {"policy": "route"}}},
+            "route_to is required with policy route",
+        ),
+        (
+            {
+                "chat_completions": {
+                    "unserved_models": {"policy": "reject", "route_to": "vllm-sr/auto"}
+                }
+            },
+            "route_to goes with policy route only",
+        ),
+        (
+            {
+                "chat_completions": {
+                    "models": ["vllm-sr/auto"],
+                    "unserved_models": {"policy": "route", "route_to": "other"},
+                }
+            },
+            "is not one of the API's models",
+        ),
+        (
+            {"images": {"unserved_models": {"policy": "route", "route_to": "m"}}},
+            "takes no unserved_models",
+        ),
+        (
+            {"chat_completions": {"unserved_models": {"policy": "forward"}}},
+            "policy",
+        ),
+    ):
+        with pytest.raises(PydanticValidationError, match=message):
+            Listener(name="public", port=8000, apis=apis)
 
 
 def test_listener_names_are_unique():

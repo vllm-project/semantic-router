@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc/codes"
@@ -76,10 +77,13 @@ func (r *OpenAIRouter) newRoutingSession(ctx context.Context, release func()) *r
 	if hop, ok := routing.HopFrom(ctx); ok {
 		session.ctx.Hop = &hop
 		session.ctx.replayRunParent = replayRunParentFrom(ctx)
-	} else if models, ok := routing.ListenerModelsFrom(ctx); ok {
+	} else {
 		// A hop's context derives from its client request's, so only a
 		// client request takes the listener's restriction.
-		session.ctx.ListenerModels = models
+		if models, ok := routing.ListenerModelsFrom(ctx); ok {
+			session.ctx.ListenerModels = models
+		}
+		session.ctx.UnservedModelRoute = routing.UnservedModelRouteFrom(ctx)
 	}
 	return session
 }
@@ -119,12 +123,18 @@ func (s *routingSession) RequestBody(body []byte, endOfStream bool) (*routing.Ef
 	})
 }
 
+// SetUpstreamDeadline gives the pending structured-output pass the deadline
+// used by the native upstream call.
+func (s *routingSession) SetUpstreamDeadline(deadline time.Time) {
+	if pass := s.ctx.structuredOutputPass; pass != nil {
+		pass.deadline = deadline
+	}
+}
+
 func (s *routingSession) ResponseHeaders(header routing.Header, endOfStream bool) (*routing.Effect, error) {
 	if s.fallback != nil {
-		// The caller asks the fallback only about failures, so a fallback
-		// candidate's success is recorded here, before its headers are built.
 		if status, err := strconv.Atoi(header.Get(":status")); err == nil && status >= 200 && status < 300 {
-			s.fallback.succeeded(status)
+			s.fallback.beginResponse(status)
 		}
 	}
 	v := &ext_proc.ProcessingRequest_ResponseHeaders{
@@ -148,6 +158,16 @@ func (s *routingSession) ResponseBody(body []byte, endOfStream bool) (*routing.E
 	})
 }
 
+// ResponseBodyCut answers for an upstream body that ended before it was
+// whole, which Envoy answers with its own local reply.
+func (s *routingSession) ResponseBodyCut(cause error) (*routing.Effect, error) {
+	return s.phase(func() (*ext_proc.ProcessingResponse, error) {
+		return s.router.cutResponseBodyReply(s.ctx, cause), nil
+	}, func(response *ext_proc.ProcessingResponse) {
+		responseBodyReplySent(s.ctx, response, true)
+	})
+}
+
 func (s *routingSession) Evidence() routing.Evidence {
 	return routingEvidence(s.ctx)
 }
@@ -161,10 +181,6 @@ func (s *routingSession) Close(err error) {
 		return
 	}
 	s.closed = true
-	if s.fallback != nil {
-		// A chain the caller abandoned still leaves one audit record.
-		s.router.recordFallbackExecution(s.ctx)
-	}
 	if s.ended {
 		return
 	}
@@ -221,9 +237,18 @@ func (s *routingSession) end(err error) {
 		return
 	}
 	s.ended = true
+	if s.fallback != nil {
+		s.router.finishNativeFallbackResponse(s.ctx, "response_incomplete")
+		s.router.recordFallbackExecution(s.ctx)
+	}
 	releaseInflightAdmission(s.ctx)
 	s.router.finishRequestSpend(s.ctx)
 	releaseStreamedBody(s.ctx)
+	finishRequestWork(s.ctx)
+	// Native HTTP requests end here instead of Process's defer, so the cache
+	// lookup's singleflight lease is released here too: a request that will
+	// not store must not hold its key for the full lease window.
+	s.router.responseCacheService().ReleaseLease(s.ctx.CacheLease)
 	finishRequestTrace(s.ctx, err)
 	if s.release != nil {
 		s.release()
