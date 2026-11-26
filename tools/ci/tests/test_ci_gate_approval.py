@@ -22,12 +22,12 @@ from execution_batches import (  # noqa: E402
     expected_dispatch_jobs,
     platform_batches,
 )
-from test_ci_artifact_selection import write_builds, write_receipts  # noqa: E402
-from test_ci_gate import SHA, completed  # noqa: E402
 from manual_ci import (  # noqa: E402
     qualification_attempt_ready,
     qualification_status_url,
 )
+from test_ci_artifact_selection import write_builds, write_receipts  # noqa: E402
+from test_ci_gate import SHA, completed  # noqa: E402
 
 BASE = "b" * 40
 HEAD = "c" * 40

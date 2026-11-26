@@ -341,10 +341,16 @@ class PRStatusTests(unittest.TestCase):
                         deferred_images=[],
                     )
                     client.refresh_report()
-                write = client.write
 
-                def fail_compatibility_write(endpoint, payload, **kwargs):
-                    if endpoint.endswith(f"/{operation}"):
+                def fail_compatibility_write(
+                    endpoint,
+                    payload,
+                    *,
+                    suffix=f"/{operation}",
+                    write=client.write,
+                    **kwargs,
+                ):
+                    if endpoint.endswith(suffix):
                         raise ManualCIError("Compatibility write failed.")
                     return write(endpoint, payload, **kwargs)
 
