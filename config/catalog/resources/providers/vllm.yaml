@@ -249,6 +249,58 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/google/gemma-4-31b-it
+- catalog: google/gemma-4-12b-it
+  relationship: self_hosted
+  id: google/gemma-4-12B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.23.0
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-12B-it
+- catalog: google/gemma-4-26b-a4b-it
+  relationship: self_hosted
+  id: google/gemma-4-26B-A4B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.25.0
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-26B-A4B-it
+- catalog: google/gemma-4-e4b-it
+  relationship: self_hosted
+  id: google/gemma-4-E4B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.19.1
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-E4B-it
+- catalog: google/gemma-4-e2b-it
+  relationship: self_hosted
+  id: google/gemma-4-E2B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.19.1
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-E2B-it
 - catalog: meta/llama-4-scout-17b-16e-instruct
   relationship: self_hosted
   id: meta-llama/Llama-4-Scout-17B-16E-Instruct

@@ -3675,6 +3675,58 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/google/gemma-4-31b-it
+  - catalog: google/gemma-4-12b-it
+    relationship: self_hosted
+    id: google/gemma-4-12B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.23.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-12B-it
+  - catalog: google/gemma-4-26b-a4b-it
+    relationship: self_hosted
+    id: google/gemma-4-26B-A4B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.25.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-26B-A4B-it
+  - catalog: google/gemma-4-e4b-it
+    relationship: self_hosted
+    id: google/gemma-4-E4B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.19.1
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-E4B-it
+  - catalog: google/gemma-4-e2b-it
+    relationship: self_hosted
+    id: google/gemma-4-E2B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.19.1
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-E2B-it
   - catalog: meta/llama-4-scout-17b-16e-instruct
     relationship: self_hosted
     id: meta-llama/Llama-4-Scout-17B-16E-Instruct
@@ -6870,6 +6922,169 @@ models:
   - open_weights
   - multimodal
   released_at: '2026-04-02'
+- id: google/gemma-4-12b-it
+  display_name: Gemma 4 12B IT
+  description: Google's encoder-free Gemma 4 instruction model for text, image, and audio workloads.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-12B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-12B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-26b-a4b-it
+  display_name: Gemma 4 26B A4B IT
+  description: Google's mixture-of-experts Gemma 4 instruction model with roughly 4B active parameters.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 26B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+- id: google/gemma-4-e4b-it
+  display_name: Gemma 4 E4B IT
+  description: Google's compact Gemma 4 instruction model with 4.5B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-E4B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-e2b-it
+  display_name: Gemma 4 E2B IT
+  description: Google's smallest Gemma 4 instruction model with 2.3B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E2B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 5.1B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-E2B-it
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemma-3-27b-it
   display_name: Gemma 3 27B IT
   description: Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.
@@ -21980,6 +22195,366 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.772
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.788
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-scicode@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.38
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-ifbench@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.74
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-ifeval@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.972
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.826
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.823
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-scicode@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.4
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-ifbench@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.72
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-ifeval@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.694
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.586
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-scicode@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.24
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-ifbench@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.44
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-ifeval@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.967
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.6
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.434
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-scicode@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.21
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-ifbench@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.38
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-ifeval@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.946
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
     redistributable: true
 - id: cognition/gemini-3-6-flash-low-frontiercode-1-1@1.0.0
   model: google/gemini-3.6-flash
@@ -47283,6 +47858,94 @@ index_results:
   - independent/gemma-4-31b-non-reasoning-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 29.213483146067396
+- model: google/gemma-4-12b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 77.2
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.772
+    normalized: 0.772
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 77.2
+- model: google/gemma-4-26b-a4b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 82.6
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.826
+    normalized: 0.826
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 82.6
+- model: google/gemma-4-e4b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 69.39999999999999
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.694
+    normalized: 0.694
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 69.39999999999999
+- model: google/gemma-4-e2b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 60.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6
+    normalized: 0.6
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 60.0
 - model: google/gemma-3-27b-it
   reasoning_effort: disabled
   index: vllm-sr/general@1.0.0
