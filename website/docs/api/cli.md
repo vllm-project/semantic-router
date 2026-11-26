@@ -646,6 +646,9 @@ Usage: vllm-sr benchmark target register [OPTIONS]
 
 Replace the local registry from a JSON list of credential references.
 
+A mom target needs config_hash: the active_runtime_hash that the Router
+reports at GET /api/v1/config/hash on its management API (port 8080).
+
 | Parameter | Description |
 | --- | --- |
 | `--file PATH` | [required] |
