@@ -132,13 +132,54 @@ func guardStates(fake *runtimetest.Runtime) []string {
 	for _, request := range fake.Decisions() {
 		for _, question := range request.Questions {
 			if question.Choices != nil && slices.ContainsFunc(*question.Choices, func(choice api.ChoiceOption) bool { return choice.Key == "jailbreak" }) {
-				state, _ := request.State.(string)
-				states = append(states, state)
+				states = append(states, guardStateText(request.State))
 				break
 			}
 		}
 	}
 	return states
+}
+
+// guardStateText is the text one guard window read. A window of a state with
+// named parts carries those parts, so it reads the same text the state has
+// joined from the history to the request turn last, which is how the scan cuts
+// its windows.
+func guardStateText(state any) string {
+	if text, ok := state.(string); ok {
+		return text
+	}
+	parts := map[string]string{}
+	switch typed := state.(type) {
+	case map[string]string:
+		parts = typed
+	case map[string]any:
+		for name, value := range typed {
+			if text, ok := value.(string); ok {
+				parts[name] = text
+			}
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(parts))
+	for name := range parts {
+		names = append(names, name)
+	}
+	slices.SortFunc(names, func(a, b string) int {
+		if (a == "request") != (b == "request") {
+			if a == "request" {
+				return 1
+			}
+			return -1
+		}
+		return strings.Compare(a, b)
+	})
+	texts := make([]string, len(names))
+	for index, name := range names {
+		texts[index] = parts[name]
+	}
+	return strings.Join(texts, "\n\n")
 }
 
 // An injection at 60% of a 1,000,000-token message is read, and refuses the

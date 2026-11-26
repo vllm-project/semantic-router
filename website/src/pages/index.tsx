@@ -82,6 +82,13 @@ function FinalCtaSection(): JSX.Element {
                   <p><Translate id="homepage.finalCta.docsDetail">From installation to your first request.</Translate></p>
                 </Link>
               </li>
+              <li>
+                <PixelIcon name="pool" size={32} className={styles.principleIcon} />
+                <Link to="/community/contributor-guide">
+                  <h3><Translate id="homepage.finalCta.contribute">Build it with us</Translate></h3>
+                  <p><Translate id="homepage.finalCta.contributeDetail">From your first pull request to maintainer.</Translate></p>
+                </Link>
+              </li>
             </ul>
           </div>
         </ScrollReveal>

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -128,7 +129,7 @@ func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) e
 						PrimaryKey: true,
 						AutoID:     false,
 						TypeParams: map[string]string{
-							"max_length": "255",
+							"max_length": strconv.Itoa(replayIDMaxLength),
 						},
 					},
 					{
@@ -310,7 +311,35 @@ func (m *MilvusStore) Get(ctx context.Context, id string) (Record, bool, error) 
 	return m.getRecord(ctx, id)
 }
 
+// validRecordID reports whether id is opaque record-id syntax. Milvus takes a
+// boolean expression as a string, so anything outside this set would change
+// the expression instead of naming a record.
+// replayIDMaxLength bounds a record id. It is the collection's own id column
+// bound: a longer id would be stored and listed but never found, so the guard
+// and the schema share the constant instead of drifting apart.
+const replayIDMaxLength = 255
+
+func validRecordID(id string) bool {
+	if id == "" || len(id) > replayIDMaxLength {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.', r == ':':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func (m *MilvusStore) getRecord(ctx context.Context, id string) (Record, bool, error) {
+	if !validRecordID(id) {
+		// A record ID that is not opaque syntax cannot name a record, and must
+		// never reach the expression below.
+		return Record{}, false, nil
+	}
 	if m.asyncWrites {
 		if err := runAsyncOp(ctx, m.asyncChan, func() error { return nil }); err != nil {
 			return Record{}, false, err

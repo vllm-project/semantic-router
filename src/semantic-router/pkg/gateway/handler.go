@@ -40,6 +40,10 @@ type Serving struct {
 	// accept together, which GET /v1/models lists; the routing core enforces
 	// a path's own models, which Gate gives, on the model it parses.
 	Models []string
+	// APIPath, when set, reads a request path under one of the listener's API
+	// prefixes as the API's own path; every later step, the Gate, System One
+	// and the routing core included, sees the request under that path.
+	APIPath func(path string) string
 	// Gate, when set, is the listener's API grant: the models it accepts on
 	// a request path (nil accepts every model), or false and the detail of
 	// the 404 a path it does not serve answers.
@@ -173,6 +177,7 @@ func (h *Handler) serveRequest(w http.ResponseWriter, r *http.Request, x *exchan
 		return
 	}
 	defer release()
+	r = withAPIPath(r, serving.APIPath)
 	listing := r.Method == http.MethodGet && r.URL.Path == "/v1/models"
 	models := serving.Models
 	if serving.Gate != nil && !listing {
@@ -367,12 +372,14 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 }
 
 // responseBody is nil for a response that has no body, as Envoy then ends the
-// stream with the headers.
+// stream with the headers. Content-Length: 0 is deliberately not in that set:
+// it must still run the response-body phase so a successful reply with a
+// missing completion body is rejected like any other empty body, regardless
+// of HTTP framing.
 func responseBody(call *routing.Call, resp *upstream.Response) io.Reader {
 	switch {
 	case call.Request.Header.Get(":method") == http.MethodHead,
-		resp.StatusCode == http.StatusNoContent, resp.StatusCode == http.StatusNotModified,
-		resp.Header.Get("Content-Length") == "0":
+		resp.StatusCode == http.StatusNoContent, resp.StatusCode == http.StatusNotModified:
 		return nil
 	default:
 		return resp.Body
@@ -512,4 +519,21 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(status)
 	_, _ = w.Write(body)
+}
+
+// withAPIPath is r as the API it asks for sees it: its path without the
+// listener's prefix for the API, the query and the rest of the request as the
+// client sent them. The client's own request is left untouched.
+func withAPIPath(r *http.Request, apiPath func(string) string) *http.Request {
+	if apiPath == nil {
+		return r
+	}
+	path := apiPath(r.URL.Path)
+	if path == r.URL.Path {
+		return r
+	}
+	clone := r.Clone(r.Context())
+	clone.URL.Path, clone.URL.RawPath = path, ""
+	clone.RequestURI = clone.URL.RequestURI()
+	return clone
 }

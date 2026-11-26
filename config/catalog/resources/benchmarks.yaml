@@ -189,8 +189,11 @@
   default_profile: public-games
   profiles:
     - id: public-games
-      display_name: Public games
-      description: Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.
+      display_name: Public games (sequential Elo)
+      description: Public-game scores based on sequential Elo ratings for programs generated at the named reasoning setting.
+    - id: public-games-bradley-terry
+      display_name: Public games (Bradley–Terry)
+      description: Public-game scores based on fitted Bradley–Terry ratings for programs generated at the named reasoning setting.
   metrics:
     - id: score
       unit: score

@@ -156,9 +156,9 @@ func validateNativeAcceptance(accept *EscalateAccept) error {
 			return fmt.Errorf("accept.native[%d] must name a question or question_type", index)
 		}
 		switch rule.QuestionType {
-		case "", "choice", "score", "noul", "box":
+		case "", "choice", "score", "noul", "box", "set", "span":
 		default:
-			return fmt.Errorf("accept.native[%d].question_type must be choice, score, noul, or box", index)
+			return fmt.Errorf("accept.native[%d].question_type must be choice, score, noul, box, set, or span", index)
 		}
 		if rule.Field != "confidence" && rule.Field != "top_probability" && rule.Field != "probability_margin" {
 			return fmt.Errorf("accept.native[%d].field must be confidence, top_probability, or probability_margin; score value is not confidence", index)
@@ -166,8 +166,14 @@ func validateNativeAcceptance(accept *EscalateAccept) error {
 		if rule.QuestionType == "box" && rule.Field != "confidence" {
 			return fmt.Errorf("accept.native[%d]: a box answer has only a confidence", index)
 		}
-		if rule.Field == "probability_margin" && rule.QuestionType != "" && rule.QuestionType != "noul" {
-			return fmt.Errorf("accept.native[%d]: probability_margin applies only to noul", index)
+		if rule.QuestionType == "set" && rule.Field != "probability_margin" {
+			return fmt.Errorf("accept.native[%d]: a set answer has only a probability_margin", index)
+		}
+		if rule.QuestionType == "span" && rule.Field == "confidence" {
+			return fmt.Errorf("accept.native[%d]: a span answer has no confidence", index)
+		}
+		if rule.Field == "probability_margin" && rule.QuestionType != "" && rule.QuestionType != "noul" && rule.QuestionType != "set" && rule.QuestionType != "span" {
+			return fmt.Errorf("accept.native[%d]: probability_margin applies only to noul, set and span", index)
 		}
 		if err := validateNumericPredicateContract(&rule.NumericPredicate); err != nil {
 			return fmt.Errorf("accept.native[%d]: %w", index, err)
