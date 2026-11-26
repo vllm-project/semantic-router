@@ -72,6 +72,7 @@ func TestRedisSharedGuardVerdictsAcrossReplicas(t *testing.T) {
 	}
 	require.Len(t, guardStates(firstModel), read)
 	require.Empty(t, guardStates(secondModel))
+	t.Logf("model requests: first replica=%d, second replica=%d", len(guardStates(firstModel)), len(guardStates(secondModel)))
 
 	// An unavailable authenticated connection still scans a fresh attack.
 	require.NoError(t, second.sharedVerdicts.client.Close())
