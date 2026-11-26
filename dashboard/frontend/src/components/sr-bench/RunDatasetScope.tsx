@@ -26,6 +26,7 @@ import {
   friendlyDatasetName,
   profileDescription,
   profileTitle,
+  selectedQuestionCount,
 } from './datasetPresentation'
 import type { Catalog, Dataset, DatasetSelection } from './types'
 import { BenchBlock, BenchLoading, Notice } from './benchUi'
@@ -172,13 +173,7 @@ export default function RunDatasetScope({
   useEffect(() => onResolved(resolved), [resolved, onResolved])
   const allSelected = available.length > 0 && available.every((id) => benchmarks.includes(id))
   const selectedQuestions =
-    !custom && selection?.profile === profile
-      ? benchmarks.reduce(
-          (sum, id) =>
-            sum + (selection.benchmarks.find((entry) => entry.id === id)?.case_count ?? 0),
-          0,
-        )
-      : null
+    !custom && selection?.profile === profile ? selectedQuestionCount(selection, benchmarks) : null
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <section className="flex min-w-0 flex-col gap-2.5">
