@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -120,15 +121,14 @@ type semanticStreamBuffers struct {
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
-		return
-	}
 	if ctx.PublicChatUsageFilter != nil {
+		// An empty final read still marks the boundary for a codec failure
+		// discovered while finalizing an unterminated frame.
 		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
 		buffers.public = append(buffers.public, filtered...)
 		buffers.recordError(ctx, err, true)
 	}
-	if ctx.ProtocolResponseStream != nil {
+	if len(responseBody) != 0 && ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		if frame := failureFrame(frames, events); frame != nil {
@@ -518,9 +518,34 @@ func (state *semanticResponseStreamState) delivered() bool {
 	return state != nil && state.failed == nil && state.terminal
 }
 
+// streamFailureSummary names a protocol failure by its normalized category and,
+// for an error the Router authored, its code. A decoder copies a provider
+// frame's code, message and parameter verbatim, and those can echo request
+// content, so a provider-framed error contributes only its category. Only a
+// Router-authored ErrorDiagnostic is printed from the cause chain: a parser
+// error's text can name provider fields. The client keeps the failure it always
+// saw.
+func streamFailureSummary(err *llmprotocol.ProtocolError) string {
+	summary := "category=" + string(err.Category)
+	if err.ProviderFramed {
+		return summary
+	}
+	if err.Code != "" {
+		summary += ", code=" + err.Code
+	}
+	var diagnostic llmprotocol.ErrorDiagnostic
+	if errors.As(err, &diagnostic) {
+		summary += "; " + string(diagnostic)
+	}
+	return summary
+}
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if !state.delivered() {
+		if state != nil && state.failed != nil {
+			return nil, fmt.Errorf("semantic stream did not complete successfully: %s", streamFailureSummary(state.failed))
+		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)

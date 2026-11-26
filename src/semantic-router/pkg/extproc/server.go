@@ -409,6 +409,7 @@ func newRouterServiceWithSnapshot(r *OpenAIRouter, snapshot *configsnapshot.Snap
 	rs := &RouterService{}
 	generation := newRouterGeneration(r, snapshot)
 	generation.service = rs
+	r.commitReplayFileRetention()
 	rs.current.Store(generation)
 	return rs
 }
@@ -491,6 +492,7 @@ func (rs *RouterService) swapSnapshot(r *OpenAIRouter, snapshot *configsnapshot.
 	generation := newRouterGeneration(r, snapshot)
 	generation.service = rs
 	old := rs.current.Swap(generation)
+	r.commitReplayFileRetention()
 	if publish != nil {
 		publish(generation.acquire)
 	}

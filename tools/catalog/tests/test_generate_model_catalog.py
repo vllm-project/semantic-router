@@ -432,7 +432,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(
             openai_inventory["representative_models"],
-            ["openai/gpt-6-astra", "openai/gpt-5.6-sol", "openai/gpt-5.5"],
+            ["openai/gpt-6.2-astra", "openai/gpt-6.2-sol", "openai/gpt-6.1-terra"],
         )
 
     def test_baidu_creator_has_exact_evidence_buckets_and_real_bindings(self) -> None:
@@ -779,6 +779,14 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             ["adaptive", "disabled"],
         )
         self.assertEqual(families["claude-effort-opt-in"]["default_mode"], "disabled")
+        for family, default_mode in (
+            ("longcat-2.0", "enabled"),
+            ("longcat-2.5", "disabled"),
+        ):
+            self.assertEqual(families[family]["type"], "chat_template_kwargs")
+            self.assertEqual(families[family]["parameter"], "enable_thinking")
+            self.assertEqual(families[family]["modes"], ["enabled", "disabled"])
+            self.assertEqual(families[family]["default_mode"], default_mode)
         self.assertEqual(families["kimi-k3"]["levels"], ["low", "high", "max"])
         self.assertEqual(families["kimi-k3"]["default"], "max")
         self.assertEqual(families["hunyuan-hy4"]["levels"], ["high"])
@@ -838,6 +846,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "moonshot/kimi-k3": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",
+            "meituan/longcat-2.5": "longcat-2.5",
+            "meituan/longcat-2.0": "longcat-2.0",
             "meta/muse-glimmer-30b": "muse-glimmer",
             "mistral/mistral-medium-3.5": "mistral-none-high",
             "mistral/mistral-small-4": "mistral-none-high",
@@ -867,6 +877,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             providers["anthropic"]["reasoning_transport"], "output_config_effort"
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
+        self.assertEqual(providers["longcat"]["reasoning_transport"], "thinking_object")
         zai_bindings = {
             binding["catalog"]: binding for binding in providers["zai"]["models"]
         }
@@ -927,6 +938,9 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "openai/gpt-5.4",
                 "openai/gpt-5.5",
                 "openai/gpt-6-astra",
+                "openai/gpt-6.2-astra",
+                "openai/gpt-6.2-sol",
+                "openai/gpt-6.1-terra",
                 "openai/gpt-5.6-luna",
                 "openai/gpt-5.6-sol",
                 "openai/gpt-5.6-terra",

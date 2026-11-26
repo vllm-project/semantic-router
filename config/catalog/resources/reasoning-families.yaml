@@ -253,6 +253,16 @@
   levels: [minimal, low, medium, high, xhigh, max]
   modes: [enabled]
   default_mode: enabled
+- id: longcat-2.0
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: enabled
+- id: longcat-2.5
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: disabled
 - id: gemma4
   type: chat_template_kwargs
   parameter: enable_thinking

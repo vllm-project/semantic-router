@@ -283,5 +283,9 @@ func validAnthropicStopReason(reason string) bool {
 }
 
 func invalidProviderResponse(code, message string) error {
-	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, code, message, nil)
+	return invalidProviderResponseWithCause(code, message, nil)
+}
+
+func invalidProviderResponseWithCause(code, message string, cause error) error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, code, message, cause)
 }

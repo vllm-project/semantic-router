@@ -39,7 +39,7 @@
 - id: duellab/muse-spark-open-xhigh-gamebench-2@1.0.0
   model: meta/muse-spark-open
   benchmark: duellab/gamebench@2.0.0
-  benchmark_profile: public-games
+  benchmark_profile: public-games-bradley-terry
   reasoning_effort: xhigh
   subject:
     source_model: Muse Spark Open
