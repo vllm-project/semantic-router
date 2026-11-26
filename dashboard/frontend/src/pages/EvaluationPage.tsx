@@ -47,6 +47,11 @@ const COMPOSER_VIEWS: Record<string, EvaluationMode> = {
   estimate: 'estimate',
 }
 
+// Start evaluation and the run sheet's primary action (Re-run or Evaluate
+// candidate) share the same footer spot. A repeated Start click that lands
+// after the new run opens must not reopen the composer for that run.
+const START_SETTLE_MS = 1500
+
 function engineLabel(version?: string) {
   const match = version?.match(/^sr-bench-(.+)$/)
   return match ? `sr-bench ${match[1]}` : (version ?? 'sr-bench')
@@ -221,6 +226,9 @@ export default function EvaluationPage() {
     setSearch(next)
   }
   const closeOverlay = () => navigate({ view: 'runs', ...experimentRoute })
+  const startedRun = useRef<{ id: string; at: number } | null>(null)
+  const settling = (id: string) =>
+    startedRun.current?.id === id && Date.now() - startedRun.current.at < START_SETTLE_MS
   const rerun = search.get('rerun')
   const rerunRun = rerun ? runs.find((run) => run.id === rerun) : undefined
   const composerExperiment: ExperimentRunContext | undefined = experimentID
@@ -412,15 +420,18 @@ export default function EvaluationPage() {
           navigate({ view: 'runs', run: run.id, ...experimentRoute })
           refresh()
         }}
-        onCandidate={(baseline, mode) => openComposer(mode, baseline)}
+        onCandidate={(baseline, mode) => {
+          if (!settling(baseline)) openComposer(mode, baseline)
+        }}
         onCompare={(run) => openCompare([run.id])}
-        onRerun={(run) =>
+        onRerun={(run) => {
+          if (settling(run.id)) return
           navigate({
             view: run.manifest.mode === 'preview' ? 'preview' : 'new',
             rerun: run.id,
             ...experimentRoute,
           })
-        }
+        }}
       />
       <NewEvaluationSheet
         open={composerOpen}
@@ -457,6 +468,7 @@ export default function EvaluationPage() {
         rerun={rerunRun ? rerunSource(rerunRun) : undefined}
         onStarted={(run) => {
           setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
+          startedRun.current = { id: run.id, at: Date.now() }
           navigate({ view: 'runs', run: run.id, ...experimentRoute })
           refresh()
         }}
