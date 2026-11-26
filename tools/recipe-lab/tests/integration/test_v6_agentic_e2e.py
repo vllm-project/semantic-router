@@ -505,8 +505,12 @@ class LiveArmCli:
         self._seq += 1
         return f"v6-{kind}-{self._seq}"
 
-    def _drive(self, router_url: str, run_id: str, model: str) -> list[dict]:
-        """The AG8 scripted agent client, in process, through one endpoint."""
+    def _drive(self, router_url: str, run_id: str) -> list[dict]:
+        """The AG8 scripted agent client, in process, through one endpoint.
+
+        The probe fixes the routed model name itself (the Router resolves the
+        entrypoint); there is no per-arm model override to pass.
+        """
         from agentic_probe import AgentRunner
 
         fixtures = self._fixtures()
@@ -522,7 +526,6 @@ class LiveArmCli:
             extra_headers={},
             max_tokens=64,
             max_steps=12,
-            model=model,
         )
         for session in fixtures["sessions"]:
             runner.run_session(session)
@@ -531,7 +534,7 @@ class LiveArmCli:
     def _run_mom(self, target_id: str, manifest: dict) -> dict:
         arm = self.mom_targets[target_id]
         run_id = self._next_id(target_id.replace("/", "-"))
-        transcript = self._drive(arm.router_url, run_id, ROUTER_MODEL)
+        transcript = self._drive(arm.router_url, run_id)
         rows = self._arm_rows(arm, run_id)
         continuity = self._continuity(rows, run_id)
         task_scores = {
@@ -563,7 +566,7 @@ class LiveArmCli:
 
     def _run_reference(self, alias: str, manifest: dict) -> dict:
         run_id = self._next_id(alias.replace("/", "-"))
-        transcript = self._drive(self.mock_endpoint, run_id, alias)
+        transcript = self._drive(self.mock_endpoint, run_id)
         task_scores = {
             name: 1.0 if ok else 0.0
             for name, ok in _task_success(transcript, self._fixtures()).items()
@@ -1373,10 +1376,12 @@ def test_v6_scenario_2_tuning(stack, recipe_lab_bin, tmp_path):
         diag_b / "diagnosis.json"
     ).read_bytes()
     diagnosis = json.loads((diag_a / "diagnosis.json").read_text(encoding="utf-8"))
-    # a protection-disabled arm resolves no session identity, so the AG4
-    # agentic section (phase distributions, separation, failures) is
-    # honestly absent - the W1 shape's own evidence
-    assert "agentic" not in diagnosis
+    # the AG4 agentic section keys on request structure (session phase /
+    # agent markers on the rows), not on the router-side protection
+    # switches: the probe rows carry a phase either way, so the section
+    # appears in both arms and the byte-identical assertion above proves
+    # the switch leaks nothing into the diagnosis
+    assert "agentic" in diagnosis
     assert diagnosis["decision_coverage"]["total_decisions"] == 3
 
     # attribute-session over the same records: a protection-disabled config
