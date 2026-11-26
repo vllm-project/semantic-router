@@ -3,10 +3,10 @@
 
 `vllm-sr config apply` sends what `vllm-sr serve` would run, so after an
 apply the next serve keeps the CLI's access to the management API (#4698). A
-change the running Router can't take is saved for the next serve, as the
-Dashboard saves one (#4699). `vllm-sr config validate` runs the Router's own
-validation from the stack's image, and prints the warnings the Router logs
-(#4696, #4697).
+change the running Router can't take is saved for the next serve (#4699),
+beside the config the Router keeps serving (#7222). `vllm-sr config validate`
+runs the Router's own validation from the stack's image, and prints the
+warnings the Router logs (#4696, #4697).
 """
 
 import json
@@ -15,7 +15,8 @@ import unittest
 from pathlib import Path
 
 import yaml
-from cli.pending_activation import ORIGIN_CLI, read_pending_activation
+from cli.commands.runtime_paths import _runtime_config_filename, pending_restart_path
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation, record_file
 from cli_test_base import CLITestBase
 from mock_upstream import PROVIDER_MOCKER_PORT, MockUpstreamMixin
 from serve_session import ServeSessionMixin
@@ -150,8 +151,13 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
             running_endpoint = endpoint(8081)
             self._edit_config(move_listeners)
 
+            runtime_config = (
+                Path(self.test_dir)
+                / ".vllm-sr"
+                / _runtime_config_filename(self.runtime_stack.stack_name)
+            )
             # The second apply still targets the bound port after the first
-            # one has saved a future port into the mounted runtime config.
+            # one has saved a future port for the next serve.
             for attempt in range(2):
                 if attempt:
                     self._edit_config(
@@ -168,17 +174,23 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 )
                 self.assertEqual(saved["status"], "restart_required", saved)
                 self.assertFalse(saved["applied"], saved)
+                self.assertEqual(
+                    Path(saved["saved"]), pending_restart_path(runtime_config), saved
+                )
                 self.assertTrue(os.path.isfile(saved["saved"]), saved)
                 active = self._cli_json(
                     "config", "get", "--format", "json", "--endpoint", running_endpoint
                 )["config"]
-                # Config reads can expose the saved candidate. The successful
-                # request proves the old endpoint still serves while it is pending.
-                self.assertIsInstance(active, dict)
+                # #7222: the Router serves its active config until the next
+                # serve, so config get shows what it bound at startup.
+                self.assertEqual(
+                    active["global"]["services"]["management_api"]["port"], 8081
+                )
+                self.assertNotIn(active["listeners"][0]["port"], (8890, 8891))
                 code, status, stderr = self.run_cli(["status"], timeout=60)
                 self.assertEqual(code, 0, f"{status}\n{stderr}")
                 self.assertRegex(status, r"Router\s+Running")
-                pending = read_pending_activation(Path(saved["saved"]))
+                pending = read_pending_activation(runtime_config)
                 self.assertIsNotNone(pending, saved)
                 self.assertEqual(pending.reason, "restart")
                 self.assertEqual(pending.origin, ORIGIN_CLI)
@@ -276,6 +288,62 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         finally:
             self.run_cli(["stop"], timeout=120)
         self.print_test_result(True, "the next serve applied the change apply saved")
+
+    def test_failed_serve_preserves_pending_restart(self):
+        self.write_minimal_canonical_config(provider="openai")
+
+        def disable_tracing(document):
+            services = document.setdefault("global", {}).setdefault("services", {})
+            services["observability"] = {"tracing": {"enabled": False}}
+
+        self._edit_config(disable_tracing)
+        try:
+            self._serve()
+            self._edit_config(
+                lambda document: document["listeners"][0].update(port=65100)
+            )
+            saved = self._cli_json("config", "apply", "--config", "config.yaml")
+            self.assertEqual(saved["status"], "restart_required", saved)
+            runtime_config = (
+                Path(self.test_dir)
+                / ".vllm-sr"
+                / _runtime_config_filename(self.runtime_stack.stack_name)
+            )
+            staged_file = Path(saved["saved"])
+            self.assertEqual(staged_file, pending_restart_path(runtime_config), saved)
+            active = runtime_config.read_bytes()
+            staged = staged_file.read_bytes()
+            pending_file = record_file(runtime_config)
+            pending = pending_file.read_bytes()
+
+            code, stdout, stderr = self.run_cli(
+                [
+                    "serve",
+                    "--target",
+                    "docker",
+                    "--gateway",
+                    "standalone",
+                    "--config",
+                    "config.yaml",
+                    "--image-pull-policy",
+                    "never",
+                ],
+                env={"VLLM_SR_PORT_OFFSET": "500"},
+            )
+            self.assertEqual(code, 1, f"{stdout}\n{stderr}")
+            self.assertIn("host port 65600", stderr)
+
+            code, status, stderr = self.run_cli(
+                ["status", "router", "--target", "docker"]
+            )
+            self.assertEqual(code, 0, f"{status}\n{stderr}")
+            self.assertRegex(status, r"Router\s+Running")
+            self.assertIn("Restart required", status)
+            self.assertEqual(pending_file.read_bytes(), pending)
+            self.assertEqual(runtime_config.read_bytes(), active)
+            self.assertEqual(staged_file.read_bytes(), staged)
+        finally:
+            self.run_cli(["stop"], timeout=120)
 
     def test_validate_runs_the_routers_own_validation(self):
         self.print_test_header(

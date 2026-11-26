@@ -707,6 +707,115 @@ def _same_document(first: bytes, second: bytes) -> bool:
         return False
 
 
+def pending_restart_path(runtime_config_path: Path) -> Path:
+    """Where a change waits for the restart the running Router asked for.
+
+    The Router reloads its runtime config whenever that file changes, and a
+    reload does not run the checks that asked for the restart. Beside it, in a
+    JSON file no stack's runtime config can be named, the change stays
+    inactive.
+    """
+
+    return runtime_config_path.with_suffix(".pending-restart.json")
+
+
+def stage_pending_restart(
+    source_config_path: Path,
+    effective_data: bytes,
+    *,
+    state_root_dir: str | Path | None = None,
+    stack_name: str | None = None,
+    expected_source: ConfigSourceRevision | None = None,
+) -> Path:
+    """Stage the document the next ``serve`` makes active.
+
+    It is saved with the digest of the source it came from. ``expected_source``
+    refuses a source that changed since the apply planned it.
+    """
+
+    source_config_path = source_config_path.expanduser().absolute()
+    source_data = read_config_source(source_config_path, expected_source)
+    document = {
+        "source_digest": _digest_bytes(source_data),
+        "config": effective_data.decode("utf-8"),
+    }
+    staged = pending_restart_path(
+        _runtime_config_output_path(
+            source_config_path, state_root_dir=state_root_dir, stack_name=stack_name
+        )
+    )
+    return write_private_state_bytes(
+        staged, (json.dumps(document, sort_keys=True) + "\n").encode("utf-8")
+    )
+
+
+def _load_pending_restart(path: Path) -> dict[str, str] | None:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"source_digest", "config"}
+        or not all(isinstance(value, str) for value in document.values())
+        or not _SHA256_PATTERN.fullmatch(document["source_digest"])
+    ):
+        return None
+    return document
+
+
+def promote_pending_restart(
+    source_config_path: Path,
+    expected_sha256: str | None,
+    *,
+    state_root_dir: str | Path | None = None,
+    stack_name: str | None = None,
+    before_replace: Callable[[bytes], None],
+) -> bool:
+    """Make the staged document active, if it is still what the restart is for.
+
+    *expected_sha256* is the digest the pending activation recorded for it.
+    Returns whether the source changed after the apply, so that the source
+    replaces the active document instead. The caller removes the staged file
+    once the active document holds the change, so a serve that fails before
+    then promotes it again; after it, the pending activation waits for
+    readiness instead.
+    """
+
+    source_config_path = source_config_path.expanduser().absolute()
+    staged = pending_restart_path(
+        _runtime_config_output_path(
+            source_config_path, state_root_dir=state_root_dir, stack_name=stack_name
+        )
+    )
+    if staged.is_symlink() or not staged.is_file():
+        return False
+    stage = _load_pending_restart(staged)
+    data = stage["config"].encode("utf-8") if stage else b""
+    if stage is None or expected_sha256 != hashlib.sha256(data).hexdigest():
+        log.warning(
+            "Dropping %s: no pending activation is waiting for the change "
+            "`vllm-sr config apply` saved there",
+            staged,
+        )
+        return False
+    if stage["source_digest"] != _digest_bytes(source_config_path.read_bytes()):
+        log.info(
+            "The source config changed after `vllm-sr config apply` saved a "
+            "change for this restart; serving the source instead"
+        )
+        return True
+    materialize_runtime_config(
+        source_config_path,
+        data,
+        state_root_dir=state_root_dir,
+        stack_name=stack_name,
+        replace_active=True,
+        before_replace=lambda: before_replace(data),
+    )
+    return False
+
+
 def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
     runtime_config_path = _runtime_config_output_path(source_config_path)
     runtime_dir = runtime_config_path.parent

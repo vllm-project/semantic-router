@@ -203,13 +203,14 @@ read it.
 - **`--gateway extproc`.** A listener's keys stay in `api_keys`, as written:
   the CLI writes them into the Envoy configuration it generates. Write them as
   `"${NAME}"` references to keep them out of the Router's configuration.
-- **Your own file, copied as written.** `vllm-sr serve`, and the fallback of
-  `vllm-sr config apply` when a change needs a restart, copy the file you give
-  them into `.vllm-sr/runtime-config.yaml` as it is, so the Router loads it at
-  its next start, and the Router's configuration history records that load.
-  No key store runs on that path, so a literal key you wrote in your own file
-  is in that copy and that history entry too, until the next Dashboard or
-  management API save moves it. Keep keys out of your own file with
+- **Your own file, copied as written.** `vllm-sr serve` copies the file you
+  give it into `.vllm-sr/runtime-config.yaml` as it is, so the Router loads it
+  at its next start, and the Router's configuration history records that load.
+  When a change needs a restart, `vllm-sr config apply` saves that copy beside
+  it, in `.vllm-sr/runtime-config.pending-restart.json`, until the next `serve`
+  moves it in. No key store runs on that path, so a literal key you wrote in
+  your own file is in those copies and that history entry too, until the next
+  Dashboard or management API save moves it. Keep keys out of your own file with
   `${NAME}` or `auth.api_key_file`.
 
 A Dashboard user without the `config.secrets.read` permission, such as the

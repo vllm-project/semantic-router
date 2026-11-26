@@ -47,7 +47,7 @@ vllm-sr config apply --config config.yaml   # 激活它
 
 `vllm-sr config apply` 最多等待 120 秒让变更生效，足以加载新模型；需要更久时传入 `--timeout`。超时不会取消变更：`vllm-sr config versions` 会显示它是否已激活。
 
-需要重启的变更（例如 listener 换了端口）会像控制面板那样被保存下来：`config apply` 提示“Restart required: run `vllm-sr serve` to apply.”，`vllm-sr status` 会报告这次保存的变更，下一次 `vllm-sr serve` 会应用它。
+需要重启的变更（例如 listener 换了端口）会保存在活动文档旁边：`config apply` 提示“Restart required: run `vllm-sr serve` to apply.”，`vllm-sr status` 会报告这次保存的变更，下一次 `vllm-sr serve` 会应用它。在此之前，Router 继续服务活动文档，`vllm-sr config get` 显示的也是它。那次 serve 会替换活动文档，包括期间对它做的编辑。如果在此之前又编辑了 `config.yaml`，它会改为服务编辑后的文件。
 
 要改为用 `config.yaml` 替换生效的文档（包括控制面板中的编辑）并重启：
 

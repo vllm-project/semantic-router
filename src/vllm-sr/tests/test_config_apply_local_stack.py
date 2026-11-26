@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 import yaml
-from cli import local_stack_config, runtime_service_status
-from cli.commands import config_management
+from cli import (
+    container_backend,
+    core,
+    local_stack_config,
+    runtime_lifecycle,
+    runtime_service_status,
+)
+from cli.commands import config_management, runtime_serve_config
+from cli.commands.runtime_paths import pending_restart_path
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
-from cli.pending_activation import ORIGIN_CLI, read_pending_activation
+from cli.pending_activation import ORIGIN_CLI, read_pending_activation, record_file
 from cli.router_management_client import RouterManagementError, RouterResponse
 from cli.runtime_stack import resolve_runtime_stack
 from click.testing import CliRunner
@@ -79,6 +89,12 @@ def _set_management_port(config_path: Path, port: int) -> None:
         "port": port,
     }
     config_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+
+def _staged_document(staged: Path) -> dict:
+    """The config a refused apply staged for the next serve."""
+
+    return yaml.safe_load(json.loads(staged.read_text(encoding="utf-8"))["config"])
 
 
 class FakeClient:
@@ -213,8 +229,9 @@ def test_custom_endpoint_stages_each_pending_change_at_the_running_port(
         assert "run `vllm-sr serve`" in result.stderr
         pending = read_pending_activation(stack.runtime_config())
         assert pending is not None and pending.origin == ORIGIN_CLI
-        saved = yaml.safe_load(stack.runtime_config().read_text(encoding="utf-8"))
+        saved = _staged_document(pending_restart_path(stack.runtime_config()))
         assert saved["global"]["services"]["management_api"]["port"] == 8082
+        assert not stack.runtime_config().exists()
 
     assert len(client.sent) == 2
 
@@ -342,7 +359,7 @@ def test_apply_of_a_file_outside_the_stack_says_how_to_serve_it(
     assert "--replace-active-config" in result.output
 
 
-# #4699: a change the Router can't take is saved like the Dashboard saves one.
+# #4699: a change the Router can't take is saved for the next serve.
 def test_restart_required_is_saved_for_the_next_serve(monkeypatch, stack, tmp_path):
     def refuse():
         raise RouterManagementError(
@@ -444,6 +461,7 @@ def test_restart_required_rejects_a_source_change(
     assert runtime.read_bytes() == previous_config
     assert read_pending_activation(runtime) is None
     assert not runtime.with_suffix(".provenance.json").exists()
+    assert not pending_restart_path(runtime).exists()
 
 
 def test_a_timed_out_apply_says_the_change_may_still_activate(
@@ -475,22 +493,154 @@ def test_apply_waits_for_model_warmup_by_default():
 
 
 def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):
-    runtime_config = save_pending_restart(
-        stack, tmp_path / "config.yaml", "listeners changed"
-    )
+    active = stack.runtime_config()
+    served = SOURCE.replace(f"port: {MOVED_PORT}", "port: 8899").encode()
+    active.write_bytes(served)
 
-    assert runtime_config == stack.runtime_config()
-    active = yaml.safe_load(runtime_config.read_text(encoding="utf-8"))
-    assert active["listeners"][0]["port"] == MOVED_PORT
-    assert active["global"]["services"]["management_api"]["bind_address"] == "0.0.0.0"
-    pending = read_pending_activation(runtime_config)
+    staged = save_pending_restart(stack, tmp_path / "config.yaml", "listeners changed")
+
+    # #7222: the Router reloads its runtime config whenever it changes, so the
+    # change waits beside it and the Router keeps serving what it served.
+    assert staged == active.with_name("runtime-config.pending-restart.json")
+    assert active.read_bytes() == served
+    assert not active.with_suffix(".provenance.json").exists()
+    config = json.loads(staged.read_text(encoding="utf-8"))["config"]
+    document = yaml.safe_load(config)
+    assert document["listeners"][0]["port"] == MOVED_PORT
+    assert document["global"]["services"]["management_api"]["bind_address"] == "0.0.0.0"
+    assert staged.stat().st_mode & 0o777 == 0o600
+    pending = read_pending_activation(active)
     assert pending is not None and pending.reason == "restart"
     assert pending.origin == ORIGIN_CLI
     assert pending.saved_by() == "with `vllm-sr config apply`"
     assert pending.detail == "listeners changed"
-    # serve of the same file finds the document it would write, so it applies it.
-    receipt = runtime_config.with_suffix(".provenance.json")
-    assert receipt.is_file()
+    assert pending.config_sha256 == hashlib.sha256(config.encode()).hexdigest()
+
+
+def test_a_recipe_package_stack_does_not_save_a_restart(monkeypatch, stack, tmp_path):
+    monkeypatch.setattr(
+        local_stack_config, "active_recipe_package_for_stack", lambda **_: True
+    )
+
+    # serve runs the package's config, so a saved change would never apply.
+    with pytest.raises(ValueError, match="Recipe package"):
+        save_pending_restart(stack, tmp_path / "config.yaml", "listeners changed")
+    assert not pending_restart_path(stack.runtime_config()).exists()
+    assert read_pending_activation(stack.runtime_config()) is None
+
+
+@pytest.mark.parametrize(
+    ("outcome", "start_calls", "readiness_calls"),
+    [("host-port", 0, 0), ("start", 1, 0), ("readiness", 1, 1), ("success", 1, 1)],
+)
+def test_serve_clears_staged_restart_only_after_readiness(
+    monkeypatch, stack, tmp_path, caplog, outcome, start_calls, readiness_calls
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-pending-restart")
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "500")
+    stack = replace(stack, layout=resolve_runtime_stack())
+    source = tmp_path / "config.yaml"
+    document = yaml.safe_load(SOURCE)
+    document["listeners"][0].update(
+        name="public", port=65100 if outcome == "host-port" else MOVED_PORT
+    )
+    document["global"] = {
+        "services": {"observability": {"tracing": {"enabled": False}}}
+    }
+    source.write_text(yaml.safe_dump(document), encoding="utf-8")
+
+    reason = "listeners[public].port changes"
+    runtime_config = stack.runtime_config()
+    active_bytes = SOURCE.replace(f"port: {MOVED_PORT}", "port: 8899").encode()
+    runtime_config.write_bytes(active_bytes)
+    staged = save_pending_restart(stack, source, reason)
+    pending_file = record_file(runtime_config)
+    pending_bytes = pending_file.read_bytes()
+    staged_bytes = json.loads(staged.read_text(encoding="utf-8"))["config"].encode()
+
+    start = Mock(
+        return_value=(
+            (1, "", "port already allocated") if outcome == "start" else (0, "", "")
+        )
+    )
+    ready = Mock(side_effect=SystemExit(1) if outcome == "readiness" else None)
+    monkeypatch.setattr(container_backend, "get_container_runtime", lambda: "docker")
+    monkeypatch.setattr(
+        container_backend, "acquire_runtime_lifecycle_lock", lambda **_: nullcontext()
+    )
+    monkeypatch.setattr(container_backend, "attach_controller", lambda *_: None)
+    monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _: None)
+    monkeypatch.setattr(
+        core, "_prepare_runtime_network", lambda *a, **k: ("net", str(tmp_path))
+    )
+    monkeypatch.setattr(core, "_start_support_services", lambda *a, **k: (set(), "net"))
+    monkeypatch.setattr(core, "container_start_vllm_sr", start)
+    monkeypatch.setattr(core, "connect_runtime_container", lambda *_: None)
+    monkeypatch.setattr(runtime_lifecycle, "wait_for_router_health", ready)
+    monkeypatch.setattr(
+        runtime_lifecycle, "container_status_strict", lambda *a, **k: "running"
+    )
+    monkeypatch.setattr(core, "container_status", lambda _: "running")
+    monkeypatch.setattr(
+        core,
+        "inspect_container_mounts",
+        lambda _: [{"Source": str(stack.state_dir), "Destination": "/app/.vllm-sr"}],
+    )
+    monkeypatch.setattr(core, "report_service_status", lambda *_: None)
+    stopped = []
+    monkeypatch.setattr(
+        runtime_serve_config, "stop_runtime_before_config_replacement", stopped.append
+    )
+
+    runner = CliRunner()
+    status_args = ["status", "router", "--target", "docker"]
+    before = runner.invoke(main, status_args)
+    assert before.exit_code == 0, before.output
+    assert "Restart required" in before.output and reason in before.output
+
+    serve_args = [
+        "serve",
+        "--target",
+        "docker",
+        "--gateway",
+        "standalone",
+        "--config",
+        str(source),
+    ]
+    result = runner.invoke(main, serve_args)
+    succeeded = outcome == "success"
+    assert result.exit_code == (0 if succeeded else 1), result.output
+    assert start.call_count == start_calls
+    assert ready.call_count == readiness_calls
+    assert len(stopped) == start_calls
+    if outcome == "host-port":
+        assert "invalid listener public host port 65600" in caplog.text
+        assert runtime_config.read_bytes() == active_bytes
+        assert staged.is_file()
+    if start_calls:
+        assert Path(start.call_args.kwargs["runtime_config_file"]) == runtime_config
+        assert runtime_config.read_bytes() == staged_bytes
+
+    after = runner.invoke(main, status_args)
+    assert after.exit_code == 0, after.output
+    if succeeded:
+        assert not pending_file.exists()
+        assert "Restart required" not in after.output
+    else:
+        assert (
+            pending_file.is_file()
+        ), "failed serve discarded the pending restart record"
+        assert pending_file.read_bytes() == pending_bytes
+        assert "Restart required" in after.output and reason in after.output
+
+    if outcome in {"start", "readiness"}:
+        start.return_value, ready.side_effect = (0, "", ""), None
+        retry = runner.invoke(main, serve_args)
+        assert retry.exit_code == 0, retry.output
+        assert len(stopped) == 1
+        assert runtime_config.read_bytes() == staged_bytes
+        assert not pending_file.exists()
+        assert "Restart required" not in runner.invoke(main, status_args).output
 
 
 @pytest.mark.parametrize("running_port", [8080, 9095])
@@ -498,6 +648,7 @@ def test_status_keeps_the_bound_port_after_a_restart_required_save(
     monkeypatch, stack, tmp_path, running_port
 ):
     source = tmp_path / "config.yaml"
+    stack.runtime_config().write_text(SOURCE, encoding="utf-8")
     candidate = yaml.safe_load(source.read_text(encoding="utf-8"))
     candidate["global"] = {
         "services": {"management_api": {"bind_address": "0.0.0.0", "port": 9096}}
@@ -520,10 +671,10 @@ def test_status_keeps_the_bound_port_after_a_restart_required_save(
         )
 
     monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
-    runtime_config = save_pending_restart(stack, source, "listeners changed")
-    saved = yaml.safe_load(runtime_config.read_text(encoding="utf-8"))
+    staged = save_pending_restart(stack, source, "listeners changed")
+    saved = _staged_document(staged)
     assert saved["global"]["services"]["management_api"]["port"] == 9096
-    pending = read_pending_activation(runtime_config)
+    pending = read_pending_activation(stack.runtime_config())
     assert pending is not None and pending.reason == "restart"
 
     assert runtime_service_status._check_router_status(

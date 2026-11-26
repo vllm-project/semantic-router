@@ -1,7 +1,8 @@
 """Pending activations: saved configs that need `vllm-sr serve` to apply.
 
 `vllm-sr config apply` records one the same way when the Router answers
-`RESTART_REQUIRED`, with origin "cli".
+`RESTART_REQUIRED`, with origin "cli". Its config waits beside the runtime
+config instead of in it, and the next `vllm-sr serve` makes it active.
 
 The Dashboard holds no container runtime. When a saved config needs the
 Router (and Envoy with `--gateway extproc`) created anew -- first-run setup
@@ -54,6 +55,8 @@ class PendingActivation:
     reason: str
     detail: str = ""
     origin: str = ORIGIN_DASHBOARD
+    # The digest of the saved config the activation is for.
+    config_sha256: str = ""
 
     def saved_by(self) -> str:
         """Who saved the change, as status and serve name it."""
@@ -106,10 +109,12 @@ def read_pending_activation(runtime_config: str | Path) -> PendingActivation | N
     reason = record.get("reason")
     detail = record.get("detail")
     origin = record.get("origin")
+    config_sha256 = record.get("config_sha256")
     return PendingActivation(
         reason=reason if reason in (REASON_SETUP, REASON_RESTART) else REASON_SETUP,
         detail=detail if isinstance(detail, str) else "",
         origin=ORIGIN_CLI if origin == ORIGIN_CLI else ORIGIN_DASHBOARD,
+        config_sha256=config_sha256 if isinstance(config_sha256, str) else "",
     )
 
 
@@ -121,9 +126,11 @@ def record_pending_activation(
     *,
     origin: str = ORIGIN_CLI,
 ) -> None:
-    """Record that config, already written to runtime_config, waits for serve.
+    """Record that config waits for serve.
 
-    The record has the Dashboard's format, so each side reads the other's.
+    The Dashboard writes config to runtime_config first, and `config apply`
+    stages it beside that file. The record has the Dashboard's format, so each
+    side reads the other's.
     """
 
     record = {
