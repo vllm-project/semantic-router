@@ -2,6 +2,7 @@
 
 import copy
 
+from .legacy_reasoning_modes import FIELD as REASONING_CONDITIONS
 from .native_output import model_limits
 from .store import TERMINAL
 from .target_contracts import auxiliary_bindings, effective_auxiliary_targets
@@ -9,6 +10,10 @@ from .target_contracts import auxiliary_bindings, effective_auxiliary_targets
 
 def candidate_manifest(baseline, targets, mode="live", name=None, experiment=None):
     source = baseline["manifest"]
+    if REASONING_CONDITIONS in source:
+        raise ValueError(
+            "Candidate derivation does not support reasoning condition matrices"
+        )
     if (
         baseline["status"] not in TERMINAL
         or source["mode"] != "live"
@@ -67,6 +72,10 @@ def candidate_manifest(baseline, targets, mode="live", name=None, experiment=Non
 def validate_candidate_protocol(baseline, candidate):
     """Server configuration must not silently change a reusable baseline protocol."""
     source = baseline["manifest"]
+    if any(REASONING_CONDITIONS in value for value in (source, candidate)):
+        raise ValueError(
+            "Candidate derivation does not support reasoning condition matrices"
+        )
     for key in (
         "case_sha256",
         "sampling",

@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 
 from .legacy_reasoning import CONFIGURATIONS, ENVIRONMENT, REQUIREMENTS, SOURCE_REVISION
+from .legacy_reasoning_explicit_cot import BENCHMARKS as EXPLICIT_COT_DATASETS
+from .legacy_reasoning_explicit_cot import SUFFIX as EXPLICIT_COT_SUFFIX
 
 GRADER_BASE_IMAGE = "docker.io/library/python:3.12-slim-bookworm"
 
@@ -105,6 +107,13 @@ def home():
 
 
 def harness_paths(benchmark):
+    if (
+        benchmark.startswith("legacy-")
+        and benchmark.endswith(EXPLICIT_COT_SUFFIX)
+        and benchmark.removeprefix("legacy-").removesuffix(EXPLICIT_COT_SUFFIX)
+        in EXPLICIT_COT_DATASETS
+    ):
+        benchmark = ENVIRONMENT
     if (
         benchmark.startswith("legacy-")
         and benchmark.removeprefix("legacy-") in CONFIGURATIONS
