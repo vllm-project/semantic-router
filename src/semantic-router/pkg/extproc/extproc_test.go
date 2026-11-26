@@ -2161,17 +2161,47 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		},
 	}
 
-	// Case 3: Request timeout exceeded (elapsed >= 2s) -> records timeout
+	// Case 3: Pre-header codes.Unavailable near or past total_timeout (e.g. 1.8s with 2s deadline)
+	// preserves the receive error and does NOT infer a timeout from elapsed time.
 	ctx3 := &RequestContext{
 		RequestModel:        "fast-model",
 		UpstreamStatusCode:  0,
-		ProcessingStartTime: time.Now().Add(-2 * time.Second),
+		ProcessingStartTime: time.Now().Add(-1800 * time.Millisecond),
 	}
 	before3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
-	_ = r.handleProcessReceiveError(ctx3, io.EOF)
+	unavailAt1800ms := status.Error(codes.Unavailable, "upstream connection reset")
+	retErr3 := r.handleProcessReceiveError(ctx3, unavailAt1800ms)
+	if status.Code(retErr3) != codes.Unavailable {
+		t.Fatalf("expected handleProcessReceiveError to preserve codes.Unavailable at 1.8s, got %v", retErr3)
+	}
 	after3 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"})
-	if after3 != before3+1 {
-		t.Fatalf("expected timeout to increase on request timeout deadline: before=%v after=%v", before3, after3)
+	if after3 != before3 {
+		t.Fatalf("expected timeout NOT to increase on pre-header codes.Unavailable at 1.8s: before=%v after=%v", before3, after3)
+	}
+
+	ctx3PastDeadline := &RequestContext{
+		RequestModel:        "fast-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-2100 * time.Millisecond),
+	}
+	retErr3Past := r.handleProcessReceiveError(ctx3PastDeadline, unavailAt1800ms)
+	if status.Code(retErr3Past) != codes.Unavailable {
+		t.Fatalf("expected handleProcessReceiveError to preserve codes.Unavailable past 2s deadline, got %v", retErr3Past)
+	}
+	if got := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"}); got != before3 {
+		t.Fatalf("expected timeout NOT to increase on pre-header codes.Unavailable past deadline: before=%v after=%v", before3, got)
+	}
+
+	ctx3EOF := &RequestContext{
+		RequestModel:        "fast-model",
+		UpstreamStatusCode:  0,
+		ProcessingStartTime: time.Now().Add(-2100 * time.Millisecond),
+	}
+	if err := r.handleProcessReceiveError(ctx3EOF, io.EOF); err != nil {
+		t.Fatalf("expected nil on clean io.EOF, got %v", err)
+	}
+	if got := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "fast-model"}); got != before3 {
+		t.Fatalf("expected timeout NOT to be inferred from pre-header elapsed time on io.EOF: before=%v after=%v", before3, got)
 	}
 
 	// Case 4: Normal upstream reset after connect-timeout interval (elapsed 2s > connect_timeout 1s, but < 15s total timeout)
@@ -2315,7 +2345,7 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		t.Fatalf("expected timeout NOT to increase on subsecond early pre-header reset: before=%v after=%v", before11, after11)
 	}
 
-	// Case 12: Subsecond pre-header verified total timeout deadline (elapsed 105ms >= 100ms deadline) -> records timeout
+	// Case 12: Subsecond pre-header EOF past total_timeout without authoritative deadline -> does NOT infer timeout
 	ctx12 := &RequestContext{
 		RequestModel:        "subsecond-model",
 		UpstreamStatusCode:  0,
@@ -2324,8 +2354,26 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	before12 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
 	_ = r.handleProcessReceiveError(ctx12, io.EOF)
 	after12 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"})
-	if after12 != before12+1 {
-		t.Fatalf("expected timeout to increase on subsecond pre-header total timeout deadline: before=%v after=%v", before12, after12)
+	if after12 != before12 {
+		t.Fatalf("expected timeout NOT to be inferred on pre-header EOF without deadline: before=%v after=%v", before12, after12)
+	}
+
+	// Case 12b: Mid-stream codes.Unavailable past idle_timeout -> preserves receive error and does NOT record timeout
+	ctx12StreamErr := &RequestContext{
+		RequestModel:        "subsecond-model",
+		UpstreamStatusCode:  200,
+		IsStreamingResponse: true,
+		StreamingComplete:   false,
+		StartTime:           time.Now().Add(-110 * time.Millisecond),
+		ProcessingStartTime: time.Now().Add(-110 * time.Millisecond),
+		LastStreamChunkTime: time.Now().Add(-105 * time.Millisecond),
+	}
+	retStreamErr := r.handleProcessReceiveError(ctx12StreamErr, status.Error(codes.Unavailable, "transport closing"))
+	if status.Code(retStreamErr) != codes.Unavailable {
+		t.Fatalf("expected mid-stream codes.Unavailable to be preserved, got %v", retStreamErr)
+	}
+	if got := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "subsecond-model"}); got != before12 {
+		t.Fatalf("expected timeout NOT to increase on mid-stream codes.Unavailable: before=%v after=%v", before12, got)
 	}
 
 	// Case 13: Subsecond 503 early disconnect (elapsed 1ms << 100ms connect deadline) -> records upstream_5xx, NOT timeout
@@ -2378,7 +2426,7 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 		t.Fatalf("expected upstream_5xx to increase on 503 after connect interval: before=%v after=%v", before15_5xx, after15_5xx)
 	}
 
-	// Case 16: Unreachable model (connect_timeout=1s, no total_timeout) connect timeout pre-header EOF -> records timeout
+	// Case 16: Unreachable model (connect_timeout=1s, no total_timeout) pre-header EOF without status 503 or deadline -> does NOT infer timeout
 	ctx16 := &RequestContext{
 		RequestModel:        "unreachable-model",
 		UpstreamStatusCode:  0,
@@ -2387,8 +2435,8 @@ func TestHandleProcessReceiveErrorVerifiedTimeouts(t *testing.T) {
 	before16 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
 	_ = r.handleProcessReceiveError(ctx16, io.EOF)
 	after16 := getCounterValue("llm_request_errors_total", map[string]string{"reason": "timeout", "model": "unreachable-model"})
-	if after16 != before16+1 {
-		t.Fatalf("expected timeout to increase on unreachable model connect timeout pre-header EOF: before=%v after=%v", before16, after16)
+	if after16 != before16 {
+		t.Fatalf("expected timeout NOT to be inferred on pre-header EOF without status 503 or deadline: before=%v after=%v", before16, after16)
 	}
 }
 

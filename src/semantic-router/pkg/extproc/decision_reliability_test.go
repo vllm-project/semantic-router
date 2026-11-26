@@ -151,3 +151,44 @@ func TestEnvoyReliabilityHeadersRoundsUpPositiveSubmillisecondDeadlines(t *testi
 	zeroHeaders := headerValues(envoyReliabilityHeaders(zeroOverride, true))
 	require.Equal(t, "0", zeroHeaders["x-envoy-upstream-rq-timeout-ms"])
 }
+
+func TestValidatedWhitespaceTotalTimeoutGeneratesEnvoyRequestTimeoutHeader(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+providers:
+  defaults:
+    model: padded-model
+  models:
+    - name: padded-model
+      reliability:
+        total_timeout: " 2s "
+      backend_refs:
+        - name: local-vllm
+          provider: vllm
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+    decisions:
+      - name: padded_decision
+        reliability:
+          total_timeout: " 3s "
+        modelRefs:
+          - model: padded-model
+`))
+	require.NoError(t, err)
+
+	router := &OpenAIRouter{Config: cfg}
+
+	var providerHeaders []*core.HeaderValueOption
+	router.appendReliabilityHeaders(&providerHeaders, "padded-model")
+	require.Equal(t, "2000", headerValues(providerHeaders)["x-envoy-upstream-rq-timeout-ms"])
+
+	resp := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{
+		RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}},
+	}}
+	router.addEnvoyReliabilityHeaders(resp, &RequestContext{
+		VSRSelectedDecision: &cfg.Decisions[0],
+		VSRSelectedModel:    "padded-model",
+	})
+	got := headerValues(resp.GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders())
+	require.Equal(t, "3000", got["x-envoy-upstream-rq-timeout-ms"])
+}

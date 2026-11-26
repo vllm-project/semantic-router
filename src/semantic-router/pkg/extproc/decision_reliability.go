@@ -112,23 +112,21 @@ func (r *OpenAIRouter) appendReliabilityHeaders(headersOut *[]*core.HeaderValueO
 			continue
 		}
 		rel := modelParams.Reliability
-		if rel.TotalTimeout != "" {
-			if dur, err := time.ParseDuration(rel.TotalTimeout); err == nil {
-				var timeoutMs int64
-				if dur > 0 {
-					// Round positive durations up to at least 1ms so sub-millisecond durations
-					// do not truncate to 0, which would disable Envoy's request timeout.
-					timeoutMs = int64((dur + time.Millisecond - 1) / time.Millisecond)
-				}
-				*headersOut = append(*headersOut, &core.HeaderValueOption{
-					Header: &core.HeaderValue{
-						Key:      headers.EnvoyUpstreamRqTimeoutMs,
-						RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
-					},
-					AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
-				})
-				return
+		if dur := reliabilityDuration(rel.TotalTimeout); dur != nil && *dur >= 0 {
+			var timeoutMs int64
+			if *dur > 0 {
+				// Round positive durations up to at least 1ms so sub-millisecond durations
+				// do not truncate to 0, which would disable Envoy's request timeout.
+				timeoutMs = int64((*dur + time.Millisecond - 1) / time.Millisecond)
 			}
+			*headersOut = append(*headersOut, &core.HeaderValueOption{
+				Header: &core.HeaderValue{
+					Key:      headers.EnvoyUpstreamRqTimeoutMs,
+					RawValue: []byte(strconv.FormatInt(timeoutMs, 10)),
+				},
+				AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
+			})
+			return
 		}
 	}
 }

@@ -235,14 +235,11 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 }
 
 func parseDurationSafe(s string) (time.Duration, bool) {
-	if s == "" {
+	dur := reliabilityDuration(s)
+	if dur == nil || *dur <= 0 {
 		return 0, false
 	}
-	d, err := time.ParseDuration(s)
-	if err != nil || d <= 0 {
-		return 0, false
-	}
-	return d, true
+	return *dur, true
 }
 
 func timeoutThreshold(dur, maxAllowance time.Duration) time.Duration {
@@ -307,21 +304,27 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		return true
 	}
 
-	totalTimeoutStr, idleTimeoutStr, connectTimeoutStr := r.getEffectiveTimeouts(ctx)
-
-	var start time.Time
-	if !ctx.ProcessingStartTime.IsZero() {
-		start = ctx.ProcessingStartTime
-	} else if !ctx.StartTime.IsZero() {
-		start = ctx.StartTime
-	}
-	var elapsed time.Duration
-	if !start.IsZero() {
-		elapsed = time.Since(start)
+	// Preserve non-EOF receive errors (e.g. codes.Unavailable) unless the
+	// transport supplied an authoritative deadline above.
+	if !errors.Is(err, io.EOF) {
+		return false
 	}
 
-	// Mid-stream stall termination (stream idle timeout)
+	// Mid-stream stall termination (stream idle timeout after response headers arrived)
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
+		totalTimeoutStr, idleTimeoutStr, _ := r.getEffectiveTimeouts(ctx)
+
+		var start time.Time
+		if !ctx.ProcessingStartTime.IsZero() {
+			start = ctx.ProcessingStartTime
+		} else if !ctx.StartTime.IsZero() {
+			start = ctx.StartTime
+		}
+		var elapsed time.Duration
+		if !start.IsZero() {
+			elapsed = time.Since(start)
+		}
+
 		// Measure the actual idle gap since the last received response frame
 		var lastActivity time.Time
 		if !ctx.LastStreamChunkTime.IsZero() {
@@ -341,28 +344,6 @@ func (r *OpenAIRouter) isVerifiedTimeoutTermination(ctx *RequestContext, err err
 		}
 		if reqDur, ok := parseDurationSafe(totalTimeoutStr); ok && elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
 			return true
-		}
-		return false
-	}
-
-	// Pre-header termination (Envoy local reply due to request timeout or connect timeout)
-	if ctx.UpstreamStatusCode == 0 && elapsed > 0 {
-		// Check if request exceeded total_timeout
-		if reqDur, ok := parseDurationSafe(totalTimeoutStr); ok {
-			if elapsed >= timeoutThreshold(reqDur, 300*time.Millisecond) {
-				return true
-			}
-		}
-
-		// Check if request exceeded connect_timeout
-		if errors.Is(err, io.EOF) {
-			if connDur, ok := parseDurationSafe(connectTimeoutStr); ok {
-				_, hasReq := parseDurationSafe(totalTimeoutStr)
-				if elapsed >= timeoutThreshold(connDur, 250*time.Millisecond) &&
-					(!hasReq || elapsed <= connDur+500*time.Millisecond) {
-					return true
-				}
-			}
 		}
 	}
 
