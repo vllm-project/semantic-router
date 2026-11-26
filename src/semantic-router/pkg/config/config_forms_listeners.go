@@ -18,7 +18,7 @@ var listenerForms = []ConfigForm{
 		Code:    CodeRemovedField,
 		Paths:   []string{"listeners[].models"},
 		What:    "a listener's models are the models of each API it serves",
-		Becomes: "apis: {chat_completions: {models: [...]}, responses: {models: [...]}, messages: {models: [...]}, images: {models: [...]}}",
+		Becomes: "apis: {chat_completions: {models: [...]}, responses: {models: [...]}, messages: {models: [...]}, images: {models: [...]}, speech: {models: [...]}}",
 		Migrate: func(m *Migration, at FormMatch) error {
 			if mappingValue(at.Parent, "apis") != nil {
 				return fmt.Errorf("the listener sets both models and apis; give each apis entry its models and remove models")

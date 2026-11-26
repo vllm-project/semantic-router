@@ -66,6 +66,35 @@ def _shared_with_dashboard(info: os.stat_result) -> bool:
     )
 
 
+def _chmod_directory_without_following(
+    directory: Path, mode: int, expected: os.stat_result
+) -> os.stat_result:
+    """Set a directory's mode through a descriptor that never follows symlinks.
+
+    ``os.chmod(..., follow_symlinks=False)`` relies on glibc >= 2.32 emulating
+    ``fchmodat(AT_SYMLINK_NOFOLLOW)`` and raises ``NotImplementedError`` on older
+    glibc. Opening with ``O_NOFOLLOW`` and calling ``fchmod`` works everywhere
+    and changes exactly the inode that was inspected. The pathname is checked
+    again afterwards, while the descriptor still pins the inode, so a path
+    swapped during ``fchmod`` is refused instead of returned as secured.
+    """
+
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open(directory, flags)
+    try:
+        opened = os.fstat(fd)
+        if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+            raise OSError(errno.ESTALE, "directory changed while hardening", directory)
+        os.fchmod(fd, mode)
+        secured = os.fstat(fd)
+        current = os.lstat(directory)
+        if (current.st_dev, current.st_ino) != (secured.st_dev, secured.st_ino):
+            raise OSError(errno.ESTALE, "directory changed while hardening", directory)
+        return secured
+    finally:
+        os.close(fd)
+
+
 def _create_or_harden_private_directory(
     directory: Path, *, parents: bool = False
 ) -> Path:
@@ -109,12 +138,13 @@ def _create_or_harden_private_directory(
         return directory
     if stat.S_IMODE(info.st_mode) != _PRIVATE_DIRECTORY_MODE:
         try:
-            os.chmod(directory, _PRIVATE_DIRECTORY_MODE, follow_symlinks=False)
+            secured_info = _chmod_directory_without_following(
+                directory, _PRIVATE_DIRECTORY_MODE, info
+            )
         except (NotImplementedError, OSError) as error:
             raise ValueError(
                 f"Runtime state directory permissions cannot be secured: {directory}"
             ) from error
-        secured_info = directory.lstat()
         if (
             not stat.S_ISDIR(secured_info.st_mode)
             or secured_info.st_uid != current_user_id

@@ -391,6 +391,54 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
+			name: "Nemotron 3.5 Super VL medium effort flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL full effort omits medium flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL switch disabled", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt medium effort flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt full effort omits medium flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt switch disabled", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
 			name: "Nemotron Cascade switch disabled", catalog: "nvidia/nemotron-cascade-2-30b-a3b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportChatTemplate,

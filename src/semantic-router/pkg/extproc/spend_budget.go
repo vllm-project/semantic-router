@@ -14,6 +14,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -186,28 +187,29 @@ func (r *OpenAIRouter) reserveDispatchSpend(ctx *RequestContext, model string, r
 }
 
 // dispatchSpendEstimate bounds the cost of a call: its estimated input at the
-// model's highest input rate, and its output at the request's limit, else
-// the model's, else the budgets' reserve. It is false when the model has no
-// price in currency.
+// model's highest input rate, and its output at the request's limit capped
+// by the model limit. Without a request limit, it uses the model limit or the
+// budgets' reserve. It is false when the model has no price in currency.
 func (r *OpenAIRouter) dispatchSpendEstimate(model string, request *llmprotocol.Request, currency string) (float64, bool) {
 	pricing, ok := r.Config.GetFullModelPricing(model)
 	if !ok || normalizeReplayCurrency(pricing.Currency) != currency {
 		return 0, false
 	}
-	output := r.Config.Budgets.EffectiveOutputReserveTokens()
-	limit := r.Config.ModelConfig[model].MaxOutputTokens
-	if limit > 0 {
-		output = limit
-	}
+	output := defaultSpendOutputTokens(r.Config, model)
 	if request != nil && request.Sampling.MaxOutputTokens != nil && *request.Sampling.MaxOutputTokens > 0 {
-		output = int(min(*request.Sampling.MaxOutputTokens, int64(math.MaxInt32)))
-		if limit > 0 {
+		output = min(*request.Sampling.MaxOutputTokens, math.MaxInt32)
+		if limit := int64(r.Config.ModelConfig[model].MaxOutputTokens); limit > 0 {
 			output = min(output, limit)
 		}
 	}
-	inputRate := max(pricing.PromptPer1M, effectiveCacheWriteRate(pricing), effectiveCacheWrite1hRate(pricing))
-	input := llmprotocol.EstimateInput(request).Tokens
-	return (float64(input)*inputRate + float64(output)*max(pricing.CompletionPer1M, 0)) / 1e6, true
+	return estimateDispatchCost(llmprotocol.EstimateInput(request).Tokens, output, pricing), true
+}
+
+func defaultSpendOutputTokens(cfg *config.RouterConfig, model string) int64 {
+	if limit := int64(cfg.ModelConfig[model].MaxOutputTokens); limit > 0 {
+		return limit
+	}
+	return int64(cfg.Budgets.EffectiveOutputReserveTokens())
 }
 
 // settleRequestSpend replaces the reservation with the priced usage, or with
