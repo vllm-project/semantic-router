@@ -59,7 +59,8 @@ func observationStatistic(o Observation, field string) (float64, bool) {
 			return *o.Confidence, true
 		}
 	case "probability_margin":
-		if o.Type == "noul" && o.Probability != nil {
+		// A span is as sure as the Noul its question answers.
+		if (o.Type == "noul" || o.Type == "span") && o.Probability != nil {
 			return 2 * math.Abs(*o.Probability-0.5), true
 		}
 		// A set is as sure as its least sure label.

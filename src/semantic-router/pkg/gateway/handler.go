@@ -372,12 +372,14 @@ func (h *Handler) forward(ctx context.Context, serving Serving, plan *routing.Pl
 }
 
 // responseBody is nil for a response that has no body, as Envoy then ends the
-// stream with the headers.
+// stream with the headers. Content-Length: 0 is deliberately not in that set:
+// it must still run the response-body phase so a successful reply with a
+// missing completion body is rejected like any other empty body, regardless
+// of HTTP framing.
 func responseBody(call *routing.Call, resp *upstream.Response) io.Reader {
 	switch {
 	case call.Request.Header.Get(":method") == http.MethodHead,
-		resp.StatusCode == http.StatusNoContent, resp.StatusCode == http.StatusNotModified,
-		resp.Header.Get("Content-Length") == "0":
+		resp.StatusCode == http.StatusNoContent, resp.StatusCode == http.StatusNotModified:
 		return nil
 	default:
 		return resp.Body

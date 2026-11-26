@@ -199,22 +199,9 @@ class NativeEngineModel(EngineModel):
         # other, and a frozenset consents to some slots only. The accelerator
         # scope narrows consent further when a record covers only some of the
         # device class's accelerators.
-        consents = (
-            spec.dtype.approximate_cpu_kernels
-            if self.device.type == "cpu"
-            else spec.dtype.approximate_kernels
-        )
-        self.kernels.allow_approximate = (
-            not options.exact_kernels_only
-            and bool(consents)
-            and (
-                spec.dtype.approximate_accelerators is None
-                or accelerator.name in spec.dtype.approximate_accelerators
-            )
-        )
-        # A family may consent to some slots only (DtypePolicy.approximate_cpu_kernels).
-        self.kernels.approximate_slots = (
-            consents if isinstance(consents, frozenset) else None
+        self.kernels.consent(
+            spec.dtype.consents_on(accelerator.name, self.device.type == "cpu"),
+            options.exact_kernels_only,
         )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None

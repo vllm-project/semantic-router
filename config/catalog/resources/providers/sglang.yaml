@@ -142,3 +142,13 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+- catalog: meituan/longcat-2.0
+  relationship: self_hosted
+  id: meituan-longcat/LongCat-2.0-FP8
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-23
+    source: https://docs.sglang.io/cookbook/autoregressive/Meituan/LongCat-2.0
