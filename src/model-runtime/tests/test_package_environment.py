@@ -24,11 +24,18 @@ DEFAULTS = {
     "OPENBLAS_NUM_THREADS": "1",
 }
 SPIN = "GOMP_SPINCOUNT"
-# `vllm-srun serve` with the server replaced: what the server would start with.
+# `vllm-srun serve` with the server replaced: what the server would start with,
+# and the spin count when PyTorch loaded, if it did.
 SERVE_PROBE = """
 import json, os, sys, types
+at_torch_load = []
+class WatchTorch:
+    def find_spec(self, name, path=None, target=None):
+        if name == "torch" and not at_torch_load:
+            at_torch_load.append(os.environ.get("GOMP_SPINCOUNT"))
+sys.meta_path.insert(0, WatchTorch())
 sys.modules["vllm_srun.api.server"] = types.SimpleNamespace(
-    serve=lambda config: print(json.dumps([os.environ.get("GOMP_SPINCOUNT"), "torch" in sys.modules]))
+    serve=lambda config: print(json.dumps([os.environ.get("GOMP_SPINCOUNT"), at_torch_load]))
 )
 from vllm_srun.cli import main
 main(sys.argv[1:])
@@ -67,8 +74,8 @@ def served_spin_count(arguments: list[str], env: dict[str, str]) -> str | None:
         text=True,
         check=True,
     ).stdout.splitlines()
-    value, torch_loaded = json.loads(out[-1])
-    assert not torch_loaded, "the spin count must be chosen before PyTorch loads"
+    value, at_torch_load = json.loads(out[-1])
+    assert at_torch_load in ([], [value]), "PyTorch loaded before the spin count"
     return value
 
 
