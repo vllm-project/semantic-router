@@ -84,6 +84,13 @@ func TestDetectDefaultStorageClassMultipleDefaults(t *testing.T) {
 		}
 		return sc
 	}
+	betaClass := func(name string, created metav1.Time) *storagev1.StorageClass {
+		return &storagev1.StorageClass{ObjectMeta: metav1.ObjectMeta{
+			Name:              name,
+			CreationTimestamp: created,
+			Annotations:       map[string]string{StorageClassBetaDefaultAnnotation: "true"},
+		}}
+	}
 
 	tests := []struct {
 		name    string
@@ -116,6 +123,22 @@ func TestDetectDefaultStorageClassMultipleDefaults(t *testing.T) {
 				class("alpha", newer, true),
 			},
 			want: "alpha",
+		},
+		{
+			name: "only default uses the beta annotation",
+			classes: []*storagev1.StorageClass{
+				betaClass("legacy-default", older),
+				class("fast", newer, false),
+			},
+			want: "legacy-default",
+		},
+		{
+			name: "newer beta default wins over older GA default",
+			classes: []*storagev1.StorageClass{
+				class("a-ga-default", older, true),
+				betaClass("b-beta-default", newer),
+			},
+			want: "b-beta-default",
 		},
 		{
 			name: "no default is an error",

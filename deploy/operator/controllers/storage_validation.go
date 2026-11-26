@@ -31,7 +31,17 @@ import (
 const (
 	// StorageClassDefaultAnnotation is the annotation used to mark a StorageClass as default
 	StorageClassDefaultAnnotation = "storageclass.kubernetes.io/is-default-class"
+	// StorageClassBetaDefaultAnnotation is the older beta annotation that
+	// Kubernetes still honors when choosing the default StorageClass.
+	StorageClassBetaDefaultAnnotation = "storageclass.beta.kubernetes.io/is-default-class"
 )
+
+// isDefaultStorageClass reports whether a StorageClass is marked as default
+// with either the GA or the beta annotation, as Kubernetes does.
+func isDefaultStorageClass(sc *storagev1.StorageClass) bool {
+	return sc.Annotations[StorageClassDefaultAnnotation] == "true" ||
+		sc.Annotations[StorageClassBetaDefaultAnnotation] == "true"
+}
 
 // detectDefaultStorageClass finds the default StorageClass in the cluster.
 // When more than one StorageClass is marked as default (for example while
@@ -47,9 +57,9 @@ func detectDefaultStorageClass(ctx context.Context, c client.Client) (string, er
 	}
 
 	var defaults []storagev1.StorageClass
-	for _, sc := range storageClasses.Items {
-		if sc.Annotations[StorageClassDefaultAnnotation] == "true" {
-			defaults = append(defaults, sc)
+	for i := range storageClasses.Items {
+		if isDefaultStorageClass(&storageClasses.Items[i]) {
+			defaults = append(defaults, storageClasses.Items[i])
 		}
 	}
 	if len(defaults) == 0 {
