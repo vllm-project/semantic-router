@@ -525,7 +525,7 @@ def plan_selection(root: Path, env: dict[str, str]) -> dict:
 def write_observation(
     output: Path, selection: dict, logs: list[Path], *, completed: bool
 ) -> dict:
-    failed, failed_tests = set(), set()
+    failed, failed_tests, started, ended = set(), set(), set(), set()
     for log in logs:
         for line in log.read_text().splitlines():
             try:
@@ -533,25 +533,38 @@ def write_observation(
             except ValueError:
                 continue
             package = event.get("Package") or event.get("ImportPath")
+            test = (event.get("Test") or "").split("/", 1)[0]
             if event.get("Action") in {"fail", "build-fail"} and package:
                 failed.add(package)
-                if event.get("Test"):
-                    failed_tests.add((package, event["Test"].split("/", 1)[0]))
+                if test:
+                    failed_tests.add((package, test))
+            if package and test:
+                if event.get("Action") == "run":
+                    started.add((package, test))
+                elif event.get("Action") in {"pass", "fail", "skip"}:
+                    ended.add((package, test))
+    # A test binary that exits mid-test, as on a panic in a background
+    # goroutine, fails its package and leaves the running test without a result.
+    exited = {(p, t) for p, t in started - ended if p in failed}
     selected = selection["selected_packages"]
     missed = sorted(failed - set(selected)) if selected is not None else []
     # A failure inside a filtered package, in a test the filter left out.
     filters = selection.get("test_filters") or {}
     missed += sorted(
         f"{package}/{test}"
-        for package, test in failed_tests
+        for package, test in failed_tests | exited
         if package in filters and test not in filters[package]
     )
+    # A filtered package that failed with no test to blame may hide one.
+    named = {package for package, _ in failed_tests | exited}
+    unattributed = sorted(p for p in failed if p in filters and p not in named)
     record = {
         **selection,
         "completed": completed,
         "failing_packages": sorted(failed),
         "failing_packages_outside_selection": missed,
         "failure_outside_selection": bool(missed),
+        "unattributed_failures": unattributed,
         "comparison_complete": completed,
     }
     (output / "selection.json").write_text(json.dumps(record, indent=2) + "\n")
@@ -569,6 +582,13 @@ def summary_line(record: dict) -> str:
     )
     fallback = "; ".join(record.get("fallback_reasons", [])[:3]) or "none"
     missed = ", ".join(record["failing_packages_outside_selection"]) or "none"
+    if record.get("unattributed_failures"):
+        missed += "; failed without a test result: " + ", ".join(
+            record["unattributed_failures"]
+        )
+    if not record["comparison_complete"]:
+        # A run that did not finish never reads as a clean comparison.
+        missed += " (incomplete comparison: the run did not finish)"
     return (
         f"Core test selection ({record['mode']}): {size} selected. "
         f"Fallback: {fallback}. Failures outside the selection: {missed}."

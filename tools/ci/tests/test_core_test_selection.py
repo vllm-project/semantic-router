@@ -245,7 +245,8 @@ class CoreTestSelectionTest(unittest.TestCase):
         record = json.loads((self.tmp_path / "selection.json").read_text())
         assert summary.read_text() == (
             "Core test selection (shadow): 1 of 2 packages selected. "
-            "Fallback: none. Failures outside the selection: missed.\n"
+            "Fallback: none. Failures outside the selection: missed "
+            "(incomplete comparison: the run did not finish).\n"
         )
         assert record["failure_outside_selection"]
         assert record["failing_packages_outside_selection"] == ["missed"]
@@ -495,6 +496,49 @@ class CoreTestSelectionTest(unittest.TestCase):
         assert record["failing_packages_outside_selection"] == [
             f"{PREFIX}/pkg/extproc/TestSlow"
         ]
+
+    def test_a_test_left_out_that_kills_its_binary_is_named(self):
+        # A panic in a background goroutine ends the binary without a test
+        # result: go test -json reports only the package as failed.
+        extproc = f"{PREFIX}/pkg/extproc"
+        events = [
+            {"Action": "run", "Package": extproc, "Test": "TestScan"},
+            {"Action": "pass", "Package": extproc, "Test": "TestScan"},
+            {"Action": "run", "Package": extproc, "Test": "TestSlow"},
+            {
+                "Action": "output",
+                "Package": extproc,
+                "Test": "TestSlow",
+                "Output": "panic: background goroutine\n",
+            },
+            {"Action": "fail", "Package": extproc},
+        ]
+        log = self.tmp_path / "unit.jsonl"
+        log.write_text("".join(json.dumps(e) + "\n" for e in events))
+        plan = {
+            "mode": "shadow",
+            "selected_packages": [extproc],
+            "all_packages": [extproc],
+            "test_filters": {extproc: ["TestScan"]},
+        }
+        record = selection.write_observation(
+            self.tmp_path, plan, [log], completed=False
+        )
+        assert record["failing_packages_outside_selection"] == [f"{extproc}/TestSlow"]
+        assert selection.summary_line(record).endswith(
+            f"Failures outside the selection: {extproc}/TestSlow "
+            "(incomplete comparison: the run did not finish)."
+        )
+
+        # Without a running test to blame, the package is named instead.
+        log.write_text(json.dumps(events[-1]) + "\n")
+        record = selection.write_observation(
+            self.tmp_path, plan, [log], completed=False
+        )
+        assert record["unattributed_failures"] == [extproc]
+        assert "none; failed without a test result: " + extproc in (
+            selection.summary_line(record)
+        )
 
     def test_repo_reads_see_raw_strings_and_multiline_joins(self):
         reads = _write_repo(
