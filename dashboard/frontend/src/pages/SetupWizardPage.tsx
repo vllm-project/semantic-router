@@ -20,6 +20,7 @@ import {
   SetupSuccessView,
 } from './SetupWizardReviewPanel'
 import { SetupDecisionModelSection } from './SetupWizardDecisionModel'
+import { useSetupRouterReadiness } from './setupRouterReadiness'
 import {
   SETUP_LAST_STEP,
   SETUP_STEP_DESCRIPTIONS,
@@ -96,6 +97,7 @@ const SetupWizardPage: React.FC = () => {
   const [direction, setDirection] = useState(1)
   const [phase, setPhase] = useState<'wizard' | 'done'>('wizard')
   const [leaving, setLeaving] = useState(false)
+  const [activationMessage, setActivationMessage] = useState<string | null>(null)
   const [decisionModelChoice, setDecisionModelChoice] = useState<DecisionModelName | null>(null)
   const [models, setModels] = useState<ModelDraft[]>([createModelDraft(1)])
   const [defaultModelId, setDefaultModelId] = useState<string>('')
@@ -565,6 +567,7 @@ const SetupWizardPage: React.FC = () => {
         return
       }
       setActivationState('idle')
+      setActivationMessage(response.message ?? null)
       setPhase('done')
     } catch (err) {
       setActivationState('error')
@@ -619,6 +622,11 @@ const SetupWizardPage: React.FC = () => {
   }, [])
 
   const finished = phase === 'done'
+  // Activation saves the config for `vllm-sr serve`; the Router is live only
+  // once the status reports it ready.
+  const routerReadiness = useSetupRouterReadiness(finished)
+  const live = finished && routerReadiness.state === 'ready'
+  const routerStopped = finished && routerReadiness.state === 'stopped'
   const activating = activationState === 'activating'
   const percent = finished ? 100 : activating ? 90 : (currentStep / SETUP_STEP_LABELS.length) * 100
   const summaries = [
@@ -696,13 +704,24 @@ const SetupWizardPage: React.FC = () => {
           </div>
           <div className="mt-auto rounded-xl border border-border bg-surface px-3 py-2.5">
             <span className="flex items-center gap-2 text-xs font-medium">
-              <StatusDot tone={finished ? 'success' : 'info'} pulse />
-              {finished ? 'Routing live traffic' : 'Setup mode'}
+              <StatusDot
+                tone={live ? 'success' : routerStopped ? 'danger' : 'info'}
+                pulse={!routerStopped}
+              />
+              {live
+                ? 'Routing live traffic'
+                : routerStopped
+                  ? 'Router not running'
+                  : finished
+                    ? 'Router starting'
+                    : 'Setup mode'}
             </span>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              {finished
+              {live
                 ? 'Change anything later in Settings.'
-                : 'The router serves no traffic until you activate a configuration.'}
+                : finished
+                  ? 'Setup is saved. The router serves traffic once it is ready.'
+                  : 'The router serves no traffic until you activate a configuration.'}
             </p>
           </div>
         </aside>
@@ -728,6 +747,8 @@ const SetupWizardPage: React.FC = () => {
               defaultModel={defaultModel}
               summary={`${modelCount} ${modelCount === 1 ? 'model' : 'models'} · ${currentRouteLabel} · ${decisionModelLabel}`}
               leaving={leaving}
+              readiness={routerReadiness}
+              activationMessage={activationMessage}
               onTest={() => void leaveSetup('/get-started')}
               onDashboard={() => void leaveSetup('/')}
             />
