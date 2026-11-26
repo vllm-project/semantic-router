@@ -59,6 +59,10 @@
     "message": "更多",
     "description": "Navbar item with label More"
   },
+  "item.label.Recipes": {
+    "message": "路由配方",
+    "description": "Navbar item with label Recipes"
+  },
   "item.label.Model Hub": {
     "message": "模型库",
     "description": "Navbar item with label Model Hub"
