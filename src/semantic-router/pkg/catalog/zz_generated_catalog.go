@@ -212,6 +212,11 @@ const builtInCatalogJSON = `{
           "description": "Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.",
           "display_name": "Published agent",
           "id": "published-agent"
+        },
+        {
+          "description": "Independently measured full 66-task Terminal-Bench 4.0 pass@1, with the agent, repeat count, and constraints retained on the evaluation record.",
+          "display_name": "Independent agent run",
+          "id": "independent-agent"
         }
       ],
       "source": "https://github.com/harbor-framework/terminal-bench/releases/tag/v4.0.0"
@@ -353,9 +358,14 @@ const builtInCatalogJSON = `{
       ],
       "profiles": [
         {
-          "description": "Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.",
-          "display_name": "Public games",
+          "description": "Public-game scores based on sequential Elo ratings for programs generated at the named reasoning setting.",
+          "display_name": "Public games (sequential Elo)",
           "id": "public-games"
+        },
+        {
+          "description": "Public-game scores based on fitted Bradley–Terry ratings for programs generated at the named reasoning setting.",
+          "display_name": "Public games (Bradley–Terry)",
+          "id": "public-games-bradley-terry"
         }
       ],
       "source": "https://benchmarks.duellab.org/methodology"
@@ -14290,6 +14300,466 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-12b-it-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.772
+      },
+      "model": "google/gemma-4-12b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 12B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-12b-it-report-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.788
+      },
+      "model": "google/gemma-4-12b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 12B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-12b-it-report-scicode@1.0.0",
+      "metrics": {
+        "score": 0.38
+      },
+      "model": "google/gemma-4-12b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 12B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-12b-it-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.74
+      },
+      "model": "google/gemma-4-12b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 12B"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-12b-it-report-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.972
+      },
+      "model": "google/gemma-4-12b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 12B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.826
+      },
+      "model": "google/gemma-4-26b-a4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 26B-A4B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.823
+      },
+      "model": "google/gemma-4-26b-a4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 26B-A4B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-26b-a4b-it-report-scicode@1.0.0",
+      "metrics": {
+        "score": 0.4
+      },
+      "model": "google/gemma-4-26b-a4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 26B-A4B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-26b-a4b-it-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.72
+      },
+      "model": "google/gemma-4-26b-a4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 26B-A4B"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-26b-a4b-it-report-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.985
+      },
+      "model": "google/gemma-4-26b-a4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 26B-A4B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e4b-it-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.694
+      },
+      "model": "google/gemma-4-e4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E4B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.586
+      },
+      "model": "google/gemma-4-e4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E4B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e4b-it-report-scicode@1.0.0",
+      "metrics": {
+        "score": 0.24
+      },
+      "model": "google/gemma-4-e4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E4B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e4b-it-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.44
+      },
+      "model": "google/gemma-4-e4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E4B"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e4b-it-report-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.967
+      },
+      "model": "google/gemma-4-e4b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E4B"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e2b-it-report-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.6
+      },
+      "model": "google/gemma-4-e2b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E2B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.434
+      },
+      "model": "google/gemma-4-e2b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E2B"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e2b-it-report-scicode@1.0.0",
+      "metrics": {
+        "score": 0.21
+      },
+      "model": "google/gemma-4-e2b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E2B"
+      }
+    },
+    {
+      "benchmark": "allenai/ifbench@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e2b-it-report-ifbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.38
+      },
+      "model": "google/gemma-4-e2b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E2B"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://arxiv.org/html/2607.02770v1#S2.T5",
+        "verification": "claimed"
+      },
+      "id": "google/gemma-4-e2b-it-report-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.946
+      },
+      "model": "google/gemma-4-e2b-it",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "reasoning_mode": "enabled",
+        "source_kind": "technical_report",
+        "variant": "Gemma 4 E2B"
+      }
+    },
+    {
       "benchmark": "cognition/frontiercode@1.1.0",
       "benchmark_profile": "main",
       "evidence": {
@@ -15050,6 +15520,340 @@ const builtInCatalogJSON = `{
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.884
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.280",
+        "averaged_runs": 3,
+        "context_window": "512K",
+        "harness": "claude-code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.385
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.280",
+        "context_window": "512K",
+        "harness": "claude-code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-deepswe@1.0.0",
+      "metrics": {
+        "resolved": 0.646
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 3,
+        "context_window": "1M",
+        "harness": "mini-swe-agent",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.518
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "official evaluation code",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "subset": "public",
+        "task_count": 600,
+        "thinking_mode": "enabled",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.5-model-card-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.631
+      },
+      "model": "meituan/longcat-2.5",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "agent_version": "2.1.116",
+        "harness": "claude-code",
+        "maximum_output_tokens": "256K",
+        "sampling_temperature": 1.0,
+        "sampling_top_p": 0.95,
+        "source_kind": "official_model_card",
+        "subset": "full",
+        "thinking_mode": "enabled",
+        "tool_policy": "with_tools",
+        "variant": "LongCat-2.5"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.708
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.595
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "unspecified_by_source",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.889
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.9
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.03
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-deepswe@1.0.0",
+      "metrics": {
+        "resolved": 0.097
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.158
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "verification": "claimed"
+      },
+      "id": "meituan/longcat-2.0-comparison-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.375
+      },
+      "model": "meituan/longcat-2.0",
+      "observed_at": "2026-11-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "reported_in": "LongCat-2.0 column of the LongCat-2.5 model card",
+        "source_kind": "official_model_card",
+        "thinking_mode": "unspecified_by_source",
+        "tool_policy": "with_tools",
+        "variant": "LongCat-2.0"
       }
     },
     {
@@ -21957,6 +22761,176 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-terminal-bench-4@1.0.0",
+      "metrics": {
+        "resolved": 0.657
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "terminal_harness": "Claude Code",
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-deepswe@1.0.0",
+      "metrics": {
+        "resolved": 0.755
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "swe_harness": "Claude Code",
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.511
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "hle_mode": "full_no_tools",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam-with-tools@1.0.0",
+      "metrics": {
+        "accuracy": 0.7
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "hle_mode": "full_with_tools",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.942
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning@1.0.0",
+      "metrics": {
+        "score": 0.89
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "tool_policy": "no_tools",
+        "trials": 4,
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "with-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "verification": "claimed"
+      },
+      "id": "moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning-with-tools@1.0.0",
+      "metrics": {
+        "score": 0.934
+      },
+      "model": "moonshot/kimi-k3.1-pro",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "tool_policy": "with_tools",
+        "tools": "python",
+        "trials": 4,
+        "variant": "Kimi K3.1 Pro"
+      }
+    },
+    {
       "benchmark": "scicode-bench/scicode@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -22161,6 +23135,282 @@ const builtInCatalogJSON = `{
         "reasoning_mode": "enabled",
         "source_kind": "official_model_card",
         "variant": "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.8952
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA-Diamond",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.8822
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "problem_window": "2024-08_to_2025-05",
+        "reasoning_mode": "enabled",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "LiveCodeBench v6",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.711
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_version": "1.17.11",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-bench Verified",
+        "swe_harness": "OpenCode",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.5178
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_version": "1.17.11",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-bench Pro",
+        "swe_harness": "OpenCode",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.6067
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "36d417f5",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench 2.1",
+        "terminal_harness": "Terminus-2",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.8883
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA Diamond",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.2873
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "HLE (no tools)",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.4449
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "SciCode",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.5393
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench 2.1",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.556
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "MCP-Atlas",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
       }
     },
     {
@@ -23399,6 +24649,407 @@ const builtInCatalogJSON = `{
         "source_kind": "official_model_card",
         "swe_harness": "Agentless",
         "variant": "Nemotron-Cascade-8B"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-1@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/openai-gpt-6-2",
+        "verification": "imported"
+      },
+      "id": "arc-prize/gpt-6-2-astra-xhigh-arc-agi-1@1.0.0",
+      "metrics": {
+        "accuracy": 0.985
+      },
+      "model": "openai/gpt-6.2-astra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Astra",
+        "source_model_slug": "openai-gpt-6-2-astra",
+        "subset": "semi-private",
+        "variant": "astra-xhigh"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-2@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/openai-gpt-6-2",
+        "verification": "imported"
+      },
+      "id": "arc-prize/gpt-6-2-astra-xhigh-arc-agi-2@1.0.0",
+      "metrics": {
+        "accuracy": 0.9583333333333334
+      },
+      "model": "openai/gpt-6.2-astra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Astra",
+        "source_model_slug": "openai-gpt-6-2-astra",
+        "subset": "semi-private",
+        "variant": "astra-xhigh"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games-bradley-terry",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/",
+        "verification": "imported"
+      },
+      "id": "duellab/gpt-6-2-astra-xhigh-gamebench@2.0.0",
+      "metrics": {
+        "score": 97.146404
+      },
+      "model": "openai/gpt-6.2-astra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20261119-235af8c04037",
+        "provider_setting": "xhigh",
+        "row_kind": "track",
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Astra",
+        "source_model_slug": "gpt-6-2-astra",
+        "suite_version": "2-known8-r3",
+        "track": "full_freedom/intensive"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-2-astra-xhigh-terminal-bench@4.0.0",
+      "metrics": {
+        "resolved": 0.641414141414141
+      },
+      "model": "openai/gpt-6.2-astra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "agent_harness": "mini-swe-agent",
+        "context_compaction": false,
+        "max_steps": 500,
+        "methodology_source": "https://artificialanalysis.ai/evaluations/terminalbench-4-0",
+        "repeats": 3,
+        "run_kind": "independent",
+        "scoring": "pass@1",
+        "source_model": "GPT-6.2 Astra (Xhigh)",
+        "source_model_slug": "gpt-6-2-astra-xhigh",
+        "task_count": 66
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-2-astra-xhigh-gdp-pdf@1.0.0",
+      "metrics": {
+        "all_pass": 0.28
+      },
+      "model": "openai/gpt-6.2-astra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/gdp-pdf",
+        "repeats": 5,
+        "run_kind": "independent",
+        "scoring": "all_pass",
+        "source_model": "GPT-6.2 Astra (Xhigh)",
+        "source_model_slug": "gpt-6-2-astra-xhigh",
+        "task_count": 100
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-1@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/openai-gpt-6-2",
+        "verification": "imported"
+      },
+      "id": "arc-prize/gpt-6-2-sol-xhigh-arc-agi-1@1.0.0",
+      "metrics": {
+        "accuracy": 0.97
+      },
+      "model": "openai/gpt-6.2-sol",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Sol",
+        "source_model_slug": "openai-gpt-6-2-sol",
+        "subset": "semi-private",
+        "variant": "sol-xhigh"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-2@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/openai-gpt-6-2",
+        "verification": "imported"
+      },
+      "id": "arc-prize/gpt-6-2-sol-xhigh-arc-agi-2@1.0.0",
+      "metrics": {
+        "accuracy": 0.8583333333333333
+      },
+      "model": "openai/gpt-6.2-sol",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Sol",
+        "source_model_slug": "openai-gpt-6-2-sol",
+        "subset": "semi-private",
+        "variant": "sol-xhigh"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games-bradley-terry",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/",
+        "verification": "imported"
+      },
+      "id": "duellab/gpt-6-2-sol-xhigh-gamebench@2.0.0",
+      "metrics": {
+        "score": 94.330527
+      },
+      "model": "openai/gpt-6.2-sol",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20261119-235af8c04037",
+        "provider_setting": "xhigh",
+        "row_kind": "track",
+        "run_kind": "independent",
+        "source_model": "GPT-6.2 Sol",
+        "source_model_slug": "gpt-6-2-sol",
+        "suite_version": "2-known8-r3",
+        "track": "full_freedom/intensive"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-2-sol-xhigh-terminal-bench@4.0.0",
+      "metrics": {
+        "resolved": 0.560606060606061
+      },
+      "model": "openai/gpt-6.2-sol",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "agent_harness": "mini-swe-agent",
+        "context_compaction": false,
+        "max_steps": 500,
+        "methodology_source": "https://artificialanalysis.ai/evaluations/terminalbench-4-0",
+        "repeats": 3,
+        "run_kind": "independent",
+        "scoring": "pass@1",
+        "source_model": "GPT-6.2 Sol (Xhigh)",
+        "source_model_slug": "gpt-6-2-sol-xhigh",
+        "task_count": 66
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-2-sol-xhigh-gdp-pdf@1.0.0",
+      "metrics": {
+        "all_pass": 0.284
+      },
+      "model": "openai/gpt-6.2-sol",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/gdp-pdf",
+        "repeats": 5,
+        "run_kind": "independent",
+        "scoring": "all_pass",
+        "source_model": "GPT-6.2 Sol (Xhigh)",
+        "source_model_slug": "gpt-6-2-sol-xhigh",
+        "task_count": 100
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-1-terra-high-gdp-pdf@1.0.0",
+      "metrics": {
+        "all_pass": 0.28
+      },
+      "model": "openai/gpt-6.1-terra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/gdp-pdf",
+        "repeats": 5,
+        "run_kind": "independent",
+        "scoring": "all_pass",
+        "source_model": "GPT-6.1 Terra (High)",
+        "source_model_slug": "gpt-6-1-terra-high",
+        "task_count": 100
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-1-terra-high-scicode@1.0.0",
+      "metrics": {
+        "score": 0.516203703703704
+      },
+      "model": "openai/gpt-6.1-terra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "dataset_status": "under review by Artificial Analysis",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/scicode",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "GPT-6.1 Terra (High)",
+        "source_model_slug": "gpt-6-1-terra-high"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-1-terra-high-hle@1.0.0",
+      "metrics": {
+        "accuracy": 0.432808155699722
+      },
+      "model": "openai/gpt-6.1-terra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "GPT-6.1 Terra (High)",
+        "source_model_slug": "gpt-6-1-terra-high",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/critpt@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-1-terra-high-critpt@1.0.0",
+      "metrics": {
+        "score": 0.257142857142857
+      },
+      "model": "openai/gpt-6.1-terra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_harness": "none",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/critpt",
+        "run_kind": "independent",
+        "sample_count": 70,
+        "source_model": "GPT-6.1 Terra (High)",
+        "source_model_slug": "gpt-6-1-terra-high"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/gpt-6-1-terra-high-lcr@1.1.0",
+      "metrics": {
+        "score": 0.823333333333333
+      },
+      "model": "openai/gpt-6.1-terra",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning",
+        "run_kind": "independent",
+        "sample_count": 100,
+        "source_model": "GPT-6.1 Terra (High)",
+        "source_model_slug": "gpt-6-1-terra-high"
       }
     },
     {
@@ -36107,6 +37758,119 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "Inkling Small",
         "source_model_slug": "thinkingmachines-inkling-small-medium"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.721
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "mini-swe-agent v2.4.6",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.813
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "terminus v2",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-terminal-bench-4-0@1.0.0",
+      "metrics": {
+        "resolved": 0.131
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "harness": "mini-swe-agent v2.4.6",
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.93
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
+      }
+    },
+    {
+      "benchmark": "matharena/hmmt-feb@2026.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations",
+        "verification": "claimed"
+      },
+      "id": "thinking-machines/inkling-2-small-hmmt-feb-2026@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.958
+      },
+      "model": "thinking-machines/inkling-2-small",
+      "observed_at": "2026-11-20",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Inkling 2 Small"
       }
     },
     {
@@ -59076,6 +60840,1322 @@ const builtInCatalogJSON = `{
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-12b-it-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.772,
+          "status": "available",
+          "value": 0.772,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 77.2
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [
+        "google/gemma-4-12b-it-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 77.2,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-12b-it-report-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.788,
+          "status": "available",
+          "value": 0.788,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [
+        "google/gemma-4-12b-it-report-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-12b-it-report-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.38,
+          "status": "available",
+          "value": 0.38,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [
+        "google/gemma-4-12b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.772,
+          "status": "available",
+          "value": 0.772,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [
+        "google/gemma-4-12b-it-report-gpqa-diamond@1.0.0",
+        "google/gemma-4-12b-it-report-mmlu-pro@1.0.0",
+        "google/gemma-4-12b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-12b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.826,
+          "status": "available",
+          "value": 0.826,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 82.6
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [
+        "google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 82.6,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.823,
+          "status": "available",
+          "value": 0.823,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [
+        "google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-26b-a4b-it-report-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.4,
+          "status": "available",
+          "value": 0.4,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [
+        "google/gemma-4-26b-a4b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.826,
+          "status": "available",
+          "value": 0.826,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [
+        "google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0",
+        "google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0",
+        "google/gemma-4-26b-a4b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-26b-a4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e4b-it-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.694,
+          "status": "available",
+          "value": 0.694,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 69.39999999999999
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [
+        "google/gemma-4-e4b-it-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 69.39999999999999,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.586,
+          "status": "available",
+          "value": 0.586,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [
+        "google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e4b-it-report-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.24,
+          "status": "available",
+          "value": 0.24,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [
+        "google/gemma-4-e4b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.694,
+          "status": "available",
+          "value": 0.694,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [
+        "google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0",
+        "google/gemma-4-e4b-it-report-mmlu-pro@1.0.0",
+        "google/gemma-4-e4b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-e4b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e2b-it-report-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.6,
+          "status": "available",
+          "value": 0.6,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 60.0
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [
+        "google/gemma-4-e2b-it-report-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 60.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.434,
+          "status": "available",
+          "value": 0.434,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [
+        "google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "google/gemma-4-e2b-it-report-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.21,
+          "status": "available",
+          "value": 0.21,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [
+        "google/gemma-4-e2b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.6,
+          "status": "available",
+          "value": 0.6,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [
+        "google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0",
+        "google/gemma-4-e2b-it-report-mmlu-pro@1.0.0",
+        "google/gemma-4-e2b-it-report-scicode@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemma-4-e2b-it",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
@@ -60761,6 +63841,804 @@ const builtInCatalogJSON = `{
         "ibm/granite-4.2-3b-model-card-livecodebench@6.0.0",
         "ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0",
         "ibm/granite-4.2-3b-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.884,
+          "status": "available",
+          "value": 0.884,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 88.4
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [
+        "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 88.4,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.884,
+          "status": "available",
+          "value": 0.884,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [
+        "meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.5",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.889,
+          "status": "available",
+          "value": 0.889,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.708,
+          "status": "available",
+          "value": 0.708,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 70.8
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 70.8,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.708,
+          "status": "available",
+          "value": 0.708,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meituan/longcat-2.0",
+      "provenance": [
+        "meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0",
+        "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0"
       ],
       "reasoning_effort": "unspecified",
       "score": null,
@@ -68864,6 +72742,477 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.942,
+          "status": "available",
+          "value": 0.942,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [
+        "moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "moonshot/kimi-k3.1-pro",
+      "provenance": [
+        "moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "moonshot/kimi-k3",
       "provenance": [],
       "reasoning_effort": "low",
@@ -70787,6 +75136,819 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "disabled",
       "score": null,
       "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8952,
+          "status": "available",
+          "value": 0.8952,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.8822,
+          "status": "available",
+          "value": 0.8822,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.6067,
+          "status": "available",
+          "value": 0.6067,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 60.67
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": 60.67,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.6067,
+          "status": "available",
+          "value": 0.6067,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+        "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+        "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8883,
+          "status": "available",
+          "value": 0.8883,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.4449,
+          "status": "available",
+          "value": 0.4449,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.5393,
+          "status": "available",
+          "value": 0.5393,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 53.93
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 53.93,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.5393,
+          "status": "available",
+          "value": 0.5393,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+        "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+        "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -73475,6 +78637,2342 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-astra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.2-sol",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/gpt-6-1-terra-high-hle@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.432808155699722,
+          "status": "available",
+          "value": 0.432808155699722,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [
+        "independent/gpt-6-1-terra-high-hle@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/gpt-6-1-terra-high-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.516203703703704,
+          "status": "available",
+          "value": 0.516203703703704,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [
+        "independent/gpt-6-1-terra-high-scicode@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [
+        "independent/gpt-6-1-terra-high-hle@1.0.0",
+        "independent/gpt-6-1-terra-high-scicode@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "openai/gpt-6.1-terra",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -91978,6 +99476,330 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.93,
+          "status": "available",
+          "value": 0.93,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.813,
+          "status": "available",
+          "value": 0.813,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 81.3
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 81.3,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.813,
+          "status": "available",
+          "value": 0.813,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "thinking-machines/inkling-2-small",
+      "provenance": [
+        "thinking-machines/inkling-2-small-gpqa-diamond@1.0.0",
+        "thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "tii/falcon-h1r-7b",
       "provenance": [],
       "reasoning_effort": "default",
@@ -102928,6 +110750,213 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "audio",
+        "long_context"
+      ],
+      "description": "Google's encoder-free Gemma 4 instruction model for text, image, and audio workloads.",
+      "display_name": "Gemma 4 12B IT",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/google/gemma-4-12B-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-4",
+      "id": "google/gemma-4-12b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "12B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemma4",
+      "tags": [
+        "open_weights",
+        "multimodal"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-4-12B-it",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Google's mixture-of-experts Gemma 4 instruction model with roughly 4B active parameters.",
+      "display_name": "Gemma 4 26B A4B IT",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/google/gemma-4-26B-A4B-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-4",
+      "id": "google/gemma-4-26b-a4b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "26B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemma4",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-4-26B-A4B-it",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "audio",
+        "long_context"
+      ],
+      "description": "Google's compact Gemma 4 instruction model with 4.5B effective parameters and image and audio inputs.",
+      "display_name": "Gemma 4 E4B IT",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/google/gemma-4-E4B-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-4",
+      "id": "google/gemma-4-e4b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "8B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemma4",
+      "tags": [
+        "open_weights",
+        "multimodal"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-4-E4B-it",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "audio",
+        "long_context"
+      ],
+      "description": "Google's smallest Gemma 4 instruction model with 2.3B effective parameters and image and audio inputs.",
+      "display_name": "Gemma 4 E2B IT",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/google/gemma-4-E2B-it",
+        "type": "open_weights"
+      },
+      "family": "gemma-4",
+      "id": "google/gemma-4-e2b-it",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "5.1B",
+      "presentation": {
+        "logo": "package:google",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemma4",
+      "tags": [
+        "open_weights",
+        "multimodal"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://huggingface.co/google/gemma-4-E2B-it",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "vision",
         "long_context"
       ],
@@ -103178,6 +111207,115 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/ibm-granite/granite-4.2-3b",
         "status": "claimed",
         "verified_at": "2026-09-17"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Open-weight multimodal Meituan MoE model for long-horizon coding and agentic work.",
+      "display_name": "LongCat-2.5",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5",
+        "type": "open_weights"
+      },
+      "family": "longcat-2.5",
+      "id": "meituan/longcat-2.5",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "1.6T (48B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "publisher": "Meituan / LongCat",
+      "reasoning_family": "longcat-2.5",
+      "released_at": "2026-11-02",
+      "revision": "60032d966e6369b822f0e61d2eff01368d38b111",
+      "tags": [
+        "open_weights",
+        "frontier",
+        "multimodal",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Meituan",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight Meituan MoE language model for long-context coding and agentic work.",
+      "display_name": "LongCat-2.0",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0",
+        "type": "open_weights"
+      },
+      "family": "longcat-2.0",
+      "id": "meituan/longcat-2.0",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "1.6T (48B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "publisher": "Meituan / LongCat",
+      "reasoning_family": "longcat-2.0",
+      "released_at": "2026-06-30",
+      "revision": "834bf5ffe3047aa9f6cc7a64a9bc068b146b8274",
+      "tags": [
+        "open_weights",
+        "moe",
+        "coding",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Meituan",
+        "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-23"
       }
     },
     {
@@ -104137,6 +112275,63 @@ const builtInCatalogJSON = `{
         "vision",
         "long_context"
       ],
+      "description": "Open-weight multimodal Kimi model post-trained from Kimi K3 for long-horizon coding and agentic work.",
+      "display_name": "Kimi K3.1 Pro",
+      "distribution": {
+        "license": "Kimi-K3.1-Pro",
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro",
+        "type": "open_weights"
+      },
+      "family": "kimi-k3.1",
+      "id": "moonshot/kimi-k3.1-pro",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "2.8T (104B active)",
+      "presentation": {
+        "logo": "package:moonshot",
+        "monochrome": true,
+        "monogram": "K"
+      },
+      "publisher": "Moonshot / Kimi",
+      "reasoning_family": "kimi-k3",
+      "released_at": "2026-10-23",
+      "revision": "d9e99b0792a5e93b78ea9bea62a68167e36ddd9e",
+      "tags": [
+        "open_weights",
+        "frontier",
+        "multimodal",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Moonshot AI",
+        "source": "https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-20"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
       "description": "Moonshot AI native multimodal MoE model for long-context agents.",
       "display_name": "Kimi K3",
       "distribution": {
@@ -104450,6 +112645,118 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "vision",
+        "video",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight NVIDIA vision-language MoE model for reasoning, coding, tool use, and document and video understanding.",
+      "display_name": "NVIDIA Nemotron 3.5 Super VL",
+      "distribution": {
+        "license": "OpenMDW-1.1",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+        "type": "open_weights"
+      },
+      "family": "nemotron-3.5",
+      "id": "nvidia/nemotron-3.5-super-vl",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "120B (12B active)",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-ultra",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "NVIDIA",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "vision",
+        "video",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight NVIDIA vision-language MoE model compressed from Nemotron 3.5 Super VL; the BF16 release targets customization and post-training.",
+      "display_name": "NVIDIA Nemotron 3.5 Bolt",
+      "distribution": {
+        "license": "OpenMDW-1.1",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+        "type": "open_weights"
+      },
+      "family": "nemotron-3.5",
+      "id": "nvidia/nemotron-3.5-bolt",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "74B (9B active)",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-ultra",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "efficient",
+        "reasoning",
+        "moe"
+      ],
+      "verification": {
+        "authority": "NVIDIA",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
       }
     },
     {
@@ -104770,6 +113077,165 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/nvidia/Nemotron-Cascade-8B",
         "status": "claimed",
         "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Multimodal reasoning model for complex software, computer-use, and document tasks.",
+      "display_name": "GPT-6.2 Astra",
+      "distribution": {
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "type": "proprietary_api"
+      },
+      "family": "gpt-6.2",
+      "id": "openai/gpt-6.2-astra",
+      "kind": "physical",
+      "knowledge_cutoff": "2026-05-18",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:openai",
+        "monochrome": true,
+        "monogram": "O"
+      },
+      "publisher": "OpenAI",
+      "reasoning_family": "gpt-6-astra",
+      "released_at": "2026-11-17",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "OpenAI",
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "General-purpose model for coding and tool-using agents.",
+      "display_name": "GPT-6.2 Sol",
+      "distribution": {
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "type": "proprietary_api"
+      },
+      "family": "gpt-6.2",
+      "id": "openai/gpt-6.2-sol",
+      "kind": "physical",
+      "knowledge_cutoff": "2026-06-01",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:openai",
+        "monochrome": true,
+        "monogram": "O"
+      },
+      "publisher": "OpenAI",
+      "reasoning_family": "gpt-6-astra",
+      "released_at": "2026-11-17",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "OpenAI",
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "Efficient model for visual reasoning, computer use, and writing.",
+      "display_name": "GPT-6.1 Terra",
+      "distribution": {
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "type": "proprietary_api"
+      },
+      "family": "gpt-6.1",
+      "id": "openai/gpt-6.1-terra",
+      "kind": "physical",
+      "knowledge_cutoff": "2026-06-01",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1050000,
+        "max_output_tokens": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:openai",
+        "monochrome": true,
+        "monogram": "O"
+      },
+      "publisher": "OpenAI",
+      "reasoning_family": "gpt-5.6",
+      "released_at": "2026-10-26",
+      "tags": [
+        "frontier",
+        "proprietary",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "OpenAI",
+        "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
       }
     },
     {
@@ -106375,6 +114841,58 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/thinkingmachines/Inkling-Small",
         "status": "claimed",
         "verified_at": "2026-09-05"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "long_context"
+      ],
+      "description": "Multimodal mixture-of-experts model with a native NVFP4 checkpoint and an alternative MXFP8 release.",
+      "display_name": "Inkling 2 Small",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/thinkingmachines/Inkling-2-Small",
+        "type": "open_weights"
+      },
+      "family": "inkling",
+      "generation": 2,
+      "id": "thinking-machines/inkling-2-small",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "594B (17B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "TM"
+      },
+      "publisher": "Thinking Machines Lab",
+      "released_at": "2026-11-05",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Thinking Machines Lab",
+        "source": "https://thinkingmachines.ai/model-card/inkling-2-small/",
+        "status": "claimed",
+        "verified_at": "2026-11-20"
       }
     },
     {
@@ -109684,6 +118202,55 @@ const builtInCatalogJSON = `{
       "conformance": {
         "status": "unverified"
       },
+      "default_base_url": "https://api.longcat.chat/openai/v1",
+      "default_protocol": "openai/chat-completions@1",
+      "description": "LongCat models from Meituan through the LongCat API Platform.",
+      "display_name": "LongCat",
+      "id": "longcat",
+      "models": [
+        {
+          "catalog": "meituan/longcat-2.5",
+          "id": "LongCat-2.5",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "max_output_tokens": 262144
+          },
+          "verification": {
+            "source": "https://longcat.ai/platform/docs/api/chat",
+            "status": "claimed",
+            "verified_at": "2026-11-23"
+          }
+        }
+      ],
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "LC"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "reasoning_transport": "thinking_object",
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create",
+        "openai/chat-completions@1#list_models"
+      ]
+    },
+    {
+      "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
       "default_base_url": "https://api.meta.ai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Muse models through Meta's OpenAI-compatible Model API.",
@@ -110053,6 +118620,21 @@ const builtInCatalogJSON = `{
             "status": "claimed",
             "verified_at": "2026-09-05"
           }
+        },
+        {
+          "catalog": "moonshot/kimi-k3.1-pro",
+          "id": "kimi-k3.1-pro",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart",
+            "status": "claimed",
+            "verified_at": "2026-11-20"
+          }
         }
       ],
       "presentation": {
@@ -110289,6 +118871,171 @@ const builtInCatalogJSON = `{
       "display_name": "OpenAI",
       "id": "openai",
       "models": [
+        {
+          "catalog": "openai/gpt-6.2-astra",
+          "id": "gpt-6.2-astra",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 10.0,
+            "cached_input_per_1m": 0.4,
+            "completion_per_1m": 40.0,
+            "currency": "USD",
+            "prompt_per_1m": 8.0
+          },
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            },
+            "tools_protocols": [
+              "openai/responses@1"
+            ],
+            "unsupported_include_values": [
+              "message.output_text.logprobs"
+            ],
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs",
+                "logprobs"
+              ],
+              "openai/responses@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "openai/gpt-6.2-sol",
+          "id": "gpt-6.2-sol",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 2.5,
+            "cached_input_per_1m": 0.1,
+            "completion_per_1m": 10.0,
+            "currency": "USD",
+            "prompt_per_1m": 2.0
+          },
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "reasoning_modes": [
+            "enabled"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            },
+            "tools_protocols": [
+              "openai/responses@1"
+            ],
+            "unsupported_include_values": [
+              "message.output_text.logprobs"
+            ],
+            "unsupported_request_fields": {
+              "openai/chat-completions@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs",
+                "logprobs"
+              ],
+              "openai/responses@1": [
+                "temperature",
+                "top_p",
+                "top_logprobs"
+              ]
+            }
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "openai/gpt-6.1-terra",
+          "id": "gpt-6.1-terra",
+          "lifecycle": "active",
+          "pricing": {
+            "cache_write_per_1m": 1.25,
+            "cached_input_per_1m": 0.05,
+            "completion_per_1m": 5.0,
+            "currency": "USD",
+            "prompt_per_1m": 1.0
+          },
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_efforts": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "reasoning_modes": [
+            "enabled",
+            "disabled"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "long_context_pricing": {
+              "cache_write_multiplier": 2.0,
+              "cached_input_multiplier": 2.0,
+              "completion_multiplier": 1.5,
+              "input_threshold_tokens": 272000,
+              "prompt_multiplier": 2.0
+            },
+            "tools_protocols": [
+              "openai/responses@1"
+            ]
+          },
+          "verification": {
+            "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
         {
           "catalog": "openai/gpt-6-astra",
           "id": "gpt-6-astra",
@@ -110545,21 +119292,6 @@ const builtInCatalogJSON = `{
             "completion_per_1m": 10.0,
             "currency": "USD",
             "prompt_per_1m": 2.0
-          },
-          "verification": {
-            "source": "https://developers.openai.com/api/docs/pricing",
-            "status": "claimed",
-            "verified_at": "2026-11-16"
-          }
-        },
-        {
-          "id": "gpt-6.1-terra",
-          "pricing": {
-            "cache_write_per_1m": 1.25,
-            "cached_input_per_1m": 0.05,
-            "completion_per_1m": 5.0,
-            "currency": "USD",
-            "prompt_per_1m": 1.0
           },
           "verification": {
             "source": "https://developers.openai.com/api/docs/pricing",
@@ -111762,6 +120494,20 @@ const builtInCatalogJSON = `{
             "status": "claimed",
             "verified_at": "2026-09-06"
           }
+        },
+        {
+          "catalog": "meituan/longcat-2.0",
+          "id": "meituan-longcat/LongCat-2.0-FP8",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://docs.sglang.io/cookbook/autoregressive/Meituan/LongCat-2.0",
+            "status": "claimed",
+            "verified_at": "2026-11-23"
+          }
         }
       ],
       "presentation": {
@@ -112274,6 +121020,50 @@ const builtInCatalogJSON = `{
           }
         },
         {
+          "catalog": "nvidia/nemotron-3.5-super-vl",
+          "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "evaluated_vllm_version": "0.30.0",
+            "reference_deployments": [
+              "4x H100 (tensor parallel 4)",
+              "2x GB200 (tensor parallel 2)"
+            ],
+            "reference_vllm_image": "vllm/vllm-openai:v0.32.0",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "nvidia/nemotron-3.5-bolt",
+          "id": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "reasoning_parser_plugin": "ultra_v3_reasoning_parser.py",
+            "required_environment": {
+              "VLLM_USE_V2_MODEL_RUNNER": "1"
+            },
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
           "catalog": "ai21/jamba-large-1.7",
           "id": "ai21labs/AI21-Jamba-Large-1.7",
           "lifecycle": "active",
@@ -112476,6 +121266,78 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/google/gemma-4-31b-it",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "google/gemma-4-12b-it",
+          "id": "google/gemma-4-12B-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.23.0"
+          },
+          "verification": {
+            "source": "https://recipes.vllm.ai/Google/gemma-4-12B-it",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "google/gemma-4-26b-a4b-it",
+          "id": "google/gemma-4-26B-A4B-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.25.0"
+          },
+          "verification": {
+            "source": "https://recipes.vllm.ai/Google/gemma-4-26B-A4B-it",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "google/gemma-4-e4b-it",
+          "id": "google/gemma-4-E4B-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.19.1"
+          },
+          "verification": {
+            "source": "https://recipes.vllm.ai/Google/gemma-4-E4B-it",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "google/gemma-4-e2b-it",
+          "id": "google/gemma-4-E2B-it",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "chat_template_kwargs",
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.19.1"
+          },
+          "verification": {
+            "source": "https://recipes.vllm.ai/Google/gemma-4-E2B-it",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
           }
         },
         {
@@ -113002,6 +121864,20 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/thinkingmachines/Inkling-Small",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "thinking-machines/inkling-2-small",
+          "id": "thinkingmachines/Inkling-2-Small",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://recipes.vllm.ai/thinkingmachines/Inkling-2-Small",
+            "status": "claimed",
+            "verified_at": "2026-11-20"
           }
         },
         {
@@ -114434,6 +123310,26 @@ const builtInCatalogJSON = `{
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "longcat-2.0",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
+    },
+    {
+      "default_mode": "disabled",
+      "id": "longcat-2.5",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
     },
     {
       "default_mode": "disabled",

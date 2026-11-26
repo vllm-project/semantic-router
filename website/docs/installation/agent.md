@@ -35,6 +35,14 @@ For a reviewable workload-to-recipe configuration, use the
 [Configure-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md).
 To explain a route, fallback, or delivery failure, use the
 [Routing-diagnosis skill](https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md).
+For a bounded, reproducible sr-bench run, use the
+[Benchmark skill](https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md).
+For a paired A/B verdict from compatible runs, use the
+[Comparison skill](https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md).
+For a measured recipe improvement and calibration handoff, use the
+[Tune-recipe skill](https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md).
+The [skill workflows guide](agent-skills) shows how these fit together and
+which evidence each one produces.
 
 :::note Release channel
 The Skill follows `main`, as these pages do. It installs the stable release
@@ -140,15 +148,13 @@ For model and Mixture-of-Models evaluation, use the
 
 ## Maintaining the Skill
 
-The single authored source is
-[`tools/agent/skills/vllm-sr-agent-operations/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills/vllm-sr-agent-operations),
-including its references. Edit those files and run `make agent-skill-sync`;
-do not edit the public copies directly. Use absolute URLs in the Skill and
-every reference so either copy can be installed alone. The generator changes
-the public skill name, checks linked documents, and makes any relative links
-absolute. Commit the generated files alongside their source; the website
-publishes those static files directly. A remote agent can load each reference
-without a repository checkout.
+Each public skill has one authored source under
+[`tools/agent/skills/`](https://github.com/vllm-project/semantic-router/tree/main/tools/agent/skills).
+Edit the source and run `make agent-skill-sync`; do not edit its public copy.
+The generator checks linked documents and makes relative Markdown links
+absolute so a remote agent can load a reference without a checkout. Commit
+the generated files alongside their sources; the website publishes those
+static files directly.
 
 `make agent-skill-check`, pre-commit, and `make harness-check` reject missing or
 stale generated files. Two tests keep the Skill honest: the Router loads

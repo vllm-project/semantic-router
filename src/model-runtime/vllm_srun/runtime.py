@@ -340,6 +340,8 @@ class ServedModel:
         self.precision = "float32"
         # The dtype the golden references checking an ``auto`` model are recorded at, when not ``auto``.
         self.golden_dtype: str | None = None
+        # The approximate CPU kernels a BF16 ``auto`` model's references name (dtypes.on_host).
+        self.golden_kernels: tuple[str, ...] = ()
         # Why an ``auto`` model computes in FP32 on a CPU class with BF16 references.
         self.bf16_refused: str | None = None
         self.shared = False
@@ -406,6 +408,7 @@ class ServedModel:
         process = self.runtime.config
         config = self.config
         self.golden_dtype = None
+        self.golden_kernels = ()
         check_device(config.model, config.device)
         self.health.set("loading", "resolving the model")
         options = RegistryOptions(
@@ -460,8 +463,14 @@ class ServedModel:
             if cpu_bf16
             else spec
         )
-        # BF16 on a CPU class with its own BF16 references, checked against them.
+        # BF16 on a CPU class with its own BF16 references, checked against them:
+        # the ones that name its approximate kernels, if it runs any (dtypes.on_host).
         self.golden_dtype = "bfloat16" if host is not spec else None
+        self.golden_kernels = (
+            dtypes.approximate_sources(host, placement.accelerator, device)
+            if host is not spec
+            else ()
+        )
         spec = host
         self.dtype = dtypes.resolve(self.args.dtype, spec.dtype, gpu)
         self.precision = (
@@ -641,7 +650,10 @@ class ServedModel:
             model.golden_compare,
             self.family.golden(self.package),
             placement.device.accelerator,
-            placement.accelerator.golden_references(placement.device),
+            tuple(
+                dtypes.with_kernels(key, self.golden_kernels)
+                for key in placement.accelerator.golden_references(placement.device)
+            ),
             self.golden_dtype or self.dtype,
         )
         if self.dtype != "auto" and self.health.golden.status == "unverified":

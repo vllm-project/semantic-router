@@ -3503,6 +3503,9 @@
             "vllm-sr/4.0"
           ]
         },
+        "prefix": {
+          "type": "string"
+        },
         "models": {
           "items": {
             "type": "string"
@@ -6670,6 +6673,18 @@
           "oneOf": [
             {
               "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_estimated_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "minimum": 1
             },
             {
               "type": "null"

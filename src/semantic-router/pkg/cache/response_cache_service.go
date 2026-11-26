@@ -43,6 +43,9 @@ type SingleflightLease struct {
 	Identity CacheIdentity
 	Key      string
 	Leader   bool
+	// entry is the flight this lease leads. A lease that expires hands the key
+	// to a new leader, and releasing the old lease must not end that one.
+	entry *inflightExact
 }
 
 type ResponseCacheService struct {
@@ -187,11 +190,13 @@ func (s *ResponseCacheService) LookupExactCoalesced(
 		lookup.Identity.Partition.Key(),
 		lookup.Identity.ExactFingerprint,
 	)
-	leader, done := s.acquireSingleflight(key)
+	leader, entry := s.acquireSingleflight(key)
+	done := entry.done
 	lease := SingleflightLease{
 		Identity: lookup.Identity,
 		Key:      key,
 		Leader:   leader,
+		entry:    entry,
 	}
 	if leader {
 		return result, lease, nil
@@ -216,6 +221,17 @@ func (s *ResponseCacheService) LookupExactCoalesced(
 	}
 }
 
+// ReleaseLease completes a lookup lease whose request will not store, so
+// followers proceed to the upstream instead of waiting out the lease. It is
+// safe to call for every lease: a follower's or a hit's lease holds no key,
+// and a key the store already completed is no longer inflight.
+func (s *ResponseCacheService) ReleaseLease(lease SingleflightLease) {
+	if s == nil || !lease.Leader || lease.Key == "" {
+		return
+	}
+	s.completeSingleflight(lease.Key, lease.entry)
+}
+
 func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite) error {
 	if s == nil || s.store == nil {
 		return nil
@@ -225,7 +241,7 @@ func (s *ResponseCacheService) StoreExact(ctx context.Context, write CacheWrite)
 		write.Identity.Partition.Key(),
 		write.Identity.ExactFingerprint,
 	)
-	defer s.completeSingleflight(key)
+	defer s.completeSingleflight(key, nil)
 	if write.TTL.NoStore {
 		return nil
 	}
@@ -438,13 +454,13 @@ func (s *ResponseCacheService) recordOperation(
 	}
 }
 
-func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan struct{}) {
+func (s *ResponseCacheService) acquireSingleflight(key string) (bool, *inflightExact) {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if active, ok := s.inflight[key]; ok {
 		if now.Before(active.expiresAt) {
-			return false, active.done
+			return false, active
 		}
 		s.endSingleflightLocked(key, active)
 	}
@@ -460,15 +476,22 @@ func (s *ResponseCacheService) acquireSingleflight(key string) (bool, <-chan str
 		}
 	})
 	s.inflight[key] = active
-	return true, active.done
+	return true, active
 }
 
-func (s *ResponseCacheService) completeSingleflight(key string) {
+// completeSingleflight ends key's flight. A nil entry ends whichever flight
+// holds the key, which only the store path does: it runs after the write, so
+// waking a newer leader's waiters early costs them one more lookup, not a
+// wrong answer. A lease release names its own entry and leaves a newer
+// leader's flight alone.
+func (s *ResponseCacheService) completeSingleflight(key string, entry *inflightExact) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if active, ok := s.inflight[key]; ok {
-		s.endSingleflightLocked(key, active)
+	active, ok := s.inflight[key]
+	if !ok || (entry != nil && active != entry) {
+		return
 	}
+	s.endSingleflightLocked(key, active)
 }
 
 // endSingleflightLocked wakes key's waiters and removes its entry. Callers
