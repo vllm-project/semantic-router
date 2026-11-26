@@ -112,17 +112,21 @@ def _model_profile(model: str) -> dict:
 def _model_completes(model: str, task_prompt: str, profile: dict) -> bool:
     """Deterministic stand-in for sampling a per-model completion rate.
 
-    A per-task rate from the fixture's ``completion_rate_by_task`` overrides
-    the model's flat rate for that task prompt. The task prompt hashes into
-    [0, 1); a model completes the task when the draw lands under its
-    completion rate. Same inputs always agree, so two runs of the same
-    fixture see the same completions.
+    A `completion_rate_by_task` entry overrides the overall rate for one
+    task. Otherwise the task prompt hashes into [0, 1); a model completes
+    the task when the draw lands under its completion_rate. Same inputs
+    always agree, so two runs of the same fixture see the same completions.
     """
-    rate = float(
-        (profile.get("completion_rate_by_task") or {}).get(
-            task_prompt, profile["completion_rate"]
-        )
-    )
+    by_task = profile.get("completion_rate_by_task")
+    if isinstance(by_task, dict) and task_prompt in by_task:
+        rate = float(by_task[task_prompt])
+        if rate >= 1.0:
+            return True
+        if rate <= 0.0:
+            return False
+        draw = hashlib.md5(f"{model}\x00{task_prompt}".encode()).digest()
+        return int.from_bytes(draw[:4], "big") % 10_000 / 10_000 < rate
+    rate = float(profile["completion_rate"])
     if rate >= 1.0:
         return True
     if rate <= 0.0:

@@ -87,7 +87,16 @@ REPLAY_PLUGIN = {
     "type": "router_replay",
     "configuration": {
         "enabled": True,
+        # Raw prompt capture: the record keeps the prompt text (unset is
+        # none - the router stores no request text by default). The C8
+        # random-mix evidence joins the candidate arm's replay records to
+        # the eval tasks by prompt, so without it every record arrives
+        # promptless and the routing distribution stays unknown. Long-input
+        # fixtures pad prompts far past this cap; their joins ride request
+        # ids, and the cap keeps a padded prompt from bloating the store.
+        "prompt_capture": "raw",
         "max_records": 5000,
+        "max_prompt_bytes": SEED_MAX_BODY_BYTES,
         "max_body_bytes": SEED_MAX_BODY_BYTES,
     },
 }
