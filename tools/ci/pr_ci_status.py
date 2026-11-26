@@ -124,6 +124,13 @@ def publish_qualification_status(client, repo, pull, run, plan, result) -> dict:
         if all(previous.get(key) == value for key, value in fence.items()):
             result["qualification_status_ignored"] = "waiting for rerun"
             return result
+        if (
+            result.get("state") == "running"
+            and previous.get("target_url") == payload["target_url"]
+            and previous.get("state") in {"success", "failure", "error"}
+        ):
+            result["qualification_status_ignored"] = "current attempt already completed"
+            return result
         current = current_publication_pull(client, repo, pull, run)
         if current is None or (
             payload["state"] == "success"
@@ -171,26 +178,10 @@ def publish(
     }
     if payload["status"] == "completed":
         payload["conclusion"] = state
-    comments = list(pages(client, f"repos/{repo}/issues/{pull['number']}/comments"))
-    owned = [
-        item
-        for item in comments
-        if item.get("user", {}).get("login") == "github-actions[bot]"
-        and item.get("user", {}).get("type") == "Bot"
-        and item.get("body", "").startswith(MARKER)
-    ]
-    comment_body = f"{MARKER}\n{summary}\n"
     result = {
         "pr": pull["number"],
         "state": state,
         "check": None if state == "legacy" else payload,
-        "comment": (
-            comment_body
-            if owned
-            or state in {"awaiting-approval", "legacy", "stale"}
-            or (plan and plan.get("deferred_verifications"))
-            else None
-        ),
     }
     if state != "legacy":
         result["qualification_status"] = {
@@ -199,6 +190,27 @@ def publish(
             "target_url": qualification_status_url(repo, run["id"], run["run_attempt"]),
             "description": title[:140],
         }
+        if not dry_run:
+            # Publish from the verified attempt before touching compatibility output.
+            publish_qualification_status(client, repo, pull, run, plan, result)
+            if result.get("qualification_status_ignored") == "superseded":
+                return {"ignored": "superseded while preparing status"}
+    comments = pages(client, f"repos/{repo}/issues/{pull['number']}/comments")
+    owned = [
+        item
+        for item in comments
+        if item.get("user", {}).get("login") == "github-actions[bot]"
+        and item.get("user", {}).get("type") == "Bot"
+        and item.get("body", "").startswith(MARKER)
+    ]
+    comment_body = f"{MARKER}\n{summary}\n"
+    result["comment"] = (
+        comment_body
+        if owned
+        or state in {"awaiting-approval", "legacy", "stale"}
+        or (plan and plan.get("deferred_verifications"))
+        else None
+    )
     if reason == MERGE_EVIDENCE_UNAVAILABLE:
         result["reason_codes"] = [reason]
     if dry_run:
@@ -244,9 +256,7 @@ def publish(
                 return {
                     "ignored": "pending publication evidence unavailable or changed"
                 }
-            return publish_qualification_status(
-                client, repo, pull, run, plan, {**result, **recovered}
-            )
+            return {**result, **recovered}
         # PATCH cannot move a check into a rerun's attempt. Only reuse a
         # visible check for this exact attempt, including when repairing an
         # external_id that the old publisher rewrote on a superseded check.
@@ -309,8 +319,6 @@ def publish(
             client.write(
                 f"repos/{repo}/issues/{pull['number']}/comments", {"body": comment_body}
             )
-    if state != "legacy":
-        return publish_qualification_status(client, repo, pull, run, plan, result)
     return result
 
 

@@ -248,6 +248,60 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_qualification_survives_compatibility_write_failure(self):
+        for operation, state in (("check-runs", "success"), ("comments", "pending")):
+            with self.subTest(operation=operation):
+                client = Client()
+                if state == "success":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                    client.refresh_report()
+                write = client.write
+
+                def fail_compatibility_write(endpoint, payload, **kwargs):
+                    if endpoint.endswith(f"/{operation}"):
+                        raise ManualCIError("Compatibility write failed.")
+                    return write(endpoint, payload, **kwargs)
+
+                with (
+                    patch.object(client, "write", side_effect=fail_compatibility_write),
+                    self.assertRaisesRegex(ManualCIError, "Compatibility write failed"),
+                ):
+                    reconcile(client, REPO, 101)
+                self.assertEqual(len(client.status_writes), 1)
+                self.assertEqual(client.status_writes[0]["state"], state)
+
+    def test_qualification_survives_guidance_lookup_failure(self):
+        class CommentsUnavailable(Client):
+            def request(self, endpoint, **kwargs):
+                if endpoint.startswith(f"repos/{REPO}/issues/3/comments?"):
+                    raise ManualCIError("Comments are unavailable.")
+                return super().request(endpoint, **kwargs)
+
+        client = CommentsUnavailable()
+        with self.assertRaisesRegex(ManualCIError, "Comments are unavailable"):
+            reconcile(client, REPO, 101)
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.status_writes[0]["state"], "pending")
+
+    def test_running_event_cannot_replace_a_terminal_qualification(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes[0]["state"], "success")
+        client.run.update(status="in_progress", conclusion=None)
+        reconcile(client, REPO, 101)
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.commit_statuses[0]["state"], "success")
+
     def test_execution_guard_preserves_pending_for_the_current_deferred_receipt(self):
         for case, expected in (
             ("waiting", "pending"),
