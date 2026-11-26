@@ -141,7 +141,13 @@ func groupResponseStreamContent(contents []llmprotocol.Content) []responseStream
 	groups := make([]responseStreamContentGroup, 0, len(contents))
 	for _, content := range contents {
 		family := responseStreamContentFamily(content.Kind)
-		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool ||
+		// A redacted block carries all of its data in the content_block_start
+		// frame. Give it its own item so neutralResponseEvents can put the
+		// block on the item-start event rather than on a delta, which would
+		// ask the encoder to stream a signature into it and be refused.
+		redacted := content.Kind == llmprotocol.ContentReasoning &&
+			content.Reasoning == llmprotocol.ReasoningScopeRedacted
+		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool || redacted ||
 			len(groups) == 0 || groups[len(groups)-1].family != family {
 			groups = append(groups, responseStreamContentGroup{family: family})
 		}
@@ -191,6 +197,16 @@ func neutralContentGroupEvents(
 	if group.family == llmprotocol.ContentServerTool {
 		// A server tool block streams whole, as the Messages decoder hands it
 		// on: one item that starts with the block and completes.
+		started.Content = &group.contents[0]
+		return []llmprotocol.Event{started, completed}, nil
+	}
+	if group.family == llmprotocol.ContentReasoning &&
+		len(group.contents) == 1 &&
+		group.contents[0].Reasoning == llmprotocol.ReasoningScopeRedacted {
+		// A redacted block is opaque continuity state with no delta: its data
+		// rides on the item-start event, which the Messages encoder writes as
+		// the redacted_thinking content_block_start. Emitting it as a delta
+		// would be refused, so buffered-decode-then-stream replay stays whole.
 		started.Content = &group.contents[0]
 		return []llmprotocol.Event{started, completed}, nil
 	}

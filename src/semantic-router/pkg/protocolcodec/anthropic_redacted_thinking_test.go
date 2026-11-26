@@ -131,3 +131,56 @@ func TestRedactedThinkingStreamRoundTripAndGate(t *testing.T) {
 		})
 	}
 }
+
+// A buffered reply decoded first and then streamed (cache replay and synthetic
+// producers take this path) must keep the redacted block. neutralResponseEvents
+// puts the opaque data on its own item-start event so the encoder never needs
+// to stream a signature delta into a redacted block.
+func TestRedactedThinkingBufferedDecodeThenStream(t *testing.T) {
+	engine := NewBuiltinEngine()
+	responseBody := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m",` +
+		`"content":[{"type":"redacted_thinking","data":"` + redactedPayload + `"},{"type":"text","text":"hello"}],` +
+		`"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+	response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, responseBody)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.AnthropicMessagesV1, response,
+		llmprotocol.StreamContext{Context: t.Context(), PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponseStream() error = %v", err)
+	}
+	if !bytes.Contains(wire, []byte(`"type":"redacted_thinking"`)) ||
+		!bytes.Contains(wire, []byte(redactedPayload)) ||
+		!bytes.Contains(wire, []byte("hello")) {
+		t.Fatalf("replayed stream lost the redacted block or answer: %s", wire)
+	}
+	if bytes.Contains(wire, []byte(`"signature_delta"`)) {
+		t.Fatal("a redacted block must not emit a synthetic signature delta: " + string(wire))
+	}
+	// The replayed stream decodes back to the same redacted block, not plain
+	// reasoning, so the capability gate still refuses it for Chat/Responses.
+	replayed, _, err := engine.DecodeResponseStream(
+		llmprotocol.AnthropicMessagesV1, wire,
+		llmprotocol.StreamContext{Context: t.Context(), PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("DecodeResponseStream() error = %v\n%s", err, wire)
+	}
+	var redactedFound bool
+	for _, output := range replayed.Output {
+		for _, block := range output.Content {
+			if block.Reasoning == llmprotocol.ReasoningScopeRedacted {
+				redactedFound = true
+				if block.Signature != redactedPayload {
+					t.Fatalf("replayed redacted payload = %q, want %q", block.Signature, redactedPayload)
+				}
+			}
+		}
+	}
+	if !redactedFound {
+		t.Fatalf("replayed stream lost the redacted scope: %+v", replayed.Output)
+	}
+}

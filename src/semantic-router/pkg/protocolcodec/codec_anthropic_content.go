@@ -156,8 +156,8 @@ func requireAnthropicContentFields(object map[string]json.RawMessage, typeName s
 		"thinking":          {"thinking"},
 		"redacted_thinking": {"data"},
 		"image":             {"source"},
-		"document": {"source"},
-		"tool_use": {"id", "input", "name"},
+		"document":          {"source"},
+		"tool_use":          {"id", "input", "name"},
 		// content is optional for tool_result, matching the official SDK
 		// contract: only type and tool_use_id are required. Omitted content
 		// decodes to an empty tool result.
