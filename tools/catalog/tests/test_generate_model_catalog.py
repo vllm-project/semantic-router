@@ -844,6 +844,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
             "moonshot/kimi-k3": "kimi-k3",
+            "moonshot/kimi-k3.1-pro": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
             "minimax/minimax-m3": "minimax-m3",
             "meituan/longcat-2.5": "longcat-2.5",
