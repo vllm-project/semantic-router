@@ -98,6 +98,38 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+- catalog: nvidia/nemotron-3.5-super-vl
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  restrictions:
+    reference_vllm_image: vllm/vllm-openai:v0.32.0
+    evaluated_vllm_version: 0.30.0
+    trust_remote_code: true
+    reference_deployments:
+    - 4x H100 (tensor parallel 4)
+    - 2x GB200 (tensor parallel 2)
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+- catalog: nvidia/nemotron-3.5-bolt
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  restrictions:
+    trust_remote_code: true
+    reasoning_parser_plugin: ultra_v3_reasoning_parser.py
+    required_environment:
+      VLLM_USE_V2_MODEL_RUNNER: '1'
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
 - catalog: ai21/jamba-large-1.7
   relationship: self_hosted
   id: ai21labs/AI21-Jamba-Large-1.7

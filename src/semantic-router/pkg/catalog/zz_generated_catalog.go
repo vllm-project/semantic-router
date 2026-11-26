@@ -23138,6 +23138,282 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.8952
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA-Diamond",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.8822
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "problem_window": "2024-08_to_2025-05",
+        "reasoning_mode": "enabled",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "LiveCodeBench v6",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.711
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_version": "1.17.11",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-bench Verified",
+        "swe_harness": "OpenCode",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.5178
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "agent_version": "1.17.11",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-bench Pro",
+        "swe_harness": "OpenCode",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.6067
+      },
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "benchmark_revision": "36d417f5",
+        "effort_source": "nemo_gym_super_3_5_common_recipe",
+        "evaluation_harness": "NVIDIA NeMo Gym",
+        "precision": "BF16",
+        "reasoning_mode": "enabled",
+        "sandbox": "OpenSandbox",
+        "source_column": "Nemotron 3.5 SuperGA BF16",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench 2.1",
+        "terminal_harness": "Terminus-2",
+        "variant": "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.8883
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA Diamond",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.2873
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "HLE (no tools)",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+      "metrics": {
+        "score": 0.4449
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "SciCode",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.5393
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench 2.1",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "verification": "claimed"
+      },
+      "id": "nvidia/nemotron-3.5-bolt-model-card-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.556
+      },
+      "model": "nvidia/nemotron-3.5-bolt",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "precision": "BF16",
+        "source_column": "Nemotron 3.5 Bolt 74B-A9B (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "MCP-Atlas",
+        "variant": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16"
+      }
+    },
+    {
       "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
       "benchmark_profile": "published-standard",
       "evidence": {
@@ -74878,6 +75154,819 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8952,
+          "status": "available",
+          "value": 0.8952,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.8822,
+          "status": "available",
+          "value": 0.8822,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.6067,
+          "status": "available",
+          "value": 0.6067,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 60.67
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": 60.67,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.6067,
+          "status": "available",
+          "value": 0.6067,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-super-vl",
+      "provenance": [
+        "nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0",
+        "nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0",
+        "nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.8883,
+          "status": "available",
+          "value": 0.8883,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.4449,
+          "status": "available",
+          "value": 0.4449,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.5393,
+          "status": "available",
+          "value": 0.5393,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 53.93
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 53.93,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.5393,
+          "status": "available",
+          "value": 0.5393,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "nvidia/nemotron-3.5-bolt",
+      "provenance": [
+        "nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0",
+        "nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0",
+        "nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "nvidia/nemotron-3-ultra",
       "provenance": [],
       "reasoning_effort": "medium",
@@ -111562,6 +112651,118 @@ const builtInCatalogJSON = `{
       "capabilities": [
         "chat",
         "reasoning",
+        "vision",
+        "video",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight NVIDIA vision-language MoE model for reasoning, coding, tool use, and document and video understanding.",
+      "display_name": "NVIDIA Nemotron 3.5 Super VL",
+      "distribution": {
+        "license": "OpenMDW-1.1",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+        "type": "open_weights"
+      },
+      "family": "nemotron-3.5",
+      "id": "nvidia/nemotron-3.5-super-vl",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "120B (12B active)",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-ultra",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "reasoning",
+        "moe",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "NVIDIA",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "vision",
+        "video",
+        "tools",
+        "long_context"
+      ],
+      "description": "Open-weight NVIDIA vision-language MoE model compressed from Nemotron 3.5 Super VL; the BF16 release targets customization and post-training.",
+      "display_name": "NVIDIA Nemotron 3.5 Bolt",
+      "distribution": {
+        "license": "OpenMDW-1.1",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+        "type": "open_weights"
+      },
+      "family": "nemotron-3.5",
+      "id": "nvidia/nemotron-3.5-bolt",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "74B (9B active)",
+      "presentation": {
+        "logo": "package:nvidia",
+        "monochrome": false,
+        "monogram": "N"
+      },
+      "publisher": "NVIDIA",
+      "reasoning_family": "nemotron-ultra",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "efficient",
+        "reasoning",
+        "moe"
+      ],
+      "verification": {
+        "authority": "NVIDIA",
+        "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
         "tools",
         "structured_output",
         "long_context"
@@ -119816,6 +121017,50 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "nvidia/nemotron-3.5-super-vl",
+          "id": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "evaluated_vllm_version": "0.30.0",
+            "reference_deployments": [
+              "4x H100 (tensor parallel 4)",
+              "2x GB200 (tensor parallel 2)"
+            ],
+            "reference_vllm_image": "vllm/vllm-openai:v0.32.0",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
+          "catalog": "nvidia/nemotron-3.5-bolt",
+          "id": "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "reasoning_parser_plugin": "ultra_v3_reasoning_parser.py",
+            "required_environment": {
+              "VLLM_USE_V2_MODEL_RUNNER": "1"
+            },
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
           }
         },
         {

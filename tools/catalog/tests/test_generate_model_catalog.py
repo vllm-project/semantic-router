@@ -525,6 +525,66 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {"score": 0},
         )
 
+    def test_nemotron_3_5_bf16_cards_bind_exact_checkpoint_evidence(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        checkpoints = {
+            "nvidia/nemotron-3.5-super-vl": (
+                "NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+            ),
+            "nvidia/nemotron-3.5-bolt": "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16",
+        }
+        expected_benchmarks = {
+            "nvidia/nemotron-3.5-super-vl": {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "livecodebench/livecodebench@6.0.0",
+                "swe-bench/verified@1.0.0",
+                "swe-bench/pro@1.0.0",
+                "harbor/terminal-bench@2.1.0",
+            },
+            "nvidia/nemotron-3.5-bolt": {
+                "idavidrein/gpqa-diamond@1.0.0",
+                "cais/humanitys-last-exam@1.0.0",
+                "scicode-bench/scicode@1.0.0",
+                "harbor/terminal-bench@2.1.0",
+                "scale/mcp-atlas@1.0.0",
+            },
+        }
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, set(checkpoints))
+        self.assertEqual(
+            buckets,
+            {
+                ("nvidia/nemotron-3.5-super-vl", "high", "vendor_claimed"): (
+                    expected_benchmarks["nvidia/nemotron-3.5-super-vl"]
+                ),
+                ("nvidia/nemotron-3.5-bolt", "unspecified", "vendor_claimed"): (
+                    expected_benchmarks["nvidia/nemotron-3.5-bolt"]
+                ),
+            },
+        )
+        for evaluation in resources["evaluations"]:
+            if evaluation["model"] in checkpoints:
+                self.assertEqual(
+                    evaluation["subject"]["variant"], checkpoints[evaluation["model"]]
+                )
+                self.assertEqual(evaluation["subject"]["precision"], "BF16")
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        vllm_bindings = {
+            binding["catalog"]: binding
+            for binding in providers["vllm"]["models"]
+            if binding.get("catalog") in checkpoints
+        }
+        self.assertEqual(
+            {model_id: binding["id"] for model_id, binding in vllm_bindings.items()},
+            {
+                model_id: f"nvidia/{checkpoint}"
+                for model_id, checkpoint in checkpoints.items()
+            },
+        )
+        for binding in vllm_bindings.values():
+            self.assertEqual(binding["relationship"], "self_hosted")
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
@@ -866,6 +926,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-2-30b-a3b": "nemotron-thinking-toggle",
             "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
+            "nvidia/nemotron-3.5-super-vl": "nemotron-ultra",
+            "nvidia/nemotron-3.5-bolt": "nemotron-ultra",
         }
         self.assertEqual(
             {
