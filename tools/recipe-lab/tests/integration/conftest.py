@@ -33,6 +33,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from recipe_lab.layout import find_signal, select_recipe
 
 RECIPE_LAB_ROOT = Path(__file__).resolve().parents[2]
 SMOKE_DIR = RECIPE_LAB_ROOT / "examples" / "smoke"
@@ -273,7 +274,8 @@ def _render_router_config(
             ref["endpoint"] = endpoint
     config["listeners"][0]["port"] = listener_port
     if depth_threshold is not None:
-        config["routing"]["signals"]["decision"][0]["predicate"]["gte"] = float(
+        recipe = select_recipe(config)
+        find_signal(config, recipe, "depth")["predicate"]["gte"] = float(
             depth_threshold
         )
     return yaml.safe_dump(config, sort_keys=False)
