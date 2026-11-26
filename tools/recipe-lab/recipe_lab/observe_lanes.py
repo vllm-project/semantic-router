@@ -245,11 +245,7 @@ def observation_providers_config(
                     "Lane observation placeholder; answers are irrelevant."
                 ),
                 "capabilities": ["chat", "text"],
-<<<<<<< HEAD
                 "modalities": {"input": ["text"], "output": ["text"]},
-=======
-                "modality": "text",
->>>>>>> 1946016ca (feat(recipe-lab): emit canonical v0.5 seed and candidate configs)
             }
         )
     return {
