@@ -124,8 +124,17 @@ def test_layout_holds_one_copy_and_matches_the_reference(gates):
     torch.testing.assert_close(laid(x), F.linear(x, linear.weight, linear.bias))
 
 
+def test_layout_takes_bf16_layers(gates):
+    torch.manual_seed(0)
+    linear = nn.Linear(64, 48).to(torch.bfloat16)
+    laid = zentorch.lay_out(linear)
+    assert isinstance(laid, zentorch.ZentorchLinear)
+    x = torch.randn(3, 5, 64).to(torch.bfloat16)
+    torch.testing.assert_close(laid(x), F.linear(x, linear.weight, linear.bias))
+
+
 def test_layout_leaves_other_dtypes_alone(gates):
-    linear = nn.Linear(16, 8).to(torch.bfloat16)
+    linear = nn.Linear(16, 8).to(torch.float16)
     assert zentorch.lay_out(linear) is linear
 
 

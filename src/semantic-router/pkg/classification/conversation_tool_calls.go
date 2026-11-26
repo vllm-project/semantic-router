@@ -1,4 +1,4 @@
-package extproc
+package classification
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// countInvalidRecentToolCalls returns how many tool calls the request's last
+// InvalidRecentToolCalls returns how many tool calls the request's last
 // assistant message carries that violate the schema of the tool they name:
 // arguments that are not a JSON object, or that miss a required property. A
 // small model can keep emitting such calls late in a session until the client
@@ -15,7 +15,7 @@ import (
 // can escalate to a stronger lane before that happens. The client resends the
 // history every turn, so the count needs no session state and reads the same
 // on every replica.
-func countInvalidRecentToolCalls(request *llmprotocol.Request) int {
+func InvalidRecentToolCalls(request *llmprotocol.Request) int {
 	if request == nil || len(request.Tools) == 0 {
 		return 0
 	}

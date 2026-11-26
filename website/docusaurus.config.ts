@@ -471,6 +471,7 @@ const config: Config = {
     // Publishes every published blog post as global data so the blog list page can
     // search the whole archive instead of just the posts on the current page.
     blogSearchIndexPlugin,
+    require.resolve('./src/plugins/recipeDiscovery.cjs'),
     [
       '@docusaurus/plugin-client-redirects',
       {
@@ -590,6 +591,10 @@ const config: Config = {
           className: 'nav-utility',
           position: 'right',
           items: [
+            {
+              label: 'Recipes',
+              to: '/recipes',
+            },
             {
               label: 'Model Hub',
               to: '/models',

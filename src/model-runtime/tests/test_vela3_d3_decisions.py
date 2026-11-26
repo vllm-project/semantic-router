@@ -122,22 +122,28 @@ def call(runtime, body):
 
 
 def test_the_family_consent_is_scoped_to_the_npu(runtimes) -> None:
-    """The vela3_d3 consent covers the npu only.
+    """The vela3_d3 consent covers the npu only; its CPU consent is the base's.
 
     ``describe()`` sees no device, so the policy carries the scope and the
     engine applies it: on any other accelerator the CUDA and ROCm approximate
     kernels (``cuda-fused-approximate.md``) keep the base's consent, which is
-    off -- no GPU record covers this family.
+    off -- no GPU record covers this family. The scope leaves the CPU consent
+    alone: zentorch's FP32 linear, which ``cpu-zentorch-d3.md`` measured on
+    these sizes.
     """
     engine = runtimes[0].lookup(None).model.engine_model
     policy = engine.spec.dtype
     assert policy.approximate_kernels
     assert policy.approximate_accelerators == frozenset({"npu"})
-    # The engine applies the scope: the CPU accelerator is outside it, so the
-    # loaded kernels stay exact despite the consent.
-    assert not engine.kernels.allow_approximate
+    assert policy.consents_on("npu", False) is True
+    assert policy.consents_on("cuda", False) is False
+    assert policy.consents_on("rocm", False) is False
     base = runtimes[1].lookup(None).model.engine_model.spec.dtype
     assert not base.approximate_kernels and base.approximate_accelerators is None
+    # On the CPU the engine applies the base's CPU consent: the linear slot only.
+    assert policy.consents_on("cpu", True) == base.approximate_cpu_kernels
+    assert base.approximate_cpu_kernels == frozenset({"linear"})
+    assert engine.kernels.allows("linear") and not engine.kernels.allows("sdpa")
 
 
 def test_a_blank_state_is_refused_as_the_other_vela_families_refuse_it(

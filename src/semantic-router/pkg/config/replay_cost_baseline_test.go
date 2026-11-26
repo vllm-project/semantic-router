@@ -176,6 +176,12 @@ func TestModelsOnAClaudeOrChatGPTLoginTakeTheirListPrice(t *testing.T) {
         - {name: chatgpt, endpoint: "https://chatgpt.com/backend-api/codex", provider: openai, auth: {credential: caller}}`,
 			want: ModelPricing{Currency: "USD", PromptPer1M: 5, CompletionPer1M: 30, CachedInputPer1M: 0.5},
 		},
+		"terra native ID after promotion to a card": {
+			model: `provider_model_id: gpt-6.1-terra
+      backend_refs:
+        - {name: openai, provider: openai, auth: {credential: caller}}`,
+			want: ModelPricing{Currency: "USD", PromptPer1M: 1, CompletionPer1M: 5, CachedInputPer1M: 0.05, CacheWritePer1M: rate(1.25)},
+		},
 		// A model ID with only a price list entry, no card.
 		"chatgpt price list": {
 			model: `provider_model_id: gpt-6.1-sol

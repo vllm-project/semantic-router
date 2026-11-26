@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -301,6 +302,13 @@ func TestResponsesStreamFromChatRejectsACallExtendedAfterItClosed(t *testing.T) 
 		`{"tool_calls":[{"index":1,"id":"call_2","type":"function","function":{"name":"get_weather","arguments":"{}"}}]}`,
 		`{"tool_calls":[{"index":0,"function":{"arguments":",\"b\":2}"}}]}`, `{}`))
 	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments")
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Cause == nil {
+		t.Fatalf("the rejection carried no argument evidence: %v", err)
+	}
+	if got := protocolError.Cause.Error(); !strings.Contains(got, "shape object fragment") {
+		t.Fatalf("the rejection evidence = %q", got)
+	}
 	if slices.ContainsFunc(order.trace, func(event string) bool { return strings.Contains(event, `"b"`) }) {
 		t.Fatalf("the extended arguments reached the client: %v", order.trace)
 	}

@@ -1,0 +1,87 @@
+- id: meituan/longcat-2.5
+  display_name: LongCat-2.5
+  description: Open-weight multimodal Meituan MoE model for long-horizon coding and agentic work.
+  kind: physical
+  publisher: Meituan / LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5
+    license: MIT
+  family: longcat-2.5
+  reasoning_family: longcat-2.5
+  parameter_size: 1.6T (48B active)
+  revision: 60032d966e6369b822f0e61d2eff01368d38b111
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Meituan
+    status: claimed
+    verified_at: 2026-11-23
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-11-02'
+- id: meituan/longcat-2.0
+  display_name: LongCat-2.0
+  description: Open-weight Meituan MoE language model for long-context coding and agentic work.
+  kind: physical
+  publisher: Meituan / LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+    license: MIT
+  family: longcat-2.0
+  reasoning_family: longcat-2.0
+  parameter_size: 1.6T (48B active)
+  revision: 834bf5ffe3047aa9f6cc7a64a9bc068b146b8274
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Meituan
+    status: claimed
+    verified_at: 2026-11-23
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+  tags:
+  - open_weights
+  - moe
+  - coding
+  - agentic
+  released_at: '2026-06-30'
