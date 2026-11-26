@@ -377,7 +377,13 @@ BF16 and checks that reference (`dtypes.on_host`,
 CPU is checked against another class's BF16 answers. A CPU that shares a
 class's key but fails its BF16 golden check at `auto` loads again in FP32
 (`ServedModel.load`), placed at the FP32 size, and its card's `reason` says
-why; `--dtype bfloat16` still fails there.
+why; `--dtype bfloat16` still fails there. A BF16 reference holds one GEMM
+summation order, so the approximate CPU kernels a family consents to run at
+BF16 only where the class key that also names them has references
+(`dtypes.with_kernels`: `cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16`,
+`docs/records/cpu-zentorch-d3-bf16.md`); with the plain key's references the
+model runs exact kernels, and answers from approximate kernels are never
+recorded as a generic baseline (`tools/golden_answers.py --cpu-bf16`).
 A new PyTorch can move either, so both are recorded with the PyTorch the CPU
 images pin, and a test fails when they are not.
 
@@ -445,7 +451,9 @@ a record covers the kernels it measured: vela3-fast consents on CPUs to
 zentorch's FP32 linear only (`cpu-zentorch-linear-vela3.md`), and so do
 Decision 3.0 and the Vela 3.0 d3 sizes (`cpu-zentorch-d3.md`, which also
 measured zentorch's SDPA: no decision changed, but at most 2% faster than the
-linear alone, so no family consents to it yet); their GPU paths stay exact. Another `--dtype` holds every
+linear alone, so no family consents to it yet), Decision 3.0 also at BF16
+against references naming zentorch (`cpu-zentorch-d3-bf16.md`); their GPU
+paths stay exact. Another `--dtype` holds every
 backbone weight in that dtype and runs the reference kernels without copies;
 only references recorded at that dtype check it (Decision 3.0's BF16 on CPUs),
 so elsewhere its golden status is `unverified` (`dtypes.py`). Each family records the accuracy (label
@@ -1374,7 +1382,7 @@ Section 13.4.
 
 | Accelerator | Status | Kernels |
 | --- | --- | --- |
-| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`); with `VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards (CPU family 1Ah), zentorch's prepacked FP32 linear and `zentorch_sdpa` as approximate kernels for families that consent to those slots on CPUs (vela3-fast: linear, `cpu-zentorch-linear-vela3.md`; Decision 3.0 and Vela 3.0 d3: linear, `cpu-zentorch-d3.md`; no family consents to SDPA yet) |
+| `cpu` | validated | pure-torch references, FP32; on x86, encoder linears through oneDNN's pre-packed FP32 kernel (weights reordered once at load, batch-invariant, within 3.3e-6 of `F.linear`); with `VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards (CPU family 1Ah), zentorch's prepacked FP32 and BF16 linear and `zentorch_sdpa` as approximate kernels for families that consent to those slots on CPUs (vela3-fast: linear, `cpu-zentorch-linear-vela3.md`; Decision 3.0 and Vela 3.0 d3: linear, `cpu-zentorch-d3.md`, and Decision 3.0's BF16 on a class with references naming zentorch, `cpu-zentorch-d3-bf16.md`; no family consents to SDPA yet) |
 | `rocm` | validated (MI300X, MI325X) | BF16 autocast, FLA gated delta, causal-conv1d, exact-shape HIP graphs, bit-exact fused Triton element-wise kernels (gfx942) |
 | `cuda` | validated (H200, A100, Tesla T4; Vela 2.0 0.3B@32 p50 known regression on H200; `docs/records/cuda-*.md`) | the same kernel slots; fused kernels without bit-exact evidence stay off the exact profile (`cuda-fused-kernels.md`); on Ampere and newer with Triton, a consenting family may use them under `max_speed` (Decision 2.0; `cuda-fused-approximate.md`); fused gated-delta prep (`gdn_prep`) needs FLA but does not require causal-conv1d to be installed; optional causal-conv1d is approximate on CUDA, so exact-only/non-consenting models use torch reference even when it is installed; [convolution evidence and released-runtime impact](records/cuda-causal-conv1d-exactness.md); [A/B model comparison](records/cuda-gdn-prep-without-causal-conv1d.md) |
 | `xpu`, `mps` | built-in plugins, **unvalidated** | pure-torch references |
