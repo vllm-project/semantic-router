@@ -43,12 +43,18 @@ from cli.commands.runtime_support import (
 from cli.commands.validate import ask_router, router_refusal
 from cli.container_images import pulled_this_run
 from cli.container_services import container_status_strict
+from cli.container_start import _listener_tls_mounts
 from cli.decision_model import (
     decision_model_deployment,
     gpu_requirement_error,
     remote_decision_model,
 )
-from cli.gateway_mode import GATEWAY_ENV, resolve_gateway
+from cli.gateway_mode import (
+    DEFAULT_GATEWAY,
+    GATEWAY_ENV,
+    GATEWAY_STANDALONE,
+    resolve_gateway,
+)
 from cli.parser import parse_user_config
 from cli.recipe_activation_recovery import (
     active_recipe_package_config_path,
@@ -68,6 +74,8 @@ def _prepare_runtime_config_replacement(
     effective_data: bytes,
     stack_layout: RuntimeStackLayout,
     *,
+    config_dir: str,
+    gateway: str,
     minimal: bool,
     readonly: bool,
     served_image: Callable[[], str],
@@ -75,16 +83,25 @@ def _prepare_runtime_config_replacement(
 ) -> None:
     # Validate the candidate without publishing it to the running file watcher.
     # A restart owns the next generation; the departing process must not build it.
+    tls_listeners = []
     with tempfile.TemporaryDirectory(prefix="vllm-sr-config-") as directory:
         candidate = Path(directory) / "config.yaml"
         candidate.write_bytes(effective_data)
         prepared = parse_user_config(str(candidate), log_summary=False)
         errors = validate_user_config(prepared, log_summary=False)
+        if not errors and gateway == GATEWAY_STANDALONE:
+            tls_listeners = prepared.model_dump(include={"listeners"})["listeners"]
+            # The temporary candidate and active config can both live outside
+            # the source directory against which Docker resolves TLS files.
+            _listener_tls_mounts(tls_listeners, config_dir)
         if not errors and not is_setup_mode_config(candidate):
             errors = _router_refusal(candidate, models_dir, served_image)
         if errors:
             raise ValueError("Invalid runtime config: " + "; ".join(map(str, errors)))
         validate_setup_mode_flags(is_setup_mode_config(candidate), minimal, readonly)
+    # The image check can take time. Confirm the files still exist before stopping.
+    if tls_listeners:
+        _listener_tls_mounts(tls_listeners, config_dir)
     stop_runtime_before_config_replacement(stack_layout)
 
 
@@ -146,6 +163,7 @@ def _prepare_docker_runtime_config(
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
     *,
+    gateway: str = DEFAULT_GATEWAY,
     minimal: bool = False,
     readonly: bool = False,
     engine: bool = False,
@@ -169,6 +187,20 @@ def _prepare_docker_runtime_config(
 
     stack_layout = resolve_runtime_stack()
     state_root_dir = Path(resolve_state_root_dir(str(config_path)))
+    config_dir = os.path.dirname(os.path.abspath(config_path))
+
+    def prepare_replacement(data: bytes) -> None:
+        _prepare_runtime_config_replacement(
+            data,
+            stack_layout,
+            config_dir=config_dir,
+            gateway=gateway,
+            minimal=minimal,
+            readonly=readonly,
+            served_image=served_image,
+            models_dir=state_root_dir / "models",
+        )
+
     effective_config_path = _runtime_config_output_path(
         config_path,
         state_root_dir=state_root_dir,
@@ -224,6 +256,10 @@ def _prepare_docker_runtime_config(
             effective_config_bytes = build_effective_config_bytes(
                 config_path, algorithm, source_setup_mode
             )
+            # The materializer's replacement hook only runs for an existing file.
+            if gateway == GATEWAY_STANDALONE and not effective_config_path.exists():
+                initial = yaml.safe_load(effective_config_bytes) or {}
+                _listener_tls_mounts(initial.get("listeners") or [], config_dir)
             effective_config_path = materialize_runtime_config(
                 config_path,
                 effective_config_bytes,
@@ -231,20 +267,16 @@ def _prepare_docker_runtime_config(
                 stack_name=stack_layout.stack_name,
                 replace_active=replace_active_config,
                 preserve_unchanged_source=algorithm is None,
-                before_replace=lambda: _prepare_runtime_config_replacement(
-                    effective_config_bytes,
-                    stack_layout,
-                    minimal=minimal,
-                    readonly=readonly,
-                    served_image=served_image,
-                    models_dir=state_root_dir / "models",
-                ),
+                before_replace=lambda: prepare_replacement(effective_config_bytes),
             )
             active_bytes = effective_config_path.read_bytes()
             source_candidate_selected = active_bytes == effective_config_bytes or (
                 _same_document(active_bytes, effective_config_bytes)
             )
         candidate = yaml.safe_load(effective_config_path.read_bytes()) or {}
+        if gateway == GATEWAY_STANDALONE:
+            # A preserved active config may still refer to a removed host file.
+            _listener_tls_mounts(candidate.get("listeners") or [], config_dir)
         if apply_instance_options(
             candidate,
             engine=engine,
@@ -253,14 +285,7 @@ def _prepare_docker_runtime_config(
             model_options=model_options,
         ):
             candidate_bytes = yaml.safe_dump(candidate, sort_keys=False).encode("utf-8")
-            _prepare_runtime_config_replacement(
-                candidate_bytes,
-                stack_layout,
-                minimal=minimal,
-                readonly=readonly,
-                served_image=served_image,
-                models_dir=state_root_dir / "models",
-            )
+            prepare_replacement(candidate_bytes)
             write_journaled_runtime_config_projection(
                 effective_config_path, candidate_bytes
             )
@@ -277,14 +302,7 @@ def _prepare_docker_runtime_config(
                 stack_layout,
                 enable_observability=observability,
                 reset_projection=source_candidate_selected,
-                before_replace=lambda data: _prepare_runtime_config_replacement(
-                    data,
-                    stack_layout,
-                    minimal=minimal,
-                    readonly=readonly,
-                    served_image=served_image,
-                    models_dir=state_root_dir / "models",
-                ),
+                before_replace=prepare_replacement,
             )
         return effective_config_path, setup_mode, runtime_lock
     except Exception:
@@ -301,6 +319,7 @@ def _prepare_effective_serve_config(
     platform: str | None,
     recipe_env_bindings: tuple[str, ...],
     replace_active_config: bool,
+    gateway: str = DEFAULT_GATEWAY,
     minimal: bool = False,
     readonly: bool = False,
     engine: bool = False,
@@ -335,6 +354,7 @@ def _prepare_effective_serve_config(
             platform,
             recipe_env_bindings,
             replace_active_config,
+            gateway=gateway,
             minimal=minimal,
             readonly=readonly,
             engine=engine,
