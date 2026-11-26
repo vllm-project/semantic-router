@@ -1241,6 +1241,9 @@ class ResponseGuardPluginConfig(BaseModel):
     Each rule reads named signals over the answer (and the request); a rule
     whose response-stage signal could not be read takes on_unknown.
     enabled: false turns off the guard a decision inherits.
+    hold_stream holds a streamed answer until the guard has read all of it so
+    annotate-only rules' codes reach x-vsr-warnings, at the cost of time to
+    first token; mirrors the Go-side ResponseGuardPluginConfig.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1248,6 +1251,7 @@ class ResponseGuardPluginConfig(BaseModel):
     enabled: bool = True
     rules: List[ResponseGuardRule] = Field(default_factory=list)
     on_unknown: Optional[ResponseGuardAction] = None
+    hold_stream: bool = False
 
     @model_validator(mode="after")
     def rules_when_enabled(self):

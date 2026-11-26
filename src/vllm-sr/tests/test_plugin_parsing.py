@@ -125,6 +125,74 @@ decisions:
             model()
 
 
+class TestResponseGuardHoldStream:
+    """hold_stream is a per-guard opt-in mirrored from the Go config schema."""
+
+    def test_hold_stream_defaults_to_false(self):
+        """An annotate-only guard keeps true streaming unless it opts in."""
+        guard = ResponseGuardPluginConfig(
+            rules=[{"when": {"type": "keyword", "name": "k"}, "action": "annotate"}]
+        )
+        assert guard.hold_stream is False
+
+    def test_hold_stream_opt_in_is_accepted(self):
+        """A guard can opt into holding an annotated stream."""
+        guard = ResponseGuardPluginConfig(
+            hold_stream=True,
+            rules=[{"when": {"type": "keyword", "name": "k"}, "action": "annotate"}],
+        )
+        assert guard.hold_stream is True
+
+    def test_hold_stream_validates_in_full_config(self):
+        """A reference config with hold_stream passes end-to-end validation.
+
+        The Python CLI mirrors the Go schema with extra="forbid"; a config that
+        uses the Go-side opt-in must not be rejected by the CLI validator.
+        """
+        config_yaml = """
+listeners:
+  - name: "http-8888"
+    address: "0.0.0.0"
+    port: 8888
+signals:
+  keywords:
+    - name: "test_keywords"
+      operator: "OR"
+      keywords: ["test"]
+  domains:
+    - name: "other"
+      description: "Test domain"
+decisions:
+  - name: "test_decision"
+    description: "Decision with a held annotate-only guard"
+    priority: 100
+    rules:
+      operator: "OR"
+      conditions:
+        - type: "keyword"
+          name: "test_keywords"
+    modelRefs:
+      - model: "test_model"
+    plugins:
+      - type: "response_guard"
+        configuration:
+          hold_stream: true
+          rules:
+            - when: {type: "keyword", name: "test_keywords"}
+              action: "annotate"
+          on_unknown: "annotate"
+"""
+
+        temp_path = _write_config(config_yaml)
+
+        try:
+            config = parse_user_config(temp_path)
+            errors = validate_user_config(config)
+            assert len(errors) == 0, f"Unexpected validation errors: {errors}"
+        finally:
+            os.unlink(temp_path)
+
+
 class TestRouterReplayPluginConfig:
     """Test router_replay plugin configuration."""
 

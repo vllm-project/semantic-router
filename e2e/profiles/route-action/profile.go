@@ -71,6 +71,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-jailbreak-window-block",
 		"response-jailbreak-window-warning",
 		"response-jailbreak-streaming-passthrough",
+		"response-jailbreak-streaming-hold-warnings",
 		"response-jailbreak-streaming-block",
 		"response-jailbreak-streaming-pass",
 	}
