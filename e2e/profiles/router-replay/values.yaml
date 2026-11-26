@@ -26,6 +26,24 @@ config:
           - name: shadow-second-endpoint
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      - name: openai/shadow-budget-a
+        pricing:
+          currency: USD
+          prompt_per_1m: 0
+          completion_per_1m: 1000
+        backend_refs:
+          - name: shadow-budget-a-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/shadow-budget-b
+        pricing:
+          currency: USD
+          prompt_per_1m: 0
+          completion_per_1m: 2000
+        backend_refs:
+          - name: shadow-budget-b-endpoint
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
       - name: openai/shadow-unreachable
         backend_refs:
           - name: shadow-unreachable-endpoint
@@ -60,6 +78,8 @@ config:
       recipe: shadow-multi
     - model_names: ["vllm-sr/shadow-multi-failure"]
       recipe: shadow-multi-failure
+    - model_names: ["vllm-sr/shadow-cost-budget"]
+      recipe: shadow-cost-budget
     - model_names: ["vllm-sr/shadow-ok"]
       recipe: shadow-ok
     - model_names: ["vllm-sr/shadow-judge"]
@@ -206,6 +226,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true
@@ -219,6 +240,36 @@ config:
                     timeout: 20s
                   budget:
                     max_response_bytes: 2097152
+    - name: shadow-cost-budget
+      strategy: priority
+      signals: {}
+      decisions:
+        - name: shadow_cost_budget_decision
+          priority: 1
+          rules:
+            operator: AND
+            conditions: []
+          modelRefs:
+            - model: openai/gpt-oss-20b
+              use_reasoning: false
+          plugins:
+            - type: router_replay
+              configuration:
+                enabled: true
+                prompt_capture: raw
+                max_records: 1000
+                capture_request_body: true
+                capture_response_body: true
+                max_body_bytes: 65536
+                shadow:
+                  models: [openai/shadow-budget-a, openai/shadow-budget-b]
+                  sample_rate: 1.0
+                  execution:
+                    max_concurrency: 1
+                    max_queue_size: 8
+                    timeout: 20s
+                  budget:
+                    max_estimated_cost: 0.30
     - name: shadow-multi-failure
       strategy: priority
       signals: {}
@@ -235,6 +286,7 @@ config:
             - type: router_replay
               configuration:
                 enabled: true
+                prompt_capture: raw
                 max_records: 1000
                 capture_request_body: true
                 capture_response_body: true

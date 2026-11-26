@@ -296,9 +296,11 @@ func (ImagesCodec) DecodeTransportError(body []byte, _ llmprotocol.Policy) (llmp
 			code = string(wire.Error.Code)
 		}
 	}
-	return llmprotocol.TransportError{
-		Error: llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, code, message, nil),
-	}, nil, nil
+	protocolError := llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, code, message, nil)
+	if wire.Error != nil {
+		protocolError.ProviderFramed = true
+	}
+	return llmprotocol.TransportError{Error: protocolError}, nil, nil
 }
 
 func (ImagesCodec) EncodeTransportError(err llmprotocol.TransportError) []byte {

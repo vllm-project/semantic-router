@@ -416,9 +416,10 @@ func TestShadowDispatchTimeoutIsBounded(t *testing.T) {
 	router, primaryModel := newShadowTestRouter(t, backend)
 	cfg := shadowTestPluginConfig()
 	cfg.Execution.Timeout = "1s"
+	prepare := configureShadowTestSpend(router, cfg)
 
 	started := time.Now()
-	run := runShadowRequest(t, router, primaryModel, cfg, nil)
+	run := runShadowRequest(t, router, primaryModel, cfg, prepare)
 	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
 		t.Fatalf("primary path waited on shadow: %v", elapsed)
 	}
@@ -427,6 +428,26 @@ func TestShadowDispatchTimeoutIsBounded(t *testing.T) {
 	outcome := singleShadowOutcome(t, run)
 	if outcome.Verdict != shadowVerdictFailed || outcome.Reason != shadowReasonTimeout {
 		t.Fatalf("outcome verdict=%q reason=%q", outcome.Verdict, outcome.Reason)
+	}
+	assertShadowEstimatedSpend(t, outcome)
+}
+
+func configureShadowTestSpend(router *OpenAIRouter, cfg *config.RouterReplayShadowConfig) func(*RequestContext) {
+	model := router.Config.ModelConfig[shadowTestModel]
+	model.Pricing = config.ModelPricing{Currency: "USD", CompletionPer1M: 1e6}
+	router.Config.ModelConfig[shadowTestModel] = model
+	limit := 2.0
+	cfg.Budget.MaxEstimatedCost = &limit
+	return func(ctx *RequestContext) {
+		ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(1)
+	}
+}
+
+func assertShadowEstimatedSpend(t *testing.T, outcome routerreplay.Outcome) {
+	t.Helper()
+	if got := outcome.Metadata; got["budget_cost_source"] != "estimate" ||
+		got["budget_estimated_cost"] != "1" || got["budget_accounted_cost"] != "1" {
+		t.Fatalf("expected estimated cost after interrupted dispatch, got %v", got)
 	}
 }
 

@@ -25,8 +25,8 @@ import (
 // deployment's model), so the classifier keeps the answers of the request
 // stage's windows for a while, and a window read again in that time takes
 // them instead of a call: the rule still reads every window of its input,
-// each once. A window's key holds a hash of all the text before it as well
-// as its own, so a request finds a window's answers only when its input is
+// each once. A window's key hashes the text and named part boundaries, so a
+// request finds a window's answers only when its input is
 // the same up to the window's end: the answers kept for one conversation
 // never tell another request anything, not even by how fast it is routed.
 
@@ -210,7 +210,13 @@ func cloneWindowResponse(response modelservice.Response) modelservice.Response {
 type scanVerdictKeys struct {
 	seed           [sha256.Size]byte
 	blocks         [][sha256.Size]byte
+	parts          []verdictPart
 	precisionEpoch uint64
+}
+
+type verdictPart struct {
+	name       string
+	start, end int
 }
 
 func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
@@ -219,7 +225,7 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 			return nil
 		}
 	}
-	window := scan.windowState("")
+	window := scan.windowState(scanWindow{})
 	window.MaxTokens = c.Config.ModelDeployments[scan.deployment].ScanBudget()
 	window.Questions = callQuestions(scan.rules)
 	sent, err := json.Marshal(window)
@@ -235,6 +241,15 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 		writeVerdictField(seed, field)
 	}
 	keys := &scanVerdictKeys{precisionEpoch: model.precisionEpoch}
+	if parts := scan.whole.Parts; parts != nil {
+		writeVerdictField(seed, "named parts")
+		offset := 0
+		for _, name := range scanPartNames(parts) {
+			end := offset + len(parts[name])
+			keys.parts = append(keys.parts, verdictPart{name: name, start: offset, end: end})
+			offset = end + len(scanPartSeparator)
+		}
+	}
 	seed.Sum(keys.seed[:0])
 	chain := keys.seed
 	for from := 0; from+windowVerdictBlock <= len(scan.text); from += windowVerdictBlock {
@@ -248,7 +263,8 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 }
 
 // key is the key of the window of text from start to end: the hash of the
-// text before end, the seed included, and the window's bounds.
+// text and named part boundaries through end, the seed included, and the
+// window's bounds.
 func (keys *scanVerdictKeys) key(text string, start, end int) windowVerdictKey {
 	chain, from := keys.seed, 0
 	if blocks := end / windowVerdictBlock; blocks > 0 {
@@ -257,13 +273,24 @@ func (keys *scanVerdictKeys) key(text string, start, end int) windowVerdictKey {
 	hash := sha256.New()
 	_, _ = hash.Write(chain[:])
 	_, _ = io.WriteString(hash, text[from:end])
+	for _, part := range keys.parts {
+		if part.start >= end {
+			break
+		}
+		writeVerdictField(hash, part.name)
+		writeVerdictBounds(hash, part.start, min(part.end, end))
+	}
+	writeVerdictBounds(hash, start, end)
+	var key windowVerdictKey
+	hash.Sum(key[:0])
+	return key
+}
+
+func writeVerdictBounds(hash io.Writer, start, end int) {
 	var bounds [16]byte
 	binary.LittleEndian.PutUint64(bounds[:8], uint64(start)) //nolint:gosec // a byte offset, never negative
 	binary.LittleEndian.PutUint64(bounds[8:], uint64(end))   //nolint:gosec // a byte offset, never negative
 	_, _ = hash.Write(bounds[:])
-	var key windowVerdictKey
-	hash.Sum(key[:0])
-	return key
 }
 
 // writeVerdictField writes field to hash after its length, so no two lists

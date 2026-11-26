@@ -78,10 +78,13 @@ func TestGuardWindowsRequireRemoteIdentity(t *testing.T) {
 			cfg := &config.RouterConfig{}
 			cfg.ModelDeployments = map[string]config.ModelDeployment{"primary": deployment}
 			classifier := &Classifier{Config: cfg}
+			const text = "input"
 			scan := &guardScan{
-				deployment: "primary", text: "input",
-				rules:       []askedRule{{rule: config.SystemOneRule{Stage: config.SystemOneStageRequest}}},
-				windowState: func(text string) modelservice.Request { return modelservice.Request{State: text} },
+				deployment: "primary", text: text,
+				rules: []askedRule{{rule: config.SystemOneRule{Stage: config.SystemOneStageRequest}}},
+				windowState: func(window scanWindow) modelservice.Request {
+					return modelservice.Request{State: text[window.start:window.end]}
+				},
 			}
 			scan.verdicts = classifier.newScanVerdictKeys(scan)
 			require.Nil(t, scan.verdictKey(scanWindow{end: len(scan.text)}), "unknown remote identities cannot retain or reuse window verdicts")
