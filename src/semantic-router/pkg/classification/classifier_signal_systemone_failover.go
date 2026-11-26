@@ -11,7 +11,8 @@ import (
 )
 
 // sendSystemOneFailover tries the deployments in order under one caller
-// budget. Attempt failures are not signal failures until the chain gives up.
+// budget. Each deployment reads its own view of the same source state.
+// Attempt failures are not signal failures until the chain gives up.
 func (c *Classifier) sendSystemOneFailover(ctx context.Context, call *systemOneCall, request modelservice.Request) (modelservice.Response, error) {
 	ctx, cancel := decisionFailoverContext(ctx, call.rules)
 	defer cancel()
@@ -53,10 +54,10 @@ func (c *Classifier) sendFailoverAttempt(ctx context.Context, deployment string,
 		done := modelservice.Await(ctx)
 		defer done()
 		ctx = modelservice.Unbundled(ctx)
-		if !call.rules[0].rule.FullCoverage() {
-			limit, headShare := c.routingViewBudget(deployment)
-			request = boundedState(request, limit, headShare)
-		}
+	}
+	if !call.rules[0].rule.FullCoverage() {
+		limit, headShare := c.routingViewBudget(deployment)
+		request = boundedState(request, limit, headShare)
 	}
 	request.MaxTokens = resource.ScanBudget()
 	if err := c.checkFailoverMedia(deployment, request); err != nil {

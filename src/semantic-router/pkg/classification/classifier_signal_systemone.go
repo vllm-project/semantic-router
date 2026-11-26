@@ -301,7 +301,8 @@ func (a askedRule) questionID() string {
 type systemOneCall struct {
 	deployment string
 	// fallbackChain includes the primary and is set for configured System One
-	// signals only. Other consumers of the same deployment keep their call path.
+	// signals only. For these calls, request keeps the rule's input before any
+	// deployment's routing view is applied.
 	fallbackChain []string
 	request       modelservice.Request
 	rules         []askedRule
@@ -345,7 +346,7 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 				scan.rules = append(scan.rules, asked)
 				continue
 			}
-		case !asked.rule.FullCoverage():
+		case len(chain) == 0 && !asked.rule.FullCoverage():
 			budget, headShare := c.routingViewBudget(deployment)
 			state = boundedState(state, budget, headShare)
 		}

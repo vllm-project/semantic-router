@@ -2,12 +2,14 @@ package classification
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -54,6 +56,7 @@ global:
         capabilities: {question_types: [noul]}
         auth: {api_key_env: TEST_FAILOVER_PRIMARY_KEY}
         timeout_ms: 250
+        routing_view: {max_tokens: 256}
         fallbacks: [spare, cpu-backup]
       spare:
         provider: systemone
@@ -65,6 +68,7 @@ global:
         endpoint: %s
         model: backup-model
         timeout_ms: 600
+        routing_view: {max_tokens: 512}
         auth: {api_key_env: TEST_FAILOVER_CPU_KEY}
 `
 
@@ -78,6 +82,7 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 	var backupStatus atomic.Int32
 	var mu sync.Mutex
 	var order []string
+	var primaryView string
 	seen := func(name string) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -85,7 +90,18 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 	}
 	primary := newFailoverTestServer(t, "primary-test-key", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			seen("primary")
+			var request struct {
+				State string `json:"state"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Errorf("decode primary request: %v", err)
+				http.Error(w, "invalid test request", http.StatusBadRequest)
+				return
+			}
+			mu.Lock()
+			order = append(order, "primary")
+			primaryView = request.State
+			mu.Unlock()
 		}
 		writeFailoverTestAnswer(w, r, int(status.Load()))
 	})
@@ -111,12 +127,14 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 	})
 	classifier := newFailoverTestClassifier(t, primary.URL, spare.URL, cpu.URL)
 	for _, test := range []struct {
-		name, route, signalError string
-		status, backupStatus     int32
-		failover                 bool
+		name, route, signalError, state string
+		status, backupStatus            int32
+		failover                        bool
 	}{
 		{name: "healthy", status: http.StatusOK, route: "ordinary"},
 		{name: "unavailable", status: http.StatusServiceUnavailable, route: "tools", failover: true},
+		{name: "fits wider backup view", status: http.StatusServiceUnavailable, route: "tools", failover: true, state: strings.Repeat("Read a sample document. ", 70)},
+		{name: "exceeds both views", status: http.StatusServiceUnavailable, route: "tools", failover: true, state: strings.Repeat("Read a sample document. ", 110)},
 		{name: "upstream failure", status: http.StatusBadGateway, route: "tools", failover: true},
 		{name: "overloaded", status: http.StatusTooManyRequests, route: "tools", failover: true},
 		{name: "attempt timed out", status: 0, route: "tools", failover: true},
@@ -132,7 +150,10 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 			backupStatus.Store(test.backupStatus)
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			state := "Read a document: " + test.name
+			state := test.state
+			if state == "" {
+				state = "Read a document: " + test.name
+			}
 			signals, err := classifier.EvaluateAllSignalsWithHeaders(SignalEvaluationInput{Text: state, RequestFacts: RequestFacts{Context: ctx}})
 			if err != nil {
 				t.Fatal(err)
@@ -146,6 +167,7 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 			}
 			mu.Lock()
 			asks := slices.Clone(order)
+			view := primaryView
 			mu.Unlock()
 			want := []string{"primary"}
 			if test.failover {
@@ -154,11 +176,19 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 			if !slices.Equal(asks, want) {
 				t.Fatalf("attempts = %v, want %v", asks, want)
 			}
+			wantPrimaryView := routingView(state, 256*routingViewBytesPerToken, config.DefaultRoutingViewHeadShare)
+			if view != wantPrimaryView {
+				t.Fatalf("primary view = %d bytes, want its own %d-byte view of the original state", len(view), len(wantPrimaryView))
+			}
 			if test.failover && test.backupStatus == 0 {
 				calls := native.Decisions()
 				last := calls[len(calls)-1]
-				if last.Model == nil || *last.Model != "backup-model" || last.State != state || len(last.Questions) != 1 {
-					t.Fatalf("backup received the wrong model, state, or questions: %+v", last)
+				if last.Model == nil || *last.Model != "backup-model" || len(last.Questions) != 1 {
+					t.Fatalf("backup received the wrong model or questions: %+v", last)
+				}
+				wantBackupView := routingView(state, 512*routingViewBytesPerToken, config.DefaultRoutingViewHeadShare)
+				if got, ok := last.State.(string); !ok || got != wantBackupView {
+					t.Fatalf("backup view = %d bytes (%T), want its own %d-byte view of the original state", len(got), last.State, len(wantBackupView))
 				}
 				if last.Options == nil || last.Options.DeadlineMs == nil || *last.Options.DeadlineMs <= 0 || *last.Options.DeadlineMs > 600 {
 					t.Fatalf("backup did not receive its own timeout within the chain's deadline: %+v", last.Options)
