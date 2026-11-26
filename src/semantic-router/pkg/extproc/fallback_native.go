@@ -317,6 +317,7 @@ func (f *sessionFallback) beginResponse(status int) {
 		ctx.InflightToken = 0
 	}
 	ctx.SemanticRequest = candidate.request
+	ctx.responseGroundingRequest = candidate.projectedRequest
 	// A candidate's request carries its output format: only the primary
 	// dispatch held it back.
 	ctx.structuredOutputPass = nil

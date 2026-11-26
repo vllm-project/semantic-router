@@ -173,7 +173,7 @@ func semanticCachePartition(ctx *RequestContext, model string) string {
 	return responseCacheIdentity(ctx, model).Partition.Key()
 }
 
-const responseGuardCacheVersion = "grounding-coverage-v1"
+const responseGuardCacheVersion = "grounding-coverage-v2"
 
 func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
 	protocol := strings.TrimSpace(string(ctx.SourceFormat))

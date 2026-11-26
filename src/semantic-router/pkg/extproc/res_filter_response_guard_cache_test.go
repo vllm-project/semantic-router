@@ -294,16 +294,21 @@ func TestResponseGuardCacheMissesPreUpgradeEntries(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			prior.CacheIdentity.Partition.Epoch = cache.CombineFingerprints("", guardFingerprint)
 			previousService := cache.NewResponseCacheService(store, cache.DefaultResponseCacheServiceOptions())
 			write := previousService.StoreExact
 			if mode == config.ResponseCacheModeSemantic {
 				write = previousService.StoreSemantic
 			}
-			if err := write(t.Context(), cache.CacheWrite{
-				Identity: prior.CacheIdentity, RequestID: prior.RequestID, ResponseBody: []byte(exactCacheHitBody), TTL: cache.DefaultTTL(),
-			}); err != nil {
-				t.Fatal(err)
+			for _, epoch := range []string{
+				cache.CombineFingerprints("", guardFingerprint),
+				cache.CombineFingerprints("", guardFingerprint, "grounding-coverage-v1"),
+			} {
+				prior.CacheIdentity.Partition.Epoch = epoch
+				if err := write(t.Context(), cache.CacheWrite{
+					Identity: prior.CacheIdentity, RequestID: prior.RequestID, ResponseBody: []byte(exactCacheHitBody), TTL: cache.DefaultTTL(),
+				}); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			current := request("after-upgrade")

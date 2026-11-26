@@ -2,13 +2,16 @@ package extproc
 
 import (
 	"context"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 const (
@@ -120,6 +123,97 @@ func TestResponseGuardGroundingCoverage(t *testing.T) {
 			}
 			if len(*calls) != 1 || (*calls)[0].Parts[part] != inventoryText {
 				t.Errorf("model calls = %+v, want one with the readable %s", *calls, part)
+			}
+		})
+	}
+}
+
+func TestResponseGuardGroundsOnTheBackendToolResult(t *testing.T) {
+	const format = llmprotocol.AnthropicMessagesV1
+	const pdfData = "JVBERi0="
+	const fileNote = "A file (application/pdf) was not sent because the selected model cannot read files."
+	const history = "The earlier count was twelve notebooks."
+	const requestBody = `{
+		"model":"inventory","max_tokens":64,"messages":[
+			{"role":"user","content":"Read the inventory."},
+			{"role":"assistant","content":[{"type":"tool_use","id":"read-1","name":"read_inventory","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"read-1","content":[
+				{"type":"text","text":"` + history + `"},
+				{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"` + pdfData + `"}}
+			]}]},
+			{"role":"assistant","content":"I have the inventory count."},
+			{"role":"user","content":"Repeat the count."}
+		]
+	}`
+	for _, tc := range []struct {
+		name         string
+		capabilities []string
+		wantContext  string
+		wantError    string
+		fallback     bool
+	}{
+		{name: "file replaced with note", capabilities: []string{"tools"}, wantContext: history + " " + fileNote},
+		{name: "file retained", capabilities: []string{"tools", "file_input"}, wantContext: history, wantError: "systemone_unreadable_tool_result"},
+		{name: "fallback replaces the file", capabilities: []string{"tools", "file_input"}, wantContext: history + " " + fileNote, fallback: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := config.SystemOneInput{Answer: true, Context: true}
+			router, ctx, calls := inventoryResponseGuard(t, input, config.SystemOneCoverageFull, config.SystemOneUnscannedUnknown, config.ResponseGuardBlock)
+			router.Config.ModelConfig = map[string]config.ModelParams{"inventory": {APIFormat: config.APIFormatAnthropic, Capabilities: tc.capabilities}}
+			router.Config.AllowLossyTranslation = []string{llmprotocol.LossyFieldUnreadableFile}
+			request, envelope, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(format, []byte(requestBody))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx.SemanticRequest, ctx.ProtocolEnvelope = &request, envelope
+			ctx.SourceFormat, ctx.TargetFormat, ctx.RequestModel = format, format, request.Model
+			prepared, err := router.materializePreparedProviderRequest(&providerDispatch{logicalModel: request.Model, targetFormat: format}, ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantFile := tc.fallback || tc.wantError != ""
+			if strings.Contains(string(prepared.body), pdfData) != wantFile || strings.Contains(string(prepared.body), fileNote) == wantFile {
+				t.Fatalf("backend request = %s, want the original PDF: %t", prepared.body, wantFile)
+			}
+			var plan *responsePolicyPlan
+			if tc.fallback {
+				fallbackRouter, fallbackConfig := setupFallbackTestRouter(t, fallback.DefaultEnabledPolicy())
+				router.FallbackOrchestrator = fallbackRouter.FallbackOrchestrator
+				router.CredentialResolver = fallbackRouter.CredentialResolver
+				router.Config.ProviderProfiles = fallbackConfig.ProviderProfiles
+				router.Config.VLLMEndpoints = fallbackConfig.VLLMEndpoints
+				candidate := fallbackConfig.ModelConfig["model-fallback-2"]
+				candidate.Capabilities = []string{"tools"}
+				router.Config.ModelConfig["model-fallback-2"] = candidate
+				ctx.VSREligibleModelRefs = []config.ModelRef{{Model: request.Model}, {Model: "model-fallback-2"}}
+				ctx.VSRSelectedModel = request.Model
+				ctx.UpstreamStatusCode = http.StatusServiceUnavailable
+				router.fallbackCaller = func(_ context.Context, model string, body []byte, _ map[string]string) ([]byte, int, error) {
+					if model != "model-fallback-2" || strings.Contains(string(body), pdfData) || !strings.Contains(string(body), fileNote) {
+						t.Fatalf("fallback %s request = %s, want the replacement note", model, body)
+					}
+					return []byte(`{"id":"msg_inventory","type":"message","role":"assistant","model":"model-fallback-2","content":[{"type":"text","text":"` + inventoryText + `"}],"stop_reason":"end_turn","usage":{"input_tokens":20,"output_tokens":8}}`), http.StatusOK, nil
+				}
+				response := router.handleUpstreamTransportError([]byte("primary unavailable"), ctx)
+				if got := response.GetImmediateResponse().GetStatus().GetCode(); got != http.StatusOK {
+					t.Errorf("fallback status = %d, want 200", got)
+				}
+			} else {
+				plan = guardAnswer(t, router, ctx, inventoryText)
+			}
+			if len(*calls) != 1 || (*calls)[0].Parts["context"] != tc.wantContext {
+				t.Fatalf("model calls = %+v, want one with context %q", *calls, tc.wantContext)
+			}
+			if reason := ctx.ResponseGuard.observed().Errors[inventoryKey]; reason != tc.wantError {
+				t.Fatalf("signal error = %q, want %q", reason, tc.wantError)
+			}
+			if tc.fallback {
+				return
+			}
+			if wantFile {
+				assertBlockedWith(t, plan, "Response blocked by the response guard")
+			} else {
+				assertDelivered(t, ctx, plan, headers.WarningGuard)
 			}
 		})
 	}

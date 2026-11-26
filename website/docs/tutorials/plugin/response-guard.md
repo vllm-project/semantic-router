@@ -93,10 +93,11 @@ or `403` up to ten times, and shows a `403` as a failed login.
 
 The grounding context is the documents and memories the
 [context plugin](./context.md) injected, in either injection mode, and the
-text from the request's own tool results. A rule that reads `input.context`
-with `coverage: full` applies `on_unscanned` when tool-result content is
-omitted, even if the model read all the supplied text. If the omission leaves
-no readable grounding, the Router applies the policy without a model call.
+text from the tool results projected for the backend that answered the
+request. A rule that reads `input.context` with `coverage: full` applies
+`on_unscanned` when the grounding projection omits tool-result content, even
+if the model read all the supplied text. If the omission leaves no readable
+grounding, the Router applies the policy without a model call.
 
 `POST /api/v1/plugins/response_guard/preview` reads an active binding's guard
 over a supplied question, context and answer; `mode: probe` asks the

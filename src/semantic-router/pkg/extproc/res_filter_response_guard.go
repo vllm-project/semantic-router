@@ -109,8 +109,12 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 			grounding = append(grounding, retrieved)
 		}
 	}
-	if ctx.SemanticRequest != nil {
-		for _, message := range ctx.SemanticRequest.Messages {
+	request := ctx.responseGroundingRequest
+	if request == nil {
+		request = ctx.SemanticRequest
+	}
+	if request != nil {
+		for _, message := range request.Messages {
 			for _, content := range message.Content {
 				if content.Kind != llmprotocol.ContentToolResult {
 					continue
