@@ -540,15 +540,22 @@ func streamFailureSummary(err *llmprotocol.ProtocolError) string {
 	return summary
 }
 
+// streamFailure is a failed stream's error: its text is the summary, and it
+// unwraps to the protocol failure so a caller can read its category and code.
+type streamFailure struct{ failed *llmprotocol.ProtocolError }
+
+func (failure streamFailure) Error() string {
+	return "semantic stream did not complete successfully: " + streamFailureSummary(failure.failed)
+}
+
+func (failure streamFailure) Unwrap() error { return failure.failed }
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if state != nil && state.failed != nil {
-		return nil, fmt.Errorf("semantic stream did not complete successfully: %w", state.failed)
+		return nil, streamFailure{state.failed}
 	}
 	if !state.delivered() {
-		if state != nil && state.failed != nil {
-			return nil, fmt.Errorf("semantic stream did not complete successfully: %s", streamFailureSummary(state.failed))
-		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
