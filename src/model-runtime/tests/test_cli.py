@@ -278,3 +278,52 @@ def test_a_known_uid_keeps_its_environment(monkeypatch):
     monkeypatch.setenv("HOME", "/")
     cli.default_identity()
     assert os.environ["HOME"] == "/" and "TORCHINDUCTOR_CACHE_DIR" not in os.environ
+
+
+def clear_allocator_settings(monkeypatch):
+    for name in cli.ALLOCATOR_SETTINGS:
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
+
+
+def as_build(monkeypatch, cuda, hip, initialized=False):
+    import torch
+
+    monkeypatch.setattr(torch.version, "cuda", cuda)
+    monkeypatch.setattr(torch.version, "hip", hip)
+    monkeypatch.setattr(torch.cuda, "is_initialized", lambda: initialized)
+
+
+def test_a_cuda_build_takes_expandable_segments(monkeypatch):
+    clear_allocator_settings(monkeypatch)
+    as_build(monkeypatch, cuda="12.8", hip=None)
+    cli.expand_cuda_segments()
+    assert os.environ["PYTORCH_CUDA_ALLOC_CONF"] == "expandable_segments:True"
+
+
+@pytest.mark.parametrize("name", ["PYTORCH_ALLOC_CONF", "PYTORCH_CUDA_ALLOC_CONF"])
+def test_an_operators_allocator_setting_is_kept(monkeypatch, name):
+    clear_allocator_settings(monkeypatch)
+    monkeypatch.setenv(name, "max_split_size_mb:512")
+    as_build(monkeypatch, cuda="12.8", hip=None)
+    cli.expand_cuda_segments()
+    assert os.environ[name] == "max_split_size_mb:512"
+    assert not (set(cli.ALLOCATOR_SETTINGS) - {name}) & set(os.environ)
+
+
+@pytest.mark.parametrize(
+    ("cuda", "hip"), [(None, None), (None, "6.4"), ("12.8", "6.4")]
+)
+def test_cpu_and_rocm_builds_keep_the_default_allocator(monkeypatch, cuda, hip):
+    clear_allocator_settings(monkeypatch)
+    as_build(monkeypatch, cuda=cuda, hip=hip)
+    cli.expand_cuda_segments()
+    assert "PYTORCH_CUDA_ALLOC_CONF" not in os.environ
+
+
+def test_an_initialized_cuda_keeps_its_allocator_and_warns(monkeypatch, caplog):
+    clear_allocator_settings(monkeypatch)
+    as_build(monkeypatch, cuda="12.8", hip=None, initialized=True)
+    cli.expand_cuda_segments()
+    assert "PYTORCH_CUDA_ALLOC_CONF" not in os.environ
+    assert "expandable_segments takes effect only in a new process" in caplog.text
