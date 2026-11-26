@@ -988,15 +988,13 @@ def test_bindings_validates_and_hashes_effective_replay_store(tmp_path, monkeypa
         ),
         ({"store_backend": "redis", "redis": {"address": "db:6379"}}, None, False),
         ({"store_backend": "memory"}, None, False),
-        ({"enabled": False, "store_backend": "postgres"}, None, False),
-        ({}, {"enabled": False, "store_backend": "postgres"}, False),
     ],
 )
 def test_explicit_replay_storage_is_preserved_or_diagnosed(
     tmp_path, source, rendered, invalid
 ):
     def config(replay):
-        return {"global": {"services": {"router_replay": {"enabled": True, **replay}}}}
+        return {"global": {"services": {"router_replay": replay}}}
 
     candidate = tmp_path / "candidate.yaml"
     initial = yaml.safe_dump(config(rendered or source))
@@ -1009,9 +1007,32 @@ def test_explicit_replay_storage_is_preserved_or_diagnosed(
     assert candidate.read_text() == initial
 
 
+def test_unbound_template_postgres_selects_memory(tmp_path):
+    # The Router validates the replay store at startup whenever the services
+    # block selects a backend (every request carries a default replay
+    # policy), so a template postgres selection without a connection must be
+    # rewritten even though no decision mounts a router_replay plugin.
+    for rendered in (
+        {"store_backend": "postgres"},
+        {"postgres": {}},  # no store_backend: the postgres block selects it
+    ):
+        document = {"global": {"services": {"router_replay": rendered}}}
+        candidate = tmp_path / "candidate.yaml"
+        candidate.write_text(yaml.safe_dump(document))
+        overrides = bindings_mod._derive_eval_replay_store(candidate, {})
+        assert [change["new"] for change in overrides] == ["memory"]
+        service = yaml.safe_load(candidate.read_text())["global"]["services"][
+            "router_replay"
+        ]
+        assert service["store_backend"] == "memory"
+
+
 @pytest.mark.parametrize("scope", ["only", "later"])
 @pytest.mark.parametrize("enabled", [None, False, True])
-def test_disabled_global_store_with_decision_replay(tmp_path, scope, enabled):
+def test_decision_replay_plugins_do_not_gate_store_rewrite(tmp_path, scope, enabled):
+    # A decision-level router_replay plugin never gates store
+    # initialization: the store is built and validated from the services
+    # block alone, whatever the decisions record.
     plugin = {"type": "router_replay"}
     if enabled is not None:
         plugin["configuration"] = {"enabled": enabled}
@@ -1023,21 +1044,16 @@ def test_disabled_global_store_with_decision_replay(tmp_path, scope, enabled):
         document["recipes"] = [routing]
     else:
         document["recipes"] = [{"name": "other", "decisions": []}, routing]
-    initial = yaml.safe_dump(document)
     candidate = tmp_path / "candidate.yaml"
-    candidate.write_text(initial)
+    candidate.write_text(yaml.safe_dump(document))
     overrides = bindings_mod._derive_eval_replay_store(candidate, {})
-    if enabled:
-        assert [change["new"] for change in overrides] == ["memory"]
-        assert (
-            yaml.safe_load(candidate.read_text())["global"]["services"][
-                "router_replay"
-            ]["store_backend"]
-            == "memory"
-        )
-    else:
-        assert not overrides
-        assert candidate.read_text() == initial
+    assert [change["new"] for change in overrides] == ["memory"]
+    assert (
+        yaml.safe_load(candidate.read_text())["global"]["services"]["router_replay"][
+            "store_backend"
+        ]
+        == "memory"
+    )
 
 
 @pytest.mark.parametrize(

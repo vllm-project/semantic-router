@@ -46,7 +46,10 @@ SCRIPT = RECIPE_LAB_ROOT / "examples" / "cold-start" / "cold-start.sh"
 MODEL_EVAL_DIR = REPO_ROOT / "src" / "training" / "model_eval"
 
 CATEGORIES = ("math", "physics", "law", "history")
-PER_CATEGORY = 10
+# 20 per category -> 80 cases -> the 40/30/30 split freezes 24 cases: the
+# paired Hoeffding CI over 12 cases spans a 1pp threshold no matter the
+# outcome (radius ~78pp), so the live verdict cannot decide.
+PER_CATEGORY = 20
 ALIAS_A = "team/model-a"
 ALIAS_B = "team/model-b"
 SEED_SERVED = "local/seed-backend"

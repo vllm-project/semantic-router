@@ -479,18 +479,6 @@ def _derived_eval_providers(
     return config, disabled
 
 
-def _decision_enables_replay(document: dict[str, Any]) -> bool:
-    """A decision can opt in when the global replay recorder is disabled."""
-    for recipe in document.get("recipes") or []:
-        for decision in recipe.get("decisions") or []:
-            for plugin in decision.get("plugins") or []:
-                if plugin.get("type") == "router_replay":
-                    if (plugin.get("configuration") or {}).get("enabled") is True:
-                        return True
-                    break
-    return False
-
-
 def _derive_eval_replay_store(
     candidate: Path, providers: dict[str, Any]
 ) -> list[dict[str, str]]:
@@ -508,8 +496,10 @@ def _derive_eval_replay_store(
     pg = rendered.get("postgres")
     if backend != "postgres" and (backend or pg is None):
         return []
-    if not rendered.get("enabled") and not _decision_enables_replay(document):
-        return []  # Go initializes no replay store when every recorder is disabled.
+    # The Router builds and validates the replay store at startup whenever
+    # the services block selects a backend (every request carries a default
+    # replay policy), so an unusable postgres selection breaks the router
+    # even when no decision mounts a router_replay plugin.
     path = "global.services.router_replay"
     if isinstance(pg, dict) and all(
         isinstance(pg.get(k), str) and pg[k].strip() for k in ("database", "user")
