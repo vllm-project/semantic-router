@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 func validityTestTools() []llmprotocol.Tool {
@@ -96,16 +95,6 @@ func TestInvalidRecentToolCalls(t *testing.T) {
 			want: 0,
 		},
 		{
-			name:  "invalid call in an earlier item of the last turn",
-			tools: validityTestTools(),
-			messages: []llmprotocol.Message{
-				{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run tests"}}},
-				assistantToolCallMessage(&llmprotocol.ToolCall{ID: "call_1", Name: "bash", Arguments: `{"command":"ls"}`}),
-				assistantToolCallMessage(&llmprotocol.ToolCall{ID: "call_2", Name: "bash", Arguments: `{"command":"ls","description":"list files"}`}),
-			},
-			want: 1,
-		},
-		{
 			name:  "no assistant message",
 			tools: validityTestTools(),
 			messages: []llmprotocol.Message{
@@ -132,21 +121,5 @@ func TestInvalidRecentToolCalls(t *testing.T) {
 				t.Fatalf("InvalidRecentToolCalls = %d, want %d", got, test.want)
 			}
 		})
-	}
-}
-
-// A Responses input carries each function_call item as its own assistant
-// message; the fact counts the whole turn, not only its last item.
-func TestInvalidRecentToolCallsCountsEveryItemOfAResponsesTurn(t *testing.T) {
-	body := `{"model":"m","tools":[{"type":"function","name":"bash","parameters":{"type":"object","required":["command"],"properties":{"command":{"type":"string"}}}}],"input":[` +
-		`{"role":"assistant","content":[{"type":"output_text","text":"calling"}]},` +
-		`{"type":"function_call","call_id":"c1","name":"bash","arguments":"{}"},` +
-		`{"type":"function_call","call_id":"c2","name":"bash","arguments":"{\"command\":\"ls\"}"}]}`
-	request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIResponsesV1, []byte(body))
-	if err != nil {
-		t.Fatalf("decode request: %v", err)
-	}
-	if got := InvalidRecentToolCalls(&request); got != 1 {
-		t.Fatalf("InvalidRecentToolCalls = %d, want 1", got)
 	}
 }

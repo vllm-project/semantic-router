@@ -16,7 +16,7 @@ func TestExtractSemanticRequestSignalsInvalidToolCalls(t *testing.T) {
 		}},
 		Messages: []llmprotocol.Message{
 			{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run tests"}}},
-			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "bash", Arguments: `{"command":"ls"}`}}}},
+			{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "bash", Arguments: `{}`}}}},
 		},
 	}
 	snapshot := extractSemanticRequestSignals(request)
