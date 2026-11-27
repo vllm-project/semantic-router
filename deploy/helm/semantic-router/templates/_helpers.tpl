@@ -171,6 +171,39 @@ replaces the chart's data volume.
 {{- end }}
 
 {{/*
+"true" when the Router's ext_proc listener serves TLS, which kubelet's native
+gRPC probe cannot reach: that probe speaks plaintext. Mirrors the Operator's
+routerUsesGRPCTLS, so a chart release and an Operator release probe the same
+listener the same way. The Router's own boolean flag syntax and last-value-wins
+behavior apply, and an argument list ends at a bare "--".
+*/}}
+{{- define "semantic-router.extprocGRPCTLS" -}}
+{{- $secure := false -}}
+{{- range .Values.args -}}
+{{- $arg := toString . -}}
+{{- if eq $arg "--" -}}
+{{- break -}}
+{{- end -}}
+{{- $name := $arg -}}
+{{- $value := "" -}}
+{{- $hasValue := false -}}
+{{- if contains "=" $arg -}}
+{{- $parts := splitList "=" $arg -}}
+{{- $name = index $parts 0 -}}
+{{- $value = index $parts 1 -}}
+{{- $hasValue = true -}}
+{{- end -}}
+{{- if or (eq $name "--secure") (eq $name "-secure") -}}
+{{- $secure = true -}}
+{{- if $hasValue -}}
+{{- $secure = has $value (list "1" "t" "T" "TRUE" "True" "true") -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $secure -}}
+{{- end }}
+
+{{/*
 The install note for a vector store that keeps its uploaded files in the
 chart's data directory while that is an emptyDir, which a new Pod starts empty.
 */}}
