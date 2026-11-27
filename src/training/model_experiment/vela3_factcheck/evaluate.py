@@ -15,8 +15,9 @@ from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.plugins.base import SurfacePlan
 from vllm_srun.runtime import Runtime
 
+from ...model_eval.provenance.emit import split_digest
 from ...model_eval.provenance.metrics import roc_auc
-from .data import POSITIVE, read_rows, suite_rows
+from .data import NEUTRAL_THRESHOLD, POSITIVE, read_rows, suite_rows
 from .package import ADAPTER, sha256
 from .train import QUESTION, questions
 
@@ -66,7 +67,7 @@ def average_precision(score, truth):
     return float(np.sum(np.diff(np.r_[0, recall]) * tp / (thresholds + 1)))
 
 
-def summarize(rows, threshold, *, bootstrap=False):
+def summarize(rows, threshold, *, published_threshold=None, bootstrap=False):
     score = np.array([row["score"] for row in rows])
     truth = np.array([row["positive"] for row in rows], dtype=bool)
     abstain = np.array([row["abstain"] for row in rows])
@@ -81,9 +82,11 @@ def summarize(rows, threshold, *, bootstrap=False):
             / len(rows)
         ),
         "abstain_p50_p95": np.percentile(abstain, [50, 95]).tolist(),
-        "neutral": rates(score, truth, 0.5),
+        "neutral": rates(score, truth, NEUTRAL_THRESHOLD),
         "selected_on_dev": rates(score, truth, threshold),
     }
+    if published_threshold is not None:
+        report["published_operating_point"] = rates(score, truth, published_threshold)
     if bootstrap:
         groups = defaultdict(list)
         for index, row in enumerate(rows):
@@ -97,7 +100,7 @@ def summarize(rows, threshold, *, bootstrap=False):
             )
             s, y = score[indices], truth[indices]
             for operating_point, cut in (
-                ("neutral", 0.5),
+                ("neutral", NEUTRAL_THRESHOLD),
                 ("selected_on_dev", threshold),
             ):
                 if y.any():
@@ -156,7 +159,9 @@ def pair_results(rows, threshold):
     return {
         "pairs": len(pairs),
         "ordered": sum(pos > neg for neg, pos in pairs),
-        "both_correct_neutral": sum(neg < 0.5 <= pos for neg, pos in pairs),
+        "both_correct_neutral": sum(
+            neg < NEUTRAL_THRESHOLD <= pos for neg, pos in pairs
+        ),
         "both_correct_dev": sum(neg < threshold <= pos for neg, pos in pairs),
     }
 
@@ -172,9 +177,12 @@ def main():
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--shared", action="store_true")
+    parser.add_argument("--published-threshold", type=float, default=0.9999)
     args = parser.parse_args()
     if args.batch_size < 1:
         parser.error("batch-size must be positive")
+    if not 0 <= args.published_threshold <= 1:
+        parser.error("published-threshold must be in [0, 1]")
     runtime = Runtime(
         ServeConfig(
             models=(ModelConfig(model=str(args.model.resolve()), device=args.device),)
@@ -198,8 +206,8 @@ def main():
             raw[name] = score_rows(model, placement, request, rows, args.batch_size)
             print(f"{name}: {len(rows)}", flush=True)
         peak_memory = (
-            torch.cuda.max_memory_allocated(placement.device) / 1024**2
-            if placement.device.type == "cuda"
+            torch.cuda.max_memory_allocated(model.engine_model.device) / 1024**2
+            if model.engine_model.device.type == "cuda"
             else None
         )
     finally:
@@ -223,12 +231,25 @@ def main():
             args.model / ("router_adapter.safetensors" if args.shared else ADAPTER)
         ),
         "dev_threshold": threshold,
+        "published_threshold": args.published_threshold,
         "batch_size": args.batch_size,
         "peak_cuda_memory_mib": peak_memory,
         "max_input_tokens": int(model.package.max_input_tokens),
+        "model_sha256": model.info.model_sha256,
+        "input_splits": {
+            name: split_digest(
+                (row["text"], int(row["label"] == POSITIVE)) for row in rows
+            )
+            for name, rows in inputs.items()
+        },
         "wall_seconds": time.perf_counter() - started,
         "splits": {
-            key: summarize(raw[key], threshold, bootstrap=key in {"test", "fresh-mgsm"})
+            key: summarize(
+                raw[key],
+                threshold,
+                published_threshold=args.published_threshold,
+                bootstrap=key in {"test", "fresh-mgsm"},
+            )
             for key in splits
         },
         "mgsm_by_language": {
@@ -237,13 +258,14 @@ def main():
         "probes": probes,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("x", encoding="utf-8") as file:
-        json.dump(report, file, indent=2, allow_nan=False)
-        print(file=file)
     if args.scores_out is not None:
         with args.scores_out.open("x", encoding="utf-8") as file:
             json.dump(raw, file, allow_nan=False)
             print(file=file)
+        report["scores_sha256"] = sha256(args.scores_out)
+    with args.out.open("x", encoding="utf-8") as file:
+        json.dump(report, file, indent=2, allow_nan=False)
+        print(file=file)
 
 
 if __name__ == "__main__":

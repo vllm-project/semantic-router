@@ -13,7 +13,7 @@ from pathlib import Path
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_file
-from torch.nn import functional as F
+from torch.nn.functional import cross_entropy, softplus
 from vllm_srun.config import ModelConfig, ServeConfig
 from vllm_srun.engines.native.adapters import load_adapter_network, module_name
 from vllm_srun.families.vela2.encoder_layout import batch_indices
@@ -21,11 +21,14 @@ from vllm_srun.families.vela2.members import INDEX_INPUTS
 from vllm_srun.runtime import Runtime
 
 from .data import NEGATIVE, POSITIVE, read_rows
-from .package import ADAPTER, sha256
+from .package import ADAPTER, release_files, sha256
 
 FACTCHECK = "router:factcheck"
 QUESTION = "fact_check_classifier:factcheck"
 INSTRUCTIONS = "Does answering this request require checking facts?"
+MEDIUM_SEQUENCE = 256
+LONG_SEQUENCE = 512
+PARITY_TOLERANCE = 0.005
 
 
 def questions(model):
@@ -47,7 +50,7 @@ def make_batches(examples, rng):
         block = sorted(order[offset : offset + 64], key=lambda row: len(row[0].ids))
         while block:
             width = len(block[-1][0].ids)
-            size = 1 if width > 512 else 2 if width > 256 else 4
+            size = 1 if width > LONG_SEQUENCE else 2 if width > MEDIUM_SEQUENCE else 4
             batches.append(block[-size:])
             del block[-size:]
     rng.shuffle(batches)
@@ -131,7 +134,7 @@ def fit(args, model, placement, rows, pairs, rng):
         local = forward([examples[0][0]]).softmax(-1)[0, 1].item()
         expected = torch.as_tensor(reference[:2]).softmax(-1)[1].item()
         parity_error = abs(local - expected)
-    if parity_error > 0.005:
+    if parity_error > PARITY_TOLERANCE:
         raise ValueError(
             f"training and runtime probability differ by {parity_error:.5f}"
         )
@@ -164,15 +167,15 @@ def fit(args, model, placement, rows, pairs, rng):
             logits = forward(sequences)
             target = torch.tensor(targets, device=device)
             gap = logits[:, 1] - logits[:, 0]
-            ce = F.cross_entropy(logits, target, reduction="none", label_smoothing=0.05)
+            ce = cross_entropy(logits, target, reduction="none", label_smoothing=0.05)
             loss = (
                 ce * torch.tensor(weights, device=device)
             ).mean() + 0.005 * gap.square().mean()
             if j == 0 and pair_sequences and args.pair_weight:
                 paired = forward(pair_sequences[(offset // 4) % len(pair_sequences)])
                 margins = paired[:, 1] - paired[:, 0]
-                pair_loss = F.softplus(2.5 - (margins[1] - margins[0]))
-                pair_loss += F.cross_entropy(
+                pair_loss = softplus(2.5 - (margins[1] - margins[0]))
+                pair_loss += cross_entropy(
                     paired, target.new_tensor([0, 1]), label_smoothing=0.05
                 )
                 loss = loss + args.pair_weight * pair_loss
@@ -230,6 +233,7 @@ def fit(args, model, placement, rows, pairs, rng):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
+    parser.add_argument("--base-release", default="vllm-sr/vela3-fast")
     parser.add_argument("--train", type=Path, required=True)
     parser.add_argument("--augmentation", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
@@ -248,6 +252,7 @@ def main():
     for row in read_rows(args.augmentation):
         (pairs if row.get("kind") == "pair" else rows).append(row)
     rng.shuffle(rows)
+    release = release_files(args.model, args.base_release)
     args.out.mkdir(parents=True)
     runtime = Runtime(
         ServeConfig(
@@ -258,6 +263,9 @@ def main():
         runtime.load()
         served = runtime.lookup(None)
         receipt = fit(args, served.model, served.placement, rows, pairs, rng)
+        receipt["base_repo"] = release.repo_id
+        receipt["base_revision"] = release.revision
+        receipt["base_model_sha256"] = release.model_sha256
         (args.out / "run.json").write_text(
             json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
         )

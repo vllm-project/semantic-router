@@ -13,7 +13,7 @@ class FactCheckDataTests(unittest.TestCase):
             {"id": "b", "text": "Sum the values.", "group_sha256": "source-group"},
         ]
         held_out = [
-            {"id": "c", "text": " WHAT time does the library close today？ "},
+            {"id": "c", "text": " WHAT time does the library close today\uff1f "},
             {"id": "d", "text": "Suma los valores.", "group_sha256": "source-group"},
             {"id": "e", "text": "What time does the station close today?"},
         ]
@@ -29,17 +29,37 @@ class FactCheckDataTests(unittest.TestCase):
             adapter = root / "trained.safetensors"
             adapter.write_bytes(b"candidate")
             out = root / "variant"
+            config_digest = (
+                "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+            )
             export_variant(
-                base, ("config.json", "factcheck_adapter.safetensors"), adapter, out
+                base,
+                {
+                    "config.json": config_digest,
+                    "factcheck_adapter.safetensors": "unused",
+                },
+                adapter,
+                out,
             )
             self.assertEqual(
                 (base / "factcheck_adapter.safetensors").read_bytes(), b"base"
             )
+
             self.assertEqual(
                 (out / "factcheck_adapter.safetensors").read_bytes(), b"candidate"
             )
             self.assertEqual((out / "config.json").read_bytes(), b"{}")
             self.assertEqual(
                 (out / "SHA256SUMS").read_text().splitlines()[0],
-                "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a  config.json",
+                f"{config_digest}  config.json",
             )
+
+    def test_failed_copy_leaves_destination_available_for_retry(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter = root / "trained.safetensors"
+            adapter.write_bytes(b"candidate")
+            output = root / "variant"
+            with self.assertRaises(FileNotFoundError):
+                export_variant(root, {"missing.json": "unused"}, adapter, output)
+            self.assertFalse(output.exists())

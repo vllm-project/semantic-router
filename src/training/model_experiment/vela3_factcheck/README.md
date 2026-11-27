@@ -48,7 +48,9 @@ python -m "$entry.evaluate" --model "$OUT/candidate" --suite "$SUITE" --probes "
 ```
 
 The audit compares normalized text, source groups and character 5-grams.
-Reports show results at 0.5 and at a threshold selected only on `dev`.
+Reports show results at the neutral 0.5 threshold, at a threshold selected only
+on `dev`, and at the deployed `vela3-fast` preset threshold of 0.9999. A change
+in calibration needs a candidate-specific threshold before promotion.
 Use the separate MGSM language slices and paired evidence results alongside
 aggregate metrics. The suite documents source artifacts in `no_robots` and
 WildBench that can make their aggregate AUC optimistic. Both are secondary to
@@ -69,7 +71,34 @@ immutable input and artifact receipt revisions, and validate the bundle.
 PYTHONPATH=src/training/model_eval python -m provenance.cli validate "$BUNDLE"
 ```
 
-Use a separately configured worker for shadow traffic while the released worker
-continues to supply the answer. Promote only after the predefined gate passes.
+Start both workers to mirror the replay with `python -m "$entry.serve_check"
+shadow "$RELEASED_ENDPOINT" "$CANDIDATE_ENDPOINT"`. The released worker supplies
+the primary results. Promote only after the predefined gate passes.
 Rollback by restoring the released configuration and checking its artifact
 identity and decision responses.
+
+## Reference run
+
+The primary `vela3-fast` run used 5,248 audited suite rows, 638 authored rows,
+and 100 paired training entries. Four suite training rows overlapped held-out
+prompts and were removed from the training input. The audit also checked both
+sets of evidence probes against the training input.
+
+| Metric | Released | Candidate |
+| --- | ---: | ---: |
+| Test ROC AUC | 0.673 | 0.934 |
+| Test Brier score | 0.381 | 0.098 |
+| Test recall at 0.5 | 387/400 | 352/400 |
+| Test false positives at 0.5 | 303/400 | 49/400 |
+| MGSM false positives at 0.5 | 1,991/1,991 | 72/1,991 |
+| New evidence pairs ordered correctly | 1/8 | 7/8 |
+| Both labels correct on the new pairs at 0.5 | 0/8 | 3/8 |
+| Local `/v1/decisions` replay p95 | 86.5 ms | 86.1 ms |
+
+The HTTP replay used the same CUDA device and settings, with 80 timed requests
+per package after warmup. The multi-question requests covered FactCheck,
+domain, feedback, PII, and unsupported claims. The latter four answers matched
+across the three captures, and restoring the released package reproduced its
+entire responses. The 0.9999 released preset threshold flagged zero positives
+on the candidate test scores. A candidate deployment needs its own explicit
+FactCheck predicate.

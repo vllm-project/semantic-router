@@ -3,10 +3,12 @@
 import argparse
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from .data import POSITIVE
+from ...model_eval.provenance.metrics import latency_percentiles
+from .data import NEGATIVE, POSITIVE
 from .train import INSTRUCTIONS
 
 REQUESTS = (
@@ -25,7 +27,12 @@ def requests():
                 "answer": "Contact Alex at alex@example.com for the details.",
             },
             "questions": {
-                "factcheck": {"type": "choice", "instructions": INSTRUCTIONS},
+                "factcheck": {
+                    "type": "choice",
+                    "instructions": INSTRUCTIONS,
+                    "overflow": "truncate",
+                    "criteria": {NEGATIVE: None, POSITIVE: None},
+                },
                 "domain": {
                     "type": "choice",
                     "instructions": "Which subject area is this request about?",
@@ -48,10 +55,32 @@ def request_json(endpoint, path, body=None):
         return json.load(response)
 
 
-def observe(endpoint, rounds):
-    from ...model_eval.provenance.metrics import latency_percentiles
+def shadow(primary, candidate):
+    """Mirror fixed requests to a second worker and keep the released answers."""
+    path = "/v1/decisions"
+    rows = []
+    with ThreadPoolExecutor(max_workers=1) as worker:
+        for body in requests():
+            unmirrored = request_json(primary, path, body)
+            comparison = worker.submit(request_json, candidate, path, body)
+            served = request_json(primary, path, body)
+            if served["answers"] != unmirrored["answers"]:
+                raise ValueError("the released responses changed during the shadow run")
+            scores = [
+                result["answers"]["factcheck"]["probabilities"][POSITIVE]
+                for result in (served, comparison.result())
+            ]
+            rows.append({"primary": scores[0], "shadow": scores[1]})
+    return rows
 
+
+def observe(endpoint, rounds):
     inputs = list(requests())
+    (model,) = request_json(endpoint, "/v1/models")["data"]
+    identity = {
+        key: model[key]
+        for key in ("model_sha256", "engine", "device", "dtype", "engine_args")
+    }
     for body in inputs:
         request_json(endpoint, "/v1/decisions", body)
     answers, timings = [], []
@@ -72,15 +101,36 @@ def observe(endpoint, rounds):
                         "thresholds": result.get("thresholds", {}),
                     }
                 )
-    return {"outputs": answers, "latency": latency_percentiles(timings)}
+    return {
+        "model": identity,
+        "outputs": answers,
+        "latency": latency_percentiles(timings),
+    }
 
 
 def compare(base, candidate, rollback):
+    if base["model"] != rollback["model"]:
+        raise ValueError("rollback worker has a different model identity or settings")
+    base_digest = base["model"]["model_sha256"]
+    candidate_digest = candidate["model"]["model_sha256"]
+    if base_digest == candidate_digest or any(
+        candidate["model"].get(key) != value
+        for key, value in base["model"].items()
+        if key != "model_sha256"
+    ):
+        raise ValueError(
+            "expected distinct model identities with matching runtime settings"
+        )
+    expected = set(next(requests())["questions"])
+    if any(len(run["outputs"]) != len(REQUESTS) for run in (base, candidate, rollback)):
+        raise ValueError("incomplete HTTP replay")
     rows = []
     for b, c, r in zip(
         base["outputs"], candidate["outputs"], rollback["outputs"], strict=True
     ):
-        unrelated = {key for key in b["answers"] if key != "factcheck"}
+        if any(set(item["answers"]) != expected for item in (b, c, r)):
+            raise ValueError("HTTP replay is missing expected answers")
+        unrelated = expected - {"factcheck"}
         if b != r:
             raise ValueError("rollback did not restore the released response")
         if any(b["answers"][key] != c["answers"][key] for key in unrelated) or any(
@@ -97,6 +147,8 @@ def compare(base, candidate, rollback):
         raise ValueError("the candidate did not change any FactCheck response")
     return {
         "factcheck": rows,
+        "released_model_sha256": base_digest,
+        "candidate_model_sha256": candidate_digest,
         "released_latency": base["latency"],
         "candidate_latency": candidate["latency"],
     }
@@ -108,12 +160,17 @@ def main():
     capture = commands.add_parser("capture")
     capture.add_argument("endpoint")
     capture.add_argument("--rounds", type=int, default=20)
+    mirror = commands.add_parser("shadow")
+    mirror.add_argument("primary")
+    mirror.add_argument("candidate")
     check = commands.add_parser("compare")
     for name in ("released", "candidate", "rollback"):
         check.add_argument(name, type=Path)
     args = parser.parse_args()
     if args.command == "capture":
         result = observe(args.endpoint, args.rounds)
+    elif args.command == "shadow":
+        result = shadow(args.primary, args.candidate)
     else:
         result = compare(
             *(

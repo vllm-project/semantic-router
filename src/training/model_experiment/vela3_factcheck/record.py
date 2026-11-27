@@ -5,6 +5,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from vllm_srun.families.vela3.package import verify
+
 from ...model_eval.provenance.emit import (
     build_artifact_manifest,
     build_dataset_manifest,
@@ -20,8 +22,8 @@ from ...model_eval.provenance.metrics import (
     discrimination,
     operating_points,
 )
-from .data import NEGATIVE, POSITIVE, read_rows, suite_rows
-from .package import ADAPTER, sha256
+from .data import NEGATIVE, NEUTRAL_THRESHOLD, POSITIVE, read_rows, suite_rows
+from .package import ADAPTER, release_files, sha256
 
 TASK = "fact-check"
 LABELS = {NEGATIVE: 0, POSITIVE: 1}
@@ -50,6 +52,10 @@ def make_bundle(args):
     report = json.loads(args.report.read_text())
     run_stats = json.loads(args.run.read_text())
     http = json.loads(args.serving.read_text())
+    audit = json.loads(args.audit.read_text())
+    gate = json.loads(args.gate.read_text())
+    release = release_files(args.base, BASE)
+    candidate = verify(args.model, None)
     scores = json.loads(args.scores.read_text())["test"]
     if (
         sha256(args.model / ADAPTER) != run_stats["adapter_sha256"]
@@ -63,11 +69,50 @@ def make_bundle(args):
         or sha256(args.augmentation) != run_stats["augmentation_sha256"]
     ):
         raise ValueError("the training input files differ from the run receipt")
+    if (
+        release.revision != BASE_REVISION
+        or run_stats["initial_adapter_sha256"]
+        != release.files["router_adapter.safetensors"]
+        or any(
+            candidate.files.get(name) != digest
+            for name, digest in release.files.items()
+            if name != ADAPTER
+        )
+        or candidate.model_sha256 != report["model_sha256"]
+        or candidate.model_sha256 != http["candidate_model_sha256"]
+        or release.model_sha256 != http["released_model_sha256"]
+    ):
+        raise ValueError("pinned base, candidate package and serving identities differ")
+    if (
+        audit["train_overlaps"]
+        or audit["augmentation_overlaps"]
+        or audit["train_sha256"] != run_stats["train_sha256"]
+        or audit["augmentation_sha256"] != run_stats["augmentation_sha256"]
+    ):
+        raise ValueError("training inputs must pass the held-out audit")
+    if (
+        gate["status"] not in {"passed", "rejected"}
+        or gate["candidate_model_sha256"] != candidate.model_sha256
+    ):
+        raise ValueError("expected a completed gate disposition for this candidate")
+    if (
+        sha256(args.scores) != report["scores_sha256"]
+        or split("test", test_rows)["digest"] != report["input_splits"]["test"]
+    ):
+        raise ValueError(
+            "prediction file or test inputs differ from the evaluation receipt"
+        )
     if [(row["id"], row["positive"]) for row in scores] != [
         (row["id"], row["label"] == POSITIVE) for row in test_rows
     ]:
         raise ValueError("prediction IDs or labels differ from the pinned test split")
 
+    pairs = [
+        {"id": row["id"], "text": row[field], "label": label}
+        for row in augment
+        if row.get("kind") == "pair"
+        for field, label in (("neg_text", NEGATIVE), ("pos_text", POSITIVE))
+    ]
     dataset = build_dataset_manifest(
         manifest_id="vela3-factcheck-data",
         task=TASK,
@@ -78,6 +123,7 @@ def make_bundle(args):
         splits=[
             split("train", training),
             split("augmentation", [r for r in augment if r.get("kind") != "pair"]),
+            *([split("evidence-pairs", pairs)] if pairs else []),
             split("test", test_rows),
         ],
         text_field="text",
@@ -87,6 +133,12 @@ def make_bundle(args):
             "Apply the reviewed training labels and exclude training rows matching held-out IDs, groups or text.",
             "Append the authored examples and apply the separately identified evidence pairs in the ranking loss.",
         ],
+        description=(
+            "Training sources: Dolly (CC BY-SA 3.0), NF-CATS (MIT), Open Question Type "
+            "(CC BY 4.0), Search Arena user prompts (CC BY 4.0), URS (Apache-2.0), and "
+            "local authored augmentation. No Robots is used only in offline evaluation; "
+            "see the pinned suite source inventory for its non-commercial terms."
+        ),
     )
     dataset["source"]["components"] = [
         {"type": "huggingface", "locator": SUITE, "revision": SUITE_REVISION},
@@ -104,7 +156,16 @@ def make_bundle(args):
         base_model_revision=BASE_REVISION,
         entrypoint=f"{PREFIX}/train.py",
         repo_root=ROOT,
-        dataset_refs=[{**dataset_ref, "splits": ["train", "augmentation"]}],
+        dataset_refs=[
+            {
+                **dataset_ref,
+                "splits": [
+                    "train",
+                    "augmentation",
+                    *(["evidence-pairs"] if pairs else []),
+                ],
+            }
+        ],
         seed=run_stats["seed"],
         hyperparameters={
             **run_stats,
@@ -119,6 +180,8 @@ def make_bundle(args):
         label_mapping=LABELS,
     )
     run["code"]["repo"] = args.code_repo
+    run["code"]["revision"] = args.train_code_revision
+    run["code"]["dirty"] = args.train_dirty
     artifact = build_artifact_manifest(
         manifest_id="vela3-factcheck-candidate",
         task=TASK,
@@ -133,12 +196,12 @@ def make_bundle(args):
         include_globs=("*.safetensors", "*.json", "SHA256SUMS"),
     )
     y_true = [int(row["positive"]) for row in scores]
-    y_pred = [int(row["score"] >= 0.5) for row in scores]
+    y_pred = [int(row["score"] >= NEUTRAL_THRESHOLD) for row in scores]
     probs = [[1 - row["score"], row["score"]] for row in scores]
     confidence = [prob[pred] for prob, pred in zip(probs, y_pred, strict=True)]
     abstention = abstention_curve(y_true, y_pred, confidence)
     abstention["operating_points"] = operating_points(
-        y_true, probs, LABELS, (POSITIVE,), (0.5, report["dev_threshold"])
+        y_true, probs, LABELS, (POSITIVE,), (NEUTRAL_THRESHOLD, report["dev_threshold"])
     )
     evaluation = build_evaluation_manifest(
         manifest_id="vela3-factcheck-test",
@@ -172,14 +235,18 @@ def make_bundle(args):
         description="Latency comes from the separate public HTTP replay of the same artifact; quality comes from the predefined test split.",
     )
     evaluation["harness"]["code"]["repo"] = args.code_repo
+    evaluation["description"] += f" Qualification disposition: {gate['status']}."
     for record in (dataset, run, artifact, evaluation):
-        write_manifest(record, args.out / f"{record['kind']}.yaml")
+        write_manifest(record, args.out / f"{record['kind']}.manifest.yaml")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in (
         "train",
+        "base",
+        "audit",
+        "gate",
         "augmentation",
         "suite",
         "run",
@@ -190,9 +257,15 @@ def main():
         "out",
     ):
         parser.add_argument(f"--{name}", type=Path, required=True)
-    for name in ("input-revision", "artifact-revision", "device-name"):
+    for name in (
+        "input-revision",
+        "artifact-revision",
+        "device-name",
+        "train-code-revision",
+    ):
         parser.add_argument(f"--{name}", required=True)
     parser.add_argument("--code-repo", required=True)
+    parser.add_argument("--train-dirty", action="store_true")
     make_bundle(parser.parse_args())
 
 

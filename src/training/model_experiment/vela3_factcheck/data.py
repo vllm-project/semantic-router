@@ -10,6 +10,8 @@ from pathlib import Path
 
 NEGATIVE = "NO_FACT_CHECK_NEEDED"
 POSITIVE = "FACT_CHECK_NEEDED"
+NEUTRAL_THRESHOLD = 0.5
+MIN_SHINGLES = 20
 
 # Count/add/rewrite supplied material, or obtain missing content at a linked URL.
 REVIEWED_LABELS = {
@@ -39,15 +41,17 @@ def shingles(text):
 def overlaps(training, held_out):
     exact, groups, index = (defaultdict(set) for _ in range(3))
     fingerprints = {}
+    held_out_ids = set()
     for row in held_out:
         key = row["id"]
+        held_out_ids.add(key)
         normalized = normalize(row["text"])
         exact[normalized].add(key)
         for field in ("group", "group_sha256"):
             if row.get(field):
                 groups[row[field]].add(key)
         fingerprint = shingles(normalized)
-        if len(fingerprint) >= 20:
+        if len(fingerprint) >= MIN_SHINGLES:
             fingerprints[key] = fingerprint
             for shingle in fingerprint:
                 index[shingle].add(key)
@@ -56,10 +60,12 @@ def overlaps(training, held_out):
     for row in training:
         normalized = normalize(row["text"])
         matching = set(exact.get(normalized, ()))
+        if row["id"] in held_out_ids:
+            matching.add(row["id"])
         for field in ("group", "group_sha256"):
             matching.update(groups.get(row.get(field), ()))
         fingerprint = shingles(normalized)
-        if len(fingerprint) >= 20:
+        if len(fingerprint) >= MIN_SHINGLES:
             candidates = set().union(*(index.get(s, ()) for s in fingerprint))
             for key in candidates - matching:
                 other = fingerprints[key]
@@ -85,10 +91,7 @@ def suite_rows(suite, split):
 def audit(suite, training, augmentation, probes=()):
     seen = [r for r in augmentation if r.get("kind") != "pair"]
     for pair in (r for r in augmentation if r.get("kind") == "pair"):
-        seen.extend(
-            {"id": pair["id"], "text": pair[field]}
-            for field in ("neg_text", "pos_text")
-        )
+        seen.extend({**pair, "text": pair[field]} for field in ("neg_text", "pos_text"))
     held_out = [
         row
         for path in sorted(suite.glob("*/fact_check/*.jsonl"))
@@ -122,7 +125,11 @@ def main():
     report["augmentation_sha256"] = hashlib.sha256(
         args.augmentation.read_bytes()
     ).hexdigest()
-    args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    report["probe_sha256"] = [
+        hashlib.sha256(path.read_bytes()).hexdigest() for path in args.probes
+    ]
+    if args.train is not None:
+        report["train_sha256"] = hashlib.sha256(args.train.read_bytes()).hexdigest()
     for field in ("train_overlaps", "augmentation_overlaps"):
         print(f"{field}: {len(report[field])}")
     if args.clean_train is not None and not report["augmentation_overlaps"]:
@@ -130,10 +137,21 @@ def main():
         with args.clean_train.open("x", encoding="utf-8") as output:
             for row in training:
                 if row["id"] not in excluded:
-                    if args.train is None and row["id"] in REVIEWED_LABELS:
-                        row = {**row, "label": REVIEWED_LABELS[row["id"]]}
-                    print(json.dumps(row, ensure_ascii=False), file=output)
+                    label = (
+                        REVIEWED_LABELS.get(row["id"], row["label"])
+                        if args.train is None
+                        else row["label"]
+                    )
+                    print(
+                        json.dumps({**row, "label": label}, ensure_ascii=False),
+                        file=output,
+                    )
+        report["clean_train_sha256"] = hashlib.sha256(
+            args.clean_train.read_bytes()
+        ).hexdigest()
+        args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return 0
+    args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     return int(bool(report["train_overlaps"] or report["augmentation_overlaps"]))
 
 
