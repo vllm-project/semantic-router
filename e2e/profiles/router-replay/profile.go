@@ -68,6 +68,7 @@ func (p *Profile) GetTestCases() []string {
 		"router-replay-tool-result-capture",
 		"shadow-dispatch-observes-candidate-model",
 		"shadow-dispatch-multi-model-completes",
+		"shadow-dispatch-group-cost-budget",
 		"shadow-dataset-export-manifest",
 		"shadow-dataset-judge-tasks",
 		"shadow-dispatch-fail-open-unreachable-backend",

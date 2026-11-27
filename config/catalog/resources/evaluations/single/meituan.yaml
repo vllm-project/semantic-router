@@ -1,0 +1,269 @@
+- id: meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: claude-code
+    agent_version: 2.1.280
+    context_window: 512K
+    averaged_runs: 3
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.884
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-terminal-bench-4@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: claude-code
+    agent_version: 2.1.280
+    context_window: 512K
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.385
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-deepswe@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: mini-swe-agent
+    context_window: 1M
+    averaged_runs: 3
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.646
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-automation-bench@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    subset: public
+    task_count: 600
+    evaluation_harness: official evaluation code
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    score: 0.518
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-humanitys-last-exam-with-tools@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    tool_policy: with_tools
+    harness: claude-code
+    agent_version: 2.1.116
+    subset: full
+    maximum_output_tokens: 256K
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.631
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    harness: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.708
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-swe-bench-pro@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    harness: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.595
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.889
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-ifeval@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.9
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-terminal-bench-4@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.03
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-deepswe@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.097
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-automation-bench@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    score: 0.158
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-humanitys-last-exam-with-tools@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    tool_policy: with_tools
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.375
+  status: available
+  observed_at: 2026-11-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true

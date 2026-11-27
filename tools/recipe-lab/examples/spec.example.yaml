@@ -1,0 +1,58 @@
+api_version: recipe-lab/v1alpha1
+objective:
+  metric_key: capability.score
+  direction: maximize
+  min_improvement_pct: 1.0
+  # A1: the replay tier ranks candidates by this contracted metric (ledger key);
+  # metric_key stays the live sr-bench metric.
+  replay_metric: routed_accuracy
+  # E: economic constraints - guards (gates:) are safety vetoes, constraints
+  # are economic conditions. Verified sr-bench compare cost fields live on
+  # the baseline_targets/candidate_targets entries: total_spend_usd,
+  # cache_neutral_cost_usd, cost_usd, evaluation_cost_usd. Unknown usage is
+  # serialized as null - an unevaluable constraint is INCONCLUSIVE, never 0.
+  constraints:
+    - name: cost-not-worse
+      metric: total_spend_usd
+      op: lte
+      bound: baseline   # or a number
+      tolerance_pct: 0.0
+workload:
+  # A4 dataset identity: content_hash = "sha256:" + sha256(<manifest raw bytes>),
+  # manifest is the dataset JSONL path relative to this spec file.
+  # attribute / run verify the hash before touching the data (`recipe-lab hash
+  # --file <path>` prints it for a new dataset).
+  manifest: datasets/dev-mmlu-pro.yaml
+  content_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  profile: quick
+  # B: preferred form - three-way split produced by `recipe-lab split`:
+  # split_rule: "group by source_id; seed 42; 40/30/30"   # required, written to provenance
+  # splits:
+  #   calib:       {manifest: calib.jsonl,       content_hash: sha256:<...>}
+  #   dev:         {manifest: dev.jsonl,         content_hash: sha256:<...>}
+  #   frozen_test: {manifest: frozen_test.jsonl, content_hash: sha256:<...>}
+  # The three splits must be disjoint (case_id and prompt); frozen_test is
+  # quarantined from replay/propose and only touched by live-verdict --final.
+attribution:
+  oracle_policy:
+    math: local/model-math
+    code: local/model-code
+    reasoning: local/model-large
+gates:
+  # A3: the contract is the only source of guard floors. live-verdict takes
+  # --guard-measurements JSONL with measurements only:
+  #   {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+  # floor: "baseline" resolves against the measured baseline value; a gate
+  # without a usable measurement is unevaluated (verdict INCONCLUSIVE).
+  - name: pii-recall-floor
+    metric: guard.pii.recall
+    floor: baseline
+budget:
+  rounds: 5
+  max_minutes_per_trial: 60
+stack:
+  mode: external
+  endpoint: http://127.0.0.1:8899
+  baseline_ref: config-revision@main
+# A5: no `evaluation` section - replay and live are separate commands with
+# CLI-fixed tiers.

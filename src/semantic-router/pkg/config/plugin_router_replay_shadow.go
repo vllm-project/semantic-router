@@ -107,7 +107,7 @@ func (c *RouterReplayShadowConfig) UnmarshalJSON(data []byte) error {
 	if isNullJSON(capture.Enabled) {
 		return fmt.Errorf("capture.enabled must be a boolean when provided")
 	}
-	if err := decoded.Budget.validateEstimatedCost(); err != nil {
+	if err := decoded.Budget.validateEstimates(); err != nil {
 		return err
 	}
 	*c = RouterReplayShadowConfig(decoded)
@@ -199,7 +199,7 @@ func (c *RouterReplayShadowConfig) Validate() error {
 	if err != nil || duration <= 0 || duration > maxShadowTimeout || len(effective.Execution.Timeout) > maxShadowTimeoutLength || !shadowDurationPattern.MatchString(effective.Execution.Timeout) {
 		return fmt.Errorf("execution.timeout must be a positive duration at most 5m")
 	}
-	if err := c.Budget.validateEstimatedCost(); err != nil {
+	if err := c.Budget.validateEstimates(); err != nil {
 		return err
 	}
 	if *effective.Budget.MaxResponseBytes < 2*len(c.Models) {
@@ -213,7 +213,12 @@ func (c *RouterReplayShadowConfig) Validate() error {
 	return nil
 }
 
-func (b ShadowBudgetConfig) validateEstimatedCost() error {
+func (b ShadowBudgetConfig) validateEstimates() error {
+	// StructuredPayload represents JSON numbers as float64.
+	const maxExactJSONInteger = 1<<53 - 1
+	if tokens := b.MaxEstimatedTokens; tokens != nil && (*tokens < 1 || int64(*tokens) > maxExactJSONInteger) {
+		return fmt.Errorf("budget.max_estimated_tokens must be between 1 and %d", int64(maxExactJSONInteger))
+	}
 	if cost := b.MaxEstimatedCost; cost != nil && (*cost <= 0 || math.IsNaN(*cost) || math.IsInf(*cost, 0)) {
 		return fmt.Errorf("budget.max_estimated_cost must be finite and positive")
 	}

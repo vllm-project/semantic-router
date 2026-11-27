@@ -59,10 +59,11 @@ func decodeOpenRouterTransportError(
 		category = openRouterErrorCategory(code)
 	}
 	return llmprotocol.TransportError{Error: &llmprotocol.ProtocolError{
-		Category:  category,
-		Code:      code,
-		Message:   detail.Message,
-		Parameter: parameter,
+		Category:       category,
+		Code:           code,
+		Message:        detail.Message,
+		Parameter:      parameter,
+		ProviderFramed: true,
 	}}, diagnostics, nil
 }
 

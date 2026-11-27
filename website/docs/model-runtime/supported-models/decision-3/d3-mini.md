@@ -68,6 +68,7 @@ references recorded for:
 - CPU (`cpu@bfloat16`)
 - x86-64 CPU with AVX2 (BF16 emulated) (`cpu:x86_64:avx2:bf16_emulated@bfloat16`)
 - AMD x86-64 CPU with AVX-512 BF16 (`cpu:x86_64:avx512:bf16_native:amd@bfloat16`)
+- AMD x86-64 CPU with AVX-512 BF16, with zentorch's linear (`cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16`)
 
 At `--dtype auto`, an AMD x86-64 CPU with AVX-512 BF16 also computes
 in BF16 and compares them with its own BF16 reference.

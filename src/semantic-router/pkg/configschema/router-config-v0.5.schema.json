@@ -910,6 +910,7 @@
             "responses",
             "messages",
             "images",
+            "speech",
             "systemone",
             "openai",
             "anthropic"
@@ -1436,6 +1437,9 @@
         },
         "tool_sessions": {
           "$ref": "#/$defs/ToolSessionStoreConfig"
+        },
+        "guard_verdicts": {
+          "$ref": "#/$defs/GuardVerdictStoreConfig"
         }
       },
       "additionalProperties": false,
@@ -3034,6 +3038,54 @@
         "use_reasoning"
       ]
     },
+    "GuardVerdictRedisConfig": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password_env": {
+          "type": "string",
+          "pattern": "^[A-Z_][A-Z0-9_]*$"
+        },
+        "database": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tls": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GuardVerdictStoreConfig": {
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": [
+            "local",
+            "redis"
+          ]
+        },
+        "hmac_key_env": {
+          "type": "string",
+          "pattern": "^([A-Z_][A-Z0-9_]*)?$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "maximum": 1000,
+          "minimum": 1
+        },
+        "redis": {
+          "$ref": "#/$defs/GuardVerdictRedisConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "HallucinationRule": {
       "properties": {
         "name": {
@@ -3473,6 +3525,7 @@
               "responses",
               "messages",
               "images",
+              "speech",
               "systemone",
               "openai",
               "anthropic"
@@ -3497,6 +3550,9 @@
             "vllm-sr/5.0",
             "vllm-sr/4.0"
           ]
+        },
+        "prefix": {
+          "type": "string"
         },
         "models": {
           "items": {
@@ -3603,6 +3659,18 @@
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
+        },
+        "streaming": {
+          "$ref": "#/$defs/LooperStreamingConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LooperStreamingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -6671,6 +6739,18 @@
             }
           ]
         },
+        "max_estimated_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "maximum": 9007199254740991,
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "max_estimated_cost": {
           "oneOf": [
             {
@@ -8448,6 +8528,15 @@
         "path": [
           "stores",
           "tool_sessions"
+        ]
+      },
+      {
+        "key": "guard_verdicts",
+        "layer": "stores",
+        "display_name": "Guard Verdicts",
+        "path": [
+          "stores",
+          "guard_verdicts"
         ]
       },
       {
