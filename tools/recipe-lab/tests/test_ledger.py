@@ -184,6 +184,28 @@ def test_incomplete_record_roundtrip_and_never_ranks(tmp_path):
     assert best is not None and best["metrics"]["capability.score"] == 0.81
 
 
+def test_append_fails_when_the_writer_lock_cannot_be_taken(tmp_path):
+    # review regression: a swallowed lock error let two concurrent appends
+    # both report success while only one record landed. An append whose
+    # writer lock cannot be acquired must fail loudly, never proceed
+    # unlocked - a lost record looks like a measured candidate that
+    # never ranked.
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(ledger_path)
+    ledger.append(base_record(metrics={"capability.score": 0.5}))
+    lock_path = tmp_path / "ledger.lock"
+    lock_path.unlink()  # the first append created it; make it unusable now
+    lock_path.mkdir()
+    with pytest.raises(OSError):
+        ledger.append(base_record(metrics={"capability.score": 0.9}))
+    rows = [
+        json.loads(line)
+        for line in ledger_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(rows) == 1  # the failed append stored nothing
+
+
 # ---- B: split field on ledger records ----
 
 

@@ -269,13 +269,17 @@ class Ledger:
     @contextmanager
     def _locked(self, *, create: bool):
         """Hold the writer lock. Readers lock an existing lock file only: a
-        ledger without one has never been appended to. A ledger whose lock
-        cannot be taken cannot be appended to either, so reads proceed."""
+        ledger without one has never been appended to, and a lock that
+        cannot be taken does not block a read. An append without its lock
+        would race a concurrent writer into a lost record, so a lock
+        failure fails the append instead of proceeding unlocked."""
         from .loop import writer_lock  # noqa: PLC0415
 
         lock_path = self.path.with_suffix(".lock")
         with ExitStack() as stack:
-            if create or lock_path.exists():
+            if create:
+                stack.enter_context(writer_lock(lock_path))
+            elif lock_path.exists():
                 with suppress(OSError):
                     stack.enter_context(writer_lock(lock_path))
             yield
