@@ -502,10 +502,10 @@ func TestOfficialAnthropicContentBlockUnionsAreClosed(t *testing.T) {
 		"text_editor_code_execution_tool_result", "tool_search_tool_result",
 		"web_fetch_tool_result", "web_search_tool_result",
 	)
-	requestSupported := append(fields("document", "image", "text", "thinking", "tool_result", "tool_use"), serverTool...)
-	requestUnsupported := fields("container_upload", "redacted_thinking", "search_result")
-	responseSupported := append(fields("text", "thinking", "tool_use"), serverTool...)
-	responseUnsupported := fields("container_upload", "redacted_thinking")
+	requestSupported := append(fields("document", "image", "redacted_thinking", "text", "thinking", "tool_result", "tool_use"), serverTool...)
+	requestUnsupported := fields("container_upload", "search_result")
+	responseSupported := append(fields("redacted_thinking", "text", "thinking", "tool_use"), serverTool...)
+	responseUnsupported := fields("container_upload")
 	assertClosedDiscriminatorInventory(t, "Anthropic request content block", 16, requestSupported, requestUnsupported)
 	assertClosedDiscriminatorInventory(t, "Anthropic response content block", 12, responseSupported, responseUnsupported)
 	engine := NewBuiltinEngine()

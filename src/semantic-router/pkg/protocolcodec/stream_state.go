@@ -497,7 +497,8 @@ func (state *streamState) observeReasoningScope(key streamContentKey, event llmp
 		return nil
 	}
 	scope := event.Content.Reasoning
-	if scope != llmprotocol.ReasoningScopeText && scope != llmprotocol.ReasoningScopeSummary {
+	if scope != llmprotocol.ReasoningScopeText && scope != llmprotocol.ReasoningScopeSummary &&
+		scope != llmprotocol.ReasoningScopeRedacted {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"invalid_reasoning_scope",
