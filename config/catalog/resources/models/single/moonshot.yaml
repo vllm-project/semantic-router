@@ -1,3 +1,49 @@
+- id: moonshot/kimi-k3.1-pro
+  display_name: Kimi K3.1 Pro
+  description: Open-weight multimodal Kimi model post-trained from Kimi K3 for long-horizon coding and agentic work.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro
+    license: Kimi-K3.1-Pro
+  family: kimi-k3.1
+  reasoning_family: kimi-k3
+  parameter_size: 2.8T (104B active)
+  revision: d9e99b0792a5e93b78ea9bea62a68167e36ddd9e
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-10-23'
 - id: moonshot/kimi-k3
   display_name: Kimi K3
   description: Moonshot AI native multimodal MoE model for long-context agents.
