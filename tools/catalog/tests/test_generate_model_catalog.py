@@ -526,6 +526,54 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {"score": 0},
         )
 
+    def test_tencent_hy4_cards_keep_published_harness_evidence(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        hy4_models = {"tencent/hy4", "tencent/hy4-flash"}
+        published_benchmarks = {
+            "datacurve/deep-swe@1.1.0",
+            "harbor/terminal-bench@4.0.0",
+            "mercor/apex-agents@1.1.0",
+            "zapier/automation-bench@1.0.6",
+            "cais/humanitys-last-exam@1.0.0",
+        }
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, hy4_models)
+        self.assertEqual(
+            buckets,
+            {
+                ("tencent/hy4", "high", "vendor_claimed"): published_benchmarks,
+                ("tencent/hy4-flash", "enabled", "vendor_claimed"): (
+                    published_benchmarks
+                ),
+            },
+        )
+        apex_records = [
+            evaluation
+            for evaluation in resources["evaluations"]
+            if evaluation["model"] in hy4_models
+            and evaluation["benchmark"] == "mercor/apex-agents@1.1.0"
+        ]
+        self.assertEqual(len(apex_records), 2)
+        for evaluation in apex_records:
+            self.assertEqual(
+                evaluation["benchmark_profile"], "published-loop-250-steps"
+            )
+            self.assertEqual(evaluation["subject"]["max_steps"], 250)
+            self.assertEqual(
+                evaluation["subject"]["benchmark_revision"], "unspecified_by_source"
+            )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        openrouter_ids = {
+            binding["catalog"]: binding["id"]
+            for binding in providers["openrouter"]["models"]
+            if binding.get("catalog") in hy4_models
+        }
+        self.assertEqual(
+            openrouter_ids,
+            {"tencent/hy4": "tencent/hy4", "tencent/hy4-flash": "tencent/hy4-flash"},
+        )
+
     def test_nemotron_3_5_bf16_cards_bind_exact_checkpoint_evidence(self) -> None:
         _, resources, _ = catalog.load_and_validate()
         checkpoints = {
@@ -585,6 +633,52 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         for binding in vllm_bindings.values():
             self.assertEqual(binding["relationship"], "self_hosted")
+
+    def test_meta_muse_evidence_matches_the_api_variants(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        cases = [
+            (
+                "meta/muse-wonder-1.0",
+                "muse-wonder",
+                "max",
+                {
+                    "scicode-bench/scicode@1.0.0": ("score", 0.603009259259259),
+                    "cais/humanitys-last-exam@1.0.0": ("accuracy", 0.500926784059314),
+                    "artificial-analysis/gdp-pdf@1.0.0": ("all_pass", 0.306),
+                    "artificial-analysis/critpt@1.0.0": ("score", 0.282857142857143),
+                    "artificial-analysis/lcr@1.1.0": ("score", 0.806666666666667),
+                },
+            ),
+            (
+                "meta/muse-ember-1.0",
+                "muse-ember-xhigh",
+                "xhigh",
+                {
+                    "artificial-analysis/gdp-pdf@1.0.0": ("all_pass", 0.224),
+                    "harbor/terminal-bench@4.0.0": ("resolved", 0.353535353535354),
+                    "artificial-analysis/briefcase@1.1.0": ("elo", 1524.47),
+                    "artificial-analysis/omniscience@1.1.0": (
+                        "accuracy",
+                        0.21366666666666667,
+                    ),
+                    "cais/hle-diamond@1.0.0": ("accuracy", 0.236),
+                },
+            ),
+        ]
+        for model, slug, effort, expected in cases:
+            with self.subTest(model=model):
+                records = [
+                    r
+                    for r in resources["evaluations"]
+                    if r["model"] == model
+                    and r["subject"].get("source_model_slug") == slug
+                ]
+                self.assertEqual({r["benchmark"] for r in records}, set(expected))
+                for record in records:
+                    self.assertEqual(record["reasoning_effort"], effort)
+                    self.assertEqual(record["evidence"]["provenance"], "third_party")
+                    metric, score = expected[record["benchmark"]]
+                    self.assertEqual(record["metrics"][metric], score)
 
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
@@ -894,6 +988,13 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(families["mistral-none-high"]["levels"], ["high"])
         self.assertEqual(families["mistral-none-high"]["disabled"], "none")
+        self.assertEqual(
+            families["gemini-flash-four-level-minimal"]["levels"],
+            ["minimal", "low", "medium", "high"],
+        )
+        self.assertEqual(
+            families["gemini-flash-four-level-minimal"]["default"], "minimal"
+        )
 
     def test_core_reasoning_model_and_provider_bindings(self) -> None:
         _, resources, _ = catalog.load_and_validate()
@@ -904,6 +1005,8 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "xai/grok-4.6": "grok-4.6",
             "xai/grok-4.7": "grok-4.6",
             "tencent/hy4-preview": "hunyuan-hy4",
+            "tencent/hy4": "hunyuan-hy4",
+            "tencent/hy4-flash": "hunyuan",
             "moonshot/kimi-k3": "kimi-k3",
             "moonshot/kimi-k3.1-pro": "kimi-k3",
             "moonshot/kimi-k2.7-code": "kimi-k2-always-on",
@@ -929,6 +1032,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-cascade-8b": "nemotron-thinking-toggle",
             "nvidia/nemotron-3.5-super-vl": "nemotron-ultra",
             "nvidia/nemotron-3.5-bolt": "nemotron-ultra",
+            "google/gemini-3.5-flash-lite": "gemini-flash-four-level-minimal",
         }
         self.assertEqual(
             {
@@ -942,6 +1046,14 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         )
         self.assertEqual(providers["xai"]["reasoning_transport"], "top_level_effort")
         self.assertEqual(providers["longcat"]["reasoning_transport"], "thinking_object")
+        self.assertEqual(providers["gemini"]["reasoning_transport"], "top_level_effort")
+        gemini_bindings = {
+            binding["catalog"]: binding for binding in providers["gemini"]["models"]
+        }
+        self.assertEqual(
+            gemini_bindings["google/gemini-3.5-flash-lite"]["id"],
+            "gemini-3.5-flash-lite",
+        )
         zai_bindings = {
             binding["catalog"]: binding for binding in providers["zai"]["models"]
         }
@@ -1181,6 +1293,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         fireworks = providers["fireworks"]
         expected_mappings = {
             "meta/muse-glimmer-30b": "accounts/fireworks/models/muse-glimmer-30b",
+            "meta/muse-spark-open": "accounts/fireworks/models/muse-spark-open",
             "moonshot/kimi-k3": "accounts/fireworks/models/kimi-k3",
             "thinking-machines/inkling": "accounts/fireworks/models/inkling",
         }

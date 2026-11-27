@@ -42,7 +42,9 @@ type Classifier struct {
 	// windowVerdicts are the answers of the guard windows it read, which a
 	// request whose input is the same up to a window's end takes instead of
 	// reading the window again.
-	windowVerdicts windowVerdicts
+	windowVerdicts     windowVerdicts
+	sharedVerdicts     *sharedWindowVerdicts
+	ownsSharedVerdicts bool
 	// overloadGates pace the requests that wait for an overloaded decision
 	// runtime to have capacity (on_signal_overload).
 	overloadGates overloadGates

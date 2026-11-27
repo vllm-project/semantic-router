@@ -1,0 +1,65 @@
+# A minimal v0.5 document with two recipes, the shape of the multi-objective
+# recipes: each public model names its own recipe through an entrypoint, and
+# the same signal name can appear in both with different thresholds.
+version: v0.5
+recipes:
+  - name: balanced
+    signals:
+      systemone:
+        - name: depth
+          question:
+            type: score
+            levels: [none, little, some, deep, research]
+          predicate:
+            gte: 0.6
+      context:
+        - name: has_images
+          modality: image
+    decisions:
+      - name: deep_route
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - type: systemone
+              name: depth
+              predicate:
+                gte: 0.6
+        modelRefs:
+          - model: strong
+      - name: plain_route
+        priority: 100
+        modelRefs:
+          - model: small
+  - name: speed-first
+    signals:
+      systemone:
+        - name: depth
+          question:
+            type: score
+            levels: [none, little, some, deep, research]
+          predicate:
+            gte: 0.2
+    decisions:
+      - name: quick_route
+        priority: 200
+        rules:
+          operator: AND
+          conditions:
+            - operator: NOT
+              conditions:
+                - type: systemone
+                  name: depth
+                  predicate:
+                    gte: 0.3
+        modelRefs:
+          - model: small
+      - name: slow_route
+        priority: 100
+        modelRefs:
+          - model: strong
+entrypoints:
+  - model_names: ["vllm-sr/mom-blend"]
+    recipe: balanced
+  - model_names: ["vllm-sr/mom-flash"]
+    recipe: speed-first

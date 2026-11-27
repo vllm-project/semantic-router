@@ -18,5 +18,9 @@ presentation:
   monogram: O
   monochrome: true
   featured: true
+# Observed on Ollama 0.40.17 serving qwen3:0.6b, with the tool call repeated on
+# llama3.2:1b. The captures and their requests are in
+# src/semantic-router/pkg/protocolcodec/ollama_conformance_test.go.
 conformance:
-  status: unverified
+  status: live_verified
+  verified_at: 2026-11-21

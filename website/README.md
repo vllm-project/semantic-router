@@ -135,6 +135,14 @@ Treat the current website redesign as the default design contract for all public
 - **Theme overrides** for docs and blog shells
 - **Local docs search** in the navbar, with no external search service (see below)
 
+### Recipe discovery
+
+`/recipes` is built from the standalone sources under `config/recipes/`.
+Update a recipe's metadata, Model Card, or YAML there rather than maintaining a
+second website copy. Provider-model links use the generated Model Hub catalog.
+The website test suite checks that the page receives the original YAML and
+derives its entrypoints and model requirements from that configuration.
+
 ### Search
 
 Search is provided by [`@easyops-cn/docusaurus-search-local`](https://github.com/easyops-cn/docusaurus-search-local), registered in the `themes` array of `docusaurus.config.ts`.

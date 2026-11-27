@@ -452,6 +452,9 @@ func (d *systemOneDeployment) exchange(ctx context.Context, method, path string,
 		if !callerCancelled(ctx, cause) {
 			d.reportFailure(remote.StatusCode, "transport", cause)
 		}
+		if remote.Retryable {
+			cause = retryableDecisionError{cause}
+		}
 		return 0, nil, cause
 	}
 	return 0, nil, err

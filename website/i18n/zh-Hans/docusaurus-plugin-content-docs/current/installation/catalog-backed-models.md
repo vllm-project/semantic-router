@@ -91,6 +91,17 @@ long decode 是单独的 API 功能。
 这些独立版本不替换 Intelligence 1.0 的组成项，其他档位继续保留证据缺失状态；
 公开成绩属于导入的第三方评测，不是 Router 本地复测。
 
+## Muse Wonder 和 Muse Ember
+
+将 `meta/muse-wonder-1.0` 或 `meta/muse-ember-1.0` 绑定到 `meta` Provider。
+Wonder 处于预览阶段。两个 API 模型 ID 都使用 Meta 的 Standard 服务模式。
+目录为每个模型收录了五项独立评测，Wonder 的实测推理级别为 `max`，Ember 为 `xhigh`。[Meta 模型文档](https://dev.meta.ai/docs/models)
+
+两个模型的推理均始终启用，默认级别为 `max`。在决策的模型引用中设置 `use_reasoning: true`，再将 `reasoning_effort`
+设为 `minimal`、`low`、`medium`、`high`、`xhigh` 或 `max` 即可调整。
+Router 在 Chat Completions 请求中发送顶层字段 `reasoning_effort`，在 Responses 请求中发送嵌套字段
+`reasoning.effort`。[Meta 推理文档](https://dev.meta.ai/docs/reasoning)
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。

@@ -126,7 +126,15 @@ func (c *RouterConfig) deploymentSpanHeads(name string) []string {
 // known at load to answer and read, and a span question's head against the
 // heads its model has.
 func validateSystemOneAnswerer(cfg *RouterConfig, path string, rule SystemOneRule) error {
-	name := cfg.SystemOneRuleDeployment(rule)
+	for _, name := range cfg.DecisionDeploymentChain(cfg.SystemOneRuleDeployment(rule)) {
+		if err := validateSystemOneRuleAnswerer(cfg, path, name, rule); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSystemOneRuleAnswerer(cfg *RouterConfig, path, name string, rule SystemOneRule) error {
 	questionTypes, modalities := cfg.deploymentAnswers(name)
 	if err := CheckSystemOneAnswerer(path, name, rule, questionTypes, modalities); err != nil {
 		return err

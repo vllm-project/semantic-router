@@ -382,6 +382,11 @@ cache, token limits and cost estimates do not apply, and the request completes
 with zero token usage. A non-2xx JSON error keeps the existing error path,
 including the backend's message.
 
+A fallback candidate's answer is written by the Router, so its `Content-Type`
+comes from the request's `response_format` rather than from the candidate's
+headers: `audio/wav`, `audio/mpeg`, `audio/pcm`, `audio/ogg`, `audio/flac` or
+`audio/aac`, the same format the client asked for.
+
 Request-text checks, such as PII detection and masking, still run, on `input`
 only. `input` is the text the Router decodes into the request and encodes back,
 so a masking rewrite reaches the backend. `instructions`, `ref_text` and the

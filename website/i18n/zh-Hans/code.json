@@ -11,6 +11,108 @@
   "nav.primary.community": {
     "message": "社区"
   },
+  "recipes.title": {
+    "message": "路由配方"
+  },
+  "recipes.description": {
+    "message": "从所需的路由行为出发，选择并验证维护中的配置。"
+  },
+  "recipes.eyebrow": {
+    "message": "路由目录"
+  },
+  "recipes.byUseCase": {
+    "message": "按使用场景浏览"
+  },
+  "recipes.examplesIntro": {
+    "message": "这些示例只配置路由，不会启动推理服务。改用示例前，请查看对应的要求与限制。"
+  },
+  "recipes.all": {
+    "message": "全部配方"
+  },
+  "recipes.general": {
+    "message": "通用路由"
+  },
+  "recipes.agents": {
+    "message": "编程与智能体"
+  },
+  "recipes.privacy": {
+    "message": "隐私与安全"
+  },
+  "recipes.reasoning": {
+    "message": "推理与验证"
+  },
+  "recipes.multimodal": {
+    "message": "视觉与多模态"
+  },
+  "recipes.cost": {
+    "message": "成本与延迟"
+  },
+  "recipes.feedback": {
+    "message": "反馈与恢复"
+  },
+  "recipes.retrieval": {
+    "message": "检索"
+  },
+  "recipes.resultCount": {
+    "message": "符合条件的配方：{count}"
+  },
+  "recipes.entrypoints": {
+    "message": "入口点"
+  },
+  "recipes.decisionModel": {
+    "message": "决策模型"
+  },
+  "recipes.embeddingModel": {
+    "message": "嵌入模型"
+  },
+  "recipes.behavior": {
+    "message": "路由行为"
+  },
+  "recipes.evaluation": {
+    "message": "评测"
+  },
+  "recipes.source": {
+    "message": "源文件"
+  },
+  "recipes.requirementsAndLimits": {
+    "message": "要求与限制"
+  },
+  "recipes.backends": {
+    "message": "示例使用的提供商模型："
+  },
+  "recipes.experimental": {
+    "message": "实验性"
+  },
+  "recipes.fullRequirements": {
+    "message": "在模型卡中查看完整要求"
+  },
+  "recipes.configuration": {
+    "message": "配置与命令"
+  },
+  "recipes.runFromRepo": {
+    "message": "按照模型卡配置后端与环境，再从仓库根目录运行以下命令。"
+  },
+  "recipes.quickStart": {
+    "message": "配方快速入门"
+  },
+  "recipes.decisionModels": {
+    "message": "决策模型"
+  },
+  "recipes.modelEvidence": {
+    "message": "这里列出示例实际配置的决策模型及信号问题，不代表每个模型变体都支持这些任务。请在 System One 查阅已校准、零样本和不支持的特性，在模型库查阅提供商模型的状态及评测依据。"
+  },
+  "recipes.supportMatrix": {
+    "message": "System One 支持与校准"
+  },
+  "recipes.compatibility": {
+    "message": "问题兼容性"
+  },
+  "recipes.modelHub": {
+    "message": "模型库"
+  },
+  "recipes.questionTypes": {
+    "message": "问题类型："
+  },
   "theme.ErrorPageContent.title": {
     "message": "页面已崩溃。",
     "description": "The title of the fallback page when the page crashed"

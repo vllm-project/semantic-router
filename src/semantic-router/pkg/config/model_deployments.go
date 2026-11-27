@@ -68,6 +68,9 @@ type ModelDeployment struct {
 	// MaxRetries is the number of transport retries after a first attempt,
 	// within the caller's deadline.
 	MaxRetries *int `yaml:"max_retries,omitempty" json:"max_retries,omitempty"`
+	// Fallbacks names decision deployments to try in order when a System One
+	// signal's call fails with a retryable error.
+	Fallbacks []string `yaml:"fallbacks,omitempty" json:"fallbacks,omitempty" jsonschema:"uniqueItems=true"`
 	// TLS verifies an https endpoint and presents a client certificate.
 	TLS *DeploymentTLS `yaml:"tls,omitempty" json:"tls,omitempty"`
 	// Limits bounds the request and response bodies of one exchange.
@@ -179,6 +182,7 @@ func (d ModelDeployment) WithDefaults() ModelDeployment {
 	d.Replicas = append([]ModelReplica(nil), d.Replicas...)
 	d.Deviations = append([]string(nil), d.Deviations...)
 	d.ForwardRequestHeaders = append([]string(nil), d.ForwardRequestHeaders...)
+	d.Fallbacks = append([]string(nil), d.Fallbacks...)
 	if d.Provider == ModelRuntimeProvider {
 		if d.Device == "" && len(d.Replicas) == 0 && d.Endpoint == "" {
 			d.Device = "auto"
@@ -286,6 +290,7 @@ func cloneModelMap[T any](values map[string]T) map[string]T {
 			deployment.Replicas = append([]ModelReplica(nil), deployment.Replicas...)
 			deployment.Deviations = append([]string(nil), deployment.Deviations...)
 			deployment.ForwardRequestHeaders = append([]string(nil), deployment.ForwardRequestHeaders...)
+			deployment.Fallbacks = append([]string(nil), deployment.Fallbacks...)
 			cloned[key] = any(deployment).(T)
 		} else {
 			cloned[key] = value
@@ -309,7 +314,7 @@ func validateModelDeploymentContracts(cfg *RouterConfig) error {
 			return fmt.Errorf("global.model_catalog.deployments.%s: %w", name, err)
 		}
 	}
-	return nil
+	return validateDecisionDeploymentFallbacks(cfg)
 }
 
 // ValidateModelBindings checks the deployments of a configuration built in

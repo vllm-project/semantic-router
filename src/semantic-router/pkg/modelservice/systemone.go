@@ -142,6 +142,6 @@ func systemOneStatusError(status int) error {
 	case status >= 400 && status < 500:
 		return ErrRejected
 	default:
-		return ErrFailed
+		return decisionHTTPError(status, ErrFailed)
 	}
 }

@@ -1,0 +1,1 @@
+{"error":{"message":"json: cannot unmarshal string into Go struct field ChatCompletionRequest.messages of type []openai.Message","type":"invalid_request_error","param":null,"code":null}}

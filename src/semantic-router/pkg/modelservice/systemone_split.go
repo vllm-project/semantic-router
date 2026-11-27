@@ -216,6 +216,9 @@ func (d *systemOneDeployment) exchangeFailure(err error) (int, []byte, error) {
 			cause = remote
 		}
 		d.reportFailure(remote.StatusCode, "transport", cause)
+		if remote.Retryable {
+			cause = retryableDecisionError{cause}
+		}
 		return 0, nil, cause
 	}
 	return 0, nil, err
@@ -235,7 +238,7 @@ func (d *systemOneDeployment) decideError(err error) error {
 	case systemoneprotocol.ProblemRejected, systemoneprotocol.ProblemCredential:
 		return fmt.Errorf("%w: systemone deployment %q: %s", ErrRejected, d.name, problem.Error())
 	}
-	return fmt.Errorf("%w: systemone deployment %q: %s", ErrFailed, d.name, problem.Error())
+	return decisionHTTPError(problem.Status, fmt.Errorf("%w: systemone deployment %q: %s", ErrFailed, d.name, problem.Error()))
 }
 
 // recordDiagnostics logs what a codec or deviation changed, once per kind of
