@@ -21,6 +21,7 @@ var signalRoutingContracts = []struct {
 	{profile: "envoy-ai-gateway", testCase: "language-routing"},
 	{profile: "envoy-ai-gateway", testCase: "reask-routing"},
 	{profile: "envoy-ai-gateway", testCase: "context-safety-overlap"},
+	{profile: "envoy-ai-gateway", testCase: "reliability-timeouts"},
 }
 
 func TestProfilesSelectSignalRoutingContracts(t *testing.T) {
