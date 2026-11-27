@@ -40,6 +40,7 @@ var (
 		validateForwardedIdentityHeaders,
 		validateGlobalModelBindingContracts,
 		validateGlobalToolSessionsContracts,
+		validateGuardVerdictStore,
 		validateGlobalRouterReplayCaptureContracts,
 		validateGlobalPluginContracts,
 		validateMaskingIdentity,

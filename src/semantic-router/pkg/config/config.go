@@ -93,14 +93,15 @@ type RouterConfig struct {
 	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig            `yaml:"memory"`
-	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
-	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
-	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
-	MaskingIdentity  MaskingIdentityConfig   `yaml:"-" json:"-"`
-	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
-	Looper           LooperConfig            `yaml:"looper,omitempty"`
+	Memory           MemoryConfig             `yaml:"memory"`
+	VectorStore      *VectorStoreConfig       `yaml:"vector_store,omitempty"`
+	ToolSessions     *ToolSessionStoreConfig  `yaml:"tool_sessions,omitempty"`
+	GuardVerdicts    *GuardVerdictStoreConfig `yaml:"guard_verdicts,omitempty"`
+	ResponseAPI      ResponseAPIConfig        `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig       `yaml:"router_replay"`
+	MaskingIdentity  MaskingIdentityConfig    `yaml:"-" json:"-"`
+	StartupStatus    StartupStatusConfig      `yaml:"startup_status"`
+	Looper           LooperConfig             `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`

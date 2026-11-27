@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -118,8 +119,20 @@ func TestAWindowKeyHoldsTheTextBeforeIt(t *testing.T) {
 	otherModel := scanOf(prose + "\n\nfirst ending")
 	otherModel.deployment = "secondary"
 	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
-	if *otherModel.verdictKey(window) == key {
-		t.Fatal("another deployment gave the same key")
+	if otherModel.verdicts != nil {
+		t.Fatal("an undeclared deployment must not retain window verdicts")
+	}
+	classifier.Config.ModelDeployments["secondary"] = classifier.Config.ModelDeployments["primary"]
+	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts != nil {
+		t.Fatal("an attached deployment without observed precision must not retain window verdicts")
+	}
+	// Observe exactly the same model under the second declaration.
+	card, _ := classifier.models.runtime.CurrentDeploymentCard("primary")
+	second := &Classifier{Config: classifier.Config, models: &classifierModelRuntime{runtime: serving.New(&cardServices{card: card}, nil)}}
+	otherModel.verdicts = second.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts == nil || *otherModel.verdictKey(window) == key {
+		t.Fatal("another observed deployment must have its own key")
 	}
 }
 
