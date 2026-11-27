@@ -1,4 +1,4 @@
-﻿"""V1 verdict-scenario pins (doc §7 acceptance evidence), unit-level.
+"""V1 verdict-scenario pins (doc §7 acceptance evidence), unit-level.
 
 No GPU, no real router binary: the fake-router machinery is imported from
 test_hot_reload. Pins the V1 criteria the existing suite does not: report/
