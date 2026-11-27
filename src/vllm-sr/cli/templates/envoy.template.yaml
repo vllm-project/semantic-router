@@ -201,14 +201,14 @@ static_resources:
           {% endif %}
           # Names this listener to the Router in x-vsr-listener, which replaces
           # a client's value; the Router applies the listener's apis. The
-          # default listener of a config without listeners is no listener of
-          # the Router's, so it only removes a client's value.
+          # default listener of a config without listeners is not known to the
+          # Router, so it only removes a client's value.
           - name: name-listener
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
               mutations:
                 request_mutations:
-                {% if listener.names_itself %}
+                {% if listener.known_to_router %}
                 - append:
                     header:
                       key: x-vsr-listener

@@ -273,11 +273,13 @@ planned for standalone mode. Until then they need Envoy.
 
 ### Listener APIs behind Envoy
 
-A listener's `apis` apply to the path the client sent, in both modes. With
-`--gateway extproc`, the Router applies them when it reads the request headers,
-before it sets the provider's path. A Messages client is served by a Chat
-Completions model, and a path the listener does not serve answers `404` with the
-same `detail` as in standalone mode.
+In both modes, a listener's `apis` decide which request paths it serves, and the
+Router matches them against the path the client sent. With `--gateway extproc`,
+it does so when it reads the request headers, before it sets the provider's
+path. A Messages client is served by a Chat Completions model, and a path the
+listener does not serve answers `404` with the same `detail` as in standalone
+mode. An API's `models` allow-list is still served in standalone mode only; see
+[Model allow-list](#model-allow-list).
 
 The Router learns the listener from the `x-vsr-listener` request header. The
 Envoy listener the CLI generates sets it to the listener's `name` ahead of

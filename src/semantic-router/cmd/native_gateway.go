@@ -285,10 +285,8 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 }
 
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
-	for _, listener := range cfg.Listeners {
-		if listener.Name == name {
-			return listener.ClientKeys()
-		}
+	if listener, ok := cfg.ListenerByName(name); ok {
+		return listener.ClientKeys()
 	}
 	return nil
 }
@@ -298,18 +296,16 @@ func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 // that names no apis serves the default APIs on every path, as before apis.
 func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name string) {
 	serving.ListsLLM = true
-	for _, listener := range cfg.Listeners {
-		if listener.Name != name {
-			continue
-		}
-		serving.Models, _ = listener.LLMModels()
-		serving.ListsLLM = servesAnyLLM(listener)
-		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
-		serving.APIPath = listener.APIPath
-		serving.Gate = listener.PathGrant
-		serving.UnservedRoute = listenerUnservedRoute(listener)
+	listener, ok := cfg.ListenerByName(name)
+	if !ok {
 		return
 	}
+	serving.Models, _ = listener.LLMModels()
+	serving.ListsLLM = servesAnyLLM(listener)
+	serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+	serving.APIPath = listener.APIPath
+	serving.Gate = listener.PathGrant
+	serving.UnservedRoute = listenerUnservedRoute(listener)
 }
 
 func servesAnyLLM(listener config.Listener) bool {
@@ -341,17 +337,15 @@ func listenerUnservedRoute(listener config.Listener) func(string) string {
 // listenerIdentityTrust is the identity trust of the named listener in cfg,
 // which config validation has already checked.
 func listenerIdentityTrust(cfg *config.RouterConfig, name string) gateway.IdentityTrust {
-	for _, listener := range cfg.Listeners {
-		if listener.Name != name || listener.Identity == nil {
-			continue
-		}
-		peers, err := listener.Identity.PeerPrefixes()
-		if err != nil {
-			return gateway.IdentityTrust{}
-		}
-		return gateway.IdentityTrust{Headers: listener.Identity.TrustHeaders, Peers: peers}
+	listener, ok := cfg.ListenerByName(name)
+	if !ok || listener.Identity == nil {
+		return gateway.IdentityTrust{}
 	}
-	return gateway.IdentityTrust{}
+	peers, err := listener.Identity.PeerPrefixes()
+	if err != nil {
+		return gateway.IdentityTrust{}
+	}
+	return gateway.IdentityTrust{Headers: listener.Identity.TrustHeaders, Peers: peers}
 }
 
 // upstreamPart makes the upstream layer part of every configuration snapshot,

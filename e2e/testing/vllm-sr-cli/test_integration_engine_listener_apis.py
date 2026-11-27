@@ -9,8 +9,9 @@ and passed a Chat Completions client in front of a Messages backend.
 
 The claude listener serves only messages. The chat model's backend has a base
 path, so its provider path differs from any client path. The open listener
-names no apis and shows the Messages backend answers chat requests. Envoy names
-the listener in x-vsr-listener, replacing a client's value.
+names no apis: it serves the same Messages client, and shows the Messages
+backend answers chat requests. Envoy names the listener in x-vsr-listener,
+replacing a client's value.
 """
 
 import json
@@ -63,15 +64,17 @@ class TestEngineListenerAPIs(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
                 self._send_mock_chat_completion(
                     mock_container, model=MESSAGES_MODEL, listener_port=OPEN_PORT
                 )
+                messages_request = {
+                    "model": CHAT_MODEL,
+                    "max_tokens": 16,
+                    "messages": [{"role": "user", "content": "ping"}],
+                }
+                anthropic = {"anthropic-version": "2023-06-01"}
                 served = self._post(
-                    CLAUDE_PORT,
-                    "/v1/messages",
-                    {
-                        "model": CHAT_MODEL,
-                        "max_tokens": 16,
-                        "messages": [{"role": "user", "content": "ping"}],
-                    },
-                    {"anthropic-version": "2023-06-01"},
+                    CLAUDE_PORT, "/v1/messages", messages_request, anthropic
+                )
+                served_open = self._post(
+                    OPEN_PORT, "/v1/messages", messages_request, anthropic
                 )
                 before_refusal = self._received_paths(mock_container)
                 refused = self._post(
@@ -90,7 +93,12 @@ class TestEngineListenerAPIs(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
 
         self.assertIn("/v1/messages", before_refusal)
         self.assertEqual(served[0], 200, served[1])
-        self.assertIn(f"{CHAT_BASE_PATH}/chat/completions", before_refusal)
+        self.assertEqual(served_open[0], 200, served_open[1])
+        self.assertEqual(
+            before_refusal.count(f"{CHAT_BASE_PATH}/chat/completions"),
+            2,
+            before_refusal,
+        )
         self.assertEqual(refused[0], 404, refused[1])
         self.assertEqual(
             json.loads(refused[1]),

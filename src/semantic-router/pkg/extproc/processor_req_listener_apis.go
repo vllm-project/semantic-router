@@ -7,8 +7,23 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
+
+// gatewayListener is the listener an Envoy gateway names in x-vsr-listener
+// on the request headers it sends over ext_proc; empty when it names none.
+// The generated Envoy listener sets it ahead of ext_proc, replacing a
+// client's value. In-process sessions never read it: the standalone gateway
+// has applied its own listener before they run.
+func gatewayListener(requestHeaders *ext_proc.HttpHeaders) string {
+	for _, header := range requestHeaders.GetHeaders().GetHeaders() {
+		if strings.EqualFold(header.GetKey(), headers.VSRListener) {
+			return strings.TrimSpace(extractHeaderValue(header))
+		}
+	}
+	return ""
+}
 
 // listenerPathRejection applies the API grant of the listener the gateway
 // named in x-vsr-listener to the path the client sent, as the standalone

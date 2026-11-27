@@ -297,8 +297,9 @@ def generate_envoy_config_from_user_config(
                     "timeout": envoy_duration(listener.timeout or "300s"),
                     "api_keys": _envoy_listener_keys(listener),
                     "trust_identity_headers": _trusts_identity_headers(listener),
-                    # The Router applies this listener's apis by its name.
-                    "names_itself": True,
+                    # The Router's config has this listener, so Envoy names it
+                    # in x-vsr-listener and the Router applies its apis.
+                    "known_to_router": True,
                 }
             )
     else:

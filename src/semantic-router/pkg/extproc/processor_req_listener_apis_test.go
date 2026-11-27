@@ -75,29 +75,35 @@ func notServedDetail(t *testing.T, response *ext_proc.ProcessingResponse) string
 // The grant reads the path the client sent, so the provider path the body
 // phase sets cannot refuse a request the listener serves.
 func TestEngineListenerServesItsAPIWhateverTheProviderPath(t *testing.T) {
-	router, model := messagesOnlyRouter(llmprotocol.OpenAIChatV1, config.ListenerAPIs{"messages": {}})
-	stream := listenerStream("claude",
-		listenerHeaders("POST", "/v1/messages"),
-		listenerBody(`{"model":"`+model+`","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`),
-	)
-	if err := router.Process(stream); err != nil {
-		t.Fatal(err)
-	}
-	if len(stream.Responses) != 2 || stream.Responses[0].GetRequestHeaders() == nil {
-		t.Fatalf("the header phase did not continue: %v", stream.Responses)
-	}
-	removed := stream.Responses[0].GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
-	if !slices.Contains(removed, headers.VSRListener) {
-		t.Fatalf("x-vsr-listener reaches the provider; removed %v", removed)
-	}
-	var providerPath string
-	for _, header := range stream.Responses[1].GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
-		if header.GetHeader().GetKey() == ":path" {
-			providerPath = string(header.GetHeader().GetRawValue())
-		}
-	}
-	if providerPath != "/v1/chat/completions" {
-		t.Fatalf("provider path = %q, want the Chat Completions path; body reply %v", providerPath, stream.Responses[1])
+	// claude serves only messages; open names no apis and serves the
+	// default APIs (#7447 rows 1 and 2).
+	for _, listener := range []string{"claude", "open"} {
+		t.Run(listener, func(t *testing.T) {
+			router, model := messagesOnlyRouter(llmprotocol.OpenAIChatV1, config.ListenerAPIs{"messages": {}})
+			stream := listenerStream(listener,
+				listenerHeaders("POST", "/v1/messages"),
+				listenerBody(`{"model":"`+model+`","max_tokens":16,"messages":[{"role":"user","content":"hi"}]}`),
+			)
+			if err := router.Process(stream); err != nil {
+				t.Fatal(err)
+			}
+			if len(stream.Responses) != 2 || stream.Responses[0].GetRequestHeaders() == nil {
+				t.Fatalf("the header phase did not continue: %v", stream.Responses)
+			}
+			removed := stream.Responses[0].GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+			if !slices.Contains(removed, headers.VSRListener) {
+				t.Fatalf("x-vsr-listener reaches the provider; removed %v", removed)
+			}
+			var providerPath string
+			for _, header := range stream.Responses[1].GetRequestBody().GetResponse().GetHeaderMutation().GetSetHeaders() {
+				if header.GetHeader().GetKey() == ":path" {
+					providerPath = string(header.GetHeader().GetRawValue())
+				}
+			}
+			if providerPath != "/v1/chat/completions" {
+				t.Fatalf("provider path = %q, want the Chat Completions path; body reply %v", providerPath, stream.Responses[1])
+			}
+		})
 	}
 }
 

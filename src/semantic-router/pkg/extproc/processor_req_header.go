@@ -173,11 +173,6 @@ func captureRequestHeaders(
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
-		// Read before markLooperHop drops it from the Router's own view, and
-		// only from the Envoy gateway, which replaces a client's value.
-		if ctx.envoyStream && lowerKey == headers.VSRListener {
-			ctx.GatewayListener = strings.TrimSpace(headerValue)
-		}
 		// The x-vsr-skip-processing opt-out is gated by the deployment-level
 		// global.router.skip_processing.enabled flag. When disabled (the
 		// default), the header is ignored entirely so an unauthenticated

@@ -125,7 +125,6 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		Headers:       make(map[string]string),
 		TraceContext:  stream.Context(),
 		ConfigVersion: r.configVersion.Load(),
-		envoyStream:   true,
 	}
 
 	for {
@@ -135,6 +134,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			// EOF, and Process sends nothing at EOF, so drop a held header reply.
 			ctx.fullDuplexHold = nil
 			return r.handleProcessReceiveError(ctx, err)
+		}
+		// Only the ext_proc stream reads the listener its Envoy gateway names;
+		// the header phase it shares with in-process sessions never does.
+		if requestHeaders := req.GetRequestHeaders(); requestHeaders != nil {
+			ctx.GatewayListener = gatewayListener(requestHeaders)
 		}
 
 		if err := r.handleProcessRequest(stream, req, ctx); err != nil {

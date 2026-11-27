@@ -286,7 +286,7 @@ recipes:
         )
 
 
-def test_envoy_listener_names_itself_and_leaves_its_apis_to_the_router(
+def test_envoy_listener_names_itself_to_the_router_and_leaves_it_the_apis(
     tmp_path, monkeypatch
 ):
     # The Router applies a listener's apis to the client's path. A route that
