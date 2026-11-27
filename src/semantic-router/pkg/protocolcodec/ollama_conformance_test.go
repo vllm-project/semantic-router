@@ -217,14 +217,14 @@ var ollamaStreams = []struct {
 	},
 	{
 		name: "chat-tool-call-stream.sse", timings: true, blocks: 2,
-		chat:      []string{`"reasoning_content":"Okay"`, `"name":"get_weather"`, `"finish_reason":"tool_calls"`},
-		responses: []string{`"type":"response.reasoning_text.delta"`, `"name":"get_weather"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
+		chat:      []string{`"reasoning_content":"Okay"`, `"function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}`, `"finish_reason":"tool_calls"`},
+		responses: []string{`"type":"response.reasoning_text.delta"`, `"name":"get_weather"`, `"delta":"{\"city\":\"Paris\"}"`, `"arguments":"{\"city\":\"Paris\"}"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
 		messages:  []string{`"type":"thinking_delta","thinking":"Okay"`, `"name":"get_weather","type":"tool_use"`, `"partial_json":"{\"city\":\"Paris\"}"`, `"stop_reason":"tool_use"`},
 	},
 	{
 		name: "chat-llama3.2-tool-call-stream.sse", timings: true, blocks: 1,
-		chat:      []string{`"name":"get_weather"`, `"finish_reason":"tool_calls"`},
-		responses: []string{`"name":"get_weather"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
+		chat:      []string{`"function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}`, `"finish_reason":"tool_calls"`},
+		responses: []string{`"name":"get_weather"`, `"delta":"{\"city\":\"Paris\"}"`, `"arguments":"{\"city\":\"Paris\"}"`, `"type":"response.function_call_arguments.done"`, `"status":"completed"`},
 		messages:  []string{`"name":"get_weather","type":"tool_use"`, `"partial_json":"{\"city\":\"Paris\"}"`, `"stop_reason":"tool_use"`},
 	},
 	{
@@ -242,9 +242,10 @@ var ollamaStreams = []struct {
 }
 
 // Each stream reaches a Chat, a Responses and a Messages client under both
-// policies. The empty content Ollama sends beside reasoning and tool calls
-// opens no block of its own, and the timings on the final usage chunk are
-// reported once as left out instead of failing the strict decode.
+// policies, and a tool call arrives at each with its exact arguments. The empty
+// content Ollama sends beside reasoning and tool calls opens no block of its
+// own, and the timings on the final usage chunk are reported once as left out
+// instead of failing the strict decode.
 func TestOllamaStreamsTranslateToEveryClient(t *testing.T) {
 	for _, stream := range ollamaStreams {
 		t.Run(stream.name, func(t *testing.T) {
