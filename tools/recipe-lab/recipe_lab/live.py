@@ -1142,6 +1142,15 @@ def verify_live(
         stats = paired_stats_from_comparison(comparison)
         if stats is not None:
             pair_stats.append(stats)
+        elif spec.objective.min_improvement_pp is not None:
+            # M2: the pp bar is decided from paired CIs only. A completed
+            # pair without paired statistics must not silently shrink the
+            # evidence to the remaining pairs - one pair's interval then
+            # decided a PASS that two pairs were contracted to support.
+            incomplete.append(
+                f"pair {rep}: compare payload carries no paired statistics "
+                "(objective.min_improvement_pp requires paired evidence)"
+            )
         # M3: per-pair output quality; merged worst-case below.
         base_sec = (
             comparison.get("baseline_targets") if isinstance(comparison, dict) else None

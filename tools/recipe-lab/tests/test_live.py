@@ -561,6 +561,61 @@ def test_verify_live_incomplete_pair_is_inconclusive(tmp_path):
     assert not (tmp_path / "compare-rep1.json").exists()
 
 
+def test_verify_live_pair_without_paired_stats_is_inconclusive(tmp_path):
+    # review regression: both pairs completed but the second carried no
+    # paired statistics, and the verify returned PASS on the first pair's
+    # interval alone. With a pp bar (the paired-evidence contract) a pair
+    # missing its stats makes the verdict INCONCLUSIVE instead.
+    stub = VerifyStub(
+        candidate_statuses=["completed", "completed"],
+        baseline_statuses=["completed", "completed"],
+        compare_values=_paired_verify_payload(),
+    )
+
+    def compare(base, cand):
+        stub.compares.append((base, cand))
+        if len(stub.compares) == 1:
+            return dict(stub.compare_values)  # rep0: paired evidence
+        return _compare_values(0.80, 0.86)  # rep1: point estimates only
+
+    stub.compare = compare
+    result = verify_live(
+        spec=_pp_spec(2.0, min_cases=60),
+        cli=stub,
+        baseline_run_id="run-base",
+        targets=["mom-router"],
+        repetitions=2,
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+        work_dir=tmp_path,
+    )
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert any(
+        "pair 1" in reason and "no paired statistics" in reason
+        for reason in result["reasons"]
+    )
+
+
+def _paired_verify_payload() -> dict:
+    """A verify-shaped compare payload with one paired comparisons[] entry."""
+    return {
+        "baseline": {"capability.score": 0.80, "total_spend_usd": 5.0},
+        "candidate": {"capability.score": 0.86, "total_spend_usd": 4.8},
+        "comparisons": [
+            {
+                "paired_cases": 60,
+                "quality_delta": 0.05,
+                "quality_delta_ci95": [0.03, 0.07],
+                "quality_delta_bootstrap_ci95": [0.03, 0.07],
+                "wins": 40,
+                "losses": 10,
+                "ties": 10,
+            }
+        ],
+    }
+
+
 def test_verify_live_baseline_arm_failure_is_inconclusive(tmp_path):
     stub = VerifyStub(
         baseline_statuses=["failed", "completed"],
