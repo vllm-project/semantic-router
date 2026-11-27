@@ -1,11 +1,12 @@
 """Decision 3.0 video inputs: decoding, frame sampling and the Qwen3-VL video processor, as the d3 runtime reads them.
 
-A request's videos are base64 MP4, WebM, QuickTime or Matroska data URLs of at
-most 32,000,000 bytes, 300 seconds and 8,294,400 pixels per frame (the d3
-server's strict loading). OpenCV decodes each from a temporary file with its
-FFmpeg backend: 2 frames per second, at least 4 and at most 32, spread evenly
-over the whole video (a frame rate the container does not give plausibly is 24
-per second), converted from BGR to RGB; an odd count repeats the last frame.
+A request's videos are base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data
+URLs of at most 32,000,000 bytes, 300 seconds and 8,294,400 pixels per frame
+(the d3 server's strict loading). OpenCV decodes each from a temporary file
+with its FFmpeg backend: 2 frames per second, at least 4 and at most 32, spread
+evenly over the whole video (a frame rate the container does not give plausibly
+is 24 per second), converted from BGR to RGB; an odd count repeats the last
+frame.
 The processor is the Transformers 5.17 ``Qwen3VLVideoProcessor`` torchvision
 backend with the runtime's budget: at most 200,704 pixels per frame
 (``cap_pixels_per_frame``), both sides a multiple of ``patch_size *
@@ -29,8 +30,9 @@ from typing import Any
 
 import torch
 
+from ...accel.cpu import on_device_thread
 from ...errors import MediaError
-from .images import _PREPROCESS, _resize
+from .images import _resize
 
 FPS = 2.0
 MIN_FRAMES = 4
@@ -43,7 +45,7 @@ MAX_TOKENS = 16_384
 MAX_VIDEO_BYTES = 32_000_000
 MAX_SOURCE_PIXELS = 8_294_400
 MAX_SECONDS = 300
-DATA_URL_FORMATS = ("mp4", "webm", "quicktime", "x-matroska")
+DATA_URL_FORMATS = ("mp4", "webm", "quicktime", "x-matroska", "mp2t")
 # A source frame rate outside this range is treated as unknown.
 SOURCE_FPS = (0.1, 1000.0)
 UNKNOWN_FPS = 24.0
@@ -239,7 +241,9 @@ def decode_windows(
         os.unlink(path)
 
 
-FORMAT_MESSAGE = "videos must be base64 MP4, WebM, QuickTime or Matroska data URLs"
+FORMAT_MESSAGE = (
+    "videos must be base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data URLs"
+)
 
 
 def _malformed(message: str) -> MediaError:
@@ -470,8 +474,8 @@ def timestamps(indices: tuple[int, ...], fps: float, merge: int) -> tuple[float,
 
 
 def preprocess(video: Video, settings: VideoSettings) -> ProcessedVideo:
-    """One decoded video through the processor (on the preprocessing thread): FP32 patch rows and its grid."""
-    return _PREPROCESS.submit(_preprocess, video, settings).result()
+    """One decoded video through the processor (on the CPU device thread): FP32 patch rows and its grid."""
+    return on_device_thread(lambda: _preprocess(video, settings))
 
 
 def _preprocess(video: Video, settings: VideoSettings) -> ProcessedVideo:

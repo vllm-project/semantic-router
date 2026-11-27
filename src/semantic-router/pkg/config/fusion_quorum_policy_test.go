@@ -57,17 +57,3 @@ func TestValidateFusionQuorumFailurePolicyRejected(t *testing.T) {
 		})
 	}
 }
-
-// Quorum-failure policy is panel-level and must stay independent of the
-// per-attempt on_error contract.
-func TestFusionQuorumFailurePolicyIndependentOfOnError(t *testing.T) {
-	cfg := &FusionAlgorithmConfig{
-		OnError:                FusionOnErrorFail,
-		QuorumFailurePolicy:    FusionQuorumFailurePolicyFallback,
-		QuorumFallbackTarget:   "backup-model",
-		MinSuccessfulResponses: 2,
-	}
-	if err := ValidateFusionAlgorithmConfig(cfg); err != nil {
-		t.Fatalf("on_error and quorum_failure_policy must remain independently configurable, got %v", err)
-	}
-}

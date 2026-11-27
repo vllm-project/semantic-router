@@ -1,6 +1,7 @@
 algorithm:
   type: fusion
   minimum_candidates: 2
+  on_error: skip
   fusion:
     model: qwen3-32b
     analysis_models:
@@ -14,10 +15,9 @@ algorithm:
     temperature: 0.2
     include_analysis: true
     include_intermediate_responses: true
-    on_error: skip
     # Panel-level policy when usable responses fall below
     # min_successful_responses: fail (typed error) or fallback (route to
-    # quorum_fallback_target). Independent of on_error, which governs a single
-    # failed panel attempt. Recipe-owned; requests cannot override it.
+    # quorum_fallback_target). Independent of algorithm.on_error, which governs a
+    # single failed panel attempt. Recipe-owned; requests cannot override it.
     quorum_failure_policy: fail
     judge_prompt_version: fusion-v1

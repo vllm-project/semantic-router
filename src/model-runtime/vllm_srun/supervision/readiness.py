@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -39,11 +39,30 @@ class Health:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def set(self, state: str, reason: str | None = None) -> None:
+        self.exchange(state, reason)
+
+    def exchange(self, state: str, reason: str | None = None) -> tuple[str, str | None]:
+        """Set the state; the state and reason it replaced."""
         if state not in STATES:
             raise ValueError(f"unknown runtime state {state!r}")
         with self._lock:
+            replaced = self.state, self.reason
             self.state = state
             self.reason = reason
+        return replaced
+
+    def set_if(
+        self, expected: tuple[str, str | None], state: str, reason: str | None = None
+    ) -> bool:
+        """Set the state only while it is still ``expected`` (state, reason); whether it did."""
+        if state not in STATES:
+            raise ValueError(f"unknown runtime state {state!r}")
+        with self._lock:
+            if (self.state, self.reason) != expected:
+                return False
+            self.state = state
+            self.reason = reason
+        return True
 
     @property
     def ready(self) -> bool:
@@ -126,6 +145,34 @@ def drift(a: Any, b: Any) -> float | None:
     return max(numbers, default=0.0)
 
 
+def qualified(key: str, dtype: str = "auto") -> str:
+    """The key of a device-class or hardware reference recorded at ``--dtype dtype``.
+
+    References recorded at ``auto`` keep the plain key; those recorded at
+    another dtype carry it (``cpu@bfloat16``), and only a model served at
+    that dtype is checked against them.
+    """
+    return key if dtype == "auto" else f"{key}@{dtype}"
+
+
+def recorded_at(goldens: list[dict[str, Any]], dtype: str) -> frozenset[str]:
+    """The hardware keys every golden request has a reference for at ``--dtype dtype`` (not ``auto``).
+
+    Device-class keys (``cpu@bfloat16``) don't count: they are fallbacks, not
+    a record on one class of hardware. Empty without golden requests.
+    """
+    suffix = qualified("", dtype)
+    keys: frozenset[str] | None = None
+    for golden in goldens:
+        recorded = frozenset(
+            key.removesuffix(suffix)
+            for key in golden.get("expected") or {}
+            if key.endswith(suffix) and ":" in key
+        )
+        keys = recorded if keys is None else keys & recorded
+    return keys or frozenset()
+
+
 def golden_check(
     run: Callable[[str, dict[str, Any]], dict[str, Any]],
     compare: Callable[
@@ -133,7 +180,8 @@ def golden_check(
     ],
     goldens: list[dict[str, Any]],
     device_class: str,
-    reference_key: str | None = None,
+    reference_key: str | Sequence[str] | None = None,
+    dtype: str = "auto",
 ) -> GoldenResult:
     """Run each golden request twice; require determinism, well-formed answers and the reference when known.
 
@@ -141,13 +189,16 @@ def golden_check(
     the response's comparable values (``LoadedModel.golden_values``) and
     ``compare(surface, values, reference, tolerance)`` checks them against the
     reference recorded for this device class (``LoadedModel.golden_compare``).
-    Prefer ``reference_key`` when recorded, otherwise the device-class reference.
+    Prefer the first of ``reference_key`` (one key, or several, most
+    specific first) recorded, otherwise the device-class reference, all as
+    recorded at the ``dtype`` the model runs (``qualified``).
     The device class still selects the tolerance: ``CPU_TOLERANCE`` on CPUs
     and ``GPU_TOLERANCE`` on GPUs. Never try another reference after a mismatch.
     Both runs are validated against the reference; on classes other than NPU,
     the second equals the first bitwise so checking once avoids double counts.
     """
     result = GoldenResult(status="unverified")
+    keys = (reference_key,) if isinstance(reference_key, str) else reference_key or ()
     tolerance = CPU_TOLERANCE if device_class == "cpu" else GPU_TOLERANCE
     for golden in goldens:
         surface, body = golden["surface"], golden["body"]
@@ -168,10 +219,13 @@ def golden_check(
                 status="failed", detail="golden answers are not deterministic"
             )
         expected = golden.get("expected") or {}
-        selected = (
-            reference_key
-            if reference_key is not None and reference_key in expected
-            else device_class
+        selected = next(
+            (
+                qualified(key, dtype)
+                for key in keys
+                if qualified(key, dtype) in expected
+            ),
+            qualified(device_class, dtype),
         )
         reference = expected.get(selected)
         # The npu class's two runs drift independently, so both are checked

@@ -135,6 +135,16 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			},
 		},
 		{
+			name: "vLLM Qwen under its served name keeps the mapping", catalog: "qwen/qwen3.8-27b", provider: "vllm",
+			providerModelID: "qwen38",
+			enabled:         true, mode: config.ReasoningModeEnabled, effort: "low",
+			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
+			wantControls: map[string]interface{}{
+				"reasoning_effort":     "low",
+				"chat_template_kwargs": map[string]interface{}{"enable_thinking": true},
+			},
+		},
+		{
 			name: "vLLM Qwen template switch disabled", catalog: "qwen/qwen3.8-27b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
@@ -147,6 +157,16 @@ func TestBuiltInCatalogLocalRuntimeReasoningWireContracts(t *testing.T) {
 			apiFormat: config.APIFormatResponses, enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
 			wantTransport: modelcatalog.ReasoningTransportEffortTemplateSwitch,
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
+		},
+		{
+			name: "Messages Qwen effort without a budget is adaptive", catalog: "qwen/qwen3.8-27b",
+			provider: "anthropic-compatible", providerModelID: "qwen38-27b",
+			apiFormat: config.APIFormatAnthropic, enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{
+				"thinking":      map[string]interface{}{"type": "adaptive"},
+				"output_config": map[string]interface{}{"effort": "medium"},
+			},
 		},
 		{
 			name: "SGLang Qwen top-level effort and template switch", catalog: "qwen/qwen3.8-27b", provider: "sglang",
@@ -286,13 +306,13 @@ func TestSameNamedLoRAUsesTheSelectedBaseProvider(t *testing.T) {
 	common := response.GetRequestBody().GetResponse()
 	require.NotNil(t, common)
 	emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
-	require.Equal(t, "base-b", emitted[headers.SelectedModel], "Envoy must select the owning base route")
+	require.Equal(t, "base-b", emitted[headers.VSRRouteModel], "Envoy must select the owning base route")
 	require.Equal(t, "/v1/responses", emitted[":path"], "wire protocol must come from the owning base")
 	require.Equal(t, "Bearer base-b-secret", emitted["Authorization"], "credential must come from the owning base")
 
-	// Model the local Envoy route table: x-selected-model selects the configured
+	// Model the local Envoy route table: x-vsr-route-model selects the configured
 	// physical model key, while the body keeps the adapter identity for vLLM.
-	routeModel := emitted[headers.SelectedModel]
+	routeModel := emitted[headers.VSRRouteModel]
 	params, found := cfg.ModelConfig[routeModel]
 	require.True(t, found, "route header must name a configured provider model")
 	require.Len(t, params.PreferredEndpoints, 1)
@@ -371,6 +391,54 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
+			name: "Nemotron 3.5 Super VL medium effort flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL full effort omits medium flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL switch disabled", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt medium effort flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt full effort omits medium flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt switch disabled", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
 			name: "Nemotron Cascade switch disabled", catalog: "nvidia/nemotron-cascade-2-30b-a3b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
@@ -397,6 +465,30 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
 			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
+		},
+		{
+			name: "OpenRouter Hy4 high effort reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
+		{
+			name: "OpenRouter Hy4 disabled reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
+		},
+		{
+			name: "OpenRouter Hy4 flash toggle-only reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": true}},
+		},
+		{
+			name: "OpenRouter Hy4 flash disabled reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
 		},
 		{
 			name: "OpenRouter GPT-6 Astra Chat reasoning object", catalog: "openai/gpt-6-astra", provider: "openrouter",
@@ -441,7 +533,7 @@ func renderCatalogReasoningWire(
 		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: routed
@@ -451,7 +543,8 @@ providers:
           provider: %s
           endpoint: 127.0.0.1:8000
           protocol: http
-routing: {}
+recipes:
+  - name: default
 `, catalogID, apiFormatLine, providerModelIDLine, providerID)))
 	require.NoError(t, err)
 
@@ -555,7 +648,7 @@ func TestAzureOpenAIProviderDispatch(t *testing.T) {
 			t.Cleanup(fixture.Close)
 
 			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
-version: v0.3
+version: v0.5
 providers:
   models:
     - name: routed
@@ -568,7 +661,8 @@ providers:
           endpoint: %s/openai/deployments/astra-prod
           api_version: "2024-10-21"
           api_key: azure-fixture-key
-routing: {}
+recipes:
+  - name: default
 `, test.apiFormat, fixture.URL)))
 			require.NoError(t, err)
 			router := &OpenAIRouter{

@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 翻译指南
 translation:
   source_commit: "7c874be29871f6d00b36b2e21b3e549e846b98c5"

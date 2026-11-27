@@ -1,0 +1,1 @@
+global.stores.vector_store.embedding_model: removed_field: embedding_model is removed; run `vllm-sr config migrate` (embedding.deployment names the store's deployment; without it the store embeds with embeddings.default)

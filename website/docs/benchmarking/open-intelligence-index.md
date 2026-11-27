@@ -1,13 +1,13 @@
 ---
 title: Open Intelligence Index
 sidebar_label: Intelligence Index
-description: Versioned catalog evidence used by Model Arena and routing quality selection.
+description: Versioned catalog evidence used by Model Hub and routing quality selection.
 ---
 
 # Open Intelligence Index
 
-The Open Intelligence Index is a catalog evidence graph shared by Model Hub,
-Model Arena and routing. It preserves versioned reported measurements and
+The Open Intelligence Index is a catalog evidence graph shared by Model Hub and
+routing. It preserves versioned reported measurements and
 missing coverage. It is not the [sr-bench 1.0](sr-bench) live evaluation score.
 Use sr-bench to measure new single-model/MoM outcomes, costs and latency; catalog
 records do not establish a fresh result on your deployment.
@@ -71,21 +71,18 @@ Every category and Overall uses `require_all`:
 
 Scores are never imputed, set to zero, renormalized over reported components,
 or borrowed from another checkpoint or reasoning effort. A partial Overall can
-still contain an available category score. That model can appear in the matching
-category or benchmark ranking and can serve a category-aware route.
+still contain an available category score, and that model can serve a
+category-aware route.
 
-## Model Arena
+## Model Hub evidence
 
-The Arena provides three views over the same data:
-
-1. Overall Intelligence rank;
-2. General, Reasoning, Coding, and Agentic ranks;
-3. the six raw benchmark ranks.
-
-The highest available reasoning-effort result is shown per model, with that
-effort exposed in the row. Physical and virtual models use identical ranking
-logic. URL parameters preserve the layer, selected capability or benchmark,
-model scope, and selected model so every view is shareable.
+Model Hub, in the Dashboard (**Models → Model Hub**) and on the website's
+[Models page](/models), shows each model's published benchmark results with
+their sources, as evidence for that model rather than a ranking. The Model
+Arena, which ranked models by Overall, capability, and benchmark, was retired
+from both in the [Dashboard UX redesign](../proposals/dashboard-ux-redesign).
+The index data in the catalog is unchanged and still informs multi-factor
+selection.
 
 ## Routing quality evidence
 

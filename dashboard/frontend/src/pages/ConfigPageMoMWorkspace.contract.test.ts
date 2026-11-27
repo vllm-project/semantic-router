@@ -3,21 +3,18 @@ import { describe, expect, it } from 'vitest'
 
 const readSource = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
-describe('Mixture-of-Models workspace contracts', () => {
-  it('uses accessible Recipes, Models, and Probes views without the old built-in-model page', () => {
+describe('Recipes page contracts', () => {
+  it('shows public models first, then recipes and probes, without a built-in model catalog', () => {
     const source = readSource('./ConfigPageEntrypointsRecipesSection.tsx')
 
-    expect(source).toContain("type MixtureWorkspaceView = 'recipes' | 'models' | 'probes'")
-    expect(source).toContain('role="tablist"')
-    expect(source).toContain('role="tab"')
-    expect(source).toContain('role="tabpanel"')
-    expect(source).toContain('<ConfigPageMoMRoutingPanel')
+    expect(source).toContain("type RecipesPageTab = 'models' | 'recipes' | 'probes'")
+    expect(source).toContain("const TABS: RecipesPageTab[] = ['models', 'recipes', 'probes']")
+    expect(source).toContain('<TabsTrigger value="models">')
+    expect(source).toContain('<ConfigPageRecipesPublicModels')
+    expect(source).toContain('<ConfigPageRecipesTable')
     expect(source).toContain('<ConfigPageMoMProbesPanel')
-    expect(source.indexOf("id: 'models'")).toBeLessThan(source.indexOf("id: 'recipes'"))
-    expect(source).toContain("useState<MixtureWorkspaceView>('models')")
     expect(source).not.toContain('useBuiltInModelCatalog()')
     expect(source).not.toContain('Built-in Models')
-    expect(source).not.toContain('Models & Routing')
   })
 
   it('uses server paging, lazy detail, strict validation, and fresh run plans', () => {
@@ -32,6 +29,17 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(source).not.toContain('simulate')
   })
 
+  it('activates and deactivates recipe packages through a previewed, confirmed plan', () => {
+    const dialog = readSource('./ConfigPageRecipeActivationDialog.tsx')
+
+    expect(dialog).toContain('previewRecipePackageActivation(')
+    expect(dialog).toContain('previewRecipePackageDeactivation(')
+    expect(dialog).toContain('activateRecipePackage(')
+    expect(dialog).toContain('deactivateRecipePackage(')
+    expect(dialog).toContain('expected_plan_digest: plan.plan_digest')
+    expect(dialog).toContain('Restart required: run vllm-sr serve to apply')
+  })
+
   it('keeps catalog reads fail closed and separate from configuration writes', () => {
     const configPage = readSource('./ConfigPage.tsx')
     const api = readSource('../utils/modelCatalogApi.ts')
@@ -42,33 +50,42 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(api).toContain('if (!isBuiltInModelCatalog(payload))')
   })
 
-  it('opens direct usage examples instead of a catalog disclosure', () => {
-    const lists = readSource('./ConfigPageMoMRoutingLists.tsx')
-    const usage = readSource('./ConfigPageModelUsageDialog.tsx')
+  it('opens direct usage examples for every chat public model', () => {
+    const cards = readSource('./ConfigPageRecipesPublicModels.tsx')
+    const sheet = readSource('./ConfigPageEntrypointSheet.tsx')
+    const support = readSource('./configPageRecipesPageSupport.ts')
 
-    expect(lists).toContain('onUsage(entrypoint)')
-    expect(lists).toContain('onEvaluate(entrypoint)')
-    expect(lists).toContain('Evaluate')
-    expect(lists).not.toContain('Catalog metadata is unavailable')
-    expect(lists).not.toContain('RecipeModelPool')
-    expect(usage).toContain('/v1/chat/completions')
-    expect(usage).toContain('from openai import OpenAI')
-    expect(usage).toContain('import OpenAI from "openai"')
-    expect(usage).toContain('rehypeHighlight')
-    expect(usage).toContain('No API key required')
-    expect(usage).not.toContain('YOUR_API_KEY')
+    expect(cards).toContain("onOpen(card, 'connect')")
+    expect(cards).toContain('Evaluate')
+    expect(sheet).toContain('usageExamples(origin, name)')
+    expect(sheet).toContain('No API key required')
+    expect(support).toContain('/v1/chat/completions')
+    expect(support).toContain('from openai import OpenAI')
+    expect(support).toContain('import OpenAI from "openai"')
+    expect(support).not.toContain('YOUR_API_KEY')
   })
 
   it('creates a model by choosing a recipe and assigning every decision', () => {
-    const routing = readSource('./ConfigPageMoMRoutingPanel.tsx')
+    const page = readSource('./ConfigPageEntrypointsRecipesSection.tsx')
     const dialog = readSource('./ConfigPageMixtureDialog.tsx')
+    const editor = readSource('./useMixtureEditor.ts')
     const support = readSource('./configPageMixtureSupport.ts')
 
-    expect(routing).toContain('<ConfigPageMixtureDialog')
+    expect(page).toContain('<ConfigPageMixtureDialog')
     expect(dialog).toContain('Choose a recipe. Assign the right models.')
-    expect(dialog).toContain('minimumCandidatesForDecision')
-    expect(dialog).toContain('applyRecipeAssignments')
+    expect(editor).toContain('resolveMixtureRecipe')
+    expect(editor).toContain('applyRecipeAssignments')
+    expect(support).toContain('minimumCandidatesForDecision(decision)')
     expect(support).toContain('assignDecisionModels')
+  })
+
+  it('publishes built-in recipes through the packaged CLI composition', () => {
+    const page = readSource('./ConfigPageEntrypointsRecipesSection.tsx')
+    const editor = readSource('./useMixtureEditor.ts')
+
+    expect(page).toContain('useBuiltInRecipes()')
+    expect(editor).toContain('composeBuiltInRecipe(')
+    expect(editor).toContain('builtInRecipeBindings(decisions, assignments)')
   })
 
   it('uses the dashboard role as the single authoring gate', () => {

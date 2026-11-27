@@ -93,6 +93,6 @@ search and tool-based paths separately.
 
 ## References
 
-- [Current RAG plugin guide](../tutorials/plugin/rag)
+- [Current RAG source guide](../tutorials/plugin/context#rag-sources)
 - [OpenAI vector-store search API](https://developers.openai.com/api/reference/resources/vector_stores/methods/search)
 - [OpenAI File Search guide](https://developers.openai.com/api/docs/guides/tools-file-search)

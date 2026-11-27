@@ -29,13 +29,75 @@ export interface ModelInventoryFilters {
   defaultModel: string
 }
 
+export type ModelBackendKind = 'endpoints' | 'deployment' | 'none'
+
+export interface ModelInventoryFacets {
+  search: string
+  providers: readonly string[]
+  /** Reasoning family names; `__unassigned__` matches models without one. */
+  families: readonly string[]
+  backends: readonly ModelBackendKind[]
+  roles: readonly Exclude<ModelRoleFilter, 'all'>[]
+  defaultModel: string
+  /** The shared deployment each model alias names, by model name. */
+  deployments?: ReadonlyMap<string, string>
+}
+
+export function modelBackendKind(
+  model: NormalizedModel,
+  deployments?: ReadonlyMap<string, string>,
+): ModelBackendKind {
+  if ((model.endpoints?.length ?? 0) > 0) return 'endpoints'
+  return deployments?.get(model.name) ? 'deployment' : 'none'
+}
+
+/** Multi-select inventory filters: values within a facet match any, facets combine with AND. */
+export function filterModelInventoryFacets(
+  models: NormalizedModel[],
+  facets: ModelInventoryFacets,
+): NormalizedModel[] {
+  const query = facets.search.trim().toLocaleLowerCase()
+  return models.filter((model) => {
+    if (
+      query &&
+      !searchableModelValues(model).some((value) => value.toLocaleLowerCase().includes(query)) &&
+      !(facets.deployments?.get(model.name) ?? '').toLocaleLowerCase().includes(query)
+    ) {
+      return false
+    }
+    if (
+      facets.providers.length > 0 &&
+      !(model.backend_refs ?? []).some((backend) =>
+        facets.providers.includes(backend.provider?.trim() ?? ''),
+      )
+    ) {
+      return false
+    }
+    if (
+      facets.families.length > 0 &&
+      !facets.families.includes(model.reasoning_family || '__unassigned__')
+    ) {
+      return false
+    }
+    if (
+      facets.backends.length > 0 &&
+      !facets.backends.includes(modelBackendKind(model, facets.deployments))
+    ) {
+      return false
+    }
+    const role = model.name === facets.defaultModel ? 'default' : 'standard'
+    return facets.roles.length === 0 || facets.roles.includes(role)
+  })
+}
+
 function searchableModelValues(model: NormalizedModel): string[] {
   return [
     model.name,
     model.provider_model_id,
     model.api_format,
     model.reasoning_family,
-    model.modality,
+    ...(model.modalities?.input ?? []),
+    ...(model.modalities?.output ?? []),
     model.param_size,
     model.description,
     ...(model.tags ?? []),
@@ -169,6 +231,9 @@ export function getModelDeleteBlocker(
   return null
 }
 
+/** Deleting several models at once asks for this phrase; one model needs none. */
+export const modelDeleteConfirmation = (count: number) => (count > 1 ? `DELETE ${count}` : '')
+
 export function validateNewModelName(rawName: unknown, existingModels: NormalizedModel[]): string {
   const modelName = typeof rawName === 'string' ? rawName.trim() : ''
   if (!modelName) {
@@ -273,9 +338,8 @@ function validateModelBackends(value: unknown): void {
 
       const backend = item as Record<string, unknown>
       const endpoint = typeof backend.endpoint === 'string' ? backend.endpoint.trim() : ''
-      const baseUrl = typeof backend.base_url === 'string' ? backend.base_url.trim() : ''
-      if (!endpoint && !baseUrl) {
-        throw new Error(`Provider backend ${index + 1} requires an endpoint or base URL.`)
+      if (!endpoint) {
+        throw new Error(`Provider backend ${index + 1} requires an endpoint.`)
       }
       if (typeof backend.provider !== 'string' || !backend.provider.trim()) {
         throw new Error(`Provider backend ${index + 1} requires a catalog Provider ID.`)
@@ -296,17 +360,13 @@ function validateModelBackends(value: unknown): void {
         throw new Error(`Provider backend ${index + 1} weight must be zero or greater.`)
       }
       if (
-        backend.extra_headers !== undefined &&
-        (!backend.extra_headers ||
-          typeof backend.extra_headers !== 'object' ||
-          Array.isArray(backend.extra_headers) ||
-          Object.values(backend.extra_headers).some(
-            (headerValue) => typeof headerValue !== 'string',
-          ))
+        backend.headers !== undefined &&
+        (!backend.headers ||
+          typeof backend.headers !== 'object' ||
+          Array.isArray(backend.headers) ||
+          Object.values(backend.headers).some((headerValue) => typeof headerValue !== 'string'))
       ) {
-        throw new Error(
-          `Provider backend ${index + 1} extra headers must contain text key/value pairs.`,
-        )
+        throw new Error(`Provider backend ${index + 1} headers must contain text key/value pairs.`)
       }
     })
   }

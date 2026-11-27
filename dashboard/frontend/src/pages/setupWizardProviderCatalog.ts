@@ -1,25 +1,45 @@
 import { modelProviderCatalog, type ModelProviderPreset } from './modelProviderCatalog'
 
-// The setup wizard intentionally starts with a short onboarding subset. The
-// IDs are the only local UX choice; all provider facts come from the generated
-// catalog projection shared with Add Model and Model Hub.
-export const SETUP_PROVIDER_IDS = ['vllm', 'ollama', 'openai-compatible', 'anthropic'] as const
+// The setup wizard offers a short onboarding subset: a self-hosted runtime,
+// the common hosted APIs and any OpenAI-compatible endpoint. The IDs are the
+// only local UX choice; all provider facts come from the generated catalog
+// projection shared with Add Model and Model Hub.
+export const SETUP_PROVIDER_IDS = [
+  'vllm',
+  'openai',
+  'anthropic',
+  'deepseek',
+  'gemini',
+  'dashscope',
+  'openrouter',
+  'ollama',
+  'nvidia-nim',
+  'openai-compatible',
+] as const
 
 export type ProviderKind = (typeof SETUP_PROVIDER_IDS)[number]
 
 export interface SetupProviderOption {
   id: ProviderKind
   label: string
+  /** The ProviderLogo key of the provider's brand. */
+  logo: string
   description: string
   placeholder: string
   initialBaseUrl: string
-  apiFormat: Exclude<ModelProviderPreset['apiFormat'], 'systemone'>
+  apiFormat: Exclude<ModelProviderPreset['apiFormat'], 'images' | 'speech' | 'systemone'>
   supportTier: ModelProviderPreset['supportTier']
 }
 
 export const DEFAULT_SETUP_RUNTIME_BASE_URL = 'vllm:8000'
 export const DEFAULT_SETUP_OLLAMA_BASE_URL = 'host.docker.internal:11434'
 const DEFAULT_COMPATIBLE_PLACEHOLDER = 'https://api.example.com/v1'
+// Catalog providers whose brand mark is filed under another name.
+const LOGO_KEYS: Partial<Record<ProviderKind, string>> = {
+  dashscope: 'qwen',
+  'nvidia-nim': 'nvidia',
+  'openai-compatible': 'openai',
+}
 
 function requireCatalogProvider(id: ProviderKind): ModelProviderPreset {
   const provider = modelProviderCatalog.find((candidate) => candidate.id === id)
@@ -31,7 +51,13 @@ function requireCatalogProvider(id: ProviderKind): ModelProviderPreset {
 
 function projectSetupProvider(id: ProviderKind): SetupProviderOption {
   const provider = requireCatalogProvider(id)
-  if (provider.apiFormat === 'systemone') throw new Error('Chat setup requires a Chat provider.')
+  if (
+    provider.apiFormat === 'images' ||
+    provider.apiFormat === 'speech' ||
+    provider.apiFormat === 'systemone'
+  ) {
+    throw new Error('Chat setup requires a Chat provider.')
+  }
   // These addresses are defaults for the local vllm-sr container stack.
   const runtimeBaseUrl =
     provider.supportTier === 'runtime'
@@ -44,6 +70,7 @@ function projectSetupProvider(id: ProviderKind): SetupProviderOption {
   return {
     id,
     label: provider.name,
+    logo: LOGO_KEYS[id] ?? id,
     description: provider.description,
     placeholder: initialBaseUrl || DEFAULT_COMPATIBLE_PLACEHOLDER,
     initialBaseUrl,

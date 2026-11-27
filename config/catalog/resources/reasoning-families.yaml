@@ -194,6 +194,13 @@
   default: medium
   modes: [enabled]
   default_mode: enabled
+- id: minimax-m3.1-flash
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh, max]
+  default: max
+  modes: [adaptive]
+  default_mode: adaptive
 - id: minimax-m3
   type: reasoning_mode
   parameter: thinking_mode
@@ -239,6 +246,16 @@
   levels: [minimal, low, medium, high, xhigh, max]
   modes: [enabled]
   default_mode: enabled
+- id: longcat-2.0
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: enabled
+- id: longcat-2.5
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: disabled
 - id: gemma4
   type: chat_template_kwargs
   parameter: enable_thinking

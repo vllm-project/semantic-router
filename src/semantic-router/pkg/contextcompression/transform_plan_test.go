@@ -59,6 +59,26 @@ func TestTransformationCompleteTurnAndStableIdentity(t *testing.T) {
 	}
 }
 
+// Removing a turn keeps the instructions a Chat client sent inside the
+// conversation after the messages they followed.
+func TestTransformationKeepsLaterInstructionsAfterTheirMessages(t *testing.T) {
+	request := historyFixture()
+	request.Instructions = append(request.Instructions,
+		llmprotocol.InstructionBlock{Role: llmprotocol.RoleSystem, Content: textMessage(llmprotocol.RoleSystem, "after another question").Content, Position: 3},
+		llmprotocol.InstructionBlock{Role: llmprotocol.RoleSystem, Content: textMessage(llmprotocol.RoleSystem, "after the live question").Content, Position: 5})
+	ir := ParseSemanticRequest(request, Provenance{})
+	if err := ir.ApplySteps(context.Background(), []TransformationStep{removalStep(TransformReset, 0, 1)}); err != nil {
+		t.Fatal(err)
+	}
+	var positions []int
+	for _, instruction := range request.Instructions {
+		positions = append(positions, instruction.Position)
+	}
+	if !reflect.DeepEqual(positions, []int{0, 1, 3}) {
+		t.Fatalf("instruction positions = %v", positions)
+	}
+}
+
 func TestTransformationRejectsPartialAndProtectedEdits(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -158,8 +178,12 @@ func TestTransformationBaselineProperty(t *testing.T) {
 func TestHistorySnapshotAndProvenance(t *testing.T) {
 	request := historyFixture()
 	snapshot := CaptureHistory(request)
-	request.Messages = append(request.Messages, textMessage(llmprotocol.RoleSystem, "memory fact"))
-	provenance := Provenance{OriginalHistory: snapshot, MemoryMessageIndexes: map[int]struct{}{5: {}}}
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "memory_1", Name: "vsr_memory_context", Arguments: "{}"}}}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+			CallID: "memory_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "memory fact"}},
+		}}}})
+	provenance := Provenance{OriginalHistory: snapshot, MemoryToolCallIDs: map[string]struct{}{"memory_1": {}}}
 	ir := ParseSemanticRequest(request, provenance)
 	history := ir.OriginalHistory()
 	history.Messages[0].Content[0].Text = "changed"
@@ -170,7 +194,7 @@ func TestHistorySnapshotAndProvenance(t *testing.T) {
 	if ir.OriginalHistory().Instructions[0].Content[0].Text != "follow permissions" {
 		t.Fatal("instructions alias snapshot")
 	}
-	if ir.Messages[5].Source != SourceMemory || ir.Messages[5].Blocks[0].Source != TargetMemory {
+	if ir.Messages[6].Source != SourceMemory || ir.Messages[6].Blocks[0].Source != TargetMemory {
 		t.Fatal("memory origin lost")
 	}
 	if !reflect.DeepEqual(snapshot.Conversation(), ir.OriginalHistory()) {

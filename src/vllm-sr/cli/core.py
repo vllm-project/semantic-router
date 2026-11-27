@@ -1,5 +1,6 @@
 """Core management functions for vLLM Semantic Router."""
 
+import sys
 from contextlib import nullcontext
 from pathlib import Path
 
@@ -327,7 +328,6 @@ def _start_vllm_sr_locked(
         if setup_mode:
             # Until setup activates a config this command changes nothing, and
             # the Dashboard's activation needs the runtime config lock.
-            heartbeat(SERVE_WAITING)
             with runtime_lock.released() if runtime_lock else nullcontext():
                 maybe_finish_setup_mode(
                     setup_mode,
@@ -337,7 +337,9 @@ def _start_vllm_sr_locked(
                     envoy=runs_envoy(gateway),
                 )
                 activated = _wait_for_setup_activation(
-                    runtime_config_file, stack_layout
+                    runtime_config_file,
+                    stack_layout,
+                    on_waiting=lambda: heartbeat(SERVE_WAITING),
                 )
             if not activated:
                 return
@@ -439,19 +441,25 @@ def _start_support_services(
 
 
 def _wait_for_setup_activation(
-    runtime_config_file, stack_layout: RuntimeStackLayout
+    runtime_config_file,
+    stack_layout: RuntimeStackLayout,
+    on_waiting=None,
 ) -> bool:
     """Wait until the Dashboard activates a config."""
 
     dashboard = stack_layout.dashboard_container_name
-    log.info(
+    message = (
         "Waiting for setup: the Router starts here once you activate a config "
-        "in the Dashboard (Ctrl-C stops waiting)"
+        "in the Dashboard"
     )
+    if sys.stdin.isatty():
+        message += " (Ctrl-C stops waiting)"
+    log.info(message)
     activated = (
         wait_for_pending_activation(
             runtime_config_file,
             dashboard_running=lambda: container_status(dashboard) == "running",
+            on_waiting=on_waiting,
         )
         is not None
     )
@@ -811,15 +819,14 @@ def show_status(service: str = "all"):
     echo(f"Detailed logs: vllm-sr logs <{'|'.join(services)}>")
 
 
-def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
-    """What a saved config waits for before the stack serves it, if anything."""
+def _mounted_state_dir(container_name: str) -> str | None:
+    """The host directory *container_name* mounts as the stack's state dir."""
 
-    setup_waiting = container_status(stack_layout.router_container_name) == "created"
     try:
-        mounts = inspect_container_mounts(stack_layout.dashboard_container_name)
+        mounts = inspect_container_mounts(container_name)
     except ContainerMountsUnavailableError:
         return None
-    state_dir = next(
+    return next(
         (
             mount.get("Source")
             for mount in mounts
@@ -827,6 +834,15 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
         ),
         None,
     )
+
+
+def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
+    """What a saved config waits for before the stack serves it, if anything."""
+
+    setup_waiting = container_status(stack_layout.router_container_name) == "created"
+    state_dir = _mounted_state_dir(stack_layout.dashboard_container_name)
+    has_dashboard = state_dir is not None
+    state_dir = state_dir or _mounted_state_dir(stack_layout.router_container_name)
     if not state_dir:
         return None
     runtime_config = Path(state_dir) / _runtime_config_filename(stack_layout.stack_name)
@@ -837,7 +853,7 @@ def _activation_state(stack_layout: RuntimeStackLayout) -> str | None:
             "`vllm-sr serve` to apply it"
             + (f" ({pending.detail})." if pending.detail else ".")
         )
-    if not setup_waiting:
+    if not setup_waiting or not has_dashboard:
         return None
     if pending is not None:
         return "Setup is complete; run `vllm-sr serve` to start the Router."

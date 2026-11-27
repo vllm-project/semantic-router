@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 模型、入口与服务
 description: 连接推理后端，为 Agent Harness 提供可编程的模型入口。
 translation:
@@ -47,19 +48,19 @@ vllm-sr serve
 vllm-sr dashboard
 ```
 
-打开 **Build → Models**，选择提供商并输入端点凭据。对于兼容提供商，控制面板会发现可用的模型 ID，因此可以一步导入多个。仅在需要覆盖元数据、定价、连接行为，或选择内置推理家族时，才使用 **Advanced settings**。自定义内联推理契约时使用 **Manual setup**。将其分配给配方之前，请验证每个连接。YAML 与控制面板路径见[配置模型](../../installation/model-configuration)，支持的组合见[模型配置模式](../../installation/model-configuration-patterns)。
+打开 **Models → Backend models**，选择 **Connect model**，再选择提供商并输入端点凭据。对于兼容提供商，控制面板会发现可用的模型 ID，因此可以一步导入多个。仅在需要覆盖元数据、定价、连接行为，或选择内置推理家族时，才使用 **Advanced settings**。自定义内联推理契约时使用 **Add manually**。将其分配给配方之前，请验证每个连接。YAML 与控制面板路径见[配置模型](../../installation/model-configuration)，支持的组合见[模型配置模式](../../installation/model-configuration-patterns)。
 
 ### 2. 选择配方 {#2-choose-a-recipe}
 
-打开 **Build → Mixture-of-Models → Recipes**。配方描述路由逻辑，而不嵌入提供商 URL 或凭据。检查其决策和 probe，或从已维护的信号、投影和决策创建自定义配方。
+打开 **Routing → Recipes**，选择 **Recipes** 标签页。配方描述路由逻辑，而不嵌入提供商 URL 或凭据。检查其决策和 probe，或从已维护的信号、投影和决策创建自定义配方。该标签页还列出随 vLLM-SR 安装、持续维护的内置配方；在其中一个上选择 **Create model** 即可发布它。
 
 ### 3. 发布 Mixture-of-Model {#3-publish-a-mixture-of-model}
 
-在 **Models** 中创建 Mixture-of-Model，选择配方，并为每个决策分配合格的已连接模型。当算法支持多个候选时，一个决策可以使用一个模型或有序列表。添加简洁的公开别名，并仅在拓扑和 probe 完成后发布。
+在 **Public models** 标签页中选择 **New public model**，选择配方，并为每个决策分配合格的已连接模型。当算法支持多个候选时，一个决策可以使用一个模型或有序列表。添加简洁的公开别名，并仅在拓扑和 probe 完成后发布。
 
 ### 4. 在 Playground 中测试 {#4-test-in-playground}
 
-在 **Playground** 中选择新的公开模型并发送代表性请求。响应元数据会显示决策、算法、所选模型、延迟、TTFT 和 TPOT，而不会中断对话。更深入的路由 trace 和成本比较请使用 **Insights**。
+在 **Playground** 中选择新的公开模型并发送代表性请求。响应元数据会显示决策、算法、所选模型、延迟、TTFT 和 TPOT，而不会中断对话。更深入的路由 trace 和成本比较请使用 **Observe → Requests**。
 
 ### 5. 调用 OpenAI 兼容 API {#5-call-the-openai-compatible-api}
 

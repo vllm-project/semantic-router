@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import pwd
 import sys
@@ -175,6 +176,16 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         ),
     )
     parser.add_argument(
+        "--max-model-len",
+        type=int,
+        default=ENGINE_DEFAULTS.max_model_len,
+        help=(
+            "most input tokens one decision question may have, at most the model "
+            "package's limit; a longer question fails with max_length_exceeded "
+            "before any forward (default: the package's limit)"
+        ),
+    )
+    parser.add_argument(
         "--media-workers",
         type=int,
         default=SERVE_DEFAULTS.media_workers,
@@ -189,6 +200,15 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=int,
         default=SERVE_DEFAULTS.max_request_bytes,
         help="largest accepted request body in bytes (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--systemone-schema",
+        choices=("vllm-sr/5.0", "vllm-sr/4.0"),
+        default=SERVE_DEFAULTS.systemone_schema,
+        help=(
+            "the System One schema /v1/systemone and /v1/systemone/batch speak: vllm-sr/5.0, or vllm-sr/4.0, "
+            "which also accepts the earlier contract's request forms (default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--max-bundle-tasks",
@@ -207,6 +227,26 @@ def add_serve_arguments(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=SERVE_DEFAULTS.load_retry_seconds,
         help="wait before the first reload of a model that failed to load, doubling up to 300 s (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--forward-timeout-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.forward_timeout_seconds,
+        help=(
+            "a forward running longer makes GET /health/live and GET /health answer 503 "
+            "until it returns, so a liveness probe restarts a hung worker; 0 turns this "
+            "watchdog off (default: %(default)s)"
+        ),
+    )
+    parser.add_argument(
+        "--shutdown-grace-seconds",
+        type=float,
+        default=SERVE_DEFAULTS.shutdown_grace_seconds,
+        help=(
+            "on SIGTERM, how long the server waits for requests and forwards in flight; "
+            "it then exits even while a forward runs, logging what it abandoned "
+            "(default: %(default)s)"
+        ),
     )
     parser.add_argument(
         "--result-cache-entries",
@@ -255,6 +295,7 @@ def _engine_args(args: argparse.Namespace) -> EngineArgs:
             batch_window_ms=args.batch_window_ms,
             dtype=args.dtype,
             enable_shared_context=args.enable_shared_context,
+            max_model_len=args.max_model_len,
         )
     except ValueError as exc:
         raise SystemExit(f"--{str(exc).replace('_', '-')}") from exc
@@ -306,6 +347,12 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
     models = _models(args, engine_args)
     if args.media_workers is not None and args.media_workers < 0:
         raise SystemExit("--media-workers must be a non-negative integer")
+    for flag in ("forward_timeout_seconds", "shutdown_grace_seconds"):
+        value = getattr(args, flag)
+        if not math.isfinite(value) or value < 0:
+            raise SystemExit(
+                f"--{flag.replace('_', '-')} must be a non-negative number of seconds"
+            )
     return ServeConfig(
         models=models,
         host=args.host,
@@ -321,6 +368,7 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         max_queued_tokens=args.max_queued_tokens,
         engine_args=engine_args,
         max_request_bytes=args.max_request_bytes,
+        systemone_schema=args.systemone_schema,
         cache_dir=args.cache_dir,
         offline=args.offline,
         base_path=args.base_path,
@@ -328,6 +376,8 @@ def config_from_args(args: argparse.Namespace) -> ServeConfig:
         log_level=args.log_level,
         autotune_cache=args.autotune_cache,
         media_workers=args.media_workers,
+        forward_timeout_seconds=args.forward_timeout_seconds,
+        shutdown_grace_seconds=args.shutdown_grace_seconds,
     )
 
 
@@ -407,6 +457,36 @@ def choose_spin_count(config: ServeConfig) -> None:
     os.environ["GOMP_SPINCOUNT"] = value
 
 
+ALLOCATOR_SETTINGS = (
+    "PYTORCH_ALLOC_CONF",
+    "PYTORCH_CUDA_ALLOC_CONF",
+    "PYTORCH_HIP_ALLOC_CONF",
+)
+
+
+def expand_cuda_segments() -> None:
+    """Let PyTorch's CUDA allocator grow its segments; an operator's allocator settings are kept.
+
+    With fixed segments a long Decision 3.0 forward kept about as much memory
+    reserved but unused as its activations took (#7179). PyTorch reads the
+    setting when CUDA initializes, so it is set after ``choose_spin_count``
+    and before the server touches the device. ROCm is left as it is: its
+    allocator reads the same variable and was not measured.
+    """
+    if any(name in os.environ for name in ALLOCATOR_SETTINGS):
+        return
+    import torch
+
+    if torch.version.cuda is None or torch.version.hip is not None:
+        return
+    if torch.cuda.is_initialized():
+        log.warning(
+            "CUDA is already initialized, so expandable_segments takes effect only in a new process"
+        )
+        return
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     default_identity()
     args = build_parser().parse_args(argv)
@@ -417,6 +497,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         config = config_from_args(args)
         choose_spin_count(config)
+        expand_cuda_segments()
         from .api.server import serve
 
         serve(config)

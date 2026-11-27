@@ -425,10 +425,9 @@ func (r *Reconciler) updateRouteStatus(ctx context.Context, route *v1alpha1.Inte
 
 	// Update statistics
 	routeCopy.Status.Statistics = &v1alpha1.RouteStatistics{
-		Decisions:  int32(len(routeCopy.Spec.Decisions)),          //nolint:gosec // Decision count is unlikely to overflow int32
-		Keywords:   int32(len(routeCopy.Spec.Signals.Keywords)),   //nolint:gosec // Keyword count is unlikely to overflow int32
-		Embeddings: int32(len(routeCopy.Spec.Signals.Embeddings)), //nolint:gosec // Embedding count is unlikely to overflow int32
-		Domains:    int32(len(routeCopy.Spec.Signals.Domains)),    //nolint:gosec // Domain count is unlikely to overflow int32
+		Decisions: int32(len(routeCopy.Spec.Decisions)),        //nolint:gosec // Decision count is unlikely to overflow int32
+		Keywords:  int32(len(routeCopy.Spec.Signals.Keywords)), //nolint:gosec // Keyword count is unlikely to overflow int32
+		Domains:   int32(len(routeCopy.Spec.Signals.Domains)),  //nolint:gosec // Domain count is unlikely to overflow int32
 	}
 
 	if reflect.DeepEqual(route.Status, routeCopy.Status) {

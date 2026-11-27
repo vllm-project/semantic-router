@@ -28,7 +28,7 @@ readiness from its host controller.
 A new Engine instance publishes the selected model on port 8899. Discover its
 public model ID with `GET /v1/systemone/models`, then send questions to
 `POST /v1/systemone` or its alias `POST /v1/decisions`. Follow the
-[quickstart](../../website/docs/model-runtime/quickstart.md) for a complete
+[quickstart](../../website/docs/model-runtime/get-started/quickstart.md) for a complete
 request and response.
 
 `--engine` (`-e`) selects Engine mode for that start. Every `serve` command
@@ -51,6 +51,9 @@ The optional `MODEL` argument replaces the artifact in the default deployment
 selected by `global.model_catalog.system.decision_model.deployment`. Omitting
 it keeps that deployment; a new configuration defaults to Vela 2.0 0.3B.
 Only explicitly supplied model or placement options override saved settings.
+That includes the model's revision, which stays when you upgrade `vllm-sr`:
+serving the same model warns when the saved revision is not the one this
+`vllm-sr` pins, and `--revision` switches it.
 
 ```bash
 # Scale the selected model to two independent workers on two AMD GPUs.
@@ -62,8 +65,8 @@ vllm-sr serve --engine --platform rocm -dp 2 --device-ids 0
 
 ## Ask about images and videos
 
-Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-flash`, `d3-mini`,
-`d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
+Decision 3.0 models (`vllm-sr/d3`, `d3-turbo`, `d3-ultra`, `d3-flash`,
+`d3-mini`, `d3-nano`, `d3-lite`, `d3-edge`) read images and videos as well as text.
 Serve one on an AMD Instinct MI325X:
 
 ```bash
@@ -71,11 +74,11 @@ vllm-sr serve vllm-sr/d3-lite --engine --platform rocm
 ```
 
 A request may carry any number of `images` as base64 PNG, JPEG or WebP data
-URLs and `videos` as base64 MP4, WebM, QuickTime or Matroska data URLs; every
-question sees them, images first, then videos, in front of the text. Each
-image may have up to 8,000,000 bytes and 16,000,000 pixels, and the model
-reads it at up to 1.6 megapixels. Send the body on standard input, as below:
-a command-line argument holds at most 128 KiB.
+URLs and `videos` as base64 MP4, WebM, QuickTime, Matroska or MPEG-TS data
+URLs; every question sees them, images first, then videos, in front of the
+text. Each image may have up to 8,000,000 bytes and 16,000,000 pixels, and the
+model reads it at up to 1.6 megapixels. Send the body on standard input, as
+below: a command-line argument holds at most 128 KiB.
 
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
@@ -130,6 +133,9 @@ Serve it on an AMD Instinct MI325X:
 vllm-sr serve vllm-sr/d3-turbo --engine --platform rocm
 ```
 
+`vllm-sr/d3-ultra` answers the same questions the same way; a text-only
+request also lists its questions in front of its state.
+
 ```bash
 curl -s localhost:8899/v1/systemone -H 'content-type: application/json' --data-binary @- <<EOF
 {
@@ -175,14 +181,14 @@ Each question reads up to 32,768 tokens; a longer one is answered 400
 `invalid_request` with reason `question_tokens`. `"options": {"long_context":
 true}` raises that to the card's `max_input_tokens` (262,144), slower and
 less accurate than the validated length, and nothing is truncated. The Router
-waits 30 seconds for an answer; give a long request more time with
-`"deadline_ms"` in the same `options`, up to the listener's
-`systemone.max_deadline_ms` (10 minutes by default): one MI325X answers about
-127,000 tokens in 32 seconds, 213,000 in 142 and 262,000 in 203, with 154 GiB
-of its memory in use at that length.
+waits 30 seconds for an answer, and for a long-context request up to the
+listener's `systemone.max_deadline_ms` (10 minutes by default); `"deadline_ms"`
+in the same `options` sets another wait within that limit. One MI325X answers
+about 127,000 tokens in 32 seconds, 213,000 in 142 and 262,000 in 203, with
+154 GiB of its memory in use at that length.
 
 Use canonical YAML for additional deployments, task bindings, attached workers
-and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy.md).
+and Kubernetes placement. See the [deployment guide](../../website/docs/model-runtime/deploy/connect-the-router.md).
 Model placement and replica count apply in either mode.
 
 ## Publish native models
@@ -198,7 +204,7 @@ Update the allowlist deliberately when publishing a new model. Check
 `/v1/systemone/models` for publication and `vllm-sr instance models` for actual
 readiness. Worker APIs such as classify, embeddings, rerank and bundle belong
 to directly operated `vllm-srun` workers; see the
-[runtime reference](../../website/docs/model-runtime/reference.md).
+[runtime reference](../../website/docs/model-runtime/reference/http-api.md).
 
 ## Troubleshooting
 

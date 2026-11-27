@@ -1,7 +1,11 @@
 package classification
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
+	"image"
+	"image/png"
 	"strings"
 	"testing"
 )
@@ -104,6 +108,8 @@ func TestEstimateOpenAIRequestContextToolArgumentsKeepExactRawJSONString(t *test
 	}
 }
 
+// An image whose size the estimate cannot read keeps the private reserve,
+// whatever its payload: the payload's bytes never reach the estimate.
 func TestEstimateOpenAIRequestContextImageUsesFixedPrivateBudget(t *testing.T) {
 	makeBody := func(payload string) []byte {
 		return []byte(fmt.Sprintf(`{
@@ -126,6 +132,34 @@ func TestEstimateOpenAIRequestContextImageUsesFixedPrivateBudget(t *testing.T) {
 		2 + RequestContextMessageFramingTokens
 	if small.TokenFloor != wantFloor {
 		t.Fatalf("token floor = %d, want %d", small.TokenFloor, wantFloor)
+	}
+}
+
+// An inline image is estimated from its size alone, in a Chat data URL, a
+// Responses input_image and an Anthropic base64 source alike: a 100 by 60
+// picture costs 12 tokens, not the 8K reserve.
+func TestRequestContextEstimatesInlineImagesFromTheirSize(t *testing.T) {
+	var picture bytes.Buffer
+	if err := png.Encode(&picture, image.NewGray(image.Rect(0, 0, 100, 60))); err != nil {
+		t.Fatal(err)
+	}
+	data := base64.StdEncoding.EncodeToString(picture.Bytes())
+	for name, estimate := range map[string]RequestContextEstimate{
+		"chat": EstimateOpenAIRequestContext([]byte(`{"messages":[{"role":"user","content":[` +
+			`{"type":"image_url","image_url":{"url":"data:image/png;base64,` + data + `"}}]}]}`)),
+		"responses part": EstimateOpenAIRequestContext([]byte(`{"messages":[{"role":"user","content":[` +
+			`{"type":"input_image","image_url":"data:image/png;base64,` + data + `"}]}]}`)),
+		"anthropic": EstimateAnthropicRequestContext([]byte(`{"max_tokens":1,"messages":[{"role":"user","content":[` +
+			`{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + data + `"}}]}]}`)),
+	} {
+		if estimate.ImageCount != 1 || estimate.ImageTokens != 12 {
+			t.Errorf("%s: %d images estimated at %d tokens, want one at 12", name, estimate.ImageCount, estimate.ImageTokens)
+		}
+	}
+	link := EstimateOpenAIRequestContext([]byte(`{"messages":[{"role":"user","content":[` +
+		`{"type":"image_url","image_url":{"url":"https://example.invalid/a.png"}}]}]}`))
+	if link.ImageTokens != RequestContextImageTokenBudget {
+		t.Fatalf("a linked image is estimated at %d tokens, want the reserve", link.ImageTokens)
 	}
 }
 
@@ -209,5 +243,25 @@ func TestEstimateAnthropicRequestContextCountsToolLoopAndUsesSameImageBudget(t *
 	}
 	if small.ImageCount != 1 || small.TokenFloor <= RequestContextImageTokenBudget {
 		t.Fatalf("Anthropic context estimate omitted prompt components: %+v", small)
+	}
+}
+
+// Reserves follow llmprotocol.InputEstimate: structured bytes beyond the text
+// rate, image reserves and media payloads; prose has none.
+func TestRequestContextReservesFollowTheInputEstimate(t *testing.T) {
+	if estimate := EstimateAnthropicRequestContext([]byte(`{"max_tokens":16,"messages":[{"role":"user","content":"hello"}]}`)); estimate.ReserveTokens != 0 {
+		t.Fatalf("prose reserve = %d, want 0", estimate.ReserveTokens)
+	}
+	input := `{"command":"` + strings.Repeat("x", 395) + `"}`
+	document := `{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"` + strings.Repeat("A", 1000) + `"}}`
+	estimate := EstimateAnthropicRequestContext([]byte(`{"max_tokens":16,"messages":[
+		{"role":"user","content":"hello"},
+		{"role":"assistant","content":[{"type":"tool_use","id":"t","name":"bash","input":` + input + `}]},
+		{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AAAA"}},` + document + `]}]}`))
+	// The tool input keeps a quarter at the text rate; the image and the
+	// document are wholly reserve.
+	want := len(input) - (len(input)+3)/4 + RequestContextImageTokenBudget + len(document)
+	if estimate.ReserveTokens != want {
+		t.Fatalf("reserve = %d, want %d (estimate %+v)", estimate.ReserveTokens, want, estimate)
 	}
 }

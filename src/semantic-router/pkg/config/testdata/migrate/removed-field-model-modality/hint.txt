@@ -1,0 +1,1 @@
+providers.models[painter].modality: removed_field: modality: diffusion is removed; run `vllm-sr config migrate` (capabilities: [image_generation] and modalities: {input: [text], output: [image]})

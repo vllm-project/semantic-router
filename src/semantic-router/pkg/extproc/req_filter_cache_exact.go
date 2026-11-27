@@ -30,6 +30,9 @@ func (r *OpenAIRouter) performExactCacheLookup(
 		MaxAge:   maxAge,
 	})
 	ctx.CacheIdentity = lease.Identity
+	// The leader's lease rides the request: its store completes the key, and
+	// a response that will not store releases it when it ends.
+	ctx.CacheLease = lease
 	lookupDuration := time.Since(start)
 	lookupTime := lookupDuration.Milliseconds()
 	return r.finishExactCacheLookup(ctx, categoryName, result, err, lookupDuration, lookupTime)
@@ -97,19 +100,8 @@ func (r *OpenAIRouter) finishExactCacheLookup(
 	metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
 	r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
 	r.reportCacheHitTelemetry(ctx, result.ResponseBody, lookupDuration)
-	// Intermediate cache detail (category, matched keywords, similarity) is
-	// demoted to the x-vsr-debug surface (#2205), same as the semantic path.
-	cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
-	response := r.createCacheHitResponse(
-		ctx,
-		result.ResponseBody,
-		cacheCategory,
-		ctx.VSRSelectedDecisionName,
-		cacheKeywords,
-		cacheSimilarity,
-	)
+	response := r.createCacheHitResponse(ctx, result.ResponseBody)
 	r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-	r.attachRouterReplayResponse(ctx, result.ResponseBody, true)
 	logging.ComponentDebugEvent("extproc", "exact_cache_hit", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"latency_ms": lookupTime,

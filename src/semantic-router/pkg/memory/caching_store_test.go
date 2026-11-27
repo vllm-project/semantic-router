@@ -76,7 +76,7 @@ func TestCachingStore_Retrieve_MissThenHit(t *testing.T) {
 		Provider: storagetest.Vectors{Size: 384, Aliases: map[string]string{
 			"coffee": "user likes coffee",
 		}},
-		Model: EmbeddingModelQwen3,
+		Deployment: "qwen3-embedding",
 	})
 	// Store one memory so Retrieve can return something
 	mem := &Memory{ID: "m1", Type: MemoryTypeSemantic, Content: "user likes coffee", UserID: "u1"}
@@ -165,7 +165,7 @@ func TestCachingStore_Store_InvalidatesCache(t *testing.T) {
 		Provider: storagetest.Vectors{Size: 384, Aliases: map[string]string{
 			"coffee": "likes coffee",
 		}},
-		Model: EmbeddingModelQwen3,
+		Deployment: "qwen3-embedding",
 	})
 	wrapped := NewCachingStore(underlying, redisCache, "milvus")
 	opts := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
@@ -401,9 +401,6 @@ func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
 		"Store":  func(c *CachingStore, ctx context.Context) error { return c.Store(ctx, mem) },
 		"Update": func(c *CachingStore, ctx context.Context) error { return c.Update(ctx, mem.ID, mem) },
 		"Forget": func(c *CachingStore, ctx context.Context) error { return c.Forget(ctx, mem.ID) },
-		"ForgetByScope": func(c *CachingStore, ctx context.Context) error {
-			return c.ForgetByScope(ctx, MemoryScope{UserID: userID})
-		},
 	}
 
 	for name, write := range writes {
@@ -634,4 +631,93 @@ func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
 	case <-time.After(cacheInvalidateTimeout + 500*time.Millisecond):
 		t.Fatal("Redis I/O outlived the invalidation budget")
 	}
+}
+
+type partialScopedDeleteStore struct {
+	*ctxIgnoringStore
+	results   []*RetrieveResult
+	deleteErr error
+}
+
+func (s *partialScopedDeleteStore) Retrieve(
+	_ context.Context,
+	_ RetrieveOptions,
+) ([]*RetrieveResult, error) {
+	return append([]*RetrieveResult(nil), s.results...), nil
+}
+
+func (s *partialScopedDeleteStore) ForgetByScope(
+	_ context.Context,
+	_ MemoryScope,
+) error {
+	remaining := make([]*RetrieveResult, 0, len(s.results))
+	for _, result := range s.results {
+		if result.Memory.ID != "m1" {
+			remaining = append(remaining, result)
+		}
+	}
+	s.results = remaining
+	return s.deleteErr
+}
+
+func TestCachingStore_ForgetByScope_PartialFailureInvalidatesCache(t *testing.T) {
+	const userID = "u-partial-delete"
+
+	deleteErr := errors.New("failed to delete one memory")
+	backing := &partialScopedDeleteStore{
+		ctxIgnoringStore: &ctxIgnoringStore{},
+		results: []*RetrieveResult{
+			{
+				Memory: &Memory{
+					ID:      "m1",
+					UserID:  userID,
+					Content: "first memory",
+				},
+				Score: 0.9,
+			},
+			{
+				Memory: &Memory{
+					ID:      "m2",
+					UserID:  userID,
+					Content: "second memory",
+				},
+				Score: 0.8,
+			},
+		},
+		deleteErr: deleteErr,
+	}
+
+	wrapped, cache := newInvalidationFixture(t, backing)
+
+	opts := RetrieveOptions{
+		Query:  "memory",
+		UserID: userID,
+		Limit:  5,
+	}
+
+	// Prime the cache with both memories.
+	before, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, before, 2)
+
+	cached, hit := cache.Get(context.Background(), opts)
+	require.True(t, hit)
+	require.Len(t, cached, 2)
+
+	// The backend deletes m1 but fails to delete the remaining memory.
+	err = wrapped.ForgetByScope(
+		context.Background(),
+		MemoryScope{UserID: userID},
+	)
+	require.ErrorIs(t, err, deleteErr)
+
+	// The cached result must be invalidated despite the returned error.
+	_, hit = cache.Get(context.Background(), opts)
+	require.False(t, hit, "partial deletion must invalidate cached results")
+
+	// A subsequent retrieval must read the backend's current state.
+	after, err := wrapped.Retrieve(context.Background(), opts)
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	assert.Equal(t, "m2", after[0].Memory.ID)
 }

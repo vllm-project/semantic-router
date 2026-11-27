@@ -342,7 +342,7 @@ func TestHandlerWritesTheFallbackChainsAnswerAsIs(t *testing.T) {
 func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
 		routing.PhaseRequestBody: {{
-			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-selected-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
+			Header:          &routing.HeaderMutation{Set: []routing.HeaderOption{set("x-vsr-route-model", "model-a"), set(":path", "/v1/messages"), set("content-length", "4")}},
 			Body:            &routing.BodyMutation{Body: []byte("next")},
 			ClearRouteCache: true,
 		}},
@@ -353,7 +353,7 @@ func TestHandlerForwardsTheCallAndRunsResponsePhases(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newTestHandler(t, p, u).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("ping")))
 	call := u.got[0]
-	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Selected-Model") != "model-a" {
+	if call.RouteKey != "model-a" || call.Path != "/v1/messages" || string(call.Body) != "next" || call.Header.Get("X-Vsr-Route-Model") != "model-a" {
 		t.Fatalf("upstream call = %+v", call)
 	}
 	if _, pseudo := call.Header[":path"]; pseudo {
@@ -406,9 +406,13 @@ func TestHandlerStreamsChunkByChunk(t *testing.T) {
 
 // Envoy's ext_proc ends processing on Envoy's own local replies, so the
 // response phases never see one: the client gets it as it is, and the session
-// ends as an ext_proc stream ends.
+// ends with the local reply, so it knows what the client got.
 func TestHandlerWritesLocalRepliesAsEnvoyDoes(t *testing.T) {
 	const connectFailure = "upstream connect error or disconnect/reset before headers. reset reason: remote connection failure"
+	closes := map[string]routing.LocalReply{
+		"a walker error":          {Status: http.StatusGatewayTimeout, Failure: "timeout"},
+		"an upstream local reply": {Status: http.StatusServiceUnavailable, Failure: "connect_failure"},
+	}
 	for name, u := range map[string]*fakeUpstream{
 		"a walker error": {err: &upstream.Error{Kind: upstream.KindTimeout, Stage: upstream.StageTotal}},
 		"an upstream local reply": {resp: func() *upstream.Response {
@@ -433,8 +437,9 @@ func TestHandlerWritesLocalRepliesAsEnvoyDoes(t *testing.T) {
 			if len(p.headers) != 1 || len(p.bodies) != 1 {
 				t.Fatalf("phases saw %d header sets and %d bodies, want the request's only", len(p.headers), len(p.bodies))
 			}
-			if len(p.closed) != 1 || p.closed[0] != nil {
-				t.Fatalf("session closed with %v, want one clean end", p.closed)
+			var local *routing.LocalReply
+			if len(p.closed) != 1 || !errors.As(p.closed[0], &local) || *local != closes[name] {
+				t.Fatalf("session closed with %v, want one end with the local reply %+v", p.closed, closes[name])
 			}
 		})
 	}
@@ -673,5 +678,78 @@ func TestHandlerWritesAnAccessRecord(t *testing.T) {
 	if r.Status != 200 || r.BytesSent != 5 || r.BytesReceived != 4 || r.UpstreamHost != "192.0.2.10:8000" ||
 		r.UserAgent != "client/1" || len(r.RequestID) != 36 || r.Method != "POST" || r.Path != "/v1/chat/completions" {
 		t.Fatalf("record = %+v", r)
+	}
+}
+
+// A 200 with Content-Length: 0 and no body must not be treated as a bodyless
+// response: the response-body phase still has to validate the completion and
+// reject a missing body. Otherwise the gateway forwards an empty 200 that
+// clients count as a successful inference. See issue #7328.
+func TestHandlerRejectsAZeroLengthCompletion(t *testing.T) {
+	const invalid = "The selected model returned an invalid response"
+	for name, header := range map[string]http.Header{
+		"content-length zero": {"Content-Length": {"0"}, "Content-Type": {"application/json"}},
+		"no framing":          {"Content-Type": {"application/json"}},
+		"empty chunked body":  {"Transfer-Encoding": {"chunked"}, "Content-Type": {"application/json"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// The processor models the real router's response-body validation:
+			// an empty completion yields a structured 502 immediate response.
+			p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
+				routing.PhaseResponseBody: {{Immediate: &routing.ImmediateResponse{
+					Status: http.StatusBadGateway, Body: []byte(invalid),
+				}}},
+			}}
+			u := &fakeUpstream{resp: func() *upstream.Response {
+				return &upstream.Response{
+					StatusCode: 200, Header: header.Clone(),
+					Body: io.NopCloser(strings.NewReader("")),
+				}
+			}}
+			rec := httptest.NewRecorder()
+			newTestHandler(t, p, u).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("{}")))
+			if rec.Code != http.StatusBadGateway || rec.Body.String() != invalid {
+				t.Fatalf("response = %d %q, want 502 %q", rec.Code, rec.Body.String(), invalid)
+			}
+			// The response-body phase must have been reached with the empty body.
+			if len(p.headers) < 2 {
+				t.Fatalf("phases saw %d header sets, want the response headers phase too", len(p.headers))
+			}
+		})
+	}
+}
+
+// HEAD, 204 and 304 legitimately have no body and must keep bypassing the
+// response-body phase even when a Content-Length header is present.
+func TestHandlerKeepsBodylessResponsesBodyless(t *testing.T) {
+	for name, tc := range map[string]struct {
+		method string
+		resp   *upstream.Response
+	}{
+		"HEAD": {
+			method: http.MethodHead,
+			resp:   &upstream.Response{StatusCode: 200, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+		"204": {
+			method: http.MethodPost,
+			resp:   &upstream.Response{StatusCode: 204, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+		"304": {
+			method: http.MethodPost,
+			resp:   &upstream.Response{StatusCode: 304, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
+				routing.PhaseResponseBody: {{Immediate: &routing.ImmediateResponse{Status: 599, Body: []byte("body phase ran")}}},
+			}}
+			u := &fakeUpstream{resp: func() *upstream.Response { return tc.resp }}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tc.method, "/v1/chat/completions", strings.NewReader("{}"))
+			newTestHandler(t, p, u).ServeHTTP(rec, req)
+			if rec.Code == 599 || rec.Body.String() == "body phase ran" {
+				t.Fatalf("bodyless response entered the body phase: %d %q", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }

@@ -22,7 +22,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 		return err
 	}
 	for index, itemBody := range itemBodies {
-		item, err := decodeResponsesItemWire(itemBody, policy, false)
+		item, err := decodeResponsesItemWire(withoutCodexItemMetadata(itemBody), policy, false)
 		if err != nil {
 			return err
 		}
@@ -34,7 +34,7 @@ func decodeResponsesInput(raw json.RawMessage, request *llmprotocol.Request, pol
 }
 
 var responsesItemUnionFields = []string{
-	"arguments", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
+	"arguments", "async", "call_id", "caller", "content", "encrypted_content", "id", "input", "name", "namespace",
 	"output", "phase", "result", "role", "status", "summary", "type",
 }
 
@@ -136,11 +136,11 @@ func responsesItemAllowedFields(itemType string) []string {
 	case "message":
 		return []string{"content", "id", "phase", "role", "status", "type"}
 	case "function_call":
-		return []string{"arguments", "call_id", "caller", "id", "name", "namespace", "status", "type"}
+		return []string{"arguments", "async", "call_id", "caller", "id", "name", "namespace", "status", "type"}
 	case "function_call_output":
 		return []string{"call_id", "caller", "id", "name", "namespace", "output", "status", "type"}
 	case "custom_tool_call":
-		return []string{"call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
+		return []string{"async", "call_id", "caller", "id", "input", "name", "namespace", "status", "type"}
 	case "custom_tool_call_output":
 		return []string{"call_id", "caller", "id", "output", "status", "type"}
 	case "reasoning":
@@ -180,24 +180,22 @@ func decodeResponsesInputItem(
 	if err := validateResponsesInputItemMetadata(item); err != nil {
 		return err
 	}
+	if err := flattenResponsesHistoryCall(&item, request, policy); err != nil {
+		return err
+	}
 	return decodeResponsesInputItemKind(item, index, request, policy)
 }
 
 func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"input.caller":            item.Caller,
-		"input.encrypted_content": item.EncryptedContent,
-		"input.phase":             item.Phase,
+		"input.async":  item.Async,
+		"input.caller": item.Caller,
+		"input.phase":  item.Phase,
 	}); err != nil {
 		return err
 	}
-	if item.Namespace != "" {
+	if item.Namespace != "" && item.Type != "function_call" && item.Type != "custom_tool_call" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
-	}
-	if item.Status != "" && item.Type != "" && item.Type != "message" &&
-		item.Type != "function_call" && item.Type != "function_call_output" &&
-		item.Type != "custom_tool_call" && item.Type != "custom_tool_call_output" && item.Type != "image_generation_call" {
-		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil
 }
@@ -264,7 +262,7 @@ func decodeResponsesMessageItem(item responsesItemWire, request *llmprotocol.Req
 		return err
 	}
 	if role == llmprotocol.RoleSystem || role == llmprotocol.RoleDeveloper {
-		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content})
+		request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{Role: role, Content: content, Position: len(request.Messages)})
 	} else {
 		request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: role, Content: content})
 	}
@@ -312,7 +310,7 @@ func decodeResponsesToolResult(item responsesItemWire, request *llmprotocol.Requ
 }
 
 func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.Request, policy llmprotocol.Policy) error {
-	content, err := decodeResponsesReasoning(item.Summary, policy, false)
+	summary, err := decodeResponsesReasoning(item.Summary, policy, false)
 	if err != nil {
 		return err
 	}
@@ -320,7 +318,28 @@ func decodeResponsesReasoningItem(item responsesItemWire, request *llmprotocol.R
 	if err != nil {
 		return err
 	}
-	content = append(content, reasoning...)
+	var content []llmprotocol.Content
+	for _, part := range append(summary, reasoning...) {
+		if part.Text != "" {
+			content = append(content, part)
+		}
+	}
+	encrypted, err := decodeResponsesEncryptedReasoning(item, policy, false)
+	if err != nil {
+		return err
+	}
+	if encrypted != nil {
+		content = append(content, *encrypted)
+	} else if len(item.EncryptedContent) > 0 {
+		// Null and empty ciphertext carry no state and are omitted on re-encoding.
+		request.Generation++
+	}
+	// Stored ID-only references have no canonical provider scope yet.
+	if len(content) == 0 && (len(item.EncryptedContent) > 0 || len(reasoning) > 0 || item.ID != "") {
+		// Retire the source envelope so it cannot resurrect the omitted item.
+		request.Generation++
+		return nil
+	}
 	request.Messages = append(request.Messages, llmprotocol.Message{ID: item.ID, Role: llmprotocol.RoleAssistant, Content: content})
 	return nil
 }
@@ -712,7 +731,7 @@ func decodeResponsesObjectToolChoice(raw json.RawMessage, policy llmprotocol.Pol
 		return llmprotocol.ToolChoice{}, llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
 			"unsupported_tool_choice",
-			"Responses tool choice cannot be represented by the neutral protocol",
+			"the Router does not support this Responses tool choice",
 			nil,
 		)
 	}
@@ -749,4 +768,30 @@ func unsupportedResponsesToolChoice(typeName string) bool {
 	default:
 		return false
 	}
+}
+
+// codexItemMetadataField is the bookkeeping Codex CLI attaches to each input
+// message since 0.163 (content_item_kinds, turn_id, create_time). Like the
+// request's client_metadata it is client metadata, not model input, so it is
+// removed before the strict item decode and reported by
+// decodeResponsesDroppedFields.
+const codexItemMetadataField = "internal_chat_message_metadata_passthrough"
+
+func withoutCodexItemMetadata(body json.RawMessage) json.RawMessage {
+	if !bytes.Contains(body, []byte(codexItemMetadataField)) {
+		return body
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(body, &object) != nil {
+		return body
+	}
+	if _, found := object[codexItemMetadataField]; !found {
+		return body
+	}
+	delete(object, codexItemMetadataField)
+	trimmed, err := json.Marshal(object)
+	if err != nil {
+		return body
+	}
+	return trimmed
 }

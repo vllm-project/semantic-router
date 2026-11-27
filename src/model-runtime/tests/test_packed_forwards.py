@@ -106,6 +106,38 @@ def test_installed_varlen_python_api_accepts_runtime_arguments(monkeypatch, grou
     assert out is q
 
 
+@pytest.mark.parametrize("groups", [1, 2])
+def test_the_aten_flash_op_receives_scale_and_grouped_heads(monkeypatch, groups):
+    """Before torch 2.10 the kernel is the ATen op; check its call on CPU, replacing only GPU dispatch."""
+    from vllm_srun.accel.gpu import _flash_varlen
+
+    calls = []
+
+    def op(*args, **kwargs):
+        calls.append((args, kwargs))
+        return (args[0],)
+
+    monkeypatch.setattr(torch.ops.aten, "_flash_attention_forward", op)
+    packed = Packed([3, 7, 1], CPU)
+    q = torch.randn(11, 4, 8, dtype=torch.bfloat16)
+    k, v = (torch.randn(11, 4 // groups, 8, dtype=torch.bfloat16) for _ in range(2))
+    attend = _wrap_varlen(_flash_varlen)
+    assert attend(q, k, v, packed, scale=0.1, groups=groups) is q
+    ((args, kwargs),) = calls
+    assert args[0] is q and args[1] is k and args[2] is v
+    assert args[3] is packed.cu_seqlens_int32 and args[4] is args[3]
+    assert args[3].dtype == torch.int32
+    assert args[5:] == (7, 7, 0.0, False, False)
+    assert kwargs == {"scale": 0.1}
+    # FP32 (--dtype float32) never reaches the 16-bit kernel.
+    full = [x.float() for x in (q, k, v)]
+    out = attend(*full, packed, scale=0.1, groups=groups)
+    torch.testing.assert_close(
+        out, varlen_attention_ref(*full, packed, scale=0.1, groups=groups)
+    )
+    assert len(calls) == 1
+
+
 def test_legacy_varlen_uses_reference_for_a_custom_scale():
     """A fixed-scale kernel must not silently change the caller's attention."""
     torch.manual_seed(3)

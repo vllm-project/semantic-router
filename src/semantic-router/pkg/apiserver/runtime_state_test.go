@@ -104,7 +104,6 @@ func TestHandleOpenAIModelsUsesResolvedRuntimeConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			staleCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -147,7 +146,6 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			staleCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -201,7 +199,6 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			liveCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -226,62 +223,6 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 	}
 	if configuration["enabled"] != true {
 		t.Fatalf("expected enabled=true in normalized plugin config, got %#v", configuration)
-	}
-}
-
-func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
-	staleCfg := &config.RouterConfig{}
-	liveCfg := &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "live-category-model",
-					Threshold:           0.42,
-					CategoryMappingPath: "live-mapping.json",
-				},
-			},
-		},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				Categories: []config.Category{
-					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
-				},
-			},
-		},
-	}
-
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: &fakeResolvedClassificationService{},
-		config:            staleCfg,
-		runtimeConfig: newLiveRuntimeConfig(
-			staleCfg,
-			func() *config.RouterConfig { return liveCfg },
-			nil,
-		),
-	}
-
-	resp := apiServer.buildModelsInfoResponse()
-
-	if len(resp.Models) == 0 {
-		t.Fatalf("expected model info entries from live config")
-	}
-
-	found := false
-	for _, model := range resp.Models {
-		if model.Name != "category_classifier" {
-			continue
-		}
-		found = true
-		if model.ModelPath != "live-category-model" {
-			t.Fatalf("expected live model path, got %q", model.ModelPath)
-		}
-		if model.Metadata["mapping_path"] != "live-mapping.json" {
-			t.Fatalf("expected live mapping path, got %+v", model.Metadata)
-		}
-	}
-
-	if !found {
-		t.Fatalf("expected category_classifier entry, got %+v", resp.Models)
 	}
 }
 

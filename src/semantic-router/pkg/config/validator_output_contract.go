@@ -14,7 +14,31 @@ func validateDecisionOutputContractSpec(decision Decision) error {
 	if err := validateOutputContractSpecType(spec, context); err != nil {
 		return err
 	}
-	return validateOutputContractPostprocess(spec, context)
+	if err := validateOutputContractPostprocess(spec, context); err != nil {
+		return err
+	}
+	return validateOutputContractAlgorithm(decision, context)
+}
+
+// validateOutputContractAlgorithm refuses a spec the decision's algorithm
+// never applies. Fusion, ReMoM and Flow shape their final answer by it; every
+// other decision serves a model's answer as it is. The Flow final lists worker
+// outputs without numbers, so it has no reference to select.
+func validateOutputContractAlgorithm(decision Decision, context string) error {
+	algorithm := ""
+	if decision.Algorithm != nil {
+		algorithm = decision.Algorithm.Type
+	}
+	switch algorithm {
+	case DecisionAlgorithmFusion, DecisionAlgorithmReMoM:
+		return nil
+	case DecisionAlgorithmWorkflows:
+		if strings.TrimSpace(decision.OutputContractSpec.Type) != OutputContractTypeReferenceSelect {
+			return nil
+		}
+		return fmt.Errorf("%s type %s is not supported by algorithm %s, whose final lists worker outputs without numbers", context, OutputContractTypeReferenceSelect, algorithm)
+	}
+	return fmt.Errorf("%s requires algorithm fusion, remom or workflows, which apply it to the final answer", context)
 }
 
 func validateOutputContractSpecType(spec *OutputContractSpec, context string) error {

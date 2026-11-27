@@ -43,7 +43,11 @@ identity; those are embedded build metadata.
   runtime registry. Each provider owns its `models[]` mappings;
   every mapping explicitly classifies the creator-to-serving-channel
   relationship as `first_party`, `managed_cloud`, `gateway`, or `self_hosted`.
-  Credential-bearing headers are forbidden here.
+  An optional `price_list[]` gives the list price of a provider-native model
+  ID that has no Model Card: `id`, `pricing` and a `verification.source`. An
+  entry only prices a custom model whose backend calls that ID on that
+  provider's own host; it is never a model, so it needs no card or
+  evaluations and is not listed or selectable. Credential-bearing headers are forbidden here.
 - `models/single/`: intrinsic facts for physical models, grouped by creator.
 - `models/virtual/`: recipe-backed logical model identities and role contracts.
 - `reasoning-families.yaml`: reusable request projections for reasoning knobs.
@@ -139,6 +143,25 @@ representatives, or a creator that falls below that depth. The policy
 is not emitted into runtime snapshots or exposed in user configuration; whether
 a candidate is mainstream and which recent lines are representative remains a
 review decision rather than a mechanical release-date ranking.
+A creator may carry a reviewed `min_representatives` below the default when it
+has fewer current, separately selectable product lines and the alternative
+would be reviving a retired or deprecated product. Thinking Machines Lab holds
+a two-representative exception. Writer holds a one-representative exception:
+its first-party catalog, reviewed on 2026-09-20, lists Palmyra X6 as the only
+line not on a deprecation path, since Palmyra X5 and Palmyra X4 are both
+scheduled for deprecation on 2026-12-14 with migration to X6. The Palmyra X5
+card stays in the catalog with `lifecycle: deprecated` so its mapping and
+evidence remain visible until Writer removes the model, but it is not a
+representative. Meituan / LongCat holds a two-representative exception,
+reviewed on 2026-11-25. LongCat-2.5 and LongCat-2.0 meet the evidence rules and
+have a serving path that the provider or the runtime documents: the LongCat API
+and the SGLang cookbook. LongCat-Flash-Lite-Sparse meets the evidence rules
+too, but the SGLang change its model card cites was closed unmerged and its
+serving path is unverified; it becomes the third representative once that path
+is verified. LongCat-Next is not a candidate: it is an any-to-any model that
+also generates images and speech, and its results are a chart without
+settings. The other LongCat-Flash models were retired from Meituan's API as
+legacy on 2026-05-29.
 
 ## User configuration boundary
 
@@ -157,7 +180,7 @@ Catalog adoption is additive within the existing v0.3 hierarchy:
   physical backends even when it supplies the legacy default listener for an
   empty listener list.
 - A catalog-backed model materializes its card and reasoning family
-  automatically. An intentional `routing.modelCards` override uses the
+  automatically. An intentional `providers.models` override uses the
   canonical `catalog` value as its `name`.
 - A custom vLLM, SGLang, private, or newly released model omits `catalog`. It
   can remain a minimal binding or supply a handwritten Model Card, custom

@@ -1,0 +1,29 @@
+# latency_aware is multi_factor weighted on latency: one percentile keeps its
+# metric, and both percentiles compare TPOT at the TPOT percentile with a note.
+version: v0.5
+providers:
+  defaults: {model: small}
+  models:
+    - name: small
+      backend_refs: [{name: small, endpoint: "127.0.0.1:8000", protocol: http, weight: 1}]
+      description: Fast general model
+    - name: large
+      backend_refs: [{name: large, endpoint: "127.0.0.1:8001", protocol: http, weight: 1}]
+      description: Strong reasoning model
+recipes:
+  - name: default
+    decisions:
+      - name: fast-first-token
+        priority: 100
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: latency_aware
+          latency_aware: {ttft_percentile: 90}
+      - name: fast-overall
+        priority: 50
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: small}, {model: large}]
+        algorithm:
+          type: latency_aware
+          latency_aware: {tpot_percentile: 95, ttft_percentile: 90, description: Prefer the faster model}

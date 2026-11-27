@@ -498,13 +498,13 @@ func TestMoMGeneratedTextPreservesPortableTextReceipt(t *testing.T) {
 	receipt := materializeMoMFixtureReceipt(t, manifest)
 	// Pin all maintained message fixtures, including bounded Vault context and
 	// meaningful repeated-text records used by context-band probes.
-	if receipt.probeCount != 315 || receipt.messageProbes != 90 || receipt.generatedProbes != 42 ||
-		receipt.imageParts != 53 || receipt.textBytes != 18_744_960 {
+	if receipt.probeCount != 366 || receipt.messageProbes != 109 || receipt.generatedProbes != 44 ||
+		receipt.imageParts != 53 || receipt.textBytes != 19_066_897 {
 		t.Fatalf("receipt counts: probes=%d messages=%d generated=%d image_parts=%d text_bytes=%d",
 			receipt.probeCount, receipt.messageProbes, receipt.generatedProbes, receipt.imageParts, receipt.textBytes)
 	}
 	// The digest also includes current group/variant IDs, including the visual-description group.
-	if receipt.textDigest != "3298a50e3f85ba620b7b18621067e076f957eff67296a8828495fe1aaf6c111f" {
+	if receipt.textDigest != "ef27688478105c3b0b038749d2b4cb3b9b31c962f977d5dd4b4c1627a918715f" {
 		t.Fatalf("materialized text digest = %s", receipt.textDigest)
 	}
 	assertMoMImageFixtureReceipt(t, manifest, receipt.imageURLs)

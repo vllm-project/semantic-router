@@ -65,7 +65,7 @@ def test_runtime_config_path_rejects_long_values_before_write(
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "a" * 300)
 
     with pytest.raises(ValueError, match="filesystem limit"):
-        _write_runtime_config(tmp_path / "config.yaml", {"version": "v0.3"})
+        _write_runtime_config(tmp_path / "config.yaml", {"version": "v0.5"})
 
     runtime_dir = tmp_path / ".vllm-sr"
     assert list(runtime_dir.iterdir()) == []
@@ -108,7 +108,7 @@ def test_write_runtime_config_uses_same_directory_atomic_private_replacement(
 
     monkeypatch.setattr(runtime_paths.os, "replace", record_replace)
 
-    result = _write_runtime_config(config_path, {"version": "v0.3"})
+    result = _write_runtime_config(config_path, {"version": "v0.5"})
 
     assert result == runtime_path
     assert observed == {
@@ -118,7 +118,7 @@ def test_write_runtime_config_uses_same_directory_atomic_private_replacement(
         "old_content": "version: old\n",
     }
     assert yaml.safe_load(runtime_path.read_text(encoding="utf-8")) == {
-        "version": "v0.3"
+        "version": "v0.5"
     }
     assert stat.S_IMODE(runtime_path.stat().st_mode) == 0o600
     assert runtime_path.stat().st_ino != old_inode
@@ -135,7 +135,7 @@ def test_write_runtime_config_rejects_file_symlink_without_following_it(
     runtime_path.symlink_to(outside_path)
 
     with pytest.raises(ValueError, match="symbolic link"):
-        _write_runtime_config(config_path, {"version": "v0.3"})
+        _write_runtime_config(config_path, {"version": "v0.5"})
 
     assert runtime_path.is_symlink()
     assert outside_path.read_text(encoding="utf-8") == "sentinel\n"
@@ -152,7 +152,7 @@ def test_runtime_config_output_rejects_symlinked_owned_directory(
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
 
     with pytest.raises(ValueError, match="symbolic link"):
-        _write_runtime_config(tmp_path / "config.yaml", {"version": "v0.3"})
+        _write_runtime_config(tmp_path / "config.yaml", {"version": "v0.5"})
 
     assert list(outside_dir.iterdir()) == []
 
@@ -277,10 +277,124 @@ def test_runtime_config_output_skips_posix_permissions_when_unsupported(
         pytest.fail("POSIX chmod must not run on an unsupported platform")
 
     monkeypatch.setattr(runtime_paths.os, "chmod", unexpected_chmod)
+    monkeypatch.setattr(runtime_paths.os, "fchmod", unexpected_chmod, raising=False)
 
     output_path = _runtime_config_output_path(tmp_path / "config.yaml")
 
     assert output_path.parent == runtime_dir
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_runtime_config_output_hardens_without_chmod_follow_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # glibc < 2.32 cannot emulate fchmodat(AT_SYMLINK_NOFOLLOW), so CPython
+    # raises NotImplementedError for os.chmod(..., follow_symlinks=False).
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    real_chmod = os.chmod
+
+    def chmod_without_nofollow(path, mode, *, dir_fd=None, follow_symlinks=True):
+        if not follow_symlinks:
+            raise NotImplementedError(
+                "chmod: follow_symlinks unavailable on this platform"
+            )
+        real_chmod(path, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(runtime_paths.os, "chmod", chmod_without_nofollow)
+
+    output_path = _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert output_path.parent == runtime_dir
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o700
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_harden_private_directory_rejects_symlink_swapped_in_after_inspection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    outside_dir = tmp_path / "outside"
+    runtime_dir.mkdir()
+    outside_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    outside_dir.chmod(0o755)
+    inspected = runtime_dir.lstat()
+    runtime_dir.rmdir()
+    runtime_dir.symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(OSError):
+        runtime_paths._chmod_directory_without_following(runtime_dir, 0o700, inspected)
+
+    assert stat.S_IMODE(outside_dir.stat().st_mode) == 0o755
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_harden_private_directory_rejects_directory_replaced_after_inspection(
+    tmp_path: Path,
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    inspected = runtime_dir.lstat()
+    runtime_dir.rename(tmp_path / "moved")
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+
+    with pytest.raises(OSError):
+        runtime_paths._chmod_directory_without_following(runtime_dir, 0o700, inspected)
+
+    assert stat.S_IMODE(runtime_dir.stat().st_mode) == 0o755
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_harden_private_directory_rejects_directory_swapped_in_during_fchmod(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    runtime_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    inspected = runtime_dir.lstat()
+    real_fchmod = os.fchmod
+
+    def fchmod_then_swap(fd, mode):
+        real_fchmod(fd, mode)
+        runtime_dir.rename(tmp_path / "moved")
+        runtime_dir.mkdir()
+        runtime_dir.chmod(0o755)
+
+    monkeypatch.setattr(runtime_paths.os, "fchmod", fchmod_then_swap)
+
+    with pytest.raises(OSError):
+        runtime_paths._chmod_directory_without_following(runtime_dir, 0o700, inspected)
+
+    assert stat.S_IMODE(runtime_dir.lstat().st_mode) == 0o755
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions only")
+def test_runtime_config_output_rejects_symlink_swapped_in_during_fchmod(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    outside_dir = tmp_path / "outside"
+    runtime_dir.mkdir()
+    outside_dir.mkdir()
+    runtime_dir.chmod(0o755)
+    outside_dir.chmod(0o755)
+    real_fchmod = os.fchmod
+
+    def fchmod_then_swap(fd, mode):
+        real_fchmod(fd, mode)
+        runtime_dir.rename(tmp_path / "moved")
+        runtime_dir.symlink_to(outside_dir, target_is_directory=True)
+
+    monkeypatch.setattr(runtime_paths.os, "fchmod", fchmod_then_swap)
+
+    with pytest.raises(ValueError, match="cannot be secured"):
+        _runtime_config_output_path(tmp_path / "config.yaml")
+
+    assert runtime_dir.is_symlink()
+    assert stat.S_IMODE(outside_dir.stat().st_mode) == 0o755
 
 
 def test_runtime_config_output_rejects_existing_non_directory(tmp_path: Path):
@@ -316,7 +430,7 @@ def test_atomic_write_failure_preserves_target_and_removes_temporary_file(
     monkeypatch.setattr(runtime_paths.yaml, "dump", fail_dump)
 
     with pytest.raises(RuntimeError, match="serialization failed"):
-        _write_runtime_config(config_path, {"version": "v0.3"})
+        _write_runtime_config(config_path, {"version": "v0.5"})
 
     assert runtime_path.read_text(encoding="utf-8") == "version: old\n"
     assert list(runtime_path.parent.glob(f".{runtime_path.name}.*.tmp")) == []
@@ -335,7 +449,7 @@ def test_replace_failure_preserves_target_and_removes_temporary_file(
     monkeypatch.setattr(runtime_paths.os, "replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
-        _write_runtime_config(config_path, {"version": "v0.3"})
+        _write_runtime_config(config_path, {"version": "v0.5"})
 
     assert runtime_path.read_text(encoding="utf-8") == "version: old\n"
     assert list(runtime_path.parent.glob(f".{runtime_path.name}.*.tmp")) == []
@@ -431,7 +545,7 @@ def test_materialize_uses_custom_host_state_without_container_path_leak(
 ):
     source = tmp_path / "source" / "config.yaml"
     source.parent.mkdir()
-    source.write_text("version: v0.3\n", encoding="utf-8")
+    source.write_text("version: v0.5\n", encoding="utf-8")
     state_root = tmp_path / "host-state"
 
     active = materialize_runtime_config(
@@ -450,8 +564,8 @@ def test_materialize_takes_a_reencoded_same_document_as_its_own(
 ):
     # What `vllm-sr config apply` sent comes back re-encoded by the Router.
     source = tmp_path / "config.yaml"
-    source.write_text("version: v0.3\n", encoding="utf-8")
-    effective = b"version: v0.3\nglobal:\n  services:\n    management_api: {bind_address: 0.0.0.0, port: 8080}\n"
+    source.write_text("version: v0.5\n", encoding="utf-8")
+    effective = b"version: v0.5\nglobal:\n  services:\n    management_api: {bind_address: 0.0.0.0, port: 8080}\n"
     active = materialize_runtime_config(source, effective)
     reencoded = yaml.safe_dump(yaml.safe_load(effective), sort_keys=True).encode()
     active.write_bytes(reencoded)

@@ -7,24 +7,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+// checkDomainSignalConstraints rejects a domain signal that matches a label
+// that is not a domain: its name, when it has no labels.
 func (v *Validator) checkDomainSignalConstraints(s *SignalDecl, context string) {
-	mmluCategories := getMMLUCategories(s)
-	for _, mmluCategory := range mmluCategories {
-		if config.IsSupportedRoutingDomainName(mmluCategory) {
+	_, labelled := s.Fields["labels"]
+	for _, label := range domainLabels(s) {
+		if config.IsSupportedRoutingDomainName(label) {
 			continue
 		}
-		v.addDiag(
-			DiagConstraint,
-			s.Pos,
-			fmt.Sprintf(
-				"%s: mmlu_categories contains unsupported value %q; supported values: %s%s",
-				context,
-				mmluCategory,
-				strings.Join(config.SupportedRoutingDomainNames(), ", "),
-				formatDomainQuickFixSuffix(mmluCategory),
-			),
-			domainQuickFix(mmluCategory),
-		)
+		message := fmt.Sprintf("%s: labels contains %q, which is not a domain; supported values: %s%s",
+			context, label, strings.Join(config.SupportedRoutingDomainNames(), ", "), formatDomainQuickFixSuffix(label))
+		if !labelled {
+			message = fmt.Sprintf("%s: the name %q is not a domain, so the signal names the domains it matches: set labels to some of %s%s",
+				context, label, strings.Join(config.SupportedRoutingDomainNames(), ", "), formatDomainQuickFixSuffix(label))
+		}
+		v.addDiag(DiagConstraint, s.Pos, message, domainQuickFix(label))
 	}
 }
 

@@ -25,6 +25,6 @@ Use [`curl-examples.sh`](curl-examples.sh) for a live classification check and
 record the current config, model revision, and Router image when comparing
 results. A small list of demo prompts is not an accuracy benchmark.
 
-To change the mapping, update the corresponding `routing.decisions` entry in
-the canonical config. Keep `providers.models`, `routing.modelCards`, decision
+To change the mapping, update the corresponding `recipes[].decisions` entry in
+the canonical config. Keep `providers.models`, `providers.models`, decision
 `modelRefs`, and the backend served-model names aligned.

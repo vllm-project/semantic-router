@@ -1,6 +1,8 @@
 // Package modelpricing calculates token costs from provider-reported usage.
 package modelpricing
 
+import "time"
+
 const tokensPerMillion = 1_000_000.0
 
 // Rates contains the active per-million-token prices for one model.
@@ -54,6 +56,17 @@ type Usage struct {
 	CompletionTokens   int
 }
 
+// Receipt is one response's provider-reported usage on Model, kept so the next
+// routing decision can price the prompt cache that response left warm.
+type Receipt struct {
+	Model string
+	Usage Usage
+	// CacheReported is false when the backend reported no cache counts, so a
+	// zero cache read means unknown rather than cold.
+	CacheReported bool
+	At            time.Time
+}
+
 // Breakdown is the normalized, mutually exclusive token allocation.
 type Breakdown struct {
 	PromptTokens        int
@@ -93,14 +106,37 @@ func Normalize(usage Usage) Breakdown {
 
 // Cost returns the total response cost in the rates' configured currency.
 func Cost(usage Usage, rates Rates) float64 {
+	cost := costsPerMillion(usage, rates)
+	return (cost.UncachedInput + cost.CacheRead + cost.CacheWrite + cost.Output) / tokensPerMillion
+}
+
+type CostComponents struct {
+	UncachedInput float64
+	CacheRead     float64
+	CacheWrite    float64
+	Output        float64
+}
+
+func Costs(usage Usage, rates Rates) CostComponents {
+	cost := costsPerMillion(usage, rates)
+	cost.UncachedInput /= tokensPerMillion
+	cost.CacheRead /= tokensPerMillion
+	cost.CacheWrite /= tokensPerMillion
+	cost.Output /= tokensPerMillion
+	return cost
+}
+
+func costsPerMillion(usage Usage, rates Rates) CostComponents {
 	breakdown := Normalize(usage)
 	writeCost := float64(breakdown.CacheWrite1hTokens)*rates.EffectiveCacheWrite1hPer1M() +
 		float64(breakdown.CacheWriteTokens-breakdown.CacheWrite1hTokens)*rates.EffectiveCacheWritePer1M()
 
-	return (float64(breakdown.StandardInputTokens)*nonNegativeRate(rates.PromptPer1M) +
-		float64(breakdown.CachedInputTokens)*nonNegativeRate(rates.CachedInputPer1M) +
-		writeCost +
-		float64(breakdown.CompletionTokens)*nonNegativeRate(rates.CompletionPer1M)) / tokensPerMillion
+	return CostComponents{
+		UncachedInput: float64(breakdown.StandardInputTokens) * nonNegativeRate(rates.PromptPer1M),
+		CacheRead:     float64(breakdown.CachedInputTokens) * nonNegativeRate(rates.CachedInputPer1M),
+		CacheWrite:    writeCost,
+		Output:        float64(breakdown.CompletionTokens) * nonNegativeRate(rates.CompletionPer1M),
+	}
 }
 
 // InputCostMultiplier normalizes observed input cost against the highest

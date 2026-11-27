@@ -30,7 +30,7 @@ func adminUsersCollectionHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUsersList(w, r, svc)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -43,6 +43,7 @@ func handleAdminUsersList(w http.ResponseWriter, r *http.Request, svc *Service) 
 	limit := positiveQueryInt(r, "limit", 100, 200)
 	options := UserListOptions{
 		Status: r.URL.Query().Get("status"),
+		Role:   r.URL.Query().Get("role"),
 		Query:  r.URL.Query().Get("q"),
 		Sort:   r.URL.Query().Get("sort"),
 		Order:  r.URL.Query().Get("order"),
@@ -110,7 +111,7 @@ func adminUserItemHandler(svc *Service) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			handleAdminUserGet(w, r, svc, userID)
 		case http.MethodPatch:
 			handleAdminUserPatch(w, r, svc, ac, userID)

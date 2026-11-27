@@ -1,3 +1,14 @@
+import { TRACE_ALGORITHM, TRACE_LOOPER, X_VSR_SELECTED_DECISION } from '../generated/vsrHeaders'
+
+// Display entries name a matched signal family signal:<type>, and a detail of
+// x-vsr-trace trace:<member>, beside the public headers they come with.
+export const MATCHED_SIGNAL_KEY_PREFIX = 'signal:'
+
+export const matchedSignalKey = (signalType: string): string =>
+  `${MATCHED_SIGNAL_KEY_PREFIX}${signalType}`
+
+export const traceKey = (detail: string): string => `trace:${detail}`
+
 const ACRONYMS: Record<string, string> = {
   api: 'API',
   kb: 'Knowledge Base',
@@ -20,10 +31,8 @@ const LANGUAGE_NAMES: Record<string, string> = {
 }
 
 const IDENTIFIER_LABELS: Record<string, string> = {
-  latency_aware: 'Latency-Aware',
   multi_factor: 'Multi-Factor',
-  rl_driven: 'RL-Driven',
-  router_dc: 'Router DC',
+  systemone: 'System One',
 }
 
 const humanizeToken = (token: string): string => {
@@ -52,16 +61,16 @@ export const formatRoutingMetadataValue = (key: string, value: string): string =
   if (!trimmed) return trimmed
   const normalizedKey = key.toLowerCase()
 
-  if (normalizedKey === 'x-vsr-matched-language') {
+  if (normalizedKey === matchedSignalKey('language')) {
     return LANGUAGE_NAMES[trimmed.toLowerCase()] ?? humanizeIdentifier(trimmed, false)
   }
-  if (normalizedKey === 'x-vsr-selected-decision') {
+  if (normalizedKey === X_VSR_SELECTED_DECISION) {
     return humanizeIdentifier(trimmed, true)
   }
   if (
-    normalizedKey === 'x-vsr-selected-algorithm' ||
-    normalizedKey === 'x-vsr-looper-algorithm' ||
-    normalizedKey.startsWith('x-vsr-matched-')
+    normalizedKey === traceKey(TRACE_ALGORITHM) ||
+    normalizedKey === traceKey(`${TRACE_LOOPER}.algorithm`) ||
+    normalizedKey.startsWith(MATCHED_SIGNAL_KEY_PREFIX)
   ) {
     return humanizeIdentifier(trimmed, false)
   }

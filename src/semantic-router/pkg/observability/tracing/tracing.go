@@ -84,6 +84,7 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 		sdktrace.WithResource(res),
 		sdktrace.WithBatcher(observedExporter{exporter}),
 		sdktrace.WithSampler(sampler),
+		sdktrace.WithIDGenerator(RunIDGenerator()),
 	)
 
 	// Set global tracer provider
@@ -317,6 +318,8 @@ const (
 	AttrCacheLookupTimeMs       = "cache.lookup_time_ms"
 	AttrCacheNegationGuard      = "cache.negation_guard"
 	AttrCacheWriteSkippedReason = "cache.write_skipped_reason"
+	AttrResponseGuardOutcome    = "response_guard.outcome"
+	AttrResponseGuardBuffered   = "response_guard.buffered"
 )
 
 // Current runtime phase spans; plugin and looper spans carry inherited recipe identity.

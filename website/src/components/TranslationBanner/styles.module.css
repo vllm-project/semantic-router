@@ -1,6 +1,6 @@
 .banner {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.625rem;
   padding: 1rem 1.1rem;
   margin: 0 0 1.1rem 0;
@@ -81,6 +81,7 @@
 @media (max-width: 768px) {
   .banner {
     flex-direction: column;
+    align-items: flex-start;
   }
 
   .editLink {

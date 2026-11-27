@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -28,7 +27,7 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	plugin := activeContextRecoveryPlugin(requestCtx)
+	plugin := activeContextRecoveryPlugin(r.Config, requestCtx)
 	if plugin == nil {
 		return responseBody, nil
 	}
@@ -50,6 +49,12 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 	}
 	if len(calls) > contextRecoveryLimit(plugin) {
 		return responseBody, fmt.Errorf("context recovery retrieval limit exceeded")
+	}
+	// The followup keeps only this turn's retrieval calls and is sent through
+	// a Looper client, so other continuity formats would lose required state.
+	// Responses blobs may be dropped by Chat encoding, as in ordinary dispatch.
+	if carriesReasoningContinuity(requestCtx.SemanticRequest, &decoded.Response) {
+		return responseBody, fmt.Errorf("context recovery cannot carry reasoning continuity blocks")
 	}
 	toolMessages, err := r.loadContextRecoveryToolMessages(
 		ctx,
@@ -74,23 +79,23 @@ func (r *OpenAIRouter) handleContextRecoveryFollowup(
 }
 
 func activeContextRecoveryPlugin(
+	cfg *config.RouterConfig,
 	requestCtx *RequestContext,
-) *config.ContextCompressionPluginConfig {
+) *config.ContextCompressConfig {
 	if requestCtx == nil ||
-		requestCtx.VSRSelectedDecision == nil ||
 		requestCtx.ExpectStreamingResponse ||
 		len(requestCtx.ContextCompressionRecoveryKeys) == 0 {
 		return nil
 	}
-	plugin := requestCtx.VSRSelectedDecision.GetContextCompressionConfig()
-	if plugin == nil || plugin.Recovery == nil || !plugin.Recovery.Enabled {
+	plugin := contextCompression(requestPlugins(cfg, requestCtx))
+	if plugin == nil || plugin.Compress.Recovery == nil || !plugin.Compress.Recovery.Enabled {
 		return nil
 	}
-	return plugin
+	return plugin.Compress
 }
 
 func contextRecoveryLimit(
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 ) int {
 	if plugin.Recovery.MaxRetrievals > 0 {
 		return plugin.Recovery.MaxRetrievals
@@ -101,7 +106,7 @@ func contextRecoveryLimit(
 func (r *OpenAIRouter) loadContextRecoveryToolMessages(
 	ctx context.Context,
 	requestCtx *RequestContext,
-	plugin *config.ContextCompressionPluginConfig,
+	plugin *config.ContextCompressConfig,
 	calls []contextRecoveryCall,
 ) ([]llmprotocol.Message, error) {
 	store := r.contextCompressionRecoveryStore(plugin)
@@ -170,6 +175,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	followupRequest.Messages = append([]llmprotocol.Message(nil), requestCtx.SemanticRequest.Messages...)
 	followupRequest.Messages = append(followupRequest.Messages, assistant...)
 	followupRequest.Messages = append(followupRequest.Messages, toolMessages...)
+	// Single-hop recovery has consumed the issued keys. Drop the reserved
+	// retrieve tool so the follow-up hop cannot inject it again.
+	followupRequest.Tools = withoutContextRecoveryTools(followupRequest.Tools)
 	followupRequest.Stream = false
 	followupRequest.Generation++
 	model := strings.TrimSpace(requestCtx.VSRSelectedModel)
@@ -188,6 +196,9 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, fmt.Errorf("encode context recovery followup: %w", err)
 	}
+	// The dispatch may already have reported what this encode drops again,
+	// such as a replayed Responses blob.
+	appendUnheldDiagnostics(requestCtx, encodedRequest.Diagnostics)
 	openAIRequest, err := parseOpenAIRequest(encodedRequest.Body)
 	if err != nil {
 		return nil, fmt.Errorf("prepare context recovery followup: %w", err)
@@ -214,11 +225,13 @@ func (r *OpenAIRouter) executeContextRecoveryFollowup(
 	if err != nil {
 		return nil, fmt.Errorf("decode context recovery followup: %w", err)
 	}
-	decoded.Response.Usage, err = mergeContextRecoveryUsage(initial.Usage, decoded.Response.Usage)
+	decoded.Response.Usage, err = llmprotocol.AddUsage(initial.Usage, decoded.Response.Usage)
 	if err != nil {
 		return nil, err
 	}
-	decoded.Response.Model = requestCtx.RequestModel
+	// The reply names the model the upstream answered with, as one without
+	// recovery does.
+	decoded.Response.Model = firstNonEmpty(decoded.Response.Model, initial.Model, requestCtx.RequestModel)
 	decoded.Response.Generation++
 	format := requestCtx.SourceFormat
 	if format == "" {
@@ -237,6 +250,69 @@ func stringSet(values []string) map[string]struct{} {
 		result[value] = struct{}{}
 	}
 	return result
+}
+
+// isContextRecoveryFollowupRequest reports a Looper hop that already carries
+// trailing tool results for the immediately preceding assistant retrieval.
+// Those hops must not re-run context compression: the results are the
+// uncompressed recovered payload.
+func isContextRecoveryFollowupRequest(request *llmprotocol.Request) bool {
+	if request == nil {
+		return false
+	}
+	results := make(map[string]struct{})
+	index := len(request.Messages) - 1
+	for index >= 0 && request.Messages[index].Role == llmprotocol.RoleTool {
+		for _, content := range request.Messages[index].Content {
+			if content.Kind == llmprotocol.ContentToolResult && content.ToolResult != nil {
+				results[content.ToolResult.CallID] = struct{}{}
+			}
+		}
+		index--
+	}
+	if len(results) == 0 {
+		return false
+	}
+	// A provider response can produce several adjacent assistant output items.
+	// Stop at the previous exchange instead of matching recovery in history.
+	for ; index >= 0; index-- {
+		message := request.Messages[index]
+		if message.Role != llmprotocol.RoleAssistant && message.Role != "" {
+			break
+		}
+		for _, content := range message.Content {
+			if isContextRecoveryAssistantToolCall(message.Role, content) {
+				if _, ok := results[content.ToolCall.ID]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func isContextRecoveryAssistantToolCall(role llmprotocol.Role, content llmprotocol.Content) bool {
+	if content.Kind != llmprotocol.ContentToolCall || content.ToolCall == nil {
+		return false
+	}
+	if content.ToolCall.Name != contextcompression.RetrieveToolName || content.ToolCall.ID == "" {
+		return false
+	}
+	return role == llmprotocol.RoleAssistant || role == ""
+}
+
+func withoutContextRecoveryTools(tools []llmprotocol.Tool) []llmprotocol.Tool {
+	if len(tools) == 0 {
+		return nil
+	}
+	kept := make([]llmprotocol.Tool, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Name == contextcompression.RetrieveToolName {
+			continue
+		}
+		kept = append(kept, tool)
+	}
+	return kept
 }
 
 func parseContextRecoveryCalls(
@@ -286,54 +362,6 @@ func contextRecoveryKey(arguments interface{}) (string, error) {
 	default:
 		return "", fmt.Errorf("invalid context recovery arguments")
 	}
-}
-
-func mergeContextRecoveryUsage(
-	initial llmprotocol.Usage,
-	followup llmprotocol.Usage,
-) (llmprotocol.Usage, error) {
-	if initial.State != llmprotocol.UsageAvailable || followup.State != llmprotocol.UsageAvailable {
-		return llmprotocol.Usage{State: llmprotocol.UsageUnavailable}, nil
-	}
-	result := llmprotocol.Usage{State: llmprotocol.UsageAvailable}
-	pairs := []struct {
-		left, right llmprotocol.TokenCount
-		target      *llmprotocol.TokenCount
-	}{
-		{initial.InputUncached, followup.InputUncached, &result.InputUncached},
-		{initial.InputCacheRead, followup.InputCacheRead, &result.InputCacheRead},
-		{initial.InputCacheWrite, followup.InputCacheWrite, &result.InputCacheWrite},
-		{initial.InputCacheWrite5m, followup.InputCacheWrite5m, &result.InputCacheWrite5m},
-		{initial.InputCacheWrite1h, followup.InputCacheWrite1h, &result.InputCacheWrite1h},
-		{initial.OutputReasoning, followup.OutputReasoning, &result.OutputReasoning},
-		{initial.OutputOther, followup.OutputOther, &result.OutputOther},
-		{initial.InputTotal, followup.InputTotal, &result.InputTotal},
-		{initial.OutputTotal, followup.OutputTotal, &result.OutputTotal},
-		{initial.Total, followup.Total, &result.Total},
-	}
-	for _, pair := range pairs {
-		merged, err := mergeContextRecoveryTokenCount(pair.left, pair.right)
-		if err != nil {
-			return llmprotocol.Usage{}, err
-		}
-		*pair.target = merged
-	}
-	return result, nil
-}
-
-func mergeContextRecoveryTokenCount(left, right llmprotocol.TokenCount) (llmprotocol.TokenCount, error) {
-	if left.Value == nil || right.Value == nil {
-		return llmprotocol.TokenCount{Provenance: llmprotocol.UsageUnknown}, nil
-	}
-	if *left.Value > math.MaxInt64-*right.Value {
-		return llmprotocol.TokenCount{}, fmt.Errorf("context recovery usage overflow")
-	}
-	value := *left.Value + *right.Value
-	provenance := llmprotocol.UsageDerived
-	if left.Provenance == llmprotocol.UsageAuthoritative && right.Provenance == llmprotocol.UsageAuthoritative {
-		provenance = llmprotocol.UsageAuthoritative
-	}
-	return llmprotocol.TokenCount{Value: &value, Provenance: provenance}, nil
 }
 
 //nolint:cyclop // Redaction walks every neutral output and nested tool result fail-closed.

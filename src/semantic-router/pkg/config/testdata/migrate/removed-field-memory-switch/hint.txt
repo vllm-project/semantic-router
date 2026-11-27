@@ -1,0 +1,1 @@
+global.stores.memory.enabled: removed_field: global.stores.memory.enabled is removed; run `vllm-sr config migrate` (a context plugin with a memory source in global.plugins)

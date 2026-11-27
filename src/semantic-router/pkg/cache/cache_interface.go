@@ -27,17 +27,20 @@ type CacheEntry struct {
 }
 
 // LookupResult carries the request-owned outcome of one lookup. A hit includes
-// the matched score; a below-threshold miss may include its rejected candidate's
-// score. Errors carry no score.
+// the matched score and, for a semantic hit, the cached request it matched; a
+// below-threshold miss may include its rejected candidate's score. Errors
+// carry no score.
 type LookupResult struct {
 	ResponseBody  []byte
 	Found         bool
 	Similarity    float32
+	Query         string
 	StoredAt      time.Time
 	ExpiresAt     time.Time
 	Age           time.Duration
 	AgeKnown      bool
 	NegationGuard NegationGuardOutcome // semantic hits only
+	RequestID     string               // the request that wrote a semantic hit's entry
 }
 
 // lookupResultFromTimestamps constructs a successful LookupResult and calculates Age / AgeKnown.
@@ -106,11 +109,11 @@ type CacheBackend interface {
 	// AddEntry stores a complete request-response pair in the cache
 	AddEntry(ctx context.Context, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error
 
-	// LookupSimilarWithThreshold returns response data and similarity from the
-	// same lookup operation. Request paths should use this method instead of
-	// backend-global similarity state. A canceled or expired context is
+	// LookupSimilar returns the cached entries of model's partition most
+	// similar to query within bounds, most similar first, with their
+	// responses, from one lookup operation. A canceled or expired context is
 	// reported as an error rather than as a miss.
-	LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error)
+	LookupSimilar(ctx context.Context, model string, query string, bounds SimilarityBounds) (SimilarEntries, error)
 
 	// Close releases all resources held by the cache backend
 	Close() error
@@ -132,6 +135,9 @@ type LegacyCacheBackend interface {
 	UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error
 	FindSimilar(model string, query string) ([]byte, bool, error)
 	FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error)
+	// LookupSimilarWithThreshold is LookupSimilar's most similar entry, or a
+	// miss with the closest similarity the lookup saw.
+	LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error)
 }
 
 // Compile-time assertions keep production implementations aligned with CacheBackend.
@@ -246,7 +252,10 @@ type CacheConfig struct {
 	// Hybrid cache specific settings
 	MaxMemoryEntries int `yaml:"max_memory_entries,omitempty"` // Max entries in HNSW for hybrid cache
 
-	// EmbeddingModel specifies which embedding model to use
-	// Options: "mmbert" (default), "qwen3", "multimodal"
-	EmbeddingModel string `yaml:"embedding_model,omitempty"`
+	// EmbeddingDeployment names the deployment semantic entries are embedded
+	// with, and EmbeddingDimension and EmbeddingLayer the view the in-memory
+	// backend reads (config.RouterConfig.ResponseCacheEmbedding).
+	EmbeddingDeployment string `yaml:"-" json:"-"`
+	EmbeddingDimension  int    `yaml:"-" json:"-"`
+	EmbeddingLayer      int    `yaml:"-" json:"-"`
 }

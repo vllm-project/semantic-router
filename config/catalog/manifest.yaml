@@ -9,7 +9,7 @@ compatibility:
   router:
     min: 0.3.0
     max_exclusive: 0.6.0
-  config_schema: v0.3
+  config_schema: v0.5
   required_features:
     - entrypoints
     - isolated_recipes
@@ -79,6 +79,11 @@ inventory:
           - ibm/granite-4.2-30b
           - ibm/granite-4.2-8b
           - ibm/granite-4.2-3b
+      - publisher: Meituan / LongCat
+        min_representatives: 2
+        representative_models:
+          - meituan/longcat-2.5
+          - meituan/longcat-2.0
       - publisher: Meta
         representative_models:
           - meta/muse-spark-1.3
@@ -91,9 +96,9 @@ inventory:
           - microsoft/phi-4-mini-flash-reasoning
       - publisher: MiniMax
         representative_models:
+          - minimax/minimax-m3.1-flash
           - minimax/minimax-m3
           - minimax/minimax-m2.7
-          - minimax/minimax-m2.5
       - publisher: Mistral AI
         representative_models:
           - mistral/mistral-small-4
@@ -101,6 +106,7 @@ inventory:
           - mistral/mistral-large-3
       - publisher: Moonshot / Kimi
         representative_models:
+          - moonshot/kimi-k3.1-pro
           - moonshot/kimi-k3
           - moonshot/kimi-k2.7-code
           - moonshot/kimi-k2.6
@@ -111,9 +117,9 @@ inventory:
           - nvidia/nemotron-cascade-2-30b-a3b
       - publisher: OpenAI
         representative_models:
-          - openai/gpt-6-astra
-          - openai/gpt-5.6-sol
-          - openai/gpt-5.5
+          - openai/gpt-6.2-astra
+          - openai/gpt-6.2-sol
+          - openai/gpt-6.1-terra
       - publisher: StepFun
         representative_models:
           - stepfun/step-3.7-flash
@@ -134,6 +140,10 @@ inventory:
         representative_models:
           - thinking-machines/inkling
           - thinking-machines/inkling-small
+      - publisher: Writer
+        min_representatives: 1
+        representative_models:
+          - writer/palmyra-x6
       - publisher: Xiaomi
         representative_models:
           - xiaomi/mimo-v2.6-flash

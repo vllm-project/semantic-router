@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: Standalone 模式
 description: Router 自己提供 OpenAI 兼容接口并在进程内执行路由流水线，Envoy 变为可选。一个与传输无关的路由核心，配 ext_proc 和原生 HTTP 两个适配器；借鉴 Envoy 的上游层，带 timeout、retry、fallback；进程内请求图；以及支持热更新和回滚的版本化配置快照。
 created: 2026-10-06
@@ -365,7 +366,7 @@ looper 不再是“绕回 Envoy”的特殊流程，而是在 Router 内部执�
 
 - **类型化扩展注册表：** 信号、算法、插件、图节点、过滤器都按 `type` 注册 Go 实现、schema、默认值和校验器；新增
   一种扩展不需要改核心代码。
-- **校验：** 由 Go 类型生成的 JSON schema（今天是 `router-config-v0.3.schema.json`）+ 交叉引用检查 + 能力检查。
+- **校验：** 由 Go 类型生成的 JSON schema（今天是 `router-config-v0.5.schema.json`）+ 交叉引用检查 + 能力检查。
   当前模式不支持的字段在加载时直接报错，并提示可以支持它的模式（例如 `--gateway extproc`）。
 - **生命周期：** compile、validate、warm、activate（原子切换，和今天的 router generation 切换一样）、drain、history。
 - **增量重建：** 只重建变化的资源。只改 endpoint 时不重建信号和模型绑定；只改 recipe 时不重建上游连接池。

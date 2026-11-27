@@ -4,7 +4,9 @@
 A standalone Router binds its listeners at startup, so moving one is refused
 as restart_required. The Dashboard saves the change as a pending activation
 and answers "Restart required", `vllm-sr status` reports it, the Router keeps
-serving the old port, and the next `vllm-sr serve` applies it.
+serving the old port, and the next `vllm-sr serve` applies it. On a `--minimal`
+stack, which has no Dashboard, `vllm-sr status` reports the same for a change
+`vllm-sr config apply` saved (#7341).
 """
 
 import json
@@ -25,7 +27,7 @@ from serve_session import ServeSessionMixin
     "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
-    """The CLI applies what the Dashboard saved for a restart."""
+    """The CLI applies what the Dashboard or `config apply` saved for a restart."""
 
     SERVE_GATEWAY = "standalone"
 
@@ -45,9 +47,9 @@ class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         except urllib_error.HTTPError as error:
             self.fail(f"{path}: HTTP {error.code}: {error.read().decode()[:500]}")
 
-    def _serve(self):
+    def _serve(self, *arguments):
         process = self._start_serve_background(
-            env=os.environ.copy(), arguments=("--config", "config.yaml")
+            env=os.environ.copy(), arguments=("--config", "config.yaml", *arguments)
         )
         try:
             self._wait_for_serve_success(process)
@@ -62,7 +64,7 @@ class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         mock_container = f"{self.runtime_stack.stack_name}-restart-upstream"
         self.write_minimal_canonical_config(
             provider="openai",
-            base_url=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
+            endpoint=f"http://{mock_container}:{PROVIDER_MOCKER_PORT}/v1",
         )
         with open(os.path.join(self.test_dir, "config.yaml"), encoding="utf-8") as f:
             moved = yaml.safe_load(f)
@@ -106,6 +108,37 @@ class TestRestartRequired(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         finally:
             self.run_cli(["stop"], timeout=120)
         self.print_test_result(True, "the next serve applied the saved change")
+
+    def test_status_reports_a_cli_restart_on_a_minimal_stack(self):
+        self.print_test_header(
+            "Restart required without a Dashboard",
+            "config apply saves a listener move on a --minimal stack; status says so",
+        )
+        # No request reaches a backend, so the default config needs no mock.
+        self.write_minimal_canonical_config()
+
+        self._serve("--minimal")
+        try:
+            self.write_minimal_canonical_config(port=8890)
+
+            code, stdout, stderr = self.run_cli(
+                ["config", "apply", "--config", "config.yaml"], timeout=240
+            )
+            self.assertEqual(code, 0, f"{stdout}\n{stderr}")
+            self.assertEqual(json.loads(stdout)["status"], "restart_required", stdout)
+            code, stdout, _stderr = self.run_cli(["status"], timeout=60)
+            self.assertEqual(code, 0, stdout)
+            self.assertIn(
+                "Restart required: a change saved with `vllm-sr config apply`", stdout
+            )
+
+            self._serve("--minimal")
+            code, stdout, _stderr = self.run_cli(["status"], timeout=60)
+            self.assertEqual(code, 0, stdout)
+            self.assertNotIn("Restart required", stdout)
+        finally:
+            self.run_cli(["stop"], timeout=120)
+        self.print_test_result(True, "status reported the restart without a Dashboard")
 
 
 if __name__ == "__main__":

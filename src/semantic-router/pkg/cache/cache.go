@@ -10,8 +10,6 @@ import (
 	"sync"
 
 	"github.com/openai/openai-go"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // extractUserContent returns the text portion of a user message's content.
@@ -168,14 +166,4 @@ func userScopeNamespace(userID string) string {
 	// is strongly recommended.
 	digest := sha256.Sum256([]byte(userID))
 	return fmt.Sprintf("%x", digest[:8])
-}
-
-// normalizeEmbeddingModel trims and lowercases an embedding model name. An
-// empty name is the router's default model (config.DefaultEmbeddingModel).
-func normalizeEmbeddingModel(model string) string {
-	normalized := strings.ToLower(strings.TrimSpace(model))
-	if normalized == "" {
-		return config.DefaultEmbeddingModel
-	}
-	return normalized
 }

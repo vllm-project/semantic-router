@@ -88,6 +88,7 @@
             "name": "lookup",
             "namespace": "weather",
             "caller": "model",
+            "async": false,
             "arguments": "{\"q\":\"weather\"}"
           }
         ]

@@ -7,7 +7,6 @@ export interface FieldSchema {
     | 'boolean'
     | 'string[]'
     | 'number[]'
-    | 'string[][]'
     | 'select'
     | 'object'
     | 'object[]'

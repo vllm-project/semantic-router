@@ -42,6 +42,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.25"
+          cache-dependency-path: '**/go.sum'
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -151,7 +152,7 @@ jobs:
         if: always()
         with:
           overwrite: true
-          name: storage-framework-evidence
+          name: storage-framework-evidence-attempt-${{ github.run_attempt }}
           path: .agent-harness/core/storage/
           include-hidden-files: true
           if-no-files-found: error

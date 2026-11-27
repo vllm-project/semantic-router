@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
@@ -41,8 +42,6 @@ const (
 	reasonRuntimeConfigNotWritable = "runtime_config_not_writable"
 	reasonSRBenchAuthUnconfigured  = "sr_bench_auth_unconfigured"
 	reasonUpstreamUnreachable      = "upstream_unreachable"
-	reasonMLPipelineDisabled       = "ml_pipeline_disabled"
-	reasonMLPipelineUnavailable    = "ml_pipeline_unavailable"
 	reasonMCPDisabled              = "mcp_disabled"
 )
 
@@ -50,8 +49,7 @@ const (
 var CapabilityReasons = []string{
 	reasonSetupInactive, reasonConfigUnreadable, reasonPermissionRequired, reasonServeNotAttached,
 	reasonRouterUnreachable, reasonProbePending, reasonServerReadonly, reasonRuntimeConfigNotWritable,
-	reasonSRBenchAuthUnconfigured, reasonUpstreamUnreachable, reasonMLPipelineDisabled,
-	reasonMLPipelineUnavailable, reasonMCPDisabled,
+	reasonSRBenchAuthUnconfigured, reasonUpstreamUnreachable, reasonMCPDisabled,
 }
 
 // Capability is the runtime state of one Dashboard feature for the caller.
@@ -129,7 +127,7 @@ func resolveCapability(facts capabilityFacts) Capability {
 // upstream.
 func CapabilitiesHandler(cfg *config.Config, setupResolver *setupmode.Resolver, prober *CapabilityProber) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -149,7 +147,6 @@ func collectCapabilities(cfg *config.Config, setupResolver *setupmode.Resolver, 
 		setupFacts(cfg, setupResolver, configReadable, perms),
 		configFacts(cfg, configReadable, probes, perms),
 		evaluationFacts(cfg, probes, perms),
-		mlPipelineFacts(cfg, probes, perms),
 		mcpFacts(cfg, perms),
 	}
 	response := CapabilitiesResponse{Capabilities: make([]Capability, 0, len(facts))}
@@ -171,6 +168,9 @@ func setupFacts(cfg *config.Config, setupResolver *setupmode.Resolver, configRea
 	}
 	if !setupResolver.Active() {
 		facts.enabled = fail(reasonSetupInactive, "Setup has been completed; the config no longer declares setup mode.")
+	}
+	if cfg.ReadonlyMode {
+		facts.configured = fail(reasonServerReadonly, "The Dashboard runs in read-only mode; setup activation is disabled.")
 	}
 	if !configActivationDeferred() && !serveAttached(cfg.AbsConfigPath) {
 		facts.healthy = fail(reasonServeNotAttached, "Activation will be saved; run `vllm-sr serve` to start the Router.")
@@ -201,30 +201,11 @@ func evaluationFacts(cfg *config.Config, probes map[string]probeResult, perms ma
 		id: "evaluation", enabled: pass(), configured: pass(), reachable: pass(), healthy: pass(),
 		authorized: permitted(perms, auth.PermEvalRead),
 	}
-	if !cfg.SRBenchAvailable {
+	if srBenchToken(cfg) == "" {
 		facts.configured = fail(reasonSRBenchAuthUnconfigured, "Set the sr-bench service token for the Dashboard.")
 		return facts
 	}
 	facts.reachable, facts.checkedAt = probeCheck(probes, probeSRBench, reasonUpstreamUnreachable, "The sr-bench service did not answer its health check.")
-	return facts
-}
-
-func mlPipelineFacts(cfg *config.Config, probes map[string]probeResult, perms map[string]bool) capabilityFacts {
-	facts := capabilityFacts{
-		id: "mlPipeline", enabled: pass(), configured: pass(), reachable: pass(), healthy: pass(),
-		authorized: permitted(perms, auth.PermMlPipeline),
-	}
-	if !cfg.MLPipelineEnabled {
-		facts.enabled = fail(reasonMLPipelineDisabled, "Enable the ML pipeline with ML_PIPELINE_ENABLED=true.")
-		return facts
-	}
-	if !cfg.MLPipelineAvailable {
-		facts.configured = fail(reasonMLPipelineUnavailable, "The ML pipeline could not be initialized; check the Dashboard logs.")
-		return facts
-	}
-	if cfg.MLServiceURL != "" {
-		facts.reachable, facts.checkedAt = probeCheck(probes, probeMLService, reasonUpstreamUnreachable, "The ML service did not answer its health check.")
-	}
 	return facts
 }
 
@@ -237,6 +218,12 @@ func mcpFacts(cfg *config.Config, perms map[string]bool) capabilityFacts {
 		facts.enabled = fail(reasonMCPDisabled, "Enable MCP with MCP_ENABLED=true.")
 	}
 	return facts
+}
+
+// srBenchToken is the service token the Dashboard forwards to sr-bench; the
+// Evaluation capability is unconfigured without it.
+func srBenchToken(cfg *config.Config) string {
+	return strings.TrimSpace(os.Getenv(cfg.SRBenchTokenEnv))
 }
 
 func permitted(perms map[string]bool, permission string) capabilityCheck {

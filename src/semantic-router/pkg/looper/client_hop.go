@@ -2,6 +2,7 @@ package looper
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/connector"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/graph"
@@ -69,6 +71,7 @@ func (c *Client) callModelAsHop(
 	if int64(len(resp.Body)) > c.maxResponseBytes {
 		return nil, fmt.Errorf("failed to read response: %w", hopError(fmt.Errorf("response body exceeds %d bytes", c.maxResponseBytes)))
 	}
+	recordAttemptSettledCost(ctx, resp.Header.Get(headers.VSRCost), resp.Header.Get(headers.VSRCostCurrency))
 	return resp.Body, nil
 }
 
@@ -92,7 +95,10 @@ func hopRequestHeader(header http.Header, bodyBytes int) routing.Header {
 // failed looper_chat_completion operation.
 type hopOperationError struct {
 	status int
-	cause  error
+	// refusal is the reason of a spend budget's refusal that answered the
+	// hop in place of a model.
+	refusal AttemptReason
+	cause   error
 }
 
 func hopError(cause error) error { return &hopOperationError{cause: cause} }
@@ -116,25 +122,54 @@ func hopStatusError(resp *graph.HopResponse) error {
 	}
 	return fmt.Errorf(
 		"request failed with status %d (error_body_bytes=%d, truncated=%t): %w",
-		resp.Status, kept, truncated, &hopOperationError{status: resp.Status},
+		resp.Status, kept, truncated, &hopOperationError{status: resp.Status, refusal: budgetRefusal(resp)},
 	)
+}
+
+// budgetRefusal reads a spend budget's refusal of the hop from the error the
+// Router answered it with: 429 budget_exceeded or 403 budget_unpriced.
+func budgetRefusal(resp *graph.HopResponse) AttemptReason {
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(resp.Body, &body) != nil {
+		return ""
+	}
+	switch reason := AttemptReason(body.Error.Code); {
+	case reason == AttemptReasonBudgetExceeded && resp.Status == http.StatusTooManyRequests,
+		reason == AttemptReasonBudgetUnpriced && resp.Status == http.StatusForbidden:
+		return reason
+	}
+	return ""
+}
+
+// UpstreamStatus is the HTTP status a model answered the failed call err
+// reports with, or 0 when no model answered it.
+func UpstreamStatus(err error) int {
+	var hopErr *hopOperationError
+	var connectorErr *connector.Error
+	switch {
+	case errors.As(err, &hopErr) && hopErr.status != 0:
+		return hopErr.status
+	case errors.As(err, &connectorErr):
+		return connectorErr.StatusCode
+	}
+	return 0
 }
 
 // modelFailureReason is how a failed model call reads in a trace that
 // reaches the client: the status it was answered with, or what ended it,
 // never transport or provider text.
 func modelFailureReason(err error) string {
-	var hopErr *hopOperationError
-	var connectorErr *connector.Error
-	switch {
+	switch status := UpstreamStatus(err); {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timed out"
 	case errors.Is(err, context.Canceled):
 		return "cancelled"
-	case errors.As(err, &hopErr) && hopErr.status != 0:
-		return fmt.Sprintf("answered %d", hopErr.status)
-	case errors.As(err, &connectorErr) && connectorErr.StatusCode != 0:
-		return fmt.Sprintf("answered %d", connectorErr.StatusCode)
+	case status != 0:
+		return fmt.Sprintf("answered %d", status)
 	case attemptReasonFromError(err) == AttemptReasonInvalidResponse:
 		return "invalid response"
 	default:

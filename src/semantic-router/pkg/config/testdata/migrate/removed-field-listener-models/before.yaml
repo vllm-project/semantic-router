@@ -1,0 +1,20 @@
+# A listener's model allow-list, which each API the listener serves now
+# carries in apis.
+version: v0.5
+listeners:
+  - name: public
+    port: 8899
+    models: [vllm-sr/auto]
+providers:
+  defaults: {model: m}
+  models:
+    - name: m
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+recipes:
+  - name: default
+entrypoints:
+  - model_names: [vllm-sr/auto]
+    recipe: default

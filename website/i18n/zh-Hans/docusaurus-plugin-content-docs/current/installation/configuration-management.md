@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 配置管理
 description: 运行中的 Router 如何激活一次配置变更、变更会重建什么、被拒绝的变更如何报告，以及如何列出和回滚版本。
 translation:
@@ -33,7 +34,7 @@ Router 只重建变更涉及的部分：
 
 - 只修改 provider 的后端或 listener 时，已加载的分类器和 embedding 模型保持不变。
 - 在 standalone 模式下，修改 recipes 或 signals 时上游连接池保持不变；修改某个 provider 时，它未变化的后端的连接池也保持不变。
-- 在 standalone 模式下，Router 在启动时绑定 listeners。增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls`，会以 `restart_required` 被拒绝；重启 Router 才能生效。listener 的 `api_keys` 无需重启即可修改。
+- 在 standalone 模式下，Router 在启动时绑定 listeners。增删 listener，或修改 listener 的 `address`、`port`、`timeout` 或 `tls`，会以 `restart_required` 被拒绝；重启 Router 才能生效。listener 的 `api_keys`、`apis` 和 `identity` 无需重启即可修改。
 
 ## 修改本地栈的配置
 
@@ -78,6 +79,7 @@ vllm-sr serve --config config.yaml --replace-active-config
 | `restart_required` | 变更需要重启，例如 standalone listener 的新地址或端口。 |
 | `unsupported` | 变更需要当前网关模式缺少的能力；消息会指出具备该能力的 `--gateway` 模式。 |
 | `artifact_unavailable` | 变更所需的模型制品不可用。 |
+| `storage_unavailable` | Router 无法写入变更使用的本地目录；`path` 指出对应的设置。见 [Router 本地磁盘上的文件](storage-overview#router-local-files)。 |
 | `model_unavailable` | 变更所需的模型无法准备好。 |
 | `build_failed` | 路由流水线或上游层无法构建。 |
 | `warmup_failed` | 某个组件预热失败。 |

@@ -59,6 +59,10 @@
     "message": "更多",
     "description": "Navbar item with label More"
   },
+  "item.label.Recipes": {
+    "message": "路由配方",
+    "description": "Navbar item with label Recipes"
+  },
   "item.label.Model Hub": {
     "message": "模型库",
     "description": "Navbar item with label Model Hub"
@@ -71,9 +75,9 @@
     "message": "讨论区",
     "description": "Navbar item with label Discussions"
   },
-  "item.label.Dashboard": {
-    "message": "控制台",
-    "description": "Navbar item with label Dashboard"
+  "item.label.System Duo": {
+    "message": "System Duo",
+    "description": "Navbar item with label System Duo"
   },
   "item.label.GitHub": {
     "message": "GitHub",
@@ -83,9 +87,9 @@
     "message": "模型库",
     "description": "Navbar item with label Models"
   },
-  "item.label.Latest (unreleased)": {
-    "message": "最新版（未发布）",
-    "description": "Navbar item with label Latest (unreleased)"
+  "item.label.Latest (main)": {
+    "message": "最新版（main）",
+    "description": "Navbar item with label Latest (main)"
   },
   "item.label.v0.4": {
     "message": "v0.4",

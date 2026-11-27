@@ -310,6 +310,14 @@ func (r *RedisStore) AttachResponse(ctx context.Context, id string, body string,
 	})
 }
 
+// AttachPrompt stores the prompt of a record written without it.
+func (r *RedisStore) AttachPrompt(ctx context.Context, id string, prompt StoredPrompt) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		prompt.Apply(record)
+		return true
+	})
+}
+
 // AppendOutcome links post-route feedback to a record.
 func (r *RedisStore) AppendOutcome(ctx context.Context, id string, outcome Outcome) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
@@ -333,6 +341,7 @@ func (r *RedisStore) UpdateHallucinationStatus(ctx context.Context, id string, d
 // UpdateUsageCost updates token usage and pricing-derived cost fields for a record.
 func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.ProviderCache = cloneProviderCacheAccounting(usage.ProviderCache)
 		record.PromptTokens = cloneIntPtr(usage.PromptTokens)
 		record.CachedPromptTokens = cloneIntPtr(usage.CachedPromptTokens)
 		record.CacheWriteTokens = cloneIntPtr(usage.CacheWriteTokens)
@@ -343,6 +352,7 @@ func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage Usage
 		record.CostSavings = cloneFloat64Ptr(usage.CostSavings)
 		record.Currency = cloneStringPtr(usage.Currency)
 		record.BaselineModel = cloneStringPtr(usage.BaselineModel)
+		record.CostAccounting = cloneCostAccounting(usage.CostAccounting)
 		return true
 	})
 }
@@ -351,6 +361,14 @@ func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage Usage
 func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {
 		record.ToolTrace = cloneToolTrace(&trace)
+		return true
+	})
+}
+
+// UpdateReview replaces the approval review of a record.
+func (r *RedisStore) UpdateReview(ctx context.Context, id string, review Review) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		record.Review = CloneReview(&review)
 		return true
 	})
 }

@@ -27,6 +27,9 @@ scheduler with C concurrent requests per wave. ``--router QUESTIONS.json``
 replaces each prompt's questions with the router signals a Route-style
 ``QUESTIONS.json`` declares (explicit questions, so every Decision 1.0 model can
 answer them). On a GPU both sides pin the built-in table's FLA kernel choices.
+``--rounds N`` repeats a paired measurement (default 1, not an acceptance
+verdict); ``--extend M`` continues through round M when evidence is under
+five rounds or a latency interval is worse at the point but still Level.
 """
 
 from __future__ import annotations
@@ -45,7 +48,8 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from decision1_parity import panels, pin  # noqa: E402
+from bench_stats import minus_baseline, should_extend, summary  # noqa: E402
+from decision1_parity import panels, pin_status, require_fla_pin  # noqa: E402
 
 ROUTER_SIGNALS = ("domain", "modality", "jailbreak", "safety", "pii", "fact_check")
 
@@ -69,18 +73,6 @@ def requests(args: argparse.Namespace) -> list[dict[str, Any]]:
 def wire_size(body: dict[str, Any]) -> int:
     """The encoded body size the HTTP server passes to ``Runtime.call`` (small bodies plan inline)."""
     return len(json.dumps(body, separators=(",", ":")).encode("utf-8"))
-
-
-def summary(seconds: list[float]) -> dict[str, float]:
-    ordered = sorted(seconds)
-    return {
-        "requests": len(ordered),
-        "p50_ms": 1000 * statistics.median(ordered),
-        "p95_ms": 1000
-        * ordered[min(len(ordered) - 1, round(0.95 * (len(ordered) - 1)))],
-        "mean_ms": 1000 * statistics.fmean(ordered),
-        "requests_per_second": len(ordered) / sum(ordered),
-    }
 
 
 def timed(call, bodies: list[dict[str, Any]]) -> list[float]:
@@ -218,13 +210,15 @@ class Native:
 
 
 def run_reference(args: argparse.Namespace) -> dict[str, Any]:
-    pinned = pin(args.repo, args.device)
+    pinned, pin_reason = pin_status(args.repo, args.device)
+    require_fla_pin(pinned, pin_reason, args.device)
     call = bundled(args)
     bodies = requests(args)
     timed(call, bodies[: args.warmup])
     return {
         "side": "reference",
         "fla_pinned": pinned,
+        "fla_pin_reason": pin_reason,
         "single": summary(timed(call, bodies)),
     }
 
@@ -249,8 +243,24 @@ def run_native(args: argparse.Namespace) -> dict[str, Any]:
         native.close()
 
 
+PAIRED_METRICS = ("p50_ms", "p95_ms", "mean_ms", "requests_per_second")
+
+
+def paired_round(
+    paths: dict[str, Callable[[dict[str, Any]], None]], bodies: list[dict[str, Any]]
+) -> tuple[dict[str, dict[str, float]], dict[str, list[float]]]:
+    seconds: dict[str, list[float]] = {name: [] for name in paths}
+    names = list(paths)
+    for index, body in enumerate(bodies):
+        shift = index % len(names)
+        for name in names[shift:] + names[:shift]:
+            seconds[name] += timed(paths[name], [body])
+    return {name: summary(values) for name, values in seconds.items()}, seconds
+
+
 def run_paired(args: argparse.Namespace) -> dict[str, Any]:
-    pinned = pin(args.model, args.device)
+    pinned, pin_reason = pin_status(args.model, args.device)
+    require_fla_pin(pinned, pin_reason, args.device)
     native = Native(args)
     try:
         paths = {
@@ -262,18 +272,49 @@ def run_paired(args: argparse.Namespace) -> dict[str, Any]:
         bodies = requests(args)
         for call in paths.values():
             timed(call, bodies[: args.warmup])
-        seconds: dict[str, list[float]] = {name: [] for name in paths}
         names = list(paths)
-        for index, body in enumerate(bodies):
-            shift = index % len(names)
-            for name in names[shift:] + names[:shift]:
-                seconds[name] += timed(paths[name], [body])
+        target = args.rounds
+        rounds: list[dict[str, Any]] = []
+        last_seconds: dict[str, list[float]] | None = None
+        while True:
+            summaries, last_seconds = paired_round(paths, bodies)
+            summaries["round"] = len(rounds)
+            rounds.append(summaries)
+            if len(rounds) < target:
+                continue
+            intervals = {
+                name: minus_baseline(
+                    [row[name] for row in rounds],
+                    [row["bundled"] for row in rounds],
+                    PAIRED_METRICS,
+                )
+                for name in names[1:]
+            }
+            if args.extend > target and any(
+                should_extend(intervals[name], ("p50_ms", "p95_ms", "mean_ms"))
+                for name in intervals
+            ):
+                target = args.extend
+                continue
+            break
+        assert last_seconds is not None
+        mean_summary = {
+            name: {
+                metric: statistics.fmean(row[name][metric] for row in rounds)
+                for metric in PAIRED_METRICS
+            }
+            | {"requests": last_seconds[name].__len__()}
+            for name in names
+        }
         result = {
             "side": "paired",
             "fla_pinned": pinned,
-            **{name: summary(values) for name, values in seconds.items()},
+            "fla_pin_reason": pin_reason,
+            "rounds": rounds,
+            "intervals_minus_bundled": intervals,
+            **mean_summary,
             "minus_bundled_ms": {
-                name: paired_difference(seconds[name], seconds["bundled"])
+                name: paired_difference(last_seconds[name], last_seconds["bundled"])
                 for name in names[1:]
             },
         }
@@ -321,6 +362,13 @@ def main() -> int:
         command.add_argument("--warmup", type=int, default=64)
         command.add_argument("--threads", type=int)
         command.add_argument("--output", required=True)
+        command.add_argument("--rounds", type=int, default=1)
+        command.add_argument(
+            "--extend",
+            type=int,
+            default=1,
+            help="max rounds if a latency interval is worse at the point but still Level",
+        )
     args = parser.parse_args()
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     started = time.time()

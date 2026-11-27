@@ -49,7 +49,7 @@ func registerMCPAPIRoutes(mux routeRegistrar, mcpHandler *handlers.MCPHandler) {
 			return
 		}
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet, http.MethodHead:
 			mcpHandler.ListServersHandler().ServeHTTP(w, r)
 		case http.MethodPost:
 			mcpHandler.CreateServerHandler().ServeHTTP(w, r)

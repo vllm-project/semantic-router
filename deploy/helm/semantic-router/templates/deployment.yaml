@@ -33,6 +33,7 @@
 {{- end }}
 {{- $customModelsMount := false -}}
 {{- $customConfigMount := false -}}
+{{- $customDataMount := eq (include "semantic-router.customDataMount" .) "true" -}}
 {{- range .Values.extraVolumeMounts -}}
 {{- if eq (.mountPath | default "") "/app/models" -}}
 {{- $customModelsMount = true -}}
@@ -94,6 +95,9 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if not (kindIs "invalid" .Values.terminationGracePeriodSeconds) }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end }}
       # Models are now automatically downloaded by the router at startup
       # No initContainer is needed - the router uses its built-in Go-based
       # modeldownload package to download models from HuggingFace based on
@@ -117,6 +121,10 @@ spec:
           {{- end }}
         securityContext:
           {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- with .Values.lifecycle }}
+        lifecycle:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
         ports:
         {{- if $standalone }}
         {{- range $listeners }}
@@ -144,6 +152,8 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: VLLM_SR_K8S_KEY_SECRET_NAME
+            value: {{ include "semantic-router.keySecretName" . | quote }}
           # One Router replica keeps its configuration history on the persistent
           # models volume, where rollback versions survive the rollout a ConfigMap
           # edit causes. Replicas that would share it, or a Pod without a persistent
@@ -164,13 +174,14 @@ spec:
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
-        {{- with .Values.envFromSecrets }}
         envFrom:
-          {{- range . }}
+          # The keys config.yaml names by entry, which saves add.
+          - secretRef:
+              name: {{ include "semantic-router.keySecretName" . }}
+          {{- range .Values.envFromSecrets }}
           - secretRef:
               name: {{ . }}
           {{- end }}
-        {{- end }}
         volumeMounts:
         - name: runtime-tmp
           mountPath: /tmp
@@ -193,6 +204,10 @@ spec:
         {{- if not $customModelsMount }}
         - name: models-volume
           mountPath: /app/models
+        {{- end }}
+        {{- if not $customDataMount }}
+        - name: router-data
+          mountPath: /var/lib/vsr
         {{- end }}
         {{- if and $standalone $tlsSecret }}
         # A Secret volume rather than a subPath mount: Kubernetes replaces its
@@ -275,6 +290,16 @@ spec:
           claimName: {{ include "semantic-router.pvcName" . }}
       {{- else }}
       - name: models-volume
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- if not $customDataMount }}
+      {{- if .Values.data.persistence.enabled }}
+      - name: router-data
+        persistentVolumeClaim:
+          claimName: {{ include "semantic-router.dataPvcName" . }}
+      {{- else }}
+      - name: router-data
         emptyDir: {}
       {{- end }}
       {{- end }}

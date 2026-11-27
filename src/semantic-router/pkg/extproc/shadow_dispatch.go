@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	mathrand "math/rand"
 	"strconv"
@@ -20,12 +19,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	callbudget "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing/budget"
 )
 
-// Shadow dispatch sends a bounded, sampled copy of the approved request to a
-// secondary configured model. It runs strictly after the primary dispatch
+// Shadow dispatch, router_replay's shadow, sends a bounded, sampled copy of the
+// approved request to a secondary configured model and appends its outcome to
+// the primary's replay record. It runs strictly after the primary dispatch
 // response has been built, never blocks the request path beyond a
 // non-blocking slot check, and records a deterministic outcome for replay.
 // This file owns the request-path hook, the bounded lanes, and outcome
@@ -45,6 +47,7 @@ const (
 	shadowReasonInternalRequest      = "internal_request"
 	shadowReasonRequestUnavailable   = "request_unavailable"
 	shadowReasonQueueFull            = "queue_full"
+	shadowReasonReplayQueueFull      = "replay_queue_full"
 	shadowReasonQueueTimeout         = "queue_timeout"
 	shadowReasonRouterClosing        = "router_closing"
 	shadowReasonBackendUnresolved    = "backend_unresolved"
@@ -56,6 +59,13 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+	shadowReasonBudgetExhausted      = "budget_exhausted"
+	shadowReasonTokenExhausted       = "budget_tokens_exhausted" //nolint:gosec // outcome reason code
+	shadowReasonBudgetUnpriced       = "budget_unpriced"
+	shadowReasonBudgetUnbounded      = "budget_unbounded_output"
+
+	// shadowReasonBackendLacksCapability shares the plugin gate's typed reason.
+	shadowReasonBackendLacksCapability = string(pluginruntime.SkipBackendLacksCapability)
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -85,6 +95,7 @@ type shadowDispatcher struct {
 
 type shadowLane struct {
 	slots    chan struct{}
+	groups   chan struct{}
 	maxQueue int
 	waiting  atomic.Int32
 }
@@ -96,7 +107,13 @@ type shadowRequestEncoder func(request llmprotocol.Request, target *shadowTarget
 // shadowJob is everything a shadow call needs, captured synchronously so the
 // worker never reads mutable request state after the primary path moves on.
 type shadowJob struct {
-	cfg             config.ShadowDispatchPluginConfig
+	cfg             config.RouterReplayShadowConfig
+	prepared        *preparedShadowCall
+	spend           *shadowSpend
+	model           string
+	context         context.Context
+	responseLimit   int
+	captureLimit    int
 	routerConfig    *config.RouterConfig
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
@@ -110,8 +127,9 @@ type shadowJob struct {
 	shadowRequestID string
 	replayID        string
 	recorder        *routerreplay.Recorder
+	receipt         *routerreplay.OutcomeReservation
 	enqueuedAt      time.Time
-	deadline        time.Time
+	timeout         time.Duration
 }
 
 type shadowResult struct {
@@ -126,6 +144,8 @@ type shadowResult struct {
 	stopReason    string
 	inputTokens   int64
 	outputTokens  int64
+	inputKnown    bool
+	outputKnown   bool
 	text          string
 	err           string
 }
@@ -140,12 +160,6 @@ func newShadowDispatcher() *shadowDispatcher {
 		lanes:   make(map[string]*shadowLane),
 		clients: make(map[string]*connector.Client),
 	}
-}
-
-// insecureShadowTLSConfig is the explicit operator opt-in matching Envoy's
-// upstream posture for a backend without a verifiable certificate.
-func insecureShadowTLSConfig() *tls.Config {
-	return &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit per-decision operator opt-in
 }
 
 // Close stops accepting new shadow calls, drains in-flight ones for a bounded
@@ -201,34 +215,48 @@ func (d *shadowDispatcher) waitIdle(timeout time.Duration) bool {
 
 // dispatchShadowIfConfigured is the single request-path hook. It runs after
 // finalizeProviderDispatchResponse so the shadow starts from the same approved
-// neutral request the primary was rendered from. Nothing here can fail the
-// request.
+// neutral request the primary was rendered from. The shadow belongs to the
+// decision's router_replay policy, so it runs only while the decision records
+// replays. Nothing here can fail the request.
 func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch *providerDispatch) {
 	if r == nil || r.ShadowDispatcher == nil || ctx == nil || dispatch == nil {
 		return
 	}
-	pluginCfg := ctx.ShadowDispatchPluginConfig
-	if pluginCfg == nil || !pluginCfg.Enabled {
+	replay := ctx.RouterReplayPluginConfig
+	if replay == nil || !replay.Enabled || replay.Shadow == nil {
 		return
 	}
 	engine, err := r.protocolEngine()
 	if err != nil {
 		engine = nil
 	}
-	cfg := pluginCfg.WithDefaults()
+	cfg := replay.Shadow.WithDefaults()
+	cfg.Capture.Enabled = cfg.Capture.Enabled && replayResponseContentAllowed(ctx)
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
-		routerConfig: r.Config,
-		engine:       engine,
-		encode:       r.shadowRequestEncoder(ctx, dispatch, engine),
-		extraHeaders: r.shadowExtraHeaders(ctx, dispatch, &cfg),
+		routerConfig:         r.Config,
+		engine:               engine,
+		encode:               r.shadowRequestEncoder(ctx, dispatch, engine),
+		extraHeaders:         r.shadowExtraHeaders(ctx, dispatch, cfg.ForwardHeaders),
+		modelLacksCapability: func(model string) bool { return r.shadowModelLacksCapability(ctx, model) },
 	})
 }
 
 type shadowSubmitDeps struct {
-	routerConfig *config.RouterConfig
-	engine       *protocolcodec.Engine
-	encode       shadowRequestEncoder
-	extraHeaders map[string]string
+	routerConfig         *config.RouterConfig
+	engine               *protocolcodec.Engine
+	encode               shadowRequestEncoder
+	extraHeaders         map[string]string
+	modelLacksCapability func(string) bool
+}
+
+// shadowModelLacksCapability reports whether the shadow model's declared capabilities
+// leave out a task capability the request needs, so the media never reaches it.
+func (r *OpenAIRouter) shadowModelLacksCapability(ctx *RequestContext, model string) bool {
+	if ctx.SemanticRequest == nil {
+		return false
+	}
+	declared, annotated := r.declaredModelCapabilities(model)
+	return !pluginruntime.CoversRequest(llmprotocol.RequiredCapabilities(*ctx.SemanticRequest), declared, annotated)
 }
 
 // shadowRequestEncoder mirrors the primary pipeline for the shadow model:
@@ -243,6 +271,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	decisionName := dispatch.decisionName
 	useReasoning := dispatch.useReasoning
 	envelope := ctx.ProtocolEnvelope
+	sourceFormat, requestID := ctx.SourceFormat, ctx.RequestID
 	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
 		request.Model = target.upstreamModel
 		request.Stream = false
@@ -253,7 +282,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		projected, err := r.projectAnthropicRequestForBackend(request, target.logicalModel, target.format)
+		projected, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(request, target.logicalModel, target.format, target)
 		if err != nil {
 			return nil, err
 		}
@@ -261,6 +290,9 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if err != nil {
 			return nil, err
 		}
+		// Shadows cannot add warnings to the primary reply. Report projection loss
+		// through metrics and logs using an immutable request identity.
+		recordProtocolDiagnostics(&RequestContext{SourceFormat: sourceFormat, TargetFormat: target.format, RequestID: requestID}, projectionDiagnostics)
 		body := encoded.Body
 		if decisionName != "" && target.format == llmprotocol.OpenAIChatV1 {
 			body, err = r.setReasoningModeToRequestBodyForModelAndProvider(
@@ -270,7 +302,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 				return nil, err
 			}
 		}
-		return adaptOllamaOutputLimit(body, target.format, target.profile)
+		return adaptMaxTokensOutputLimit(body, target.format, target.profile)
 	}
 }
 
@@ -304,72 +336,39 @@ func shadowProfileAuthHeader(profile *config.ProviderProfile) string {
 	return providerAuth.Header
 }
 
-// shadowExtraHeaders carries the span context to the shadow backend, the W3C
-// traceparent and tracestate headers only, plus the decision header mutations
-// the plugin explicitly allowlists in forward_headers. Baggage is never
-// propagated: with tracing enabled the request phase extracts client baggage
-// into the trace context, so injecting through the global propagator would
-// hand a client-supplied member such as token=... to the shadow ahead of the
-// forward_headers filter. Everything else a decision sets for the primary
-// backend stays on the primary path, so a custom credential such as
-// X-Internal-Token can never cross into the shadow backend, which is a less
-// trusted candidate. Known credential carriers and either profile's auth
-// header are dropped even when listed. Client headers are never included.
-func (r *OpenAIRouter) shadowExtraHeaders(
-	ctx *RequestContext,
-	dispatch *providerDispatch,
-	cfg *config.ShadowDispatchPluginConfig,
-) map[string]string {
+// shadowExtraHeaders carries W3C span context and allowed decision mutations.
+func (r *OpenAIRouter) shadowExtraHeaders(ctx *RequestContext, dispatch *providerDispatch, allowed []string) map[string]string {
 	extra := make(map[string]string)
 	if ctx.TraceContext != nil {
 		for _, pair := range tracing.InjectSpanContextToSlice(ctx.TraceContext) {
 			extra[pair[0]] = pair[1]
 		}
 	}
-	if ctx.VSRSelectedDecision == nil {
+	if len(allowed) == 0 {
 		return extra
 	}
-	var primaryAuthHeader string
-	if dispatch != nil {
-		primaryAuthHeader = shadowProfileAuthHeader(dispatch.profile)
-	}
-	setHeaders, _ := r.buildHeaderMutations(ctx.VSRSelectedDecision)
-	for _, option := range setHeaders {
-		header := option.GetHeader()
-		if header == nil || strings.HasPrefix(header.GetKey(), ":") {
-			continue
-		}
+	primaryAuth := shadowProfileAuthHeader(dispatch.profile)
+	mutations, _ := r.buildHeaderMutations(ctx)
+	for _, mutation := range mutations {
+		header := mutation.GetHeader()
 		name := header.GetKey()
-		if reason := shadowMutationDropReason(name, primaryAuthHeader, cfg); reason != "" {
-			logging.ComponentDebugEvent("extproc", "shadow_header_mutation_dropped", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"decision":   ctx.VSRSelectedDecision.Name,
-				"header":     name,
-				"reason":     reason,
-			})
+		if strings.HasPrefix(name, ":") || shadowHeaderIsSensitive(name, primaryAuth) {
 			continue
 		}
-		extra[name] = string(header.GetRawValue())
+		for _, allowedName := range allowed {
+			if strings.EqualFold(name, strings.TrimSpace(allowedName)) {
+				extra[name] = string(header.GetRawValue())
+				break
+			}
+		}
 	}
 	return extra
-}
-
-// shadowMutationDropReason explains why a decision header mutation stays on
-// the primary path, or returns "" when the shadow copy may carry it.
-func shadowMutationDropReason(name, primaryAuthHeader string, cfg *config.ShadowDispatchPluginConfig) string {
-	if shadowHeaderIsSensitive(name, primaryAuthHeader) {
-		return "credential"
-	}
-	if !cfg.ForwardsHeader(name) {
-		return "not_in_forward_headers"
-	}
-	return ""
 }
 
 func (d *shadowDispatcher) submit(
 	ctx *RequestContext,
 	dispatch *providerDispatch,
-	cfg config.ShadowDispatchPluginConfig,
+	cfg config.RouterReplayShadowConfig,
 	deps shadowSubmitDeps,
 ) {
 	decision := dispatch.decisionName
@@ -392,9 +391,6 @@ func (d *shadowDispatcher) submit(
 	case ctx.LooperRequest:
 		dropEarly(shadowReasonInternalRequest)
 		return
-	case cfg.Model == "" || cfg.Model == dispatch.logicalModel:
-		dropEarly(shadowReasonSameAsPrimary)
-		return
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
 		return
@@ -406,25 +402,61 @@ func (d *shadowDispatcher) submit(
 	}
 
 	now := d.now()
-	job := &shadowJob{
-		cfg:             cfg,
-		routerConfig:    deps.routerConfig,
-		engine:          deps.engine,
-		encode:          deps.encode,
-		request:         *ctx.SemanticRequest,
-		extraHeaders:    deps.extraHeaders,
-		decision:        decision,
-		recipe:          recipe,
-		primaryRequest:  ctx.RequestID,
-		primaryModel:    dispatch.logicalModel,
-		primaryBackend:  dispatch.backendName,
-		shadowRequestID: shadowRequestID(ctx.RequestID),
-		replayID:        ctx.RouterReplayID,
-		recorder:        ctx.RouterReplayRecorder,
-		enqueuedAt:      now,
-		deadline:        now.Add(time.Duration(cfg.TimeoutSeconds) * time.Second),
+	targets := make([]string, 0, len(cfg.Models))
+	skippedCapability := false
+	for _, model := range cfg.Models {
+		if model == dispatch.logicalModel {
+			continue
+		}
+		if deps.modelLacksCapability(model) {
+			skippedCapability = true
+			dropEarly(shadowReasonBackendLacksCapability)
+			continue
+		}
+		targets = append(targets, model)
 	}
-	d.enqueue(config.RoutingDecisionKey(config.RecipeName(recipe), decision), job)
+	if len(targets) == 0 {
+		if !skippedCapability {
+			dropEarly(shadowReasonSameAsPrimary)
+		}
+		return
+	}
+	snapshot, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+	if err != nil {
+		dropEarly(shadowReasonRequestUnavailable)
+		return
+	}
+	timeout, _ := time.ParseDuration(cfg.Execution.Timeout) // Validated when the config was loaded.
+	groupCtx, cancel := context.WithDeadline(d.ctx, now.Add(timeout))
+	groupCtx, _ = callbudget.WithLimit(groupCtx, len(targets))
+	if ctx.cancelAbandonedWork != nil {
+		ctx.cancelAbandonedWork()
+	}
+	ctx.cancelAbandonedWork = cancel
+	jobs := make([]*shadowJob, 0, len(targets))
+	for i, model := range targets {
+		jobs = append(jobs, &shadowJob{
+			cfg: cfg, model: model, context: groupCtx,
+			responseLimit: shadowShare(*cfg.Budget.MaxResponseBytes, len(targets), i),
+			captureLimit:  shadowShare(*cfg.Capture.MaxBytes, len(targets), i),
+			routerConfig:  deps.routerConfig, engine: deps.engine, encode: deps.encode,
+			request: *snapshot, extraHeaders: deps.extraHeaders, decision: decision, recipe: recipe,
+			primaryRequest: ctx.RequestID, primaryModel: dispatch.logicalModel, primaryBackend: dispatch.backendName,
+			shadowRequestID: shadowRequestID(ctx.RequestID), replayID: ctx.RouterReplayID, recorder: ctx.RouterReplayRecorder,
+			enqueuedAt: now, timeout: timeout,
+		})
+	}
+	d.enqueueGroup(config.RoutingDecisionKey(config.RecipeName(recipe), decision), jobs, cancel)
+}
+
+// Reservations partition each request's byte budget before any worker starts.
+// Failed or unreadable responses cannot give another worker extra allowance.
+func shadowShare(total, count, index int) int {
+	share := total / count
+	if index < total%count {
+		share++
+	}
+	return share
 }
 
 func shadowRequestID(primary string) string {
@@ -435,95 +467,125 @@ func shadowRequestID(primary string) string {
 	return primary + "-shadow-" + hex.EncodeToString(buf[:])
 }
 
-func (d *shadowDispatcher) laneFor(key string, cfg config.ShadowDispatchPluginConfig) *shadowLane {
+func (d *shadowDispatcher) laneFor(key string, cfg config.RouterReplayShadowConfig) *shadowLane {
 	lane := d.lanes[key]
-	if lane == nil || cap(lane.slots) != cfg.MaxConcurrency || lane.maxQueue != cfg.MaxQueueDepth {
+	if lane == nil || cap(lane.slots) != *cfg.Execution.MaxConcurrency || lane.maxQueue != *cfg.Execution.MaxQueueSize {
 		lane = &shadowLane{
-			slots:    make(chan struct{}, cfg.MaxConcurrency),
-			maxQueue: cfg.MaxQueueDepth,
+			slots:    make(chan struct{}, *cfg.Execution.MaxConcurrency),
+			groups:   make(chan struct{}, *cfg.Execution.MaxConcurrency),
+			maxQueue: *cfg.Execution.MaxQueueSize,
 		}
 		d.lanes[key] = lane
 	}
 	return lane
 }
 
-// enqueue applies the concurrency and queue bounds. The only synchronous work
-// is a non-blocking channel send and a counter check.
-func (d *shadowDispatcher) enqueue(key string, job *shadowJob) {
+// enqueueGroup bounds both active groups and the pending group queue. Each
+// active group competes for the lane's shared HTTP slots; candidates wait
+// rather than being discarded when another candidate holds a slot.
+func (d *shadowDispatcher) enqueueGroup(key string, jobs []*shadowJob, cancel context.CancelFunc) {
+	first := jobs[0]
 	d.mu.Lock()
 	if d.closed {
 		d.mu.Unlock()
-		d.recordDrop(job, shadowReasonRouterClosing)
+		cancel()
+		d.recordDrop(first, shadowReasonRouterClosing)
 		return
 	}
-	lane := d.laneFor(key, job.cfg)
+	lane := d.laneFor(key, first.cfg)
 	queued := false
 	select {
-	case lane.slots <- struct{}{}:
+	case lane.groups <- struct{}{}:
 	default:
 		if int(lane.waiting.Load()) >= lane.maxQueue {
 			d.mu.Unlock()
-			d.recordDrop(job, shadowReasonQueueFull)
+			cancel()
+			d.recordDrop(first, shadowReasonQueueFull)
 			return
 		}
 		lane.waiting.Add(1)
-		metrics.ShadowDispatchQueued.WithLabelValues(job.decision).Inc()
 		queued = true
+		metrics.ShadowDispatchQueued.WithLabelValues(first.decision).Inc()
 	}
 	d.wg.Add(1)
 	d.mu.Unlock()
-
 	goSafely("shadow_dispatch", func() {
 		defer d.wg.Done()
+		defer cancel()
 		if queued {
-			acquired, reason := d.waitForSlot(lane, job)
+			acquired := false
+			select {
+			case lane.groups <- struct{}{}:
+				acquired = true
+			case <-first.context.Done():
+			}
 			lane.waiting.Add(-1)
-			metrics.ShadowDispatchQueued.WithLabelValues(job.decision).Dec()
+			metrics.ShadowDispatchQueued.WithLabelValues(first.decision).Dec()
 			if !acquired {
-				d.recordDrop(job, reason)
+				for _, job := range jobs {
+					d.recordUnstarted(job)
+				}
 				return
 			}
 		}
-		defer func() { <-lane.slots }()
-		d.execute(job)
+		defer func() { <-lane.groups }()
+		budget := first.cfg.Budget
+		if (budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil) && !d.admitShadowGroup(jobs, budget) {
+			return
+		}
+		var workers sync.WaitGroup
+		for _, job := range jobs {
+			workers.Add(1)
+			goSafely("shadow_candidate", func() {
+				defer workers.Done()
+				select {
+				case lane.slots <- struct{}{}:
+				case <-job.context.Done():
+					d.recordUnstarted(job)
+					return
+				}
+				defer func() { <-lane.slots }()
+				d.execute(job)
+			})
+		}
+		workers.Wait()
 	})
 }
 
-func (d *shadowDispatcher) waitForSlot(lane *shadowLane, job *shadowJob) (bool, string) {
-	timer := time.NewTimer(time.Until(job.deadline))
-	defer timer.Stop()
-	select {
-	case lane.slots <- struct{}{}:
-		return true, ""
-	case <-timer.C:
-		return false, shadowReasonQueueTimeout
-	case <-d.ctx.Done():
-		return false, shadowReasonRouterClosing
-	}
-}
-
-// recordDrop reports a shadow call that never reached a worker. Drops are
-// bounded-resource signals, so they are observable through metrics and logs
-// rather than replay-store writes that could amplify an overload.
 func (d *shadowDispatcher) recordDrop(job *shadowJob, reason string) {
 	metrics.RecordShadowDispatch(job.decision, metrics.ShadowDispatchResultDropped, reason)
-	logging.ComponentWarnEvent("extproc", "shadow_dispatch_dropped", map[string]interface{}{
-		"request_id":        job.primaryRequest,
-		"shadow_request_id": job.shadowRequestID,
-		"decision":          job.decision,
-		"recipe":            job.recipe,
-		"shadow_model":      job.cfg.Model,
-		"reason":            reason,
+	logging.ComponentDebugEvent("extproc", "shadow_dispatch_dropped", map[string]interface{}{
+		"request_id": job.primaryRequest, "decision": job.decision, "reason": reason, "candidates": len(job.cfg.Models),
 	})
+}
+
+func (d *shadowDispatcher) recordUnstarted(job *shadowJob) {
+	reason := shadowReasonQueueTimeout
+	if d.ctx.Err() != nil {
+		reason = shadowReasonRouterClosing
+	} else if job.context.Err() == context.Canceled {
+		reason = "canceled"
+	}
+	now := d.now()
+	d.record(job, shadowResult{verdict: shadowVerdictFailed, reason: reason, startedAt: now, finishedAt: now})
 }
 
 func (d *shadowDispatcher) execute(job *shadowJob) {
+	// Reserve terminal evidence before spending a model call. Storage runs on
+	// Replay's bounded writer, independently of the candidate execution slots.
+	if job.recorder != nil && job.replayID != "" {
+		job.receipt = job.recorder.TryReserveOutcome(job.replayID)
+		if job.receipt == nil {
+			d.recordDrop(job, shadowReasonReplayQueueFull)
+			return
+		}
+	}
 	metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Inc()
 	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
-
-	callCtx, cancel := context.WithDeadline(d.ctx, job.deadline)
-	defer cancel()
-	result := d.call(callCtx, job)
+	result := d.call(job.context, job)
+	if job.spend != nil {
+		job.spend.account(result)
+	}
 	d.record(job, result)
 }
 
@@ -547,16 +609,19 @@ func (d *shadowDispatcher) record(job *shadowJob, result shadowResult) {
 			Timestamp: result.finishedAt.UTC(),
 			Source:    shadowDispatchOutcomeSource,
 			Target:    shadowDispatchOutcomeTarget,
-			TargetRef: job.cfg.Model,
+			TargetRef: job.model,
 			Verdict:   result.verdict,
 			Reason:    result.reason,
 			Metadata:  metadata,
 		}
-		if err := job.recorder.AppendOutcome(job.replayID, outcome); err != nil {
-			logging.ComponentErrorEvent("extproc", "shadow_dispatch_outcome_persist_failed", map[string]interface{}{
+		if job.receipt != nil {
+			job.receipt.Finish(outcome)
+		} else if !job.recorder.TryAppendOutcome(job.replayID, outcome) {
+			// Unstarted work has no reservation and uses best-effort reporting.
+			metrics.RecordPluginExecution("shadow_dispatch_receipt", job.decision, "dropped", 0)
+			logging.ComponentWarnEvent("extproc", "shadow_dispatch_outcome_queue_full", map[string]interface{}{
 				"request_id": job.primaryRequest,
 				"replay_id":  job.replayID,
-				"error":      err.Error(),
 			})
 		}
 	}
@@ -587,7 +652,7 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 		"shadow_request_id":  job.shadowRequestID,
 		"primary_model":      job.primaryModel,
 		"primary_backend":    job.primaryBackend,
-		"shadow_model":       job.cfg.Model,
+		"shadow_model":       job.model,
 		"shadow_backend":     result.shadowBackend,
 		"decision":           job.decision,
 		"recipe":             job.recipe,
@@ -605,21 +670,42 @@ func shadowOutcomeMetadata(job *shadowJob, result shadowResult, latency time.Dur
 	if result.err != "" {
 		metadata["error"] = result.err
 	}
+	if spend := job.spend; spend != nil {
+		metadata["budget_estimated_cost"] = strconv.FormatFloat(spend.estimate, 'f', -1, 64)
+		metadata["budget_accounted_cost"] = strconv.FormatFloat(spend.accounted, 'f', -1, 64)
+		metadata["budget_cost_source"] = spend.costSource
+		metadata["budget_currency"] = spend.currency
+	}
 	if result.verdict != shadowVerdictCompleted {
 		return metadata
 	}
 	metadata["response_bytes"] = strconv.Itoa(result.responseBytes)
 	metadata["stop_reason"] = result.stopReason
-	metadata["input_tokens"] = strconv.FormatInt(result.inputTokens, 10)
-	metadata["output_tokens"] = strconv.FormatInt(result.outputTokens, 10)
+	if result.inputKnown {
+		metadata["input_tokens"] = strconv.FormatInt(result.inputTokens, 10)
+	}
+	if result.outputKnown {
+		metadata["output_tokens"] = strconv.FormatInt(result.outputTokens, 10)
+	}
+	metadata["usage_known"] = strconv.FormatBool(result.inputKnown && result.outputKnown)
+	if spend := job.spend; spend != nil && spend.costSource == "usage" {
+		metadata["estimated_cost"] = metadata["budget_accounted_cost"]
+		metadata["cost_currency"] = spend.currency
+	} else if result.inputKnown && result.outputKnown && job.routerConfig != nil {
+		prompt, completion, currency, known := job.routerConfig.GetModelPricing(job.model)
+		if known {
+			metadata["estimated_cost"] = strconv.FormatFloat((float64(result.inputTokens)*prompt+float64(result.outputTokens)*completion)/1e6, 'g', -1, 64)
+			metadata["cost_currency"] = currency
+		}
+	}
 	metadata["response_chars"] = strconv.Itoa(utf8.RuneCountInString(result.text))
 	sum := sha256.Sum256([]byte(result.text))
 	metadata["response_sha256"] = hex.EncodeToString(sum[:])
-	if job.cfg.CaptureResponseBody {
-		if len(result.text) > job.cfg.MaxCaptureBytes {
+	if job.cfg.Capture.Enabled {
+		if len(result.text) > job.captureLimit {
 			metadata["response_excerpt_truncated"] = "true"
 		}
-		metadata["response_excerpt"] = truncateShadowText(result.text, job.cfg.MaxCaptureBytes)
+		metadata["response_excerpt"] = truncateShadowText(result.text, job.captureLimit)
 	}
 	return metadata
 }

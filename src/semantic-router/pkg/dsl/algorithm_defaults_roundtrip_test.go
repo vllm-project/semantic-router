@@ -1,6 +1,9 @@
 package dsl
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestCompileASTSeedsModelSelectionDefaults(t *testing.T) {
 	cfg, errs := CompileAST(&Program{})
@@ -10,24 +13,19 @@ func TestCompileASTSeedsModelSelectionDefaults(t *testing.T) {
 	if cfg == nil {
 		t.Fatal("expected router config from CompileAST")
 	}
-	if !cfg.ModelSelection.RouterDC.UseQueryContrastive ||
-		!cfg.ModelSelection.RouterDC.UseModelContrastive ||
-		!cfg.ModelSelection.RouterDC.UseCapabilities {
-		t.Fatalf("expected CompileAST to seed RouterDC defaults, got %+v", cfg.ModelSelection.RouterDC)
-	}
-	if !cfg.ModelSelection.Hybrid.NormalizeScores {
-		t.Fatalf("expected CompileAST to seed Hybrid defaults, got %+v", cfg.ModelSelection.Hybrid)
+	if !cfg.ModelSelection.Enabled {
+		t.Fatalf("expected CompileAST to enable model selection, got %+v", cfg.ModelSelection)
 	}
 }
 
-func TestConfidenceMaxResponseBytesRoundTrip(t *testing.T) {
+func TestEscalateAnswerCheckRoundTrip(t *testing.T) {
 	cfg, errs := Compile(`
-ROUTE confidence {
+ROUTE checked {
   MODEL "small", "large"
-  ALGORITHM confidence {
-    confidence_method: "automix_entailment"
-    verifier_server_url: "https://verifier.example.com"
-    max_response_bytes: 1234
+  ALGORITHM escalate {
+    on_error: "fail"
+    order: "cost"
+    accept: { systemone: { gte: 0.8, timeout_ms: 5000 } }
   }
 }`)
 	if len(errs) > 0 {
@@ -42,7 +40,10 @@ ROUTE confidence {
 	if len(errs) > 0 {
 		t.Fatalf("round-trip compile errors: %v", errs)
 	}
-	if got := roundTripped.Decisions[0].Algorithm.Confidence.MaxResponseBytes; got != 1234 {
-		t.Fatalf("max_response_bytes = %d, want 1234", got)
+	if !reflect.DeepEqual(cfg.Decisions[0].Algorithm, roundTripped.Decisions[0].Algorithm) {
+		t.Fatalf("escalate changed during round trip:\n%s\n%#v", dslText, roundTripped.Decisions[0].Algorithm)
+	}
+	if check := roundTripped.Decisions[0].Algorithm.Escalate.Accept.SystemOne; check == nil || *check.GTE != 0.8 || check.TimeoutMs != 5000 {
+		t.Fatalf("accept.systemone = %+v", check)
 	}
 }

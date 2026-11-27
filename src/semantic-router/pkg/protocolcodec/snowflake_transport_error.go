@@ -36,15 +36,16 @@ func decodeSnowflakeTransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire snowflakeTransportErrorWire
-	if _, _, err := decodeProviderWireVendorAware(body, &wire, policy); err != nil ||
+	if _, _, err := decodeProviderWireTolerant(body, &wire, policy); err != nil ||
 		strings.TrimSpace(wire.Code) == "" || strings.TrimSpace(wire.Message) == "" {
 		return decodeOpenAITransportError(body, policy, format)
 	}
 	return llmprotocol.TransportError{
 		Error: &llmprotocol.ProtocolError{
-			Category: snowflakeErrorCategory(wire.Code),
-			Code:     strings.TrimSpace(wire.Code),
-			Message:  wire.Message,
+			Category:       snowflakeErrorCategory(wire.Code),
+			Code:           strings.TrimSpace(wire.Code),
+			Message:        wire.Message,
+			ProviderFramed: true,
 		},
 		ProviderRequestID: strings.TrimSpace(wire.RequestID),
 	}, nil, nil

@@ -1,0 +1,11 @@
+src/**
+out/test/**
+**/*.map
+node_modules/**
+tsconfig.json
+package-lock.json
+AGENTS.md
+DEVELOPMENT.md
+OWNER
+.gitignore
+*.vsix

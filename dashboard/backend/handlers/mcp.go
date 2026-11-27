@@ -27,6 +27,20 @@ func writeMCPInternalError(w http.ResponseWriter, operation string, err error) {
 	http.Error(w, operation+" failed", http.StatusInternalServerError)
 }
 
+func writeMCPServerNotFound(w http.ResponseWriter) {
+	http.Error(w, "Server not found", http.StatusNotFound)
+}
+
+// writeMCPManagerError answers a missing server with 404 and every other
+// manager failure with a generic 500.
+func writeMCPManagerError(w http.ResponseWriter, operation string, err error) {
+	if errors.Is(err, mcp.ErrServerNotFound) {
+		writeMCPServerNotFound(w)
+		return
+	}
+	writeMCPInternalError(w, operation, err)
+}
+
 // NewMCPHandler creates an MCP Handler
 func NewMCPHandler(manager *mcp.Manager, readonlyMode bool) *MCPHandler {
 	return &MCPHandler{
@@ -39,28 +53,8 @@ func prepareMCPServerConfig(w http.ResponseWriter, config *mcp.ServerConfig) boo
 	if config.ID == "" {
 		config.ID = uuid.New().String()
 	}
-	if config.Name == "" {
-		http.Error(w, "Name is required", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == "" {
-		http.Error(w, "Transport is required", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport != mcp.TransportStdio && config.Transport != mcp.TransportStreamableHTTP {
-		http.Error(w, "Invalid transport type. Must be 'stdio' or 'streamable-http'", http.StatusBadRequest)
-		return false
-	}
-	if err := mcp.ValidateSecurity(config.Security); err != nil {
+	if err := mcp.ValidateServerConfig(config); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == mcp.TransportStdio && config.Connection.Command == "" {
-		http.Error(w, "Command is required for stdio transport", http.StatusBadRequest)
-		return false
-	}
-	if config.Transport == mcp.TransportStreamableHTTP && config.Connection.URL == "" {
-		http.Error(w, "URL is required for streamable-http transport", http.StatusBadRequest)
 		return false
 	}
 	return true
@@ -75,7 +69,7 @@ func (h *MCPHandler) ListServersHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -174,13 +168,17 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.UpdateServer(&config); err != nil {
-			writeMCPInternalError(w, "Update server", err)
+			if errors.Is(err, mcp.ErrInvalidServerConfig) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			writeMCPManagerError(w, "Update server", err)
 			return
 		}
 
 		stored, ok := h.manager.GetServer(id)
 		if !ok {
-			http.Error(w, "Server not found", http.StatusNotFound)
+			writeMCPServerNotFound(w)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -216,7 +214,7 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.DeleteServer(id); err != nil {
-			writeMCPInternalError(w, "Delete server", err)
+			writeMCPManagerError(w, "Delete server", err)
 			return
 		}
 
@@ -225,6 +223,16 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 }
 
 // ========== Connection Handlers ==========
+
+func (h *MCPHandler) writeServerState(w http.ResponseWriter, operation, id string) {
+	state, err := h.manager.GetServerStatus(id)
+	if err != nil {
+		writeMCPManagerError(w, operation, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+}
 
 // ConnectServerHandler POST /api/mcp/servers/:id/connect - Connect to server
 func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
@@ -263,13 +271,11 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
-			writeMCPInternalError(w, "Connect server", err)
+			writeMCPManagerError(w, "Connect server", err)
 			return
 		}
 
-		state, _ := h.manager.GetServerStatus(id)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+		h.writeServerState(w, "Connect server", id)
 	}
 }
 
@@ -301,13 +307,11 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			return
 		}
 		if err := h.manager.Disconnect(id); err != nil {
-			writeMCPInternalError(w, "Disconnect server", err)
+			writeMCPManagerError(w, "Disconnect server", err)
 			return
 		}
 
-		state, _ := h.manager.GetServerStatus(id)
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(mcp.RedactedServerState(state))
+		h.writeServerState(w, "Disconnect server", id)
 	}
 }
 
@@ -318,7 +322,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -333,7 +337,7 @@ func (h *MCPHandler) GetServerStatusHandler() http.HandlerFunc {
 
 		state, err := h.manager.GetServerStatus(id)
 		if err != nil {
-			http.Error(w, "Server not found", http.StatusNotFound)
+			writeMCPServerNotFound(w)
 			return
 		}
 
@@ -373,8 +377,11 @@ func (h *MCPHandler) TestConnectionHandler() http.HandlerFunc {
 		}
 		if err := h.manager.TestConnection(ctx, &config); err != nil {
 			log.Printf("[MCP-Handler] Test connection failed: error_class=%T", err)
+			// A validation failure is reported in this endpoint's envelope, not
+			// as a 400: the dialog's caller reads the message out of the body,
+			// and a non-ok status would drop it to a generic statusText.
 			message := "Connection test failed"
-			if errors.Is(err, mcp.ErrUnsupportedSecurity) {
+			if errors.Is(err, mcp.ErrInvalidServerConfig) || errors.Is(err, mcp.ErrUnsupportedSecurity) {
 				message = err.Error()
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -402,7 +409,7 @@ func (h *MCPHandler) ListToolsHandler() http.HandlerFunc {
 			return
 		}
 
-		if r.Method != http.MethodGet {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}

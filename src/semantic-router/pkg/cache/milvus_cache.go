@@ -34,7 +34,7 @@ type MilvusCache struct {
 	missCount           int64
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
-	embeddingModel      string // "mmbert" (default), "qwen3" or "multimodal"
+	embeddingDeployment string
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
@@ -45,7 +45,7 @@ type MilvusCacheOptions struct {
 	Enabled             bool
 	Config              *config.MilvusConfig
 	ConfigPath          string
-	EmbeddingModel      string
+	EmbeddingDeployment string
 }
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
@@ -106,8 +106,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		return nil, fmt.Errorf("failed to create Milvus client: %w", err)
 	}
 
-	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-
 	cache := &MilvusCache{
 		client:              milvusClient,
 		config:              milvusConfig,
@@ -115,8 +113,8 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		similarityThreshold: options.SimilarityThreshold,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
-		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider), 0)),
+		embeddingDeployment: options.EmbeddingDeployment,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, embedding.Options{Dimension: semanticCacheEmbeddingDimension(milvusConfig.Collection.VectorField.Dimension, options.EmbeddingProvider)}),
 	}
 
 	// Test connection using the new CheckConnection method
@@ -238,7 +236,7 @@ func (c *MilvusCache) initializeCollection() error {
 		})
 	}
 
-	if err := milvuslifecycle.EnsureCollectionLoadedWithRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
+	if err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(ctx, c.client, c.collectionName, func(innerCtx context.Context) error {
 		logging.Debugf("MilvusCache: collection '%s' does not exist. AutoCreateCollection=%v",
 			c.collectionName, c.config.Development.AutoCreateCollection)
 		if !c.config.Development.AutoCreateCollection {
@@ -255,6 +253,8 @@ func (c *MilvusCache) initializeCollection() error {
 			"dimension":  c.config.Collection.VectorField.Dimension,
 		})
 		return nil
+	}, func(innerCtx context.Context) error {
+		return milvuslifecycle.ValidateFloatVectorDimension(innerCtx, c.client, c.collectionName, c.config.Collection.VectorField.Name, c.embeddingDimension())
 	}, milvuslifecycle.CollectionRetryOptions{}); err != nil {
 		logging.Debugf("MilvusCache: failed to ensure/load collection: %v", err)
 		return fmt.Errorf("failed to ensure/load collection: %w", err)

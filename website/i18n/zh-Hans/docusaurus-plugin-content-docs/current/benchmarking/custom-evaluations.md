@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 自定义评测
 description: 通过一个规范 evaluation 分区添加版本化基准定义、模型关联记录和路由指数。
 translation:
@@ -29,8 +30,7 @@ Model Card 在 `resources/models/`，基准契约在
 对于自定义模型，省略 `providers.models[].catalog`。此时 provider 模型名就是其规范 Model Card 身份，也被 `evaluation.records[].model` 使用：
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   models:
     - name: private-chat
@@ -41,7 +41,8 @@ providers:
           provider: vllm
           endpoint: model-gateway.example:8000
           protocol: http
-
+      display_name: Private Chat
+      capabilities: [chat, tools, coding]
 evaluation:
   records:
     - model: private-chat
@@ -51,12 +52,8 @@ evaluation:
       metrics: {pass_at_1: 0.61}
       measured_at: 2026-09-09
       source: https://benchmarks.example/runs/private-chat-lcb6
-
-routing:
-  modelCards:
-    - name: private-chat
-      display_name: Private Chat
-      capabilities: [chat, tools, coding]
+recipes:
+  - name: default
 ```
 
 对于由内置卡片支撑的别名，将 `model` 设为规范的 `providers.models[].catalog` ID，而不是面向请求的别名。因此同一检查点的多个别名共享同一份模型证据。
@@ -146,4 +143,4 @@ algorithm:
 
 Router 使用候选精确推理力度的 `available` 结果，然后应用路由级覆盖率和分数门槛。平衡、质量优先和成本优先目标见 [Multi Factor](../tutorials/algorithm/selection/multi-factor)。
 
-在控制面板中打开 **Build → Models → Evaluation Records** 以添加或编辑记录。基准和指数定义仍保持为显式 YAML，因为更改其语义会创建版本化评分契约，而不是普通 Model Card 元数据。
+在控制面板中打开 **Models → Backend models**，从页面的 **⋯** 菜单选择 **Manage evaluation records** 以添加或编辑记录。基准和指数定义仍保持为显式 YAML，因为更改其语义会创建版本化评分契约，而不是普通 Model Card 元数据。

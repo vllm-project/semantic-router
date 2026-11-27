@@ -9,7 +9,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_custom_1",
                   "incomplete_details": null,
@@ -33,7 +33,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_custom_1",
                   "incomplete_details": null,
@@ -119,7 +119,7 @@
             {
               "data": {
                 "response": {
-                  "created_at": 0,
+                  "created_at": 100,
                   "error": null,
                   "id": "chatcmpl_custom_1",
                   "incomplete_details": null,
@@ -146,8 +146,7 @@
                   "usage": {
                     "input_tokens": 4,
                     "input_tokens_details": {
-                      "cache_write_tokens": null,
-                      "cached_tokens": null
+                      "cached_tokens": 0
                     },
                     "output_tokens": 3,
                     "output_tokens_details": {

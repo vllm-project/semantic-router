@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 title: 独立 HTTP Gateway
 description: 实验性独立推理网关，加上传输中立的共享语义运行时。一个引擎，两个适配器（ExtProc 和 HTTP）；网关额外拥有生产支持决策之前所需的物理流量层、流量控制、治理、可观测性和安全边界。
 created: 2026-08-31

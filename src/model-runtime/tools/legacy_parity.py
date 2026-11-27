@@ -162,6 +162,10 @@ def corpus(seed: int = 0) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     items = [{"id": f"p{i:04d}", "text": text} for i, text in enumerate(base)]
     items += [{"id": f"e{i:02d}", "text": text} for i, text in enumerate(EDGE)]
+    if not base:
+        raise SystemExit(
+            "acceptance corpus is empty; refuse to substitute edge prompts"
+        )
     for index, count in enumerate([8, 16, 32, 48, 64, 96, 128, 192, 256, 384]):
         picked = rng.sample(base, k=min(count, len(base)))
         items.append({"id": f"l{index:02d}", "text": "\n".join(picked)})
@@ -768,18 +772,26 @@ def ab_summary(report: dict[str, Any]) -> dict[str, Any]:
     for job, values in report.items():
         pairs = list(zip(values["legacy"], values["runtime"], strict=True))
         windows = values.get("throughput", {})
+        total_pairs = values.get("total_pairs")
+        failed_pairs = values.get("failed_pairs")
+        new_total_pairs = values.get("new_total_pairs", 0)
+        new_failed_pairs = values.get("new_failed_pairs", 0)
         row: dict[str, Any] = {
             "pairs": len(pairs),
+            "total_pairs": total_pairs,
+            "new_total_pairs": new_total_pairs,
+            "failed_pairs": failed_pairs,
+            "new_failed_pairs": new_failed_pairs,
             "legacy_ms": {
-                "p50": percentile(values["legacy"], 0.5),
-                "p95": percentile(values["legacy"], 0.95),
+                "p50": percentile_or_none(values["legacy"], 0.5),
+                "p95": percentile_or_none(values["legacy"], 0.95),
             },
             "runtime_ms": {
-                "p50": percentile(values["runtime"], 0.5),
-                "p95": percentile(values["runtime"], 0.95),
+                "p50": percentile_or_none(values["runtime"], 0.5),
+                "p95": percentile_or_none(values["runtime"], 0.95),
             },
             "median_speedup": (
-                statistics.median(values["ratio"]) if values["ratio"] else math.nan
+                statistics.median(values["ratio"]) if values["ratio"] else None
             ),
             "throughput_per_s": {
                 side: statistics.median(rates) for side, rates in windows.items()
@@ -827,12 +839,37 @@ async def ab_rounds(
     report = state["report"]
     for round_index in range(state["pair_rounds"], rounds):
         for spec in specs:
-            entry = report.setdefault(
-                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
-            )
+            entry = report.get(spec["Job"])
+            if entry is None:
+                entry = {
+                    "legacy": [],
+                    "runtime": [],
+                    "ratio": [],
+                    "total_pairs": 0,
+                    "failed_pairs": 0,
+                    "new_total_pairs": 0,
+                    "new_failed_pairs": 0,
+                }
+                report[spec["Job"]] = entry
+            else:
+                # Historical checkpoints predate pair accounting: attempted and
+                # failed totals are unknown then rather than assumed zero.
+                entry.setdefault("total_pairs", None)
+                entry.setdefault("failed_pairs", None)
+                entry.setdefault("new_total_pairs", 0)
+                entry.setdefault("new_failed_pairs", 0)
             for item in spec["Inputs"]:
                 legacy_ns, runtime_ns = await pair(spec, item, bool(round_index % 2))
-                if legacy_ns < 0 or runtime_ns < 0:
+                # New attempts are always counted, even when historical totals
+                # are unknown (None). Historical totals themselves are never
+                # fabricated from zero.
+                entry["new_total_pairs"] += 1
+                if entry["total_pairs"] is not None:
+                    entry["total_pairs"] += 1
+                if legacy_ns <= 0 or runtime_ns <= 0:
+                    entry["new_failed_pairs"] += 1
+                    if entry["failed_pairs"] is not None:
+                        entry["failed_pairs"] += 1
                     continue
                 entry["legacy"].append(legacy_ns)
                 entry["runtime"].append(runtime_ns)
@@ -881,7 +918,7 @@ def run_ab(args: argparse.Namespace) -> None:
     while legacy.stdout.readline().strip() != "READY":
         if legacy.poll() is not None:
             raise SystemExit("the legacy binary exited before it was ready")
-    runtime = serve_runtime(args, specs, "cpu")
+    runtime = serve_runtime(args, specs, args.device)
     sides = ["legacy", "alone", "merged"]
 
     def call_legacy(spec: dict[str, Any], item: dict[str, str]) -> int:
@@ -941,9 +978,29 @@ def run_ab(args: argparse.Namespace) -> None:
         rates = " ".join(
             f"{side} {rate:.1f}/s" for side, rate in row["throughput_per_s"].items()
         )
+        total = row["total_pairs"]
+        failed = row["failed_pairs"]
+        new_total = row["new_total_pairs"]
+        new_failed = row["new_failed_pairs"]
+        total_text = str(total) if total is not None else "?"
+        failed_text = str(failed) if failed is not None else "?"
+        speedup = row["median_speedup"]
+        speedup_text = f"x{speedup:.2f}" if speedup is not None else "N/A"
+        ok = row["pairs"]
+        sr = ok / total if total else None
+        fr = failed / total if total and failed is not None else None
+        sr_text = f"{sr:.1%}" if sr is not None else "?"
+        fr_text = f"{fr:.1%}" if fr is not None else "?"
+
+        def _fmt_ms(v: Any) -> str:
+            return f"{v:.2f}" if v is not None else "N/A"
+
         print(
-            f"{job:13s} pairs={row['pairs']:4d} p50 {row['legacy_ms']['p50']:.2f}->{row['runtime_ms']['p50']:.2f} ms "
-            f"p95 {row['legacy_ms']['p95']:.2f}->{row['runtime_ms']['p95']:.2f} ms speedup x{row['median_speedup']:.2f} {rates}"
+            f"{job:13s} pairs={ok:4d} total={total_text} fail={failed_text} "
+            f"sr={sr_text} fr={fr_text} "
+            f"new_total={new_total} new_fail={new_failed} "
+            f"p50 {_fmt_ms(row['legacy_ms']['p50'])}->{_fmt_ms(row['runtime_ms']['p50'])} ms "
+            f"p95 {_fmt_ms(row['legacy_ms']['p95'])}->{_fmt_ms(row['runtime_ms']['p95'])} ms speedup {speedup_text} {rates}"
         )
 
 
@@ -1034,6 +1091,17 @@ def percentile(values: list[int], q: float) -> float:
     if not ordered:
         return math.nan
     return ordered[min(len(ordered) - 1, max(0, math.ceil(q * len(ordered)) - 1))] / 1e6
+
+
+def percentile_or_none(values: list[int], q: float) -> float | None:
+    """Like ``percentile`` but returns ``None`` for empty input instead of NaN.
+
+    Keeps JSON output free of non-standard NaN / Infinity values.
+    """
+    p = percentile(values, q)
+    if isinstance(p, float) and math.isnan(p):
+        return None
+    return p
 
 
 def compare_job(
@@ -1311,6 +1379,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     ab_parser.add_argument("--tree", required=True)
     ab_parser.add_argument("--libs")
     ab_parser.add_argument("--cache", required=True)
+    ab_parser.add_argument("--device", default="cpu")
     ab_parser.add_argument("--threads", type=int)
     ab_parser.add_argument("--rounds", type=int, default=2)
     ab_parser.add_argument(

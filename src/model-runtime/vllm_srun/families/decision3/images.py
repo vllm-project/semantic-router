@@ -18,19 +18,19 @@ import binascii
 import hashlib
 import io
 import math
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 
+from ...accel.cpu import on_device_thread
 from ...errors import MediaError
 
-# Preprocessing runs on one thread: PyTorch's OpenMP backend keeps a thread team
-# per calling thread, and a team per request thread outnumbers the cores, so every
-# parallel region of the resize and normalization would pay a wake-up.
-_PREPROCESS = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vllm-sr-images")
+# Preprocessing runs on the CPU device thread, where CPU forwards run: PyTorch's
+# OpenMP backend keeps a thread team per calling thread, and once the teams
+# outnumber the cores libgomp stops spinning between parallel regions, so every
+# region of the resize, the normalization and a CPU forward pays a wake-up.
 
 MIN_PIXELS = 65_536
 MAX_PIXELS = 1_638_400
@@ -205,8 +205,8 @@ def _resize(image: torch.Tensor, height: int, width: int) -> torch.Tensor:
 
 
 def preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
-    """One RGB PIL image through the processor (on the preprocessing thread): FP32 patch rows and its grid."""
-    return _PREPROCESS.submit(_preprocess, image, digest, settings).result()
+    """One RGB PIL image through the processor (on the CPU device thread): FP32 patch rows and its grid."""
+    return on_device_thread(lambda: _preprocess(image, digest, settings))
 
 
 def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
@@ -214,7 +214,7 @@ def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
 
     The worker returns the resized uint8 pixels as a NumPy array, an eighth of
     the FP32 patch rows they become, and ``loaded`` finishes them on the
-    preprocessing thread. The resize computes each output pixel alone, so the
+    CPU device thread. The resize computes each output pixel alone, so the
     worker's thread count leaves the pixels bit for bit as ``preprocess``
     gives them.
     """
@@ -223,10 +223,10 @@ def load(value: Any, settings: ProcessorSettings) -> tuple[Any, str]:
 
 
 def loaded(pixels: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
-    """A ``load`` result through the rest of the processor (on the preprocessing thread)."""
-    return _PREPROCESS.submit(
-        _patches, torch.from_numpy(pixels), digest, settings
-    ).result()
+    """A ``load`` result through the rest of the processor (on the CPU device thread)."""
+    return on_device_thread(
+        lambda: _patches(torch.from_numpy(pixels), digest, settings)
+    )
 
 
 def _preprocess(image: Any, digest: str, settings: ProcessorSettings) -> ProcessedImage:
@@ -247,18 +247,27 @@ def _resized(image: Any, settings: ProcessorSettings) -> torch.Tensor:
     return _resize(stacked, height, width).contiguous()
 
 
-def _patches(
-    resized: torch.Tensor, digest: str, settings: ProcessorSettings
-) -> ProcessedImage:
-    """Resized uint8 pixels rescaled, normalized and laid out as the tower's FP32 patch rows."""
-    height, width = resized.shape[-2:]
+def _normalized(resized: torch.Tensor, settings: ProcessorSettings) -> torch.Tensor:
     mean = torch.tensor(settings.image_mean) * (1.0 / settings.rescale_factor)
     std = torch.tensor(settings.image_std) * (1.0 / settings.rescale_factor)
-    normalized = (
+    return (
         resized.to(dtype=torch.float32)
         .sub(mean.view(-1, 1, 1))
         .div_(std.view(-1, 1, 1))
     )
+
+
+def _patches(
+    resized: torch.Tensor, digest: str, settings: ProcessorSettings
+) -> ProcessedImage:
+    """Resized uint8 pixels rescaled, normalized and laid out as the tower's FP32 patch rows."""
+    return _layout(_normalized(resized, settings), digest, settings)
+
+
+def _layout(
+    normalized: torch.Tensor, digest: str, settings: ProcessorSettings
+) -> ProcessedImage:
+    height, width = normalized.shape[-2:]
     patch, merge, temporal = (
         settings.patch_size,
         settings.merge_size,
@@ -280,3 +289,60 @@ def _patches(
         tokens=grid_h * grid_w // merge**2,
         digest=digest,
     )
+
+
+# A Box on a wide, short image (#7011): the vision grid's short axis is padded
+# with this grey, centred, before the tower reads it.
+PAD_FILL = 238
+
+
+@dataclass(frozen=True)
+class BoxPadding:
+    """Pad an image Box's photo to ``rows`` merged rows on its short axis when it is at least ``min_aspect``:1."""
+
+    rows: int
+    min_aspect: float = 4.0
+
+
+def pad_short_axis(
+    image: ProcessedImage, padding: BoxPadding, settings: ProcessorSettings
+) -> tuple[ProcessedImage, tuple[float, float, float, float]] | None:
+    """``image`` with its short axis padded to ``padding.rows`` merged rows, and where the original sits in it
+    (left, top, right, bottom, each a fraction of the padded image); None when the image does not need it or the
+    padded image would be over the pixel budget.
+    """
+    _, grid_h, grid_w = image.grid
+    patch, merge = settings.patch_size, settings.merge_size
+    height, width = grid_h * patch, grid_w * patch
+    short, long = min(height, width), max(height, width)
+    target = padding.rows * settings.factor
+    if short >= target or long < padding.min_aspect * short:
+        return None
+    if target * long > settings.max_pixels:
+        return None
+    channel = len(settings.image_mean)
+    # The patch rows back to the normalized image: the first temporal copy of each patch.
+    normalized = (
+        image.pixel_values.view(
+            grid_h // merge,
+            grid_w // merge,
+            merge,
+            merge,
+            channel,
+            settings.temporal_patch_size,
+            patch,
+            patch,
+        )[:, :, :, :, :, 0]
+        .permute(4, 0, 2, 5, 1, 3, 6)
+        .reshape(1, channel, height, width)
+    )
+    fill = _normalized(
+        torch.full((1, channel, 1, 1), PAD_FILL, dtype=torch.uint8), settings
+    )
+    new_h, new_w = (target, width) if height < width else (height, target)
+    top, left = (new_h - height) // 2, (new_w - width) // 2
+    canvas = fill.expand(1, channel, new_h, new_w).clone()
+    canvas[:, :, top : top + height, left : left + width] = normalized
+    padded = _layout(canvas, f"{image.digest}:pad{new_h}x{new_w}", settings)
+    frame = (left / new_w, top / new_h, (left + width) / new_w, (top + height) / new_h)
+    return padded, frame

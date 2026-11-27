@@ -1,0 +1,1 @@
+recipes[default].signals.domains[Math]: invalid_value: a domain rule named for a domain in another case matched that domain, since rule names were matched in any case; run `vllm-sr config migrate` (the domain in lower case, in the rule and each condition, score input and partition that names it)

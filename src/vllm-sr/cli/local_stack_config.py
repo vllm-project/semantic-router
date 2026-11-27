@@ -3,7 +3,7 @@
 `vllm-sr serve` never hands the Router the source file as written: it adds the
 stack's own wiring -- a management listener the published port reaches, the
 endpoints of the stack's service and store containers, tracing, knowledge-base
-paths -- and the platform and algorithm defaults the stack was started with.
+paths -- and the algorithm override the stack was started with.
 `config plan` and `config apply` send a source file with that same wiring when
 they talk to a local stack, so the Router keeps every connection `serve` made,
 and a later `serve` of the same file finds the document it would have written.
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from cli.bootstrap import is_setup_mode_config
 from cli.commands.runtime_paths import (
     _runtime_config_filename,
     materialize_runtime_config,
+    read_config_source,
     resolve_state_root_dir,
 )
 from cli.commands.runtime_support import (
@@ -41,10 +43,19 @@ from cli.pending_activation import (
     record_pending_activation,
 )
 from cli.runtime_config_lock import acquire_runtime_config_lock
+from cli.runtime_service_status import _router_management_port
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
+
+if typing.TYPE_CHECKING:
+    from cli.commands.runtime_paths import ConfigSourceRevision
 
 CONTAINER_STATE_DIR = "/app/.vllm-sr"
 _INSPECT_TIMEOUT_SECONDS = 15
+_LOOPBACK_BINDINGS = {
+    "localhost": frozenset({"127.0.0.1", "0.0.0.0", "::1", "::"}),
+    "127.0.0.1": frozenset({"127.0.0.1", "0.0.0.0"}),
+    "::1": frozenset({"::1", "::"}),
+}
 
 
 @dataclass(frozen=True)
@@ -53,7 +64,6 @@ class LocalStack:
 
     layout: RuntimeStackLayout
     state_dir: Path
-    platform: str | None
     algorithm: str | None
 
     def owns(self, config_path: Path) -> bool:
@@ -64,6 +74,26 @@ class LocalStack:
 
     def runtime_config(self) -> Path:
         return self.state_dir / _runtime_config_filename(self.layout.stack_name)
+
+    def publishes_management_endpoint(self, host: str, port: int) -> bool:
+        """Match the Router's startup listener to its actual host publication."""
+
+        container_name = self.layout.router_container_name
+        try:
+            management_port = _router_management_port(container_name)
+        except (OSError, ValueError, SystemExit):
+            return False
+        bindings = _container_ports(container_name).get(f"{management_port}/tcp")
+        if not isinstance(bindings, list):
+            return False
+        addresses = _LOOPBACK_BINDINGS.get(host, frozenset())
+        return any(
+            isinstance(binding, dict)
+            and binding.get("HostPort") == str(port)
+            and isinstance(binding.get("HostIp"), str)
+            and binding.get("HostIp") in addresses
+            for binding in bindings
+        )
 
 
 def local_stack() -> LocalStack | None:
@@ -88,7 +118,6 @@ def local_stack() -> LocalStack | None:
     return LocalStack(
         layout=layout,
         state_dir=Path(state_dir),
-        platform=env.get("VLLM_SR_PLATFORM") or env.get("DASHBOARD_PLATFORM") or None,
         algorithm=env.get(RUNTIME_ALGORITHM_OVERRIDE_ENV) or None,
     )
 
@@ -100,11 +129,16 @@ def stack_document(stack: LocalStack, config_path: Path) -> str:
         config_path,
         stack.algorithm,
         is_setup_mode_config(config_path),
-        stack.platform,
     ).decode("utf-8")
 
 
-def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> Path:
+def save_pending_restart(
+    stack: LocalStack,
+    config_path: Path,
+    detail: str,
+    *,
+    expected_source: ConfigSourceRevision | None = None,
+) -> Path:
     """Save a change that needs a restart for the next `vllm-sr serve`.
 
     The runtime config holds the document `serve` would materialize from
@@ -121,11 +155,12 @@ def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> P
         timeout_seconds=0,
     )
     try:
+        if expected_source is not None:
+            read_config_source(config_path, expected_source)
         document = build_effective_config_bytes(
             config_path,
             stack.algorithm,
             is_setup_mode_config(config_path),
-            stack.platform,
         )
         materialize_runtime_config(
             config_path,
@@ -133,6 +168,7 @@ def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> P
             state_root_dir=state_root,
             stack_name=stack.layout.stack_name,
             replace_active=True,
+            expected_source=expected_source,
         )
         record_pending_activation(
             runtime_config, document, REASON_RESTART, detail, origin=ORIGIN_CLI
@@ -167,3 +203,30 @@ def _container_env(container_name: str) -> dict[str, str]:
             name, value = entry.split("=", 1)
             env[name] = value
     return env
+
+
+def _container_ports(container_name: str) -> dict:
+    """Return active published ports, without adopting a stopped container."""
+
+    try:
+        result = subprocess.run(
+            [
+                get_container_runtime(),
+                "container",
+                "inspect",
+                "--format",
+                '{"running":{{json .State.Running}},"ports":{{json .NetworkSettings.Ports}}}',
+                container_name,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=_INSPECT_TIMEOUT_SECONDS,
+        )
+        inspection = json.loads(result.stdout or "null")
+    except (OSError, subprocess.SubprocessError, ValueError, SystemExit):
+        return {}
+    if not isinstance(inspection, dict) or inspection.get("running") is not True:
+        return {}
+    ports = inspection.get("ports")
+    return ports if isinstance(ports, dict) else {}

@@ -28,12 +28,15 @@ def workflow(filename):
 class DisplayNameTests(unittest.TestCase):
     def test_categories_do_not_change_execution_or_verification_identity(self):
         records = catalog.verification_records(load_domain_registry())
-        image = records["platform.image-calibration-cpu"]
-        self.assertEqual(image["category"], "conformance")
-        self.assertEqual(image["executor"], "platform")
-        self.assertEqual(image["runtime"], "model-runtime")
-        self.assertEqual(records["recipe-conformance"]["category"], "conformance")
-        self.assertEqual(records["e2e.multimodal-routing"]["category"], "e2e")
+        models = records["platform.models-cpu"]
+        self.assertEqual(models["category"], "runtime")
+        self.assertEqual(models["executor"], "platform")
+        self.assertEqual(models["runtime"], "model-runtime")
+        recipes = records["recipe-conformance"]
+        self.assertEqual(recipes["category"], "conformance")
+        self.assertEqual(recipes["executor"], "recipes")
+        self.assertEqual(recipes["runtime"], "model-runtime")
+        self.assertEqual(records["e2e.model-runtime"]["category"], "e2e")
         self.assertEqual(catalog.catalog_errors(load_domain_registry()), [])
         modified = copy.deepcopy(catalog.load_catalog())
         modified["verifications"]["core"].pop("category")
@@ -95,10 +98,9 @@ class DisplayNameTests(unittest.TestCase):
                 source_sha="a" * 40,
                 requested=(
                     "platform.models-cpu",
-                    "platform.image-calibration-cpu",
                     "local.memory",
                     "cli-unit",
-                    "e2e.vela-omni",
+                    "e2e.envoy-ai-gateway",
                 ),
             ),
         ):
@@ -162,7 +164,7 @@ class DisplayNameTests(unittest.TestCase):
             )
         )
         summary = render_plan_summary(plan)
-        self.assertIn("Tests / Conformance | Image Routing Conformance", summary)
+        self.assertIn("Tests / Runtime | Published Models", summary)
         self.assertIn("Tests / Conformance | Recipe Preview", summary)
         for filename, job in (
             ("test-platform.yml", "contracts"),
@@ -188,6 +190,10 @@ class DisplayNameTests(unittest.TestCase):
         for name, job in jobs.items():
             if name != "gate":
                 self.assertNotIn("image-distribution", job.get("needs", []))
+        # Accelerator builds wait for the cheap source checks, never for tests.
+        self.assertEqual(
+            jobs["image-distribution"]["needs"], ["plan", "quality", "generated"]
+        )
 
 
 if __name__ == "__main__":

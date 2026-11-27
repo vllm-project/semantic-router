@@ -61,19 +61,152 @@ components otherwise default to enabled when the master switch is enabled.
 
 | Scope | What is protected | What can re-route |
 | --- | --- | --- |
-| `conversation` | Turns sharing one `x-conversation-id`. | A new `x-conversation-id` in the same `x-session-id`. |
-| `session` | Turns sharing one `x-session-id`. | Idle timeout or a decision with `adaptations.mode: bypass`. |
+| `conversation` | Turns sharing one `x-conversation-id`; without one, turns of the session that share how their conversation starts. | A new `x-conversation-id` or a new conversation in the same `x-session-id`, or an explicit release. |
+| `session` | Turns sharing one `x-session-id`. | Idle timeout, a decision with `adaptations.mode: bypass`, or an explicit release. |
 
-Use `conversation` when each agent run should be independently routed. Use
-`session` when one session-level model choice should remain stable across
-multiple user-initiated runs. In `conversation` scope, a changed decision resets
-minimum-turn and continuity-cost preferences. In `session` scope, a changed
-decision or conversation alone does not release an eligible current model;
-idle timeout, bypass, candidate exclusion, or qualified rescue can release it.
-Neither scope can retain a previous model outside the admitted candidate set.
+- **Use `conversation`** when each agent run should be routed on its own. A
+  changed decision resets the minimum-turn and continuity-cost preferences.
+- **Use `session`** when one model choice should hold across several
+  user-initiated runs. A changed decision or conversation alone does not
+  release an eligible current model; idle timeout, bypass, candidate exclusion,
+  qualified rescue or an explicit release can.
+- **Neither scope** can keep a previous model outside the admitted candidate
+  set.
 
-If the configured identity headers are missing, protection fails open and
-records diagnostics instead of failing the request.
+If the session header is missing, protection fails open and records
+diagnostics instead of failing the request. A missing conversation header is
+not a failure: under `scope: conversation` the Router names the conversation by
+how it starts, its first instructions and user message, so each conversation of
+the session keeps its own key. See
+[Session identification](../../api/session-identification#choose-the-identity-you-need).
+
+### Agents that delegate to subagents
+
+A harness such as Claude Code sends one session ID for a run and its subagents.
+Protection reads the agent each request is for and holds each agent on its own
+model, so a subagent keeps the model chosen for its first request, under the
+same rules as a session, while its parent keeps its own. Claude Code, Codex
+CLI and OpenCode need no identity headers configured for this:
+
+```yaml
+protection:
+  enabled: true
+  scope: session
+```
+
+- **Claude Code** sends `x-claude-code-session-id` on every request and
+  `x-claude-code-agent-id` only on subagent requests, so the main agent keeps
+  its session key and each subagent gets its own.
+- **Codex CLI** sends `session-id` and `thread-id` on every request. A root
+  thread sends its own ID in both, and a subagent or review child that Codex
+  starts on it keeps the root's `session-id` and sends its own `thread-id`.
+  The root thread is therefore the main agent and keeps its session key, also
+  when the request pins another session, and each child gets its own.
+- **Both Codex IDs stay the same** across tool continuations and across turns
+  after `codex exec resume`, so protection holds the root and each child on
+  their own models for the whole session. `codex exec review` starts a new
+  session, so its review child gets its own key either way.
+- **Claude Code side requests**, such as its session title and its
+  compactions, carry the session ID of the agent they serve. With
+  `CLAUDE_CODE_GATEWAY_HINT_HEADERS=1` Claude Code also sends
+  `x-claude-code-request-class`, and a request whose class is not `main`,
+  `subagent` or `workflow` is held under a key of its own class beside its
+  agent's. Each class keeps the model its first request got, and a side
+  request never sets or moves its agent's model or replaces its cache
+  receipt, even when the title request is the session's first call. Route
+  them with the `agent` signal's `request_classes`.
+- **OpenCode** sends its session in `x-session-id` on every request. A
+  subagent runs in a child session of its own and also sends the session that
+  spawned it in `x-parent-session-id`. Unless the request pins a session in
+  `x-vsr-session-id`, the subagent is keyed as an agent of that session under
+  its own child session id, while the main agent keeps the session key.
+
+[Session identification](../../api/session-identification#choose-the-identity-you-need)
+lists the headers read by default. `identity.headers` replaces them: naming
+`agent` holds agents by that header alone, and an `agent` header your harness
+does not send holds every subagent on the model its parent was given, even
+when a decision routes the subagent's request elsewhere.
+
+These headers were checked with Codex CLI 0.167.0 and 0.166.0, Claude Code
+2.1.325 and OpenCode 1.18.10, configured as the
+[protocol compatibility guide](../../installation/protocol-compatibility)
+requires.
+
+To choose a subagent's model and effort by its kind, for example exploration
+subagents on a small model at low effort and reviews on a strong model at high
+effort, route on the [`agent`](../signal/heuristic/agent) signal. It reads the
+same agent identity, so protection then holds each subagent on the model its
+first request got.
+
+### Explicit release
+
+A harness that knows its task has changed phase can ask for a fresh decision
+without starting a new session. It sends the release header on one request;
+protection releases the hold on that request's key, runs the recipe again and
+holds whatever the recipe selects.
+
+- **One run.** The session ID does not change, so Replay and run-level
+  reporting keep one run.
+- **A new decision, not a new model.** The recipe can select the same model
+  again.
+
+```yaml
+protection:
+  release:
+    enabled: true                        # default
+    header: x-vsr-protection-release     # default
+    min_user_turns_between: 2            # default; 0 removes the limit
+```
+
+Any non-empty value requests a release. It applies only to the request's
+protection key: with an `agent` header configured, releasing one subagent
+leaves the main agent and the other subagents held.
+
+The Router removes the header before the request reaches a backend, whether or
+not release is enabled. Config load therefore accepts only an `x-` header name,
+and rejects:
+
+- an identity header;
+- a credential header, such as `x-api-key` or `x-goog-api-key`;
+- a gateway header: `x-envoy-*`, `x-authz-*`, `x-forwarded-*`, `x-request-id`;
+- another `x-vsr-` control header.
+
+A release is honored only when all of these hold:
+
+| Condition | Otherwise |
+| --- | --- |
+| The key already holds a model. A new session or agent gets a normal first decision instead. | — |
+| The request is at a portable turn boundary, with no active tool loop and no nonportable context. | `release_not_at_turn_boundary` |
+| At least `min_user_turns_between` user turns lie between the last honored release on the key and this one. | `release_interval` |
+| `release.enabled` is not `false`. | `release_disabled` |
+| Protection runs in `apply` mode for the request. | `protection_bypassed` (a decision with `adaptations.mode: bypass`), `protection_disabled`, `missing_identity`, or `release_observe_only` (`protection.mode: observe`) |
+
+With the default `min_user_turns_between: 2`, a release on turn 3 allows the
+next one on turn 6, and `0` removes the limit. A user turn is a request outside
+a tool loop; tool hops do not count.
+
+What a release does:
+
+- **Refused:** the current hold stays, the reason appears in `x-vsr-warnings`,
+  and the interval is not used up.
+- **Honored:** it skips the held-model shortcut and rescue. Hard candidate
+  eligibility still applies, and Replay records `release_switch` with the
+  previous and selected model.
+- **Honored, same model:** when the recipe selects the held model again, the
+  interval is still used up, and Replay records `hold_current` with the reason
+  `release_kept_current`.
+- **With the progress gate:** its evidence, cooldown and oscillation rules
+  don't suppress a release; the interval replaces them, and the gate trace
+  records `bypassed_by_release`.
+- **Under `protection.mode: observe`:** routing is unchanged, and the release
+  is recorded as not honored, without using up the interval.
+
+:::warning
+Do not put the release header in Claude Code's `ANTHROPIC_CUSTOM_HEADERS`.
+That setting is fixed at startup and sent on every request, so every request
+would ask for a release. Protection would then re-decide every
+`min_user_turns_between + 1` user turns, which effectively turns the hold off.
+:::
 
 ## Guards
 
@@ -90,28 +223,159 @@ The switch rule is:
 switch if proposal_gain >= switch_margin + stability_weight * switch_cost
 ```
 
-Protection can also allow a deterministic `rescue_switch` after repeated
-backend failures or replay-linked outcomes identify the current model as
-underpowered. With protection identity present, backend `429` and `5xx`
-responses supply failure observations even when adaptation is disabled; this
-does not enable adaptive model choice or quality updates. A correction or
-retry prompt alone is not an owned model outcome, though its signals can change
-the matched decision. Rescue requires another eligible proposal and sufficient
-evidence; it is not immediate backend failover.
+When the last response's cache counts and both models' cache prices are
+known, the cache part of `switch_cost` is priced in money instead; see
+[Cache economics](#cache-economics).
 
-Rescue is limited to eligible models at a portable turn boundary. It cannot
-override an active tool-loop lock or a nonportable-context lock. Minimum-turn
-and session-continuity preferences may yield to rescue when those hard
-boundaries are absent. Adaptation and protection also preserve any candidate
-restrictions imposed by the decision's selector, including lexicographic bands.
+Protection can also allow a deterministic `rescue_switch` when repeated
+backend failures or replay-linked outcomes show the current model is
+underpowered:
 
-With protection in `apply` mode and the configured identity present, a hard
-ownership lock whose previous model is outside the admitted pool returns
-`503` instead of transferring ownership or forcing that model. Router-owned
-Responses history becomes portable after the router has expanded it into the
-complete stateless request; its retained `previous_response_id` alone does not
-create a lock. An active tool loop still does. Unknown response IDs fail during
-history lookup, before selection.
+- **Failure evidence.** With protection identity present, backend `429` and
+  `5xx` responses supply failure observations, even when adaptation is
+  disabled. This doesn't enable adaptive model choice or quality updates.
+- **Not an outcome.** A correction or retry prompt alone is not an owned model
+  outcome, though its signals can change the matched decision.
+- **Not failover.** Rescue needs another eligible proposal and enough
+  evidence; it is not immediate backend failover.
+- **After a fallback.** When a decision's
+  [fallback](../../installation/model-configuration#fall-back-to-another-model)
+  candidate answers in place of the failed model, the key passes to the
+  candidate, so the next request is held on the model that answered and holds
+  its cache, not sent to the failing model again.
+
+Rescue boundaries:
+
+- Rescue is limited to eligible models at a portable turn boundary. It cannot
+  override an active tool-loop lock or a nonportable-context lock.
+- When those hard locks are absent, minimum-turn and session-continuity
+  preferences can yield to rescue.
+- Adaptation and protection keep any candidate restrictions from the
+  decision's selector, lexicographic bands included.
+
+Ownership locks, with protection in `apply` mode and the configured identity
+present:
+
+- **Outside the pool:** a hard lock whose previous model is outside the
+  admitted pool returns `503`, instead of transferring ownership or forcing
+  that model.
+- **Responses history** becomes portable once the Router has expanded it into
+  the complete stateless request; a retained `previous_response_id` alone
+  creates no lock. Unknown response IDs fail during history lookup, before
+  selection.
+- **An active tool loop** locks while the conversation stays on the decision
+  that admitted the loop. When classification moves to another decision, the
+  lock releases and the new decision routes from its own candidates, traced as
+  `decision_drift`.
+- **Opaque provider state** stays bound to the model that created it.
+
+## Cache Economics
+
+A prompt cache belongs to the model that wrote it. When protection would move
+a conversation or an agent to another model, it prices the switch against the
+cache it would throw away, from the usage of the last response on that
+protection key:
+
+```yaml
+global:
+  router:
+    learning:
+      protection:
+        tuning:
+          cache_economics:
+            enabled: true                # default
+            cache_ttl_seconds: 300       # default
+            default_remaining_turns: 3   # default
+```
+
+| Number | What it is |
+| --- | --- |
+| prefix | The last response's cache reads plus cache writes: what the next request on the current model would read. |
+| current turn cost | The last response priced at the current model's rates, its cached tokens at the cache-read rate. |
+| proposed turn cost | The same response priced at the proposed model's rates, once its cache holds the prefix. |
+| rewrite cost | prefix × (proposed cache-write rate − proposed cache-read rate): the proposed model's first request writes the prefix instead of reading it. The 1-hour write rate applies when the last response wrote 1-hour entries. |
+| saving | (current turn cost − proposed turn cost) × remaining turns. |
+
+Remaining turns come from the remaining-turn prior protection already reads
+when one applies, otherwise from `default_remaining_turns`.
+
+The switch goes ahead when:
+
+- the saving covers the rewrite (`switch_pays`);
+- the proposed model costs no less per turn, so the routing chose it for
+  quality, not price (`proposal_not_cheaper`); the cost is still recorded;
+- the last response is older than the cache lifetime (`cache_expired`);
+- nothing was cached (`no_warm_cache`).
+
+Otherwise protection keeps the current model (`switch_does_not_pay`). For
+example, with 19,000 tokens cached on a model priced $3 input, $0.30 cache
+read, $3.75 cache write and $15 output per million tokens, a last response with
+1,000 uncached input tokens and 500 output tokens costs $0.01965:
+
+- A model at a third of those prices costs $0.00655 for the same turn, saves
+  $0.0393 over 3 turns and rewrites the prefix for $0.02185: the switch goes
+  ahead.
+- A model at 90% of them saves $0.0059 over 3 turns but rewrites the prefix for
+  $0.0590: the current model is kept.
+
+Cache lifetime:
+
+- **`cache_ttl_seconds`** counts from the last response, because providers
+  refresh an entry each time it is read. A response that wrote 1-hour entries
+  extends the lifetime to 3600 seconds.
+- **Match your providers.** Anthropic keeps entries 5 minutes after their last
+  use by default, or 1 hour on request
+  ([prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching));
+  OpenAI keeps them 5 to 10 minutes idle and up to an hour, or up to 24 hours
+  with extended retention
+  ([prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)).
+
+When the receipts decide a switch, the switch guard's estimated prefix-cache
+penalty and benefit drop out for that switch; stay bias, handoff, switch
+margin, switch history and tool-loop terms still apply. When a value is
+missing, the switch guard decides as before and replay records why:
+
+| Reason | Missing value |
+| --- | --- |
+| `no_receipt` | No response has been recorded on the key yet. |
+| `receipt_other_model` | The last response came from another model. |
+| `cache_not_reported` | The backend reported no cache reads or writes. |
+| `no_cache_price` | A model has no `pricing`, or neither `cached_input_per_1m` nor `cache_write_per_1m`. |
+| `currency_mismatch` | The two models are priced in different currencies. |
+
+The economics do not apply to an honored release, a rescue switch or a hard
+lock. Under `scope: session` the session, each subagent and each side request
+are held on their current model before the switch guard runs, as
+[Agents that delegate to subagents](#agents-that-delegate-to-subagents)
+describes, so the economics apply once the idle timeout has released the
+hold. Under `scope: conversation` every proposed switch is priced, the
+subagents' included. Long-context price tiers are not modeled.
+
+Replay records the proposed switch in `session_policy.cache_economics`, and
+each priced candidate in `session_policy.candidate_traces.<model>.cache_economics`:
+
+```json
+{
+  "decision": "hold",
+  "reason": "switch_does_not_pay",
+  "current_model": "premium",
+  "proposed_model": "near",
+  "currency": "USD",
+  "cached_prefix_tokens": 19000,
+  "cache_age_seconds": 60,
+  "cache_ttl_seconds": 300,
+  "remaining_turns": 3,
+  "remaining_turns_source": "default",
+  "current_turn_cost": 0.01965,
+  "proposed_turn_cost": 0.017685,
+  "rewrite_cost": 0.058995,
+  "saving": 0.005895
+}
+```
+
+`decision` is `hold`, `switch` or `fallback`. A switch the receipts refused
+shows `reason=cache_switch_does_not_pay` in the `learning` member of
+`x-vsr-trace`, and one they allowed on price shows `reason=cache_switch_pays`.
 
 ## Progress Gate
 
@@ -145,42 +409,59 @@ global:
             max_switches_per_window: 2
 ```
 
-The gate is disabled when the section or `enabled` is omitted. `enabled` and
-`mode` are independent: `observe` records soft evidence decisions without
-applying them; `enforce` applies them. Neither mode relaxes hard constraints.
-The outer protection `apply`/`observe`/`bypass` modes remain separate.
+- **Off by default.** The gate is disabled when the section or `enabled` is
+  omitted.
+- **Modes.** `enabled` and `mode` are independent: `observe` records soft
+  evidence decisions without applying them, and `enforce` applies them.
+  Neither relaxes hard constraints, and the outer protection
+  `apply`/`observe`/`bypass` modes stay separate.
 
-`calibration_id` identifies the external profile that supplied the thresholds,
-using `name@version`. It is required when enabling `enforce`; an empty value in
-`observe` explicitly means uncalibrated defaults. For example,
-`team/session-policy@2026-09` is an identity, not a calibration result. The
-router neither trains a calibrator nor verifies the quality of that profile.
-Do not use the synthetic E2E fixture identity as a production calibration.
+`calibration_id` names the external profile that supplied the thresholds, as
+`name@version`:
 
-`window_size` accepts 1–256 samples; `window_ttl_seconds` accepts 1–86400 seconds.
-Threshold relationships are validated after omitted fields receive defaults.
-For example, reducing the window to two samples also requires reducing the
-default `min_window_outcomes: 3`. Evidence TTL is distinct from session idle
-expiry and the shared store's retention TTL. Retained history cannot be
-recreated by subsequently increasing the window.
+- It is required for `enforce`; an empty value in `observe` means
+  uncalibrated defaults.
+- `team/session-policy@2026-09` is an identity, not a calibration result: the
+  Router neither trains a calibrator nor checks the profile's quality.
+- Don't use the synthetic E2E fixture identity as a production calibration.
+
+Windows and validation:
+
+- `window_size` accepts 1–256 samples, and `window_ttl_seconds` 1–86400
+  seconds.
+- Threshold relationships are validated after omitted fields get their
+  defaults: reducing the window to two samples also means reducing the default
+  `min_window_outcomes: 3`.
+- Evidence TTL is separate from session idle expiry and the shared store's
+  retention TTL. Raising the window later cannot recreate history that has
+  expired.
 
 ### Evidence and decisions
 
-Response capture records positive output as `progress`, explicitly reported
-zero output as `no_progress`, and unavailable usage as `missing`. Positive
-output is a transport-level proxy, not a claim that the answer was correct.
-Authenticated, owned outcome ingest can refine a turn to `progress` or
-`regression`. Known provider failures remain non-attributable even if a later
-verdict says `failed`. `tool_error` is supported as a typed fact; the response
-path does not guess tool success from a tool message's presence.
+What each outcome means:
 
-Facts are bounded by count and event time. Duplicate request/model samples
-merge; different models and unknown request identities do not. Ingest owns the
-quality verdict, capture owns measured usage, and known infrastructure failure
-provenance wins over both. Missing confidence, cost, or latency remains unknown,
-not a fabricated zero. Cost trends use configured pricing; latency trends use
-observed time to first token. These optional trends are exposed for replay,
-not used as an additional undocumented selection score.
+| Outcome | Source |
+| --- | --- |
+| `progress` | Positive output in response capture: a transport-level proxy, not a claim that the answer was correct. Authenticated, owned outcome ingest can also set it. |
+| `no_progress` | Explicitly reported zero output. |
+| `missing` | Usage unavailable. |
+| `regression` | Authenticated, owned outcome ingest. |
+| `tool_error` | A typed fact; the response path doesn't guess tool success from a tool message's presence. |
+
+Known provider failures stay non-attributable, even if a later verdict says
+`failed`.
+
+How facts combine:
+
+- **Bounded** by count and event time. Duplicate request/model samples merge;
+  different models and unknown request identities do not.
+- **Ownership.** Ingest owns the quality verdict, capture owns measured usage,
+  and known infrastructure-failure provenance wins over both.
+- **Unknown stays unknown.** Missing confidence, cost or latency is never a
+  fabricated zero.
+- **Trends.** Cost trends use configured pricing, and latency trends use
+  observed time to first token. They are exposed for replay, not used as a
+  hidden selection score.
 
 | Reason | Condition |
 | --- | --- |
@@ -190,29 +471,42 @@ not used as an additional undocumented selection score.
 | `cooldown` | Time since the last recorded model change is below the configured interval |
 | `oscillation_guard` | The age-bounded window already contains the configured maximum switches |
 
-Escalation requires consecutive same-category negative outcomes and a
-non-positive progress trend; de-escalation requires consecutive recoveries.
-Known de-escalation is determined from the same quality index and exact
-candidate reasoning effort. Missing or incomparable quality evidence uses the
-conservative escalation path. Missing and non-attributable outcomes neither
-extend nor break a streak, but do not count toward attributable coverage.
+Streaks:
+
+- **Escalation** needs consecutive same-category negative outcomes and a
+  non-positive progress trend; **de-escalation** needs consecutive recoveries.
+- **Direction** comes from the same quality index and the exact candidate
+  reasoning effort. Missing or incomparable quality evidence takes the
+  conservative escalation path.
+- **Gaps.** Missing and non-attributable outcomes neither extend nor break a
+  streak, and don't count toward attributable coverage.
 
 ### Hard constraints and Replay
 
 Before applying a proposal or restoring the current model, the integration
-rechecks the existing candidate boundary, configured backend, context limit,
-protocol capabilities, portability locks, and the selected algorithm's hard
-SLO/quality filters. The gate cannot introduce a candidate excluded by policy.
-If the current model is no longer eligible, a soft suppression cannot restore
-it. When no eligible outcome remains, the request fails closed through the
-existing selection error path.
+rechecks:
 
-Replay's `session_policy.switch_gate` contains the evidence version,
-`calibration_id`, evidence metrics and their availability, decision/reason,
-switch direction, candidate names, switch history, and actual application.
-`enforced` describes the gate mode; `applied`, `application_reason`, and
-`final_model` describe what happened. A hard lock can apply in either mode.
-A rejected rescue is retained in `rescue_switch_gate` alongside the eventual
+- the existing candidate boundary and configured backend;
+- the context limit and protocol capabilities;
+- portability locks;
+- the selected algorithm's hard SLO and quality filters.
+
+The gate cannot introduce a candidate that policy excludes. If the current
+model is no longer eligible, a soft suppression cannot restore it; when no
+eligible outcome remains, the request fails closed through the existing
+selection error path.
+
+Replay's `session_policy.switch_gate` records:
+
+- the evidence version, `calibration_id`, the evidence metrics and their
+  availability;
+- the decision and reason, switch direction, candidate names and switch
+  history;
+- what happened: `enforced` describes the gate mode, while `applied`,
+  `application_reason` and `final_model` describe the outcome. A hard lock can
+  apply in either mode.
+
+A rejected rescue is kept in `rescue_switch_gate`, beside the eventual
 main-path decision. A non-switch does not invent a gate verdict.
 
 The maintained `progress-gate` E2E profile exercises request capture, authenticated
@@ -226,15 +520,16 @@ Most decisions do not need local configuration. Use `bypass` for hard policy
 boundaries:
 
 ```yaml
-routing:
-  decisions:
-    - name: local_privacy_policy
-      description: Keep privacy-sensitive traffic on the local model.
-      priority: 200
-      modelRefs:
-        - model: local-private-model
-      adaptations:
-        mode: bypass
+recipes:
+  - name: default
+    decisions:
+      - name: local_privacy_policy
+        description: Keep privacy-sensitive traffic on the local model.
+        priority: 200
+        modelRefs:
+          - model: local-private-model
+        adaptations:
+          mode: bypass
 ```
 
 Use `observe` to collect diagnostics without changing the final model:
@@ -248,16 +543,17 @@ adaptations:
 ## Diagnostics
 
 ```http
-x-vsr-learning-methods: protection
-x-vsr-learning-actions: protection=hold_current
-x-vsr-learning-scopes: protection=conversation
-x-vsr-learning-reasons: protection=cache_cost_high
+x-vsr-trace: session_phase=user_turn, learning=(protection;action=hold_current;scope=conversation;reason=cache_cost_high)
 ```
 
-Client UIs should translate raw actions into user-facing text. For example,
-`hold_current` can display as "kept run model", `allow_switch` as "switch
-allowed", `rescue_switch` as "rescue switch", and `bypass` as "learning
-bypassed".
+Client UIs should translate raw actions into user-facing text:
+
+| Action | Display as |
+| --- | --- |
+| `hold_current` | "kept run model" |
+| `allow_switch` | "switch allowed" |
+| `rescue_switch` | "rescue switch" |
+| `bypass` | "learning bypassed" |
 
 Router Replay stores the full protection trace: identity source and hash,
 protected model, base model, proposal model, final model, switch cost, cache

@@ -1,0 +1,186 @@
+# Existing skills only. Proposed skills are listed in README.md until they ship.
+skills:
+  - id: vllm-sr-agent-operations
+    name: vllm-sr-agent-operations
+    audience: user
+    source: tools/agent/skills/vllm-sr-agent-operations/SKILL.md
+    published: website/static/install/agent/vllm-sr/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Install, serve, configure, verify, maintain, or troubleshoot a Router stack.
+    prerequisites: Terminal access, supported Docker or Kubernetes path, and a model endpoint.
+    inputs: Host and backend details, requested task, and deployment constraints.
+    outputs: Validated config, route evidence, or an operational report.
+    handoff: Ask before changing an existing stack, exposing ports, or activating traffic.
+    support: v0.5 workflow; check the installed CLI schema and current support matrix.
+
+  - id: vllm-sr-serve
+    name: vllm-sr-serve
+    audience: user
+    source: tools/agent/skills/vllm-sr-serve/SKILL.md
+    published: website/static/install/agent/vllm-sr-serve/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-serve/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Start or verify a local Router stack or decision-model Engine mode with vllm-sr serve.
+    prerequisites: Supported Docker or Podman host, CLI, and a complete Router config or model artifact.
+    inputs: Mode, platform, model endpoint or artifact, and stack directory.
+    outputs: Startup receipt and route or System One readiness evidence.
+    handoff: Review an existing stack, config replacement, exposed port, or stop before changing it.
+    support: v0.5 local-image Router and Engine modes; check installed CLI and support matrix.
+
+  - id: vllm-sr-decision-model
+    name: vllm-sr-decision-model
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-decision-model/SKILL.md
+    published: website/static/install/agent/vllm-sr-decision-model/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Resolve model-backed recipe signals and verify decision-model answers or unknowns.
+    prerequisites: Canonical config, a public entrypoint, a representative request, and read access to Router evidence.
+    inputs: Entry point, recipe, config version, request fixture, and model-runtime access.
+    outputs: Question-to-deployment map, readiness and answer evidence, and a traced routing diagnosis.
+    handoff: Escalate model/runtime faults or propose a reviewed recipe change with fixed probes.
+    support: v0.5 model catalog and maintained recipes; use installed schema and model cards.
+
+  - id: vllm-sr-configure-recipe
+    name: vllm-sr-configure-recipe
+    audience: user
+    source: tools/agent/skills/vllm-sr-configure-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-configure-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-configure-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Turn workload goals and available backends into a reviewable recipe and entrypoint candidate.
+    prerequisites: Complete canonical config or active Router config, supported CLI, and verified backend facts.
+    inputs: Workload, objectives, constraints, backend capabilities, and baseline config identity.
+    outputs: Candidate YAML, redacted diff, validation and plan receipts, and an apply handoff.
+    handoff: Ask the reviewer to activate the candidate through the existing config workflow.
+    support: v0.5 canonical config and maintained recipe bundles; plan requires a running Router.
+
+  - id: vllm-sr-diagnose-routing
+    name: vllm-sr-diagnose-routing
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-diagnose-routing/SKILL.md
+    published: website/static/install/agent/vllm-sr-diagnose-routing/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Explain an unexpected route, fallback, or failed routed response from Router evidence.
+    prerequisites: Public entrypoint, bounded request, expected result, and read access to Router preview or probe.
+    inputs: Request fixture, active config identity, management origin, inference listener, and expected route.
+    outputs: Signal/decision trace, selected route, delivery evidence, and first failing boundary.
+    handoff: Give one targeted next check or an evidence-backed issue reproduction.
+    support: v0.5 route preview/probe and public header contract; debug trace requires permission.
+
+  - id: vllm-sr-benchmark
+    name: vllm-sr-benchmark
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-benchmark/SKILL.md
+    published: website/static/install/agent/vllm-sr-benchmark/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-benchmark/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Plan and run a reproducible sr-bench preview, replay, or live evaluation.
+    prerequisites: Prepared dataset, reachable targets, running sr-bench service, and live-call authorization when applicable.
+    inputs: Frozen cases, config hash, target revisions, request settings, judges, prices, and limits.
+    outputs: Frozen plan, run ID, coverage reconciliation, metrics, and provenance report.
+    handoff: Review expected calls and cost before any live run not already authorized.
+    support: sr-bench 1.0; preview and replay do not establish live answer quality.
+
+  - id: vllm-sr-compare-configurations
+    name: vllm-sr-compare-configurations
+    audience: user-and-contributor
+    source: tools/agent/skills/vllm-sr-compare-configurations/SKILL.md
+    published: website/static/install/agent/vllm-sr-compare-configurations/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-compare-configurations/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Compare paired Router configuration runs and explain pass, fail, or insufficient evidence.
+    prerequisites: Two durable sr-bench run IDs and a prespecified objective and guard floors.
+    inputs: Frozen manifests, run reports, compatibility options, config identities, and paired service result.
+    outputs: Paired coverage, metrics, limitations, and evidence-backed verdict.
+    handoff: Human reviews any candidate promotion or recipe-lab iteration.
+    support: sr-bench 1.0 live comparison contract; replay and preview remain diagnostic.
+
+  - id: vllm-sr-tune-recipe
+    name: vllm-sr-tune-recipe
+    audience: contributor
+    source: tools/agent/skills/vllm-sr-tune-recipe/SKILL.md
+    published: website/static/install/agent/vllm-sr-tune-recipe/SKILL.md
+    public_url: https://vllm-sr.ai/install/agent/vllm-sr-tune-recipe/SKILL.md
+    distribution: public-website
+    owner: Developer Experience & Ecosystem
+    trigger: Move from diagnosed misroute to one measured recipe change and a calibration or recipe-lab handoff.
+    prerequisites: Reproducible route evidence, canonical recipe, frozen development cases, and guard floors.
+    inputs: Baseline config/hash, trace, candidate diff, probe manifest, and paired run IDs.
+    outputs: Validated candidate, before/after evidence, and keep/revert/inconclusive explanation.
+    handoff: Human reviews promotion; recipe-lab owns its ledger when available.
+    support: Maintained v0.5 recipes; #5497 owns automated recipe-lab implementation.
+
+  - id: router-contract-change
+    name: router-contract-change
+    audience: contributor
+    source: tools/agent/skills/router-contract-change/SKILL.md
+    distribution: repository
+    owner: Affected Workgroup
+    trigger: Change a request-visible config, signal, decision, algorithm, or plugin contract.
+    prerequisites: Repository checkout and the nearest AGENTS.md instructions.
+    inputs: Changed contract and affected paths.
+    outputs: Consistent source, generated artifacts, docs, and verification.
+    handoff: Obtain cross-Workgroup review for affected contracts.
+    support: Current main branch.
+
+  - id: routing-calibration
+    name: routing-calibration
+    audience: contributor
+    source: tools/agent/skills/routing-calibration/SKILL.md
+    distribution: repository
+    owner: MoM & Routing / Evaluation & Quality
+    trigger: Probe or calibrate a maintained recipe against live backends.
+    prerequisites: Versioned probe manifest and explicit model endpoints.
+    inputs: Recipe, probe cases, and endpoint references.
+    outputs: Evidence report and reviewed recipe changes.
+    handoff: Review quality evidence and rollback point before promotion.
+    support: Current maintained recipes and probe schema.
+
+  - id: maintainer-ops
+    name: maintainer-ops
+    audience: maintainer
+    source: tools/agent/skills/maintainer-ops/SKILL.md
+    distribution: repository
+    owner: Maintainers
+    trigger: Review issue, PR, release, or GitHub lifecycle actions.
+    prerequisites: Maintainer authorization and current GitHub state.
+    inputs: Exact issue, PR, release, or head revision.
+    outputs: Reviewed proposal or authorized GitHub action.
+    handoff: Apply only after the documented maintainer review.
+    support: Current main branch and maintainer policy.
+
+  - id: vsr-claude-code-setup
+    name: setup
+    audience: claude-code-user
+    source: src/agent-harness/claude-code/skills/setup/SKILL.md
+    distribution: claude-code-plugin
+    owner: Agentic & Context
+    trigger: Set up or repair the vSR Claude Code plugin runtime and settings.
+    prerequisites: vSR Claude Code plugin installation.
+    inputs: Machine and runtime choice, app selection, and thresholds.
+    outputs: Validated plugin settings and runtime probe.
+    handoff: Review settings diff and token handling before applying.
+    support: Plugin-bundled runtime version; follow its DEVELOPMENT.md.
+
+  - id: vsr-claude-code-calibrate
+    name: calibrate
+    audience: claude-code-user
+    source: src/agent-harness/claude-code/skills/calibrate/SKILL.md
+    distribution: claude-code-plugin
+    owner: Agentic & Context
+    trigger: Tune vSR plugin thresholds from a user's own decision log.
+    prerequisites: Working vSR plugin and enough recorded decisions.
+    inputs: Decision log and user labels.
+    outputs: Suggested threshold change and before/after evidence.
+    handoff: Apply only after the user reviews the suggestion.
+    support: Plugin-bundled runtime version; follow its DEVELOPMENT.md.

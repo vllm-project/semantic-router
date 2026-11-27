@@ -14,7 +14,9 @@
   context, approximate kernels, reduced copies) needs an accuracy record under
   `docs/records/` that shows no accuracy loss, and is otherwise an engine
   argument that stays off by default. `--dtype auto` keeps each model's
-  published precision.
+  published precision, except that Decision 3.0 computes in FP32 on CPUs
+  (`docs/records/d3-cpu-fp32.md`) other than a class that computes BF16
+  natively and has its own BF16 references (`docs/records/d3-cpu-bf16-native.md`).
 - Never import or execute code shipped inside a model package, and never use
   `trust_remote_code`.
 - Unit tests use the tiny fixtures in `vllm_srun/testing/fixtures.py`.

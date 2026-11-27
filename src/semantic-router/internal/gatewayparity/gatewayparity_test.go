@@ -3,6 +3,7 @@ package gatewayparity
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -76,8 +77,12 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 	}
 	frontend := httptest.NewServer(handler)
 	defer frontend.Close()
+	// Each corpus case states its client's Accept-Encoding; the client must
+	// not add one of its own or decode the reply for the test.
+	client := frontend.Client()
+	client.Transport.(*http.Transport).DisableCompression = true
 
-	records := parity.RecordWire(context.Background(), frontend.Client(), frontend.URL, backend, corpus.Cases)
+	records := parity.RecordWire(context.Background(), client, frontend.URL, backend, corpus.Cases)
 	for _, got := range records {
 		t.Run(got.Case, func(t *testing.T) {
 			want := loadParityRecord(t, got.Case)
@@ -86,24 +91,31 @@ func TestNativeGatewayServesTheParityCorpus(t *testing.T) {
 			}
 			assertSameClientResponse(t, want.Response, got.Response)
 			assertSameUpstreamRequest(t, want, got)
-			if code, ok := routingFailureCodes[got.Case]; ok {
-				assertRoutingFailureCode(t, got.Response, code)
+			if failure, ok := routingFailureCodes[got.Case]; ok {
+				assertRoutingFailureCode(t, got.Response, failure)
 			}
 		})
 	}
 }
 
 // routingFailureCodes are the corpus cases the Router cannot route, with the
-// reason code both modes must return for them.
-var routingFailureCodes = map[string]string{
-	"unknown-model":          "model_not_found",
-	"unpublished-flow-model": "model_not_found",
+// status and reason code both modes must return for them.
+var routingFailureCodes = map[string]routingFailure{
+	"unknown-model":          {status: 404, code: "model_not_found"},
+	"unpublished-flow-model": {status: 404, code: "model_not_found"},
+	"images-api-text-route":  {status: 400, code: "image_route_required"},
+	"images-api-no-decision": {status: 400, code: "image_route_required"},
 }
 
-func assertRoutingFailureCode(t *testing.T, response *parity.Message, code string) {
+type routingFailure struct {
+	status int
+	code   string
+}
+
+func assertRoutingFailureCode(t *testing.T, response *parity.Message, failure routingFailure) {
 	t.Helper()
-	if response.Status != 400 {
-		t.Fatalf("status = %d, want 400", response.Status)
+	if response.Status != failure.status {
+		t.Fatalf("status = %d, want %d", response.Status, failure.status)
 	}
 	var body struct {
 		Error struct {
@@ -114,8 +126,8 @@ func assertRoutingFailureCode(t *testing.T, response *parity.Message, code strin
 	if err := json.Unmarshal(response.Body, &body); err != nil {
 		t.Fatalf("the error body is not JSON: %v: %s", err, response.Body)
 	}
-	if body.Error.Type != "invalid_request_error" || body.Error.Code != code {
-		t.Fatalf("error = %+v, want an invalid_request_error with code %q", body.Error, code)
+	if body.Error.Type != "invalid_request_error" || body.Error.Code != failure.code {
+		t.Fatalf("error = %+v, want an invalid_request_error with code %q", body.Error, failure.code)
 	}
 }
 

@@ -68,7 +68,7 @@ responses. The Router coordinates the semantic work between them.
 
 ## Start with what you want to do
 
-- **Run it locally:** follow the [Quickstart](/docs/installation) and send a
+- **Run it locally:** follow the [Quickstart](/docs/v0.4/installation) and send a
   request through the Router.
 - **Find the pattern for your workload:** explore [use cases](overview/use-cases)
   from cloud and data center to edge and enterprise deployments.

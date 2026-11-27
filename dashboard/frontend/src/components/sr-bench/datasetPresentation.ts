@@ -15,6 +15,12 @@ const benchmarkTitles: Record<string, string> = {
 }
 
 export const benchmarkTitle = (id: string) => benchmarkTitles[id] ?? id.replace(/[-_]/g, ' ')
+
+/** The catalog's title when it is more than the id itself, else the known display name. */
+export const catalogBenchmarkTitle = (id: string, catalog?: { id: string; title?: string }[]) => {
+  const title = catalog?.find((benchmark) => benchmark.id === id)?.title
+  return title && title !== id ? title : benchmarkTitle(id)
+}
 export const profileTitle = (id?: string) =>
   ({ smoke: 'Smoke', quick: 'Quick', standard: 'Standard' })[id ?? ''] ?? 'Custom'
 export const profileDescription = (id?: string) =>

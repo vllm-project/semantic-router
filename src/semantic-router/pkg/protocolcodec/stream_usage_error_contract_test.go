@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -295,28 +297,79 @@ func assertAnthropicCacheAccounting(t *testing.T, events []llmprotocol.Event) {
 	}
 }
 
-func TestStreamStateRequiresCompleteToolLifecycle(t *testing.T) {
+// An output limit can end a call inside its arguments. Only a max_tokens stop
+// explains that, and the stop arrives after the item ends.
+func TestStreamStateAcceptsCutToolArgumentsOnlyAtMaxTokens(t *testing.T) {
+	for _, stop := range []llmprotocol.StopReason{llmprotocol.StopToolCall, llmprotocol.StopEndTurn, llmprotocol.StopMaxTokens} {
+		t.Run(string(stop), func(t *testing.T) {
+			state := newTestStreamState()
+			startTestStream(t, state)
+			if _, err := state.next(llmprotocol.Event{
+				Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
+				Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := state.next(llmprotocol.Event{
+				Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
+				ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			completed, err := state.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if completed.ToolCall == nil || completed.ToolCall.Arguments != `{"query":` {
+				t.Fatalf("completed tool call = %+v", completed.ToolCall)
+			}
+			_, err = state.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: stop})
+			if stop == llmprotocol.StopMaxTokens && err != nil {
+				t.Fatalf("a call cut by max_tokens was refused: %v", err)
+			}
+			if stop != llmprotocol.StopMaxTokens && err == nil {
+				t.Fatalf("incomplete streamed tool arguments were accepted with stop %s", stop)
+			}
+		})
+	}
+}
+
+// A limit cuts only the final output, so another item after a cut call means
+// the arguments were malformed.
+func TestStreamStateRejectsOutputAfterACutToolCall(t *testing.T) {
 	state := newTestStreamState()
 	startTestStream(t, state)
-	if _, err := state.next(llmprotocol.Event{
-		Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
-		Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
-	}); err != nil {
-		t.Fatal(err)
+	for _, event := range []llmprotocol.Event{
+		{
+			Type: llmprotocol.EventOutputItemStarted, ItemIndex: 0, ItemID: "tool_item",
+			Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup"},
+		},
+		{
+			Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
+			ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
+		},
+		{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0},
+	} {
+		if _, err := state.next(event); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err := state.next(llmprotocol.Event{
-		Type: llmprotocol.EventToolCallDelta, ItemIndex: 0,
-		ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: `{"query":`},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := state.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: 0}); err == nil {
-		t.Fatal("incomplete streamed tool arguments were accepted")
+	_, err := state.next(llmprotocol.Event{
+		Type: llmprotocol.EventOutputItemStarted, ItemIndex: 1, ItemID: "tool_item_2",
+		Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: "call_2", Name: "lookup"},
+	})
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "invalid_stream_tool_arguments" {
+		t.Fatalf("an item after a cut call = %v, want invalid_stream_tool_arguments", err)
 	}
 }
 
 func TestStreamStateRejectsMalformedAndNonObjectToolArguments(t *testing.T) {
-	for _, arguments := range []string{`{`, `[]`, `true`, `null`, `{"query":1,"query":2}`} {
+	// A cut prefix gets no exemption from the duplicate-key and depth rules.
+	for _, arguments := range []string{
+		`[]`, `true`, `null`, `{"query":1,"query":2}`, `{"query":1}}`, `{"query" 1`,
+		`{"query":1,"query":2,"x":`, `{"query":` + strings.Repeat("[", 200),
+	} {
 		t.Run(arguments, func(t *testing.T) {
 			state := newTestStreamState()
 			startTestStream(t, state)
@@ -337,6 +390,67 @@ func TestStreamStateRejectsMalformedAndNonObjectToolArguments(t *testing.T) {
 				t.Fatalf("streamed tool arguments %q were accepted", arguments)
 			}
 		})
+	}
+}
+
+// The rejection's cause names the arguments' length and shape so the Router log
+// can tell a model-generation anomaly from a codec splice one, while the
+// arguments themselves — file contents, commands, user data — stay out of the
+// log, and the client frame keeps the same code and message.
+func TestNonObjectToolArgumentsErrorNamesOnlyTheShape(t *testing.T) {
+	arguments := `{"command":"echo hi","args":` + strings.Repeat("x", 1024)
+	err := nonObjectToolArgumentsErrorWithShape([]byte(arguments))
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) || protocolError.Code != "invalid_stream_tool_arguments" {
+		t.Fatalf("non-object arguments = %v, want invalid_stream_tool_arguments", err)
+	}
+	if protocolError.Cause == nil {
+		t.Fatal("the rejection carried no diagnostic cause")
+	}
+	cause := protocolError.Cause.Error()
+	if !strings.Contains(cause, "arguments length 1052, shape object fragment") {
+		t.Fatalf("the cause lost the length or shape: %s", cause)
+	}
+	if strings.Contains(cause, "echo hi") || strings.Contains(cause, "xxx") {
+		t.Fatalf("the cause retained the payload: %s", cause)
+	}
+	if len(cause) > 100 {
+		t.Fatalf("the cause is unbounded: %d bytes", len(cause))
+	}
+}
+
+func TestToolArgumentsShapeNamesTheFirstStructuralByte(t *testing.T) {
+	cases := map[string]string{
+		``:                    "empty",
+		"  \n\t":              "empty",
+		`{"command":"ls"`:     "object fragment",
+		`[1,2`:                "array fragment",
+		`"double encoded"`:    "quoted text",
+		"<tool_call>x":        "markup",
+		"run the command now": "plain text",
+	}
+	for arguments, want := range cases {
+		if got := toolArgumentsShape([]byte(arguments)); got != want {
+			t.Fatalf("shape of %q = %q, want %q", arguments, got, want)
+		}
+	}
+}
+
+// A call cut mid-arguments is rejected only when the terminal event disproves
+// the limit; its payload is gone by then, so the rejection keeps the length and
+// shape recorded when the cut was detected.
+func TestCutToolArgumentsKeepTheirEvidence(t *testing.T) {
+	state := newTestStreamState()
+	state.ensureCollections()
+	state.toolArguments[0] = []byte(`{"a":1`)
+	if _, err := state.finalToolArguments(llmprotocol.Event{ItemIndex: 0}, ""); err != nil {
+		t.Fatalf("a truncated object was rejected early: %v", err)
+	}
+	if !state.cutToolArguments || state.cutToolArgumentsEvidence == nil {
+		t.Fatal("a truncated object was not recorded as a possible cut")
+	}
+	if got := state.cutToolArgumentsEvidence.Error(); got != "arguments length 6, shape object fragment" {
+		t.Fatalf("cut evidence = %q", got)
 	}
 }
 

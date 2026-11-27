@@ -6,24 +6,25 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // TestPrimaryOutputDigestIsTakenBeforeABodyWarning holds the order the buffered
 // path has to keep.
 //
-// A hallucination or unverified-factual rule with the body action prepends
-// router text to the same response the digest is read from, and it runs before
-// the replay record is attached. Hashing after that credits the warning to the
+// A response_guard rule that annotates with details prepends router text to
+// the same response the digest is read from, and it runs before the replay
+// record is attached. Hashing after that credits the warning to the
 // model, and a shadow arm, which no response-stage plugin touches, then reports
 // a different digest for the same answer.
 func TestPrimaryOutputDigestIsTakenBeforeABodyWarning(t *testing.T) {
-	server, _ := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
-	router, ctx := newHallucinationSignalRouter(t, server, "body")
+	server, _ := newHallucinationDecider([]string{"450 meters"}, false)
+	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
 	recorder := startResponseStageReplay(t, router, ctx)
 	ctx.TargetFormat = llmprotocol.OpenAIChatV1
 
-	router.handleNonStreamingResponseBody(upstreamAnswerBody(hallucinationAnswer), ctx, 0)
+	router.handleNonStreamingResponseBody(upstreamAnswerBody(hallucinationAnswer), ctx, 0, false)
 
 	// Without this the test would pass on a response nothing rewrote.
 	delivered := semanticResponseText(*ctx.SemanticResponse)

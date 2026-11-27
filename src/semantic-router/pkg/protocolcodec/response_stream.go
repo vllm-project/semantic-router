@@ -30,12 +30,15 @@ func (engine *Engine) EncodeResponseStream(
 	if encodeResponseStreamErr != nil {
 		return nil, nil, encodeResponseStreamErr
 	}
+	diagnostics := projectReasoningContinuity(context.Source, format, pair.buffered.Capabilities(), &response)
+	diagnostics = appendDiagnostics(diagnostics,
+		projectReasoningSignature(engine.policy, context.Source, format, pair.buffered.Capabilities(), &response), engine.policy.Limits.Diagnostics)
 	if err := llmprotocol.RequireCapabilities(
 		format,
 		pair.buffered.Capabilities(),
 		llmprotocol.RequiredResponseCapabilities(response),
 	); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	context.PublicModel = response.Model
 	context.ResponseID = response.ID
@@ -48,7 +51,6 @@ func (engine *Engine) EncodeResponseStream(
 		return nil, nil, encodeResponseStreamErr
 	}
 	var body bytes.Buffer
-	var diagnostics llmprotocol.Diagnostics
 	for _, event := range events {
 		frames, eventDiagnostics, pushErr := encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.policy.Limits.Diagnostics)
@@ -74,7 +76,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		failed := llmprotocol.Event{
 			Type: llmprotocol.EventResponseFailed, ResponseID: response.ID,
 			Model: response.Model, StopReason: llmprotocol.StopError, Error: response.Error,
-			Failure: llmprotocol.FailureResponse,
+			Failure: llmprotocol.FailureResponse, CreatedAt: response.CreatedAt,
 		}
 		if response.Usage.State != "" {
 			usage := response.Usage
@@ -86,6 +88,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		Type:       llmprotocol.EventResponseStarted,
 		ResponseID: response.ID,
 		Model:      response.Model,
+		CreatedAt:  response.CreatedAt,
 	}
 	if response.Usage.State != "" {
 		usage := response.Usage
@@ -138,7 +141,8 @@ func groupResponseStreamContent(contents []llmprotocol.Content) []responseStream
 	groups := make([]responseStreamContentGroup, 0, len(contents))
 	for _, content := range contents {
 		family := responseStreamContentFamily(content.Kind)
-		if family == llmprotocol.ContentToolCall || len(groups) == 0 || groups[len(groups)-1].family != family {
+		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool ||
+			len(groups) == 0 || groups[len(groups)-1].family != family {
 			groups = append(groups, responseStreamContentGroup{family: family})
 		}
 		groups[len(groups)-1].contents = append(groups[len(groups)-1].contents, content)
@@ -183,6 +187,12 @@ func neutralContentGroupEvents(
 			)
 		}
 		return neutralToolCallEvents(started, completed, group.contents[0])
+	}
+	if group.family == llmprotocol.ContentServerTool {
+		// A server tool block streams whole, as the Messages decoder hands it
+		// on: one item that starts with the block and completes.
+		started.Content = &group.contents[0]
+		return []llmprotocol.Event{started, completed}, nil
 	}
 
 	events := []llmprotocol.Event{started}
@@ -257,10 +267,10 @@ func neutralReasoningDeltaEvents(
 
 func neutralToolCallEvents(started, completed llmprotocol.Event, content llmprotocol.Content) ([]llmprotocol.Event, error) {
 	if content.ToolCall == nil {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "neutral tool call is missing", nil)
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_call_missing", "tool call is missing", nil)
 	}
 	call := *content.ToolCall
-	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name}
+	started.ToolCall = &llmprotocol.ToolCall{ID: call.ID, Name: call.Name, Namespace: call.Namespace}
 	completed.ToolCall = &call
 	delta := started
 	delta.Type = llmprotocol.EventToolCallDelta

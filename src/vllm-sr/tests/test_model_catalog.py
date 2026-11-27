@@ -160,6 +160,28 @@ def test_packaged_latest_catalog_is_verified() -> None:
     assert all(model.verified for model in catalog.models)
 
 
+def test_virtual_models_do_not_advertise_non_chat_protocols() -> None:
+    protocols = [
+        {"id": "openai/chat-completions@1", "capabilities": ["chat", "streaming"]},
+        {"id": "openai/audio-speech@1", "capabilities": ["speech_generation"]},
+    ]
+
+    assert model_catalog._parse_catalog_protocols(protocols) == (
+        "openai/chat-completions@1",
+    )
+
+
+def test_packaged_catalog_loader_reads_the_catalog_as_safe_load_does() -> None:
+    text = (
+        model_catalog._model_assets_root()
+        .joinpath("latest", "catalog.yaml")
+        .read_text(encoding="utf-8")
+    )
+    expected = yaml.safe_load(text)
+
+    assert yaml.load(text, Loader=model_catalog._CATALOG_LOADER) == expected
+
+
 def test_native_protocol_does_not_expand_chat_recipe_interfaces() -> None:
     shared = packaged_model_catalog_document()
     assert any(

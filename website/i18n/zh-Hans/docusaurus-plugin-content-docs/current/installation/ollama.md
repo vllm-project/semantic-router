@@ -1,4 +1,5 @@
 ---
+is_mtpe: false
 sidebar_position: 3
 description: 分步指南：用 Ollama 服务本地模型，并通过设置控制面板或 YAML 配置将其连接到 vLLM Semantic Router。
 translation:
@@ -24,7 +25,7 @@ Semantic Router 在 `vllm-sr serve` 期间运行在 Docker 中。名称 `host.do
 
 ## 前置条件
 
-- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/zh-Hans/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
+- 已安装 Semantic Router，并且可以用 [`vllm-sr serve`](/docs/installation) 运行（Linux、macOS，或带 Docker 的 WSL2）
 - Ollama 安装在运行 Docker 的**同一台机器**上
 - 至少有一个模型所需的磁盘空间（例如，`llama3.2:3b` 大约 2 GB）
 
@@ -144,7 +145,7 @@ vllm-sr serve
 
 如果当前目录中还不存在 `config.yaml`，控制面板会以**设置模式**在 [http://localhost:8700](http://localhost:8700) 打开。
 
-在 **Step 1 — Connect model** 上注册你的 Ollama 模型：
+在 **Step 1 — Connect models** 上注册你的 Ollama 模型：
 
 | 字段 | 值 |
 | --- | --- |
@@ -152,19 +153,21 @@ vllm-sr serve
 | **Provider** | **Ollama** |
 | **Base URL or host** | `host.docker.internal:11434` |
 | **Endpoint label** | `primary`（或任何简短标签） |
-| **Default** | 如果这是你唯一的后端，选择此模型 |
+| **Default** | 第一个模型即为默认模型；要改用其他模型，在该模型上选择 **Make default** |
 
 选择 **Ollama** 会写入 Ollama 后端引用；在本地容器部署中，默认地址是
 `host.docker.internal:11434`。Router 据此识别 Ollama，并用其支持的
 `max_tokens` 字段传递输出 token 上限。如果 Ollama 运行在其他主机，请替换默认地址。
 
-当 model card 校验通过后，点击 **Next**。
+当 model card 校验通过后，点击 **Continue**。
 
 ## 6. 选择路由并激活
 
 在 **Step 2 — Choose routing** 上，如果只注册了一个 Ollama 模型，请保留 **From scratch**（一条默认的兜底路由）。稍后添加更多后端时，可以导入预设或远程配置。
 
-在 **Step 3 — Review & activate** 上，确认模型摘要，然后点击 **Activate**。
+在 **Step 3 — Decision model** 上，保留推荐的决策模型。
+
+在 **Step 4 — Review & activate** 上，确认模型摘要，然后点击 **Activate router**。
 
 激活会写入配置并退出设置模式。终端里仍在等待的 `vllm-sr serve` 随后启动 Router，由它在端口 `8899` 提供服务，并把请求路由到你的 Ollama 后端。
 
@@ -199,8 +202,7 @@ JSON 聊天补全响应表示 Ollama 已正确接入。
 如果希望直接编辑 YAML 而不是使用控制面板，添加类似这样的模型条目：
 
 ```yaml
-version: v0.3
-
+version: v0.5
 providers:
   defaults:
     model: llama3.2:3b
@@ -214,21 +216,21 @@ providers:
           protocol: http
           provider: ollama
           weight: 100
-
-routing:
-  modelCards:
-    - name: llama3.2:3b
-  decisions:
-    - name: default-route
-      description: Route all requests to the local Ollama model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+recipes:
+  - name: default
+    decisions:
+      - name: default-route
+        description: Route all requests to the local Ollama model.
+        priority: 100
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: llama3.2:3b
+            use_reasoning: false
 ```
+
+该后端不使用密钥。无论是路由的请求还是 Router 自身发起的调用（例如影子请求），Router 都不会向 `ollama` 后端发送密钥，并会忽略其上设置的 `api_key` 或 `auth.api_key_env`。如果服务位于会校验密钥的代理之后，请使用 provider `openai-compatible`。
 
 校验并启动服务：
 

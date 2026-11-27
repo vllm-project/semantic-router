@@ -69,8 +69,9 @@ not request previews. A collaborator with current **write**, **maintain**, or
 PR targeting `main` to build its current head commit, including fork PRs.
 
 The **Netlify Preview** workflow builds that exact commit and uploads the static
-site as a draft. Its `netlify-preview/PR-<number>` commit status and Actions summary
-link to the preview. Repeated requests for a pending or successful commit are
+site as a draft. It comments the preview link on the PR, updating its one comment
+on each new preview, and its `netlify-preview/PR-<number>` commit status and
+Actions summary link to it too. Repeated requests for a pending or successful commit are
 skipped; failed requests can be retried with a new `/netlify` comment. Each new
 commit needs a new comment. A PR that closes or changes head before publication
 does not publish the old build. Editing a comment does not trigger a build.
@@ -133,6 +134,14 @@ Treat the current website redesign as the default design contract for all public
 - **Custom landing, publications, community, and white-paper routes**
 - **Theme overrides** for docs and blog shells
 - **Local docs search** in the navbar, with no external search service (see below)
+
+### Recipe discovery
+
+`/recipes` is built from the standalone sources under `config/recipes/`.
+Update a recipe's metadata, Model Card, or YAML there rather than maintaining a
+second website copy. Provider-model links use the generated Model Hub catalog.
+The website test suite checks that the page receives the original YAML and
+derives its entrypoints and model requirements from that configuration.
 
 ### Search
 

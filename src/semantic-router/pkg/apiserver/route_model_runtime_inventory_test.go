@@ -31,8 +31,8 @@ func TestModelRuntimeInventoryListsPublishedDeploymentsWithoutCredentials(t *tes
 		"guard": {Provider: config.ModelRuntimeProvider, Endpoint: endpoint},
 	}
 	for _, name := range []string{"guard", "kai"} {
-		cfg.DecisionRules = append(cfg.DecisionRules, config.DecisionSignalRule{
-			Name: "hard_" + name, Deployment: name, Question: config.DecisionQuestion{Type: "noul", Instructions: "Hard?"},
+		cfg.SystemOneRules = append(cfg.SystemOneRules, config.SystemOneRule{
+			Name: "hard_" + name, Deployment: name, Question: config.SystemOneQuestion{Type: "noul", Instructions: "Hard?"},
 		})
 	}
 	manager := modelservice.NewManager()

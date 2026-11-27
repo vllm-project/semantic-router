@@ -211,7 +211,17 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, hpa)
 		if err == nil {
-			return r.Delete(ctx, hpa)
+			if !metav1.IsControlledBy(hpa, sr) {
+				return nil
+			}
+			// The read above may come from a stale cache. Delete only if the
+			// HPA is still the exact object we checked; if it was replaced by
+			// another HPA with the same name, the API server returns a
+			// Conflict and the next reconcile re-reads it.
+			return r.Delete(ctx, hpa, client.Preconditions{
+				UID:             &hpa.UID,
+				ResourceVersion: &hpa.ResourceVersion,
+			})
 		}
 		return nil
 	}
@@ -242,7 +252,7 @@ func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1a
 	return nil
 }
 
-func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
+func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	if sr.Spec.Ingress.Enabled == nil || !*sr.Spec.Ingress.Enabled {
 		ing := &networkingv1.Ingress{}
 		err := r.Get(ctx, types.NamespacedName{Name: sr.Name, Namespace: sr.Namespace}, ing)
@@ -252,7 +262,7 @@ func (r *SemanticRouterReconciler) reconcileIngress(ctx context.Context, sr *vll
 		return nil
 	}
 
-	ing := r.generateIngress(sr)
+	ing := r.generateIngress(sr, gatewayMode)
 	if err := controllerutil.SetControllerReference(sr, ing, r.Scheme); err != nil {
 		return err
 	}
@@ -289,6 +299,7 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 				sr.Status.Replicas = 0
 				sr.Status.ReadyReplicas = 0
 				sr.Status.Phase = "Pending"
+				meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 				meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 					ObservedGeneration: sr.Generation,
 					Type:               typeAvailableSemanticRouter,
@@ -313,6 +324,7 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 				Reason:             "Pending",
 				Message:            "No replicas are ready",
 			})
+			meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 		} else if deployment.Status.ReadyReplicas < deployment.Status.Replicas {
 			sr.Status.Phase = "Progressing"
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{

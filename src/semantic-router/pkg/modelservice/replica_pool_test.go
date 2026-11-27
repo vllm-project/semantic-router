@@ -45,7 +45,7 @@ func testDeclaredReplicaPool(t *testing.T, declaration config.ModelDeployment, m
 			runtime.Handler().ServeHTTP(w, r)
 		}))
 		t.Cleanup(server.Close)
-		declaration.Replicas = append(declaration.Replicas, config.ModelReplica{Endpoint: server.URL, ServedName: model.ID})
+		declaration.Replicas = append(declaration.Replicas, config.ModelReplica{Endpoint: server.URL, Model: model.ID})
 	}
 	manager := NewManager()
 	t.Cleanup(func() { _ = manager.Shutdown(context.Background()) })
@@ -229,7 +229,7 @@ func TestReplicaPoolDrainsAcceptedExchangeAcrossLeaseClose(t *testing.T) {
 	defer server.Close()
 	manager := NewManager()
 	defer func() { _ = manager.Shutdown(context.Background()) }()
-	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, Replicas: []config.ModelReplica{{Endpoint: server.URL, ServedName: "worker"}}}})
+	lease, err := manager.AcquireDeployments(map[string]config.ModelDeployment{"primary": {Provider: config.ModelRuntimeProvider, Artifact: poolArtifact, Replicas: []config.ModelReplica{{Endpoint: server.URL, Model: "worker"}}}})
 	if err != nil {
 		t.Fatal(err)
 	}

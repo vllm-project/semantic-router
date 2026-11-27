@@ -122,13 +122,14 @@ test('create uses the connected model name while keeping target ID as selection 
   page,
 }) => {
   await mockNaming(page)
-  await page.goto('/evaluation?view=new')
-  await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
-  const option = page.locator('[role="option"][data-value="short-alias"]')
-  await expect(option).toContainText(canonicalModel)
-  await expect(option).not.toContainText('short-alias')
+  await page.goto('/observe/evaluations?view=new')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  const option = page.locator('[data-target-id="short-alias"]')
+  const row = page.locator('label').filter({ has: option })
+  await expect(row).toContainText(canonicalModel)
+  await expect(row).not.toContainText('short-alias')
   await option.click()
-  await expect(page.getByRole('group', { name: canonicalModel, exact: true })).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: canonicalModel, exact: true })).toBeChecked()
   await expect(
     page.getByRole('region', { name: `${canonicalModel} request profile`, exact: true }),
   ).toBeVisible()
@@ -139,9 +140,11 @@ test('saved result and call labels resolve the frozen model rather than its targ
   page,
 }) => {
   await mockNaming(page)
-  await page.goto(`/evaluation?view=runs&run=${run.id}`)
+  await page.goto(`/observe/evaluations?view=runs&run=${run.id}`)
   const results = page.getByRole('tabpanel', { name: 'Results', exact: true })
-  await expect(results.getByRole('rowheader', { name: canonicalModel, exact: true })).toBeVisible()
+  await expect(
+    results.getByRole('rowheader', { name: canonicalModel, exact: true }).first(),
+  ).toBeVisible()
   await expect(results.getByText(`${canonicalModel}: route`, { exact: true })).toBeVisible()
   await page.getByRole('tab', { name: 'Questions', exact: true }).click()
   const questions = page.getByRole('tabpanel', { name: 'Questions', exact: true })

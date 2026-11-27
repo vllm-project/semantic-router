@@ -6,12 +6,16 @@ its first sub-word token. Decoding labels each word by its most probable label
 above the threshold, votes and fills inside a unit, joins neighbours with the
 same label and trims brackets, quotes and URL tails. Every rule reproduces the
 packages' engine exactly (``vela2_inference.py``), including its float32
-decoding and its character classes.
+decoding and its character classes, except two boundary rules the packages
+get wrong: a span keeps an edge bracket whose partner lies inside it (the
+"(" of "(415) 555-0100"), and its end takes in the combining marks that
+follow it (the U+0301 of a decomposed "José").
 """
 
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import TYPE_CHECKING, TypedDict
@@ -51,7 +55,43 @@ EDGE = frozenset(
     "[](){}<>\u300c\u300d\u300e\u300f\u3010\u3011\u300a\u300b\u3008\u3009"
     "\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u2039\u203a"
 )
+# The bracket pairs of ``EDGE``, opening to closing.
+BRACKETS = {
+    "(": ")",
+    "[": "]",
+    "{": "}",
+    "<": ">",
+    "\u300c": "\u300d",
+    "\u300e": "\u300f",
+    "\u3010": "\u3011",
+    "\u300a": "\u300b",
+    "\u3008": "\u3009",
+}
+OPENING = {closing: opening for opening, closing in BRACKETS.items()}
 URL_TRAIL = frozenset(".,;:!?)")
+# The tokenizers join one punctuation mark to the letters after it (",mina" in
+# "Park,mina@example.com"), so the mark's word reads the label of the value
+# after it and the decoder opens that value's span on it. The runtime's answers
+# drop these marks at a span's edges, and the decoder keeps them, as released.
+# ':', '.' and '/' stay: an IPv6 address, an abbreviation or a URL can begin or
+# end with one.
+SEPARATOR = frozenset(",;=|")
+
+
+@dataclass(frozen=True)
+class Dialect:
+    """How a package's decoder groups words into units and trims spans.
+
+    ``units`` splits the text into the units whose words vote together;
+    ``url_tails`` trims a URL span's trailing punctuation and CJK tail.
+    """
+
+    units: re.Pattern[str]
+    url_tails: bool
+
+
+# The Vela 2.0 packages' decoder (``vela2_inference.py``).
+VELA2 = Dialect(_UNIT, url_tails=True)
 
 
 @dataclass(frozen=True)
@@ -103,10 +143,12 @@ def words_of(text: str, token_offsets: NDArray[np.int32] | None) -> Words:
     return Words(spans[covered].astype(np.int32), token[covered].astype(np.int32))
 
 
-def _word_units(text: str, offsets: NDArray[np.int32]) -> NDArray[np.intp]:
-    """The unit (of ``_UNIT``) each word's first non-space character belongs to, -1 for none."""
+def _word_units(
+    text: str, offsets: NDArray[np.int32], units: re.Pattern[str]
+) -> NDArray[np.intp]:
+    """The unit (of ``units``) each word's first non-space character belongs to, -1 for none."""
     bounds = np.asarray(
-        [match.span() for match in _UNIT.finditer(text)], np.int64
+        [match.span() for match in units.finditer(text)], np.int64
     ).reshape(-1, 2)
     first = offsets[:, 0].astype(np.int64)
     for index in np.nonzero([text[a].isspace() for a in first.tolist()])[0]:
@@ -124,13 +166,52 @@ def _word_units(text: str, offsets: NDArray[np.int32]) -> NDArray[np.intp]:
     return np.where(inside, unit, -1)
 
 
-def trim(text: str, start: int, end: int) -> tuple[int, int]:
-    """Drop surrounding whitespace, brackets and quotes, and a URL's trailing punctuation or CJK tail."""
-    while start < end and (text[start].isspace() or text[start] in EDGE):
+def without_separators(text: str, start: int, end: int) -> tuple[int, int]:
+    """``[start, end)`` without the separators and whitespace at its edges."""
+    while start < end and (text[start] in SEPARATOR or text[start].isspace()):
         start += 1
-    while end > start and (text[end - 1].isspace() or text[end - 1] in EDGE):
+    while end > start and (text[end - 1] in SEPARATOR or text[end - 1].isspace()):
         end -= 1
-    if not _URL_START.match(text, start):
+    return start, end
+
+
+def _partner_inside(text: str, start: int, end: int, at: int) -> bool:
+    """Whether the bracket at ``at`` (``start`` or ``end - 1``) has its partner strictly inside ``[start, end)``."""
+    mark = text[at]
+    if mark in BRACKETS and at == start:
+        partner, step, stop = BRACKETS[mark], 1, end
+    elif mark in OPENING and at == end - 1:
+        partner, step, stop = OPENING[mark], -1, start - 1
+    else:
+        return False
+    depth = 0
+    for index in range(at, stop, step):
+        if text[index] == mark:
+            depth += 1
+        elif text[index] == partner:
+            depth -= 1
+            if depth == 0:
+                return index not in (start, end - 1)
+    return False
+
+
+def trim(text: str, start: int, end: int, *, url_tails: bool = True) -> tuple[int, int]:
+    """Drop surrounding whitespace, brackets and quotes, and (``url_tails``) a URL's trailing punctuation or CJK tail.
+
+    An edge bracket whose partner lies inside the span stays: ``(415) 555-0100`` keeps its ``(``, while the pair
+    around ``(tom@example.com)`` goes.
+    """
+    while start < end and (
+        text[start].isspace()
+        or (text[start] in EDGE and not _partner_inside(text, start, end, start))
+    ):
+        start += 1
+    while end > start and (
+        text[end - 1].isspace()
+        or (text[end - 1] in EDGE and not _partner_inside(text, start, end, end - 1))
+    ):
+        end -= 1
+    if not url_tails or not _URL_START.match(text, start):
         return start, end
     cjk = _CJK_CHAR.search(text, start, end)
     if cjk:
@@ -155,6 +236,8 @@ def decode_spans(
     labels: list[str],
     text: str,
     threshold: float,
+    *,
+    dialect: Dialect = VELA2,
 ) -> list[DecodedSpan]:
     """Labelled spans from word x label probabilities (the packages' word readout decoder).
 
@@ -163,7 +246,10 @@ def decode_spans(
     compare). Inside one unit of the text, conflicting labels are resolved by
     summed probability and gaps between labelled words are filled; only units
     that hold a labelled word can change. Consecutive words with the same label
-    form a span, whose probability is the mean over its words.
+    form a span, whose probability is the mean over its words; a trimmed span
+    ends after the combining marks that follow it.
+
+    ``dialect`` is the package's unit split and trimming (``VELA2`` here).
     """
     probs = np.asarray(probabilities, dtype=np.float32)
     offsets = np.asarray(offsets)
@@ -176,7 +262,7 @@ def decode_spans(
     labelled = np.nonzero(label >= 0)[0]
     if not len(labelled):
         return []
-    unit = _word_units(text, offsets)
+    unit = _word_units(text, offsets, dialect.units)
     change = np.ones(count, bool)
     change[1:] = unit[1:] != unit[:-1]
     run_start = np.nonzero(change)[0]
@@ -203,9 +289,16 @@ def decode_spans(
         value = int(label[begin])
         if value < 0:
             continue
-        start, end = trim(text, int(offsets[begin, 0]), int(offsets[stop - 1, 1]))
+        start, end = trim(
+            text,
+            int(offsets[begin, 0]),
+            int(offsets[stop - 1, 1]),
+            url_tails=dialect.url_tails,
+        )
         if end <= start:
             continue
+        while end < len(text) and unicodedata.category(text[end]).startswith("M"):
+            end += 1
         spans.append(
             {
                 "start": start,

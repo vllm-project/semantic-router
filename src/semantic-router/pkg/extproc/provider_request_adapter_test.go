@@ -548,6 +548,21 @@ func TestGatewayAndAnthropicReasoningWireContracts(t *testing.T) {
 		_, hasOutputConfig := request["output_config"]
 		assert.False(t, hasOutputConfig)
 	})
+
+	t.Run("anthropic messages drops the display of thinking it turns off", func(t *testing.T) {
+		request := renderProviderReasoningWire(t, reasoningWireFixture{
+			family: config.ReasoningFamilyConfig{
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "effort",
+				Levels: []string{"low", "medium", "high"}, Default: "high",
+				Modes:       []string{config.ReasoningModeAdaptive, config.ReasoningModeDisabled},
+				DefaultMode: config.ReasoningModeAdaptive,
+			},
+			target:  llmprotocol.AnthropicMessagesV1,
+			profile: config.ProviderProfile{Type: "anthropic"}, display: "omitted",
+		})
+		assertThinkingObjectReasoningRequest(t, request, config.ReasoningModeDisabled)
+		assert.NotContains(t, request["thinking"], "display")
+	})
 }
 
 type reasoningWireFixture struct {
@@ -557,6 +572,7 @@ type reasoningWireFixture struct {
 	target  llmprotocol.WireFormat
 	profile config.ProviderProfile
 	enabled bool
+	display string
 }
 
 func renderProviderReasoningWire(t *testing.T, fixture reasoningWireFixture) map[string]interface{} {
@@ -582,6 +598,10 @@ func renderProviderReasoningWire(t *testing.T, fixture reasoningWireFixture) map
 			Role:    llmprotocol.RoleUser,
 			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "hello"}},
 		}},
+	}
+	if fixture.display != "" {
+		request.ReasoningMode = llmprotocol.ReasoningModeAdaptive
+		request.ReasoningDisplay = fixture.display
 	}
 	if fixture.target != llmprotocol.OpenAIChatV1 {
 		router.applySemanticReasoningMode(

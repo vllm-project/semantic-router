@@ -10,6 +10,7 @@ VLLM_SR_PORT_OFFSET ?= 0
 RECIPE_CONFORMANCE_ROUTER_URL ?= http://127.0.0.1:$(shell expr 8080 + $(VLLM_SR_PORT_OFFSET))
 RECIPE_CONFORMANCE_RECIPES_ROOT ?= $(CURDIR)/config/recipes
 RECIPE_CONFORMANCE_RECIPES ?=
+RECIPE_CONFORMANCE_PROBE_SHARD ?=
 
 ##@ Recipe Conformance
 
@@ -54,7 +55,7 @@ recipe-conformance-eval: ## Evaluate one active recipe router (set RECIPE_CONFOR
 		--recipe "$(RECIPE_CONFORMANCE_RECIPE)" \
 		--router-url "$(RECIPE_CONFORMANCE_ROUTER_URL)"
 
-recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_CONFORMANCE_RECIPES)
+recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_CONFORMANCE_RECIPES; RECIPE_CONFORMANCE_PROBE_SHARD=INDEX/COUNT for one probe shard)
 	@$(LOG_TARGET)
 	@if [ -z "$(RECIPE_CONFORMANCE_RECIPES)" ]; then \
 		echo "RECIPE_CONFORMANCE_RECIPES is required"; \
@@ -62,6 +63,7 @@ recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_C
 	fi
 	@$(MAKE) vllm-sr-router-build vllm-sr-envoy-build
 	@RECIPES="$(RECIPE_CONFORMANCE_RECIPES)" \
+		PROBE_SHARD="$(RECIPE_CONFORMANCE_PROBE_SHARD)" \
 		RECIPES_ROOT="$(RECIPE_CONFORMANCE_RECIPES_ROOT)" \
 		ROUTER_IMAGE="$(VLLM_SR_ROUTER_IMAGE)" \
 		VLLM_SR_ENVOY_IMAGE="$(VLLM_SR_ENVOY_IMAGE)" \
