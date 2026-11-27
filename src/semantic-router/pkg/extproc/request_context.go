@@ -515,10 +515,9 @@ type RequestContext struct {
 	SourceFormat    llmprotocol.WireFormat
 	TargetFormat    llmprotocol.WireFormat
 	SemanticRequest *llmprotocol.Request
-	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
-	// request plugins and final capability checks. Every provider retry clones
-	// this snapshot instead of replaying mutations made for the primary backend.
+	// FallbackRequest preserves the input before candidate-specific compression.
 	FallbackRequest          *llmprotocol.Request
+	fallbackNeedsCompression bool
 	OriginalContextHistory   *contextcompression.HistorySnapshot
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
@@ -542,7 +541,8 @@ type RequestContext struct {
 
 	// Masking is the request-scoped placeholder allocator: created on the
 	// first masked dispatch, never persisted, logged or shared (D5).
-	Masking *masking.Allocator
+	Masking      *masking.Allocator
+	maskingScans maskingScanCache
 
 	// RAG (Retrieval-Augmented Generation) tracking
 	RAGRetrievedContext string  // Retrieved context of the context plugin's rag source

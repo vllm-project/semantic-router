@@ -35,6 +35,7 @@ type routeHeaderState struct {
 
 type providerDispatch struct {
 	preparationBudgetError      error
+	compressionPending          bool
 	callerMode                  llmprotocol.ReasoningMode
 	callerEffort, callerDisplay string
 	callerBudget                *int64
@@ -94,8 +95,12 @@ func (r *OpenAIRouter) prepareModelDispatch(
 	if changed {
 		request.Generation++
 	}
-	preparationErr := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel())
-	if preparationErr == nil && !request.Sampling.AutomaticOutput {
+	dispatch.compressionPending = entrypoint != "" && !request.Sampling.AutomaticOutput && contextOverflowConfig(r.Config, ctx) != nil
+	var preparationErr error
+	if !dispatch.compressionPending {
+		preparationErr = r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel())
+	}
+	if preparationErr == nil && !request.Sampling.AutomaticOutput && !dispatch.compressionPending {
 		preparationErr = r.rejectDispatchCapabilityMismatch(request, dispatch, ctx)
 	}
 	if preparationErr != nil {
@@ -398,17 +403,8 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if response.GetImmediateResponse() != nil {
 		return response, nil
 	}
-	if ctx != nil && ctx.SemanticRequest != nil {
-		// Masking is the last provider-bound content mutation, and it runs
-		// before the fallback snapshot so a retry cannot replay unmasked
-		// content. All dispatch paths reach this function (#3566).
-		if err := r.applyMaskingBeforeDispatch(ctx); err != nil {
-			metrics.RecordRequestError(dispatch.logicalModel, "masking_error")
-			logging.ComponentErrorEvent("extproc", "masking_failed", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"model":      dispatch.logicalModel,
-				"error":      err.Error(),
-			})
+	if !dispatch.compressionPending {
+		if err := r.maskProviderRequest(ctx, dispatch.logicalModel); err != nil {
 			return nil, err
 		}
 	}
@@ -446,11 +442,18 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		}
 	}
 	if r.shouldAttemptFallback(ctx) {
-		snapshot, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+		fallbackInput := candidate.fallbackInput
+		if fallbackInput == nil {
+			fallbackInput = ctx.SemanticRequest
+		}
+		snapshot, err := cloneSemanticRequestForReplay(fallbackInput)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "capture fallback request: %v", err)
 		}
 		ctx.FallbackRequest = snapshot
+		ctx.fallbackNeedsCompression = dispatch.compressionPending
+	} else {
+		ctx.maskingScans = nil
 	}
 	// Every dispatch, a Looper hop's included, reserves its estimated cost
 	// last, on the request the provider receives.
@@ -494,6 +497,19 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  prepared.byteLength(),
 	})
 	return response, nil
+}
+
+func (r *OpenAIRouter) maskProviderRequest(ctx *RequestContext, model string) error {
+	err := r.applyMaskingBeforeDispatch(ctx)
+	if err != nil {
+		metrics.RecordRequestError(model, "masking_error")
+		logging.ComponentErrorEvent("extproc", "masking_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"model":      model,
+			"error":      err.Error(),
+		})
+	}
+	return err
 }
 
 // bindPreparedDispatchArtifact couples the payload-free primary-dispatch

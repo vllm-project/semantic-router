@@ -167,6 +167,7 @@ func TestFinalAdmissionChecksMediaOutputReserve(t *testing.T) {
 		verdict string
 	}{
 		{"known overflow", 100, "exceeds"},
+		{"no capacity for media", 64, "exceeds"},
 		{"unknown prompt demand", 12, "unknown"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

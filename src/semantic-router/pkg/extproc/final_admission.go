@@ -81,20 +81,33 @@ func (r *OpenAIRouter) admitProviderBody(body []byte, request *llmprotocol.Reque
 		return body, result, nil
 	}
 	reserve, reserveSource := requestOutputReserve(&projected)
-	if reserveSource == requestDemandOutputReserveExplicit {
+	available := window - reserve
+	cfg := contextOverflowConfig(r.Config, ctx)
+	if cfg != nil {
+		budget, budgetErr := r.contextOverflowInputBudget(model, projected.Sampling.MaxOutputTokens, cfg)
+		if budgetErr != nil {
+			if isDispatchBudgetError(budgetErr) {
+				result.Source, result.Verdict = "output_reserve", "exceeds"
+			}
+			return nil, result, budgetErr
+		}
+		available, reserve = budget, window-budget
+	}
+	if cfg != nil || reserveSource == requestDemandOutputReserveExplicit {
 		result.ReservedOutputTokens = &reserve
 	}
 	if contextErr := selectionRequestContext(ctx).Err(); contextErr != nil {
 		return nil, result, contextErr
 	}
-	if reserve > window {
+	carriesMedia := requestCarriesMedia(&projected)
+	if available < 0 || available == 0 && carriesMedia {
 		result.Source, result.Verdict = "output_reserve", "exceeds"
-		return nil, result, overflowBudgetError(fmt.Sprintf("The final request reserves %d output tokens in a %d-token context window", reserve, window))
+		return nil, result, overflowBudgetError(fmt.Sprintf("The final request's %d-token output reserve leaves no input capacity in the %d-token context window", reserve, window))
 	}
-	if requestCarriesMedia(&projected) || projected.Truncation != "" && projected.Truncation != "disabled" {
+	if carriesMedia || projected.Truncation != "" && projected.Truncation != "disabled" {
 		return body, result, nil
 	}
-	if bound := contextByteBound(&projected, nil); bound < window-reserve {
+	if bound := contextByteBound(&projected, nil); bound < available {
 		result.Source, result.PromptTokenBound = "byte_bound", bound
 		if result.ReservedOutputTokens != nil {
 			result.Verdict = "fits"
@@ -109,7 +122,7 @@ func (r *OpenAIRouter) admitProviderBody(body []byte, request *llmprotocol.Reque
 	if err != nil {
 		return nil, result, err
 	}
-	verdict := r.bandVerdict(window-reserve, count, tokenizer.kind)
+	verdict := r.bandVerdict(available, count, tokenizer.kind)
 	result.Source, result.Verdict, result.PromptTokens = string(tokenizer.kind), verdict.String(), count
 	if verdict == contextExceeds {
 		return nil, result, overflowBudgetError(fmt.Sprintf("The final request counts about %d input tokens with %d reserved for output in a %d-token context window", count, reserve, window))
@@ -141,29 +154,33 @@ func (r *OpenAIRouter) materializeAdmittedCandidate(dispatch *providerDispatch, 
 	return prepared, admission, err
 }
 
-func (r *OpenAIRouter) prepareFinalCandidate(dispatch *providerDispatch, ctx *RequestContext, primary bool) (*preparedProviderRequest, dispatchAdmission, error) {
+func (r *OpenAIRouter) prepareFinalCandidate(dispatch *providerDispatch, ctx *RequestContext) (*preparedProviderRequest, dispatchAdmission, error) {
 	model := dispatch.effectiveBackendModel()
 	preparationErr := dispatch.preparationBudgetError
-	if !primary {
-		_, _, preparationErr = r.dispatchCompressionBudget(ctx, ctx.SemanticRequest, model)
+	if dispatch.compressionPending {
+		preparationErr = r.compressAndMaskDispatch(ctx, dispatch)
 	}
 	if preparationErr != nil {
-		if !isDispatchBudgetError(preparationErr) {
+		verdict := "unknown"
+		if isDispatchBudgetError(preparationErr) {
+			verdict = "exceeds"
+		} else if !dispatch.compressionPending || !errors.Is(preparationErr, selection.ErrNoEligibleCandidates) {
 			return nil, dispatchAdmission{}, preparationErr
 		}
 		admission := dispatchAdmission{
-			Model: model, ContextWindow: r.contextWindowSize(model), Source: "provider_preparation", Verdict: "exceeds",
+			Model: model, ContextWindow: r.contextWindowSize(model), Source: "provider_preparation", Verdict: verdict,
 		}
 		metrics.RecordFinalAdmission(admission.Source, admission.Verdict)
 		return nil, admission, preparationErr
 	}
 	diagnostics := len(ctx.ProtocolDiagnostics)
+	observations := len(*ctx.projectionObservations)
 	prepared, admission, err := r.materializeAdmittedCandidate(dispatch, ctx)
-	if primary && ctx.SemanticRequest.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
+	if ctx.SemanticRequest.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
+		ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]
+		*ctx.projectionObservations = (*ctx.projectionObservations)[:observations]
 		err = r.compressAutomaticOverflow(ctx, ctx.SemanticRequest, dispatch, err)
 		if err == nil {
-			ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]
-			*ctx.projectionObservations = nil
 			prepared, admission, err = r.materializeAdmittedCandidate(dispatch, ctx)
 		}
 	}

@@ -708,6 +708,19 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		}
 	}
 
+	previous := ctx.projectionObservations
+	var observations []func()
+	ctx.projectionObservations = &observations
+	defer func() { ctx.projectionObservations = previous }()
+	if ctx.fallbackNeedsCompression {
+		view := *ctx
+		view.SemanticRequest = reqCopy
+		if preparationErr := r.compressAndMaskDispatch(&view, dispatch); preparationErr != nil {
+			var maskingErr *maskingDispatchError
+			return nil, fallback.EvaluationResult{CanFallback: !errors.As(preparationErr, &maskingErr) && !isContextExpired(callCtx)}, preparationErr
+		}
+	}
+
 	engine, engineErr := r.protocolEngine()
 	if engineErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
@@ -739,6 +752,11 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		}, fmt.Errorf("fallback candidate %q refused by the spend budget: %s", candidateModel, refusal.message)
 	}
 
+	ctx.projectionObservations = previous
+	for _, record := range observations {
+		ctx.observeProjection(record)
+	}
+
 	return &fallbackCandidate{
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
 		engine: engine,
@@ -747,22 +765,13 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 
 func (r *OpenAIRouter) prepareFallbackCandidateBody(engine *protocolcodec.Engine, request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) ([]byte, error) {
 	diagnostics := len(ctx.ProtocolDiagnostics)
-	previous := ctx.projectionObservations
-	var observations []func()
-	ctx.projectionObservations = &observations
-	defer func() {
-		ctx.projectionObservations = previous
-		for _, record := range observations {
-			ctx.observeProjection(record)
-		}
-	}()
-
+	observations := len(*ctx.projectionObservations)
 	body, admission, err := r.encodeAndAdmitFallbackBody(engine, request, dispatch, ctx)
 	if request.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
+		ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]
+		*ctx.projectionObservations = (*ctx.projectionObservations)[:observations]
 		err = r.compressAutomaticOverflow(ctx, request, dispatch, err)
 		if err == nil {
-			ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]
-			observations = nil
 			body, admission, err = r.encodeAndAdmitFallbackBody(engine, request, dispatch, ctx)
 		}
 	}

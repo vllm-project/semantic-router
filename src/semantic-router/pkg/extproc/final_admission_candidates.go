@@ -13,9 +13,10 @@ import (
 )
 
 type dispatchCandidate struct {
-	request   *preparedProviderRequest
-	alternate *providerDispatch
-	view      *RequestContext
+	request       *preparedProviderRequest
+	alternate     *providerDispatch
+	view          *RequestContext
+	fallbackInput *llmprotocol.Request
 }
 
 func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *RequestContext) (dispatchCandidate, dispatchAdmission, error) {
@@ -23,13 +24,32 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		prepared, err := r.materializePreparedProviderRequest(dispatch, ctx)
 		return dispatchCandidate{request: prepared}, dispatchAdmission{}, err
 	}
-	start := len(ctx.ProtocolDiagnostics)
+	base := *ctx
+	var fallbackInput *llmprotocol.Request
+	if dispatch.compressionPending && len(ctx.VSREligibleModelRefs) > 1 {
+		// Keep the input before candidate-specific compression and masking.
+		request, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+		if err != nil {
+			return dispatchCandidate{}, dispatchAdmission{}, err
+		}
+		base.SemanticRequest = request
+		ctx.maskingScans = make(maskingScanCache)
+		if r.shouldAttemptFallback(ctx) {
+			fallbackInput = request
+		}
+	} else if ctx.SemanticRequest.Sampling.AutomaticOutput {
+		request := *ctx.SemanticRequest
+		base.SemanticRequest = &request
+		if r.shouldAttemptFallback(ctx) {
+			// Masking has run. Keep this input before the model's render and compression.
+			fallbackInput = &request
+		}
+	}
 	ctx.projectionObservations = new([]func())
-	cacheAction, cacheReason := ctx.PromptCacheAction, ctx.PromptCacheReason
-	cacheInserted, cachePreserved := ctx.PromptCacheInserted, ctx.PromptCachePreserved
-	prepared, admission, err := r.prepareFinalCandidate(dispatch, ctx, true)
-	if !isDispatchBudgetError(err) {
-		return dispatchCandidate{request: prepared}, admission, err
+	prepared, admission, err := r.prepareFinalCandidate(dispatch, ctx)
+	missingCompressionBudget := dispatch.compressionPending && errors.Is(err, selection.ErrNoEligibleCandidates)
+	if !isDispatchBudgetError(err) && !missingCompressionBudget {
+		return dispatchCandidate{request: prepared, fallbackInput: fallbackInput}, admission, err
 	}
 	if cancellation := selectionRequestContext(ctx).Err(); cancellation != nil {
 		return dispatchCandidate{request: prepared}, admission, cancellation
@@ -39,6 +59,9 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		return dispatchCandidate{request: prepared}, admission, err
 	}
 	var incompatible error
+	if missingCompressionBudget {
+		incompatible = err
+	}
 	for _, ref := range ctx.dispatchSelection.OrderCandidates(ctx.VSREligibleModelRefs) {
 		model := candidateModelIdentity(ref)
 		isPrimary := model == dispatch.logicalModel && (ctx.VSRSelectedCandidate == nil ||
@@ -47,11 +70,10 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 			ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs) {
 			continue
 		}
-		view := *ctx
+		view := base
 		view.projectionObservations = new([]func())
-		view.PromptCacheAction, view.PromptCacheReason = cacheAction, cacheReason
-		view.PromptCacheInserted, view.PromptCachePreserved = cacheInserted, cachePreserved
-		view.ProtocolDiagnostics = slices.Clone(ctx.ProtocolDiagnostics[:start])
+		view.ProtocolDiagnostics = slices.Clone(base.ProtocolDiagnostics)
+		view.maskingScans = ctx.maskingScans
 		view.VSRSelectedCandidate = &ref
 		useReasoning := r.decisionReasoningChoice(&view, model)
 		if ref.UseReasoning != nil {
@@ -66,7 +88,7 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		if resolveErr != nil {
 			return dispatchCandidate{}, admission, resolveErr
 		}
-		request, cloneErr := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+		request, cloneErr := cloneSemanticRequestForReplay(base.SemanticRequest)
 		if cloneErr != nil {
 			return dispatchCandidate{}, admission, cloneErr
 		}
@@ -85,7 +107,8 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		if explicitAnthropicReasoningDisabled(&view, alternate) {
 			view.VSRReasoningMode = "off"
 		}
-		candidateRequest, candidateAdmission, candidateErr := r.prepareFinalCandidate(alternate, &view, false)
+		alternate.compressionPending = dispatch.compressionPending
+		candidateRequest, candidateAdmission, candidateErr := r.prepareFinalCandidate(alternate, &view)
 		candidateAdmission.ExcludedCandidates = admission.ExcludedCandidates
 		if isDispatchBudgetError(candidateErr) {
 			candidateAdmission.ExcludedCandidates++
@@ -95,13 +118,14 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		if candidateErr != nil {
 			var protocolError *llmprotocol.ProtocolError
 			if errors.Is(candidateErr, selection.ErrNoEligibleCandidates) || errors.As(candidateErr, &protocolError) && protocolError.Category == llmprotocol.ErrorUnsupportedFeature {
+				admission.ExcludedCandidates++
 				incompatible = fmt.Errorf("%w: an alternate cannot serve the final request", selection.ErrNoEligibleCandidates)
 				continue
 			}
 			return dispatchCandidate{}, candidateAdmission, candidateErr
 		}
 		alternate.entrypoint = dispatch.entrypoint
-		return dispatchCandidate{request: candidateRequest, alternate: alternate, view: &view}, candidateAdmission, nil
+		return dispatchCandidate{request: candidateRequest, alternate: alternate, view: &view, fallbackInput: fallbackInput}, candidateAdmission, nil
 	}
 	if incompatible != nil {
 		return dispatchCandidate{}, admission, incompatible
@@ -120,15 +144,18 @@ func finalModelLocked(ctx *RequestContext) bool {
 func commitDispatchCandidate(ctx *RequestContext, dispatch *providerDispatch, candidate dispatchCandidate) {
 	view, alternate := candidate.view, candidate.alternate
 	model := alternate.logicalModel
-	ctx.projectionObservations = view.projectionObservations
 	ctx.VSRSelectedCandidate = view.VSRSelectedCandidate
 	bindProviderRequest(ctx, alternate, view.SemanticRequest)
-	ctx.PluginBackendModel = model
+	ctx.Masking = view.Masking
+	ctx.projectionObservations = view.projectionObservations
 	ctx.structuredOutputPass, ctx.ProtocolDiagnostics = view.structuredOutputPass, view.ProtocolDiagnostics
 	ctx.VSRReasoningMode, ctx.VSRReasoningReason = view.VSRReasoningMode, view.VSRReasoningReason
-	ctx.VSRSelectionReasoning = "Final context admission selected an alternate candidate"
 	ctx.PromptCacheAction, ctx.PromptCacheReason = view.PromptCacheAction, view.PromptCacheReason
 	ctx.PromptCacheInserted, ctx.PromptCachePreserved = view.PromptCacheInserted, view.PromptCachePreserved
+	ctx.TraceContext = view.TraceContext
+	ctx.copyDispatchCompression(view)
+	ctx.PluginBackendModel = model
+	ctx.VSRSelectionReasoning = "Final context admission selected an alternate candidate"
 	if pending := ctx.pendingSessionDecision; pending != nil {
 		pending.SelectedModel, pending.SelectedCandidate = view.VSRSelectedCandidate.Model, view.VSRSelectedCandidate
 	}
