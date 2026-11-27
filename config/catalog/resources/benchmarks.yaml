@@ -111,6 +111,9 @@
     - id: published-agent
       display_name: Published agent
       description: Terminal-Bench 4.0 result with the agent and harness retained on the evaluation record; separate from the 2.1 default index component.
+    - id: independent-agent
+      display_name: Independent agent run
+      description: Independently measured full 66-task Terminal-Bench 4.0 pass@1, with the agent, repeat count, and constraints retained on the evaluation record.
   metrics:
     - id: resolved
       unit: proportion
@@ -186,8 +189,11 @@
   default_profile: public-games
   profiles:
     - id: public-games
-      display_name: Public games
-      description: Normalized standing across the public games for programs generated at the named reasoning setting; the immutable public-release identity remains on each evaluation record.
+      display_name: Public games (sequential Elo)
+      description: Public-game scores based on sequential Elo ratings for programs generated at the named reasoning setting.
+    - id: public-games-bradley-terry
+      display_name: Public games (Bradley–Terry)
+      description: Public-game scores based on fitted Bradley–Terry ratings for programs generated at the named reasoning setting.
   metrics:
     - id: score
       unit: score
@@ -345,6 +351,20 @@
       description: Vendor-published WebVoyager task success rate on live websites; the agent, judge and task subset stay on the evaluation record.
   metrics:
     - id: success_rate
+      unit: proportion
+      direction: higher_is_better
+      range: [0, 1]
+- id: mercor/apex-agents@1.1.0
+  display_name: APEX-Agents 1.1
+  domain: knowledge_work
+  source: https://huggingface.co/datasets/mercor/apex-agents-v1.1
+  default_profile: published-loop-250-steps
+  profiles:
+    - id: published-loop-250-steps
+      display_name: Published Loop agent, 250 steps
+      description: Vendor-published APEX-Agents 1.1 pass@1 with the official Loop reference agent at 250 steps per trial, which is not comparable to the 100-step leaderboard harness. The ID names minor version 1.1; records keep the dataset patch (1.1.1 or 1.1.2) unspecified when the source does not state it.
+  metrics:
+    - id: pass_at_1
       unit: proportion
       direction: higher_is_better
       range: [0, 1]

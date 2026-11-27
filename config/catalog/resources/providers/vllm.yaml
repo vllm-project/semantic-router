@@ -5,7 +5,9 @@ category: start_here
 support_tier: runtime
 # vllm serve exposes /v1/messages since 0.11.1 behind the same bearer token as
 # its OpenAI routes, and vLLM-Omni serves image generation models on
-# /v1/images/generations. /v1/models is one OpenAI-shaped list whatever the
+# /v1/images/generations. Speech (POST /v1/audio/speech) is not listed here:
+# plain vLLM does not serve that route. See providers/vllm-omni.yaml.
+# /v1/models is one OpenAI-shaped list whatever the
 # protocol, which is what the served context window check reads.
 protocols:
 - openai/chat-completions@1
@@ -122,6 +124,38 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+- catalog: nvidia/nemotron-3.5-super-vl
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  restrictions:
+    reference_vllm_image: vllm/vllm-openai:v0.32.0
+    evaluated_vllm_version: 0.30.0
+    trust_remote_code: true
+    reference_deployments:
+    - 4x H100 (tensor parallel 4)
+    - 2x GB200 (tensor parallel 2)
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+- catalog: nvidia/nemotron-3.5-bolt
+  relationship: self_hosted
+  id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  restrictions:
+    trust_remote_code: true
+    reasoning_parser_plugin: ultra_v3_reasoning_parser.py
+    required_environment:
+      VLLM_USE_V2_MODEL_RUNNER: '1'
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
 - catalog: ai21/jamba-large-1.7
   relationship: self_hosted
   id: ai21labs/AI21-Jamba-Large-1.7
@@ -273,6 +307,58 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/google/gemma-4-31b-it
+- catalog: google/gemma-4-12b-it
+  relationship: self_hosted
+  id: google/gemma-4-12B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.23.0
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-12B-it
+- catalog: google/gemma-4-26b-a4b-it
+  relationship: self_hosted
+  id: google/gemma-4-26B-A4B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.25.0
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-26B-A4B-it
+- catalog: google/gemma-4-e4b-it
+  relationship: self_hosted
+  id: google/gemma-4-E4B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.19.1
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-E4B-it
+- catalog: google/gemma-4-e2b-it
+  relationship: self_hosted
+  id: google/gemma-4-E2B-it
+  protocols:
+  - openai/chat-completions@1
+  reasoning_transport: chat_template_kwargs
+  lifecycle: experimental
+  restrictions:
+    minimum_vllm_version: 0.19.1
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://recipes.vllm.ai/Google/gemma-4-E2B-it
 - catalog: meta/llama-4-scout-17b-16e-instruct
   relationship: self_hosted
   id: meta-llama/Llama-4-Scout-17B-16E-Instruct
@@ -660,6 +746,16 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/thinkingmachines/Inkling-Small
+- catalog: thinking-machines/inkling-2-small
+  relationship: self_hosted
+  id: thinkingmachines/Inkling-2-Small
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://recipes.vllm.ai/thinkingmachines/Inkling-2-Small
 - catalog: meta/muse-glimmer-30b
   relationship: self_hosted
   id: meta-models/Muse-Glimmer-30B

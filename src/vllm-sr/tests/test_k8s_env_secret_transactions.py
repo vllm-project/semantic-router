@@ -327,6 +327,73 @@ def test_removing_all_credentials_commits_helm_before_old_cleanup(
     assert events.index("helm") < events.index("cleanup")
 
 
+@pytest.mark.parametrize("unreadable_revision", [False, True])
+def test_upgrade_keeps_secrets_referenced_by_retained_helm_revisions(
+    monkeypatch, unreadable_revision
+):
+    backend = _backend()
+    active = _plan(backend)
+    previous = _plan(backend, "b" * 32).name
+    expired = _plan(backend, "c" * 32).name
+    older = _plan(backend, "d" * 32).name
+    current_refs = iter([{previous}, {active.name}])
+    monkeypatch.setattr(
+        backend, "_current_release_env_secret_refs", lambda: next(current_refs)
+    )
+    monkeypatch.setattr(
+        backend, "_list_managed_env_secrets", lambda: {previous, expired, older}
+    )
+    monkeypatch.setattr(backend, "_namespace_references_secret", lambda _name: False)
+    monkeypatch.setattr(backend, "_ensure_namespace", lambda: None)
+    monkeypatch.setattr(backend, "_create_env_secret", lambda _plan: None)
+    monkeypatch.setattr(backend, "_wait_for_pods", lambda: None)
+    monkeypatch.setattr(backend, "_log_k8s_summary", lambda _port: None)
+    deleted = []
+    monkeypatch.setattr(
+        backend,
+        "_delete_secret_if_exists",
+        lambda name, required=False: deleted.append(name) or True,
+    )
+
+    def run(cmd, **_kwargs):
+        if cmd[:2] == ["helm", "upgrade"]:
+            return subprocess.CompletedProcess(cmd, 0)
+        if cmd[:2] == ["helm", "history"]:
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=json.dumps([{"revision": revision} for revision in (2, 3, 4)]),
+            )
+        assert cmd[:3] == ["helm", "get", "manifest"]
+        revision = int(cmd[cmd.index("--revision") + 1])
+        if revision == 2 and unreadable_revision:
+            raise subprocess.CalledProcessError(1, cmd, stderr="unavailable")
+        env = {
+            2: {"env": [{"valueFrom": {"secretKeyRef": {"name": older}}}]},
+            3: {"envFrom": [{"secretRef": {"name": previous}}]},
+            4: {"envFrom": [{"secretRef": {"name": active.name}}]},
+        }[revision]
+        manifest = {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "spec": {"template": {"spec": {"containers": [env]}}},
+        }
+        if revision == 2:
+            manifest = {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [{"apiVersion": "v1", "kind": "List", "items": [manifest]}],
+            }
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(manifest))
+
+    monkeypatch.setattr(backend, "_run", run)
+    backend._deploy_helm_values(
+        "values.yaml", secret_plan=active, secret_name=active.name, client_port=8899
+    )
+
+    assert deleted == ([] if unreadable_revision else [expired])
+
+
 def test_cleanup_deletes_only_snapshot_revisions_not_currently_referenced(
     monkeypatch,
 ):

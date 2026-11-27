@@ -206,15 +206,19 @@ func TestSystemOneDeploymentFailuresStayUnknownWithoutTheKey(t *testing.T) {
 	}
 	for code, want := range map[int]error{http.StatusUnauthorized: ErrRejected, http.StatusTooManyRequests: ErrOverloaded, http.StatusServiceUnavailable: ErrUnavailable, http.StatusInternalServerError: ErrFailed, http.StatusFound: ErrFailed} {
 		status.Store(int64(code))
-		if err := ask(2 * time.Second); !errors.Is(err, want) {
+		err := ask(2 * time.Second)
+		if !errors.Is(err, want) {
 			t.Fatalf("status %d: %v, want %v", code, err, want)
+		}
+		if retryable := code == http.StatusTooManyRequests || code >= 500; CanFailOverDecision(err) != retryable {
+			t.Fatalf("status %d: failover eligibility should be %t, got %v", code, retryable, err)
 		}
 	}
 	if redirects.Load() != 0 {
 		t.Fatal("a redirect was followed with the credential")
 	}
 	t.Setenv("FAILING_TEST_KEY", "")
-	if err := ask(2 * time.Second); !errors.Is(err, ErrFailed) || !strings.Contains(err.Error(), "FAILING_TEST_KEY is not set") {
+	if err := ask(2 * time.Second); !errors.Is(err, ErrFailed) || CanFailOverDecision(err) || !strings.Contains(err.Error(), "FAILING_TEST_KEY is not set") {
 		t.Fatalf("a missing credential is a failure that names its variable: %v", err)
 	}
 	if _, err := remote.Decide(context.Background(), "unknown", request); !errors.Is(err, ErrUnknownDeployment) {
@@ -223,8 +227,9 @@ func TestSystemOneDeploymentFailuresStayUnknownWithoutTheKey(t *testing.T) {
 	if _, ok := remote.Card("unknown"); ok {
 		t.Fatal("an unknown deployment has no card")
 	}
+	t.Setenv("FAILING_TEST_KEY", "fake-secret-key")
 	server.Close()
-	if err := ask(2 * time.Second); !errors.Is(err, ErrFailed) {
+	if err := ask(2 * time.Second); !errors.Is(err, ErrFailed) || !CanFailOverDecision(err) {
 		t.Fatalf("an unreachable API: %v", err)
 	}
 }

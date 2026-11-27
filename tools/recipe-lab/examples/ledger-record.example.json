@@ -1,0 +1,21 @@
+{
+  "round": 1,
+  "ts": "2026-10-26T10:00:00Z",
+  "candidate": {
+    "kind": "config",
+    "ref": "config-rev@smoke001",
+    "change_summary": "smoke: domain threshold 0.30 -> 0.28",
+    "provenance": {
+      "proposer": "threshold-search",
+      "insight_refs": []
+    }
+  },
+  "tier": "replay",
+  "baseline_ref": "config-revision@main",
+  "metrics": {"capability.score": 0.794},
+  "verdict": "RANKED",
+  "dataset_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "attribution_delta": {"e1_fixed": 2, "e2_fixed": 1, "decision_mismatch_fixed": 0, "e3_remaining": 3},
+  "attribution_ref": "attribution.jsonl@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "notes": "smoke-test record"
+}

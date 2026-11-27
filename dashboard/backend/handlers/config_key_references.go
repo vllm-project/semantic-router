@@ -11,7 +11,7 @@ import (
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const keyReferenceDestinationRefused = "Forbidden: an environment reference (${NAME} or $NAME) or a saved key's file or variable (auth.api_key_file, auth.api_key_env) can stay only where the saved config uses it, on the same destination; enter the value itself to send it elsewhere"
+const keyReferenceDestinationRefused = "Forbidden: an environment reference (${NAME} or $NAME) or a saved key's file or variable (api_key_file, api_key_env, key_env, password_env, hmac_key_env) can stay only where the saved config uses it, on the same destination; enter the value itself to send it elsewhere"
 
 // rejectKeyReferenceRedirect refuses a save, by a caller who may not read
 // configuration secrets, that names a reference where the stored config does
@@ -90,9 +90,12 @@ func addKeyReferenceUsers(users map[string][]*yaml.Node, node, block *yaml.Node,
 		for i := 0; i+1 < len(node.Content); i += 2 {
 			key, value := node.Content[i].Value, node.Content[i+1]
 			field := path + "." + key
-			if key == "api_key_file" || key == "api_key_env" {
+			if key == "api_key_file" || routerconfig.IsSecretEnvReferenceField(key) {
 				if value.Value != "" {
-					prefix := map[string]string{"api_key_file": "file:", "api_key_env": "env:"}[key]
+					prefix := "env:"
+					if key == "api_key_file" {
+						prefix = "file:"
+					}
 					users[prefix+value.Value] = append(users[prefix+value.Value], block)
 				}
 				continue

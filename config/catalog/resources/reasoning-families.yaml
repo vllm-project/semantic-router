@@ -234,6 +234,13 @@
   disabled: none
   modes: [enabled, disabled]
   default_mode: enabled
+- id: muse-spark-open
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh]
+  default: xhigh
+  modes: [enabled]
+  default_mode: enabled
 - id: muse-spark
   type: reasoning_effort
   parameter: reasoning_effort
@@ -246,6 +253,16 @@
   levels: [minimal, low, medium, high, xhigh, max]
   modes: [enabled]
   default_mode: enabled
+- id: longcat-2.0
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: enabled
+- id: longcat-2.5
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes: [enabled, disabled]
+  default_mode: disabled
 - id: gemma4
   type: chat_template_kwargs
   parameter: enable_thinking
@@ -281,6 +298,13 @@
   parameter: reasoning_effort
   levels: [minimal, low, medium, high]
   default: medium
+  modes: [enabled]
+  default_mode: enabled
+- id: gemini-flash-four-level-minimal
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high]
+  default: minimal
   modes: [enabled]
   default_mode: enabled
 - id: gemini-flash-three-level-medium

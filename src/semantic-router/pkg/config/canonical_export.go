@@ -150,6 +150,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
 			ToolSessions:  cloneToolSessionStoreConfig(cfg.ToolSessions),
+			GuardVerdicts: cloneGuardVerdictStoreConfig(cfg.GuardVerdicts),
 		},
 		Integrations: CanonicalIntegrationGlobal{
 			KVTransfer: cfg.KVTransfer,

@@ -1,5 +1,10 @@
 # Verify routing and delivery
 
+For model-backed signal readiness and answers, use the
+[decision-model skill](https://vllm-sr.ai/install/agent/vllm-sr-decision-model/SKILL.md).
+For an unexpected route or delivery failure, use the
+[routing-diagnosis skill](https://vllm-sr.ai/install/agent/vllm-sr-diagnose-routing/SKILL.md).
+
 Discover the management origin (`ROUTER_ORIGIN`), the inference base URL and
 the public entrypoint of the stack you verify; `GET /v1/models` on the
 listener lists the entrypoints. Installed `vllm-sr route preview --help` and

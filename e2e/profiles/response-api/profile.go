@@ -153,6 +153,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-vllm-stop-sequence",
 		"protocol-codec-vllm-reasoning-order",
 		"protocol-codec-vllm-stream-error",
+		"protocol-codec-chat-stream-multiple-choices",
 		"protocol-codec-auto-unsupported-capability",
 		"protocol-codec-chat-backend-agent-client-replay",
 		"protocol-codec-responses-backend-agent-client-replay",
