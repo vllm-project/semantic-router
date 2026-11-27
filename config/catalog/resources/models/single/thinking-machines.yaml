@@ -90,3 +90,44 @@
   - moe
   - agentic
   - efficient
+- id: thinking-machines/inkling-2-small
+  display_name: Inkling 2 Small
+  description: Multimodal mixture-of-experts model with a native NVFP4 checkpoint and an alternative MXFP8 release.
+  kind: physical
+  publisher: Thinking Machines Lab
+  presentation:
+    logo: monogram
+    monogram: TM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/thinkingmachines/Inkling-2-Small
+    license: Apache-2.0
+  family: inkling
+  generation: 2
+  parameter_size: 594B (17B active)
+  released_at: '2026-11-05'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Thinking Machines Lab
+    status: claimed
+    verified_at: 2026-11-20
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/
+  tags:
+  - open_weights
+  - multimodal
+  - moe

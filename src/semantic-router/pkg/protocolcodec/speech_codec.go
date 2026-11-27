@@ -193,6 +193,35 @@ func speechResponseBypassError() error {
 	return unsupportedDownstreamTranslation(fmt.Errorf("speech audio bypasses the neutral response"))
 }
 
+// SpeechResponseMediaType is the media type of a Speech API response, read from
+// the request's response_format. The wire names belong to the codec; callers
+// that forward the audio (a fallback candidate's body) need the MIME type only.
+func SpeechResponseMediaType(request *llmprotocol.Request) string {
+	format := "mp3"
+	if request != nil && request.SpeechGeneration != nil {
+		if raw, ok := request.SpeechGeneration.Fields["response_format"]; ok {
+			var named string
+			if json.Unmarshal(raw, &named) == nil && named != "" {
+				format = named
+			}
+		}
+	}
+	switch format {
+	case "wav":
+		return "audio/wav"
+	case "opus":
+		return "audio/ogg"
+	case "aac":
+		return "audio/aac"
+	case "flac":
+		return "audio/flac"
+	case "pcm":
+		return "audio/pcm"
+	default:
+		return "audio/mpeg"
+	}
+}
+
 // DecodeTransportError reads the OpenAI error envelope. vLLM-Omni sends the
 // HTTP status as a numeric code, so code is read raw and only a string code is
 // kept; the backend's message is kept either way.

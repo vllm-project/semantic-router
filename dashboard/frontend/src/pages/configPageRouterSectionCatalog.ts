@@ -141,6 +141,11 @@ export const ROUTER_SETTINGS_CARDS: readonly RouterSettingsCardPolicy[] = [
     roots: [{ path: ['stores', 'tool_sessions'], mode: 'children' }],
   },
   {
+    key: 'guard_verdicts',
+    layer: 'stores',
+    roots: [{ path: ['stores', 'guard_verdicts'], mode: 'children' }],
+  },
+  {
     key: 'kv_transfer',
     layer: 'integrations',
     roots: [{ path: ['integrations', 'kv_transfer'], mode: 'children' }],

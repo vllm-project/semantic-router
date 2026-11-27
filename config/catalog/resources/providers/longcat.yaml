@@ -1,0 +1,36 @@
+id: longcat
+display_name: LongCat
+description: LongCat models from Meituan through the LongCat API Platform.
+category: model_api
+support_tier: compatible
+default_base_url: https://api.longcat.chat/openai/v1
+protocols:
+- openai/chat-completions@1
+default_protocol: openai/chat-completions@1
+supported_operations:
+- openai/chat-completions@1#create
+- openai/chat-completions@1#list_models
+reasoning_transport: thinking_object
+auth:
+  strategy: bearer
+  header: Authorization
+  prefix: Bearer
+presentation:
+  logo: monogram
+  monogram: LC
+  monochrome: true
+conformance:
+  status: unverified
+models:
+- catalog: meituan/longcat-2.5
+  relationship: first_party
+  id: LongCat-2.5
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    max_output_tokens: 262144
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-23
+    source: https://longcat.ai/platform/docs/api/chat

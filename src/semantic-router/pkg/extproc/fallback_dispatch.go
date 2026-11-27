@@ -105,7 +105,7 @@ func (r *OpenAIRouter) shouldAttemptFallback(ctx *RequestContext) bool {
 	if !orch.Policy().Enabled {
 		return false
 	}
-	if ctx.LooperRequest || ctx.ResponseHeadersContinued || ctx.fallbackExecutedByCaller {
+	if ctx.LooperRequest || ctx.LooperStreamingActive || ctx.ResponseHeadersContinued || ctx.fallbackExecutedByCaller {
 		return false
 	}
 	return len(ctx.VSREligibleModelRefs) > 1
@@ -371,6 +371,34 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 			"forwarded_headers": attemptOutcome.ForwardedHeaders,
 		})
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
+	}
+
+	if ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		// Speech audio has no neutral response, so the candidate's bytes are
+		// already the client's answer: skip decoding, response policy and the
+		// response cache, as the primary path does (processor_res_body.go).
+		// Usage stays unknown, which releases the in-flight slot.
+		ctx.RequestModel, ctx.VSRSelectedModel = candidateModel, candidateModel
+		ctx.ResponsePath, ctx.UpstreamStatusCode = headers.ResponsePathFallback, statusCode
+		ctx.TargetFormat = dispatch.targetFormat
+		ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
+		reqCopy.Stream, reqCopy.StreamOptions = origSemanticRequest.Stream, origSemanticRequest.StreamOptions
+		ctx.SemanticRequest = reqCopy
+		evalResult := orch.EvaluateAttempt(callCtx, ctx.FallbackRecord, attemptOutcome, commit)
+		if !evalResult.Succeeded {
+			return nil, evalResult, fmt.Errorf("fallback attempt evaluation: %s", evalResult.Reason)
+		}
+		recordNonStreamingFirstResponse(ctx, attemptDuration)
+		completionLatency := attemptDuration
+		if !ctx.StartTime.IsZero() {
+			completionLatency = time.Since(ctx.StartTime)
+		}
+		r.reportNonStreamingUsage(ctx, completionLatency, responseUsageMetrics{})
+		metrics.RecordModelRouting(primaryModel, candidateModel)
+		r.updateRouterReplayStatus(ctx, statusCode, false)
+		r.recordServedFallback(ctx, candidate)
+		candidateSucceeded = true
+		return r.buildFallbackImmediateResponse(resBody, protocolcodec.SpeechResponseMediaType(reqCopy), ctx), evalResult, nil
 	}
 
 	responseEngine, engineErr := r.protocolEngineForReply(resolveResponseVendor(dispatch.profile), reqCopy)

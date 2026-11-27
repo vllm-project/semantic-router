@@ -35,6 +35,114 @@ conformance:
 # no write price, a write is priced as input. Long context is over 272K input
 # tokens.
 models:
+- catalog: openai/gpt-6.2-astra
+  relationship: first_party
+  id: gpt-6.2-astra
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_modes: [enabled]
+  reasoning_efforts: [low, medium, high, xhigh, max]
+  pricing:
+    currency: USD
+    prompt_per_1m: 8.0
+    cached_input_per_1m: 0.4
+    cache_write_per_1m: 10.0
+    completion_per_1m: 40.0
+  restrictions:
+    tools_protocols:
+    - openai/responses@1
+    long_context_pricing:
+      input_threshold_tokens: 272000
+      prompt_multiplier: 2.0
+      cached_input_multiplier: 2.0
+      cache_write_multiplier: 2.0
+      completion_multiplier: 1.5
+    unsupported_request_fields:
+      openai/chat-completions@1:
+      - temperature
+      - top_p
+      - top_logprobs
+      - logprobs
+      openai/responses@1:
+      - temperature
+      - top_p
+      - top_logprobs
+    unsupported_include_values:
+    - message.output_text.logprobs
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+- catalog: openai/gpt-6.2-sol
+  relationship: first_party
+  id: gpt-6.2-sol
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_modes: [enabled]
+  reasoning_efforts: [low, medium, high, xhigh, max]
+  pricing:
+    currency: USD
+    prompt_per_1m: 2.0
+    cached_input_per_1m: 0.1
+    cache_write_per_1m: 2.5
+    completion_per_1m: 10.0
+  restrictions:
+    tools_protocols:
+    - openai/responses@1
+    long_context_pricing:
+      input_threshold_tokens: 272000
+      prompt_multiplier: 2.0
+      cached_input_multiplier: 2.0
+      cache_write_multiplier: 2.0
+      completion_multiplier: 1.5
+    unsupported_request_fields:
+      openai/chat-completions@1:
+      - temperature
+      - top_p
+      - top_logprobs
+      - logprobs
+      openai/responses@1:
+      - temperature
+      - top_p
+      - top_logprobs
+    unsupported_include_values:
+    - message.output_text.logprobs
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-sol
+- catalog: openai/gpt-6.1-terra
+  relationship: first_party
+  id: gpt-6.1-terra
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_modes: [enabled, disabled]
+  reasoning_efforts: [low, medium, high, xhigh, max]
+  pricing:
+    currency: USD
+    prompt_per_1m: 1.0
+    cached_input_per_1m: 0.05
+    cache_write_per_1m: 1.25
+    completion_per_1m: 5.0
+  restrictions:
+    tools_protocols:
+    - openai/responses@1
+    long_context_pricing:
+      input_threshold_tokens: 272000
+      prompt_multiplier: 2.0
+      cached_input_multiplier: 2.0
+      cache_write_multiplier: 2.0
+      completion_multiplier: 1.5
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
 - catalog: openai/gpt-6-astra
   relationship: first_party
   id: gpt-6-astra
@@ -219,17 +327,6 @@ price_list:
     cached_input_per_1m: 0.1
     cache_write_per_1m: 2.5
     completion_per_1m: 10.0
-  verification:
-    status: claimed
-    verified_at: 2026-11-16
-    source: https://developers.openai.com/api/docs/pricing
-- id: gpt-6.1-terra
-  pricing:
-    currency: USD
-    prompt_per_1m: 1.0
-    cached_input_per_1m: 0.05
-    cache_write_per_1m: 1.25
-    completion_per_1m: 5.0
   verification:
     status: claimed
     verified_at: 2026-11-16

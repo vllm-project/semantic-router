@@ -345,6 +345,7 @@ func decodeAnthropicStreamError(wire anthropicEventWire) llmprotocol.Event {
 	if wire.Error != nil {
 		protocolError.Category = decodeProviderErrorCategory(wire.Error.Type)
 		protocolError.Code, protocolError.Message = wire.Error.Type, wire.Error.Message
+		protocolError.ProviderFramed = true
 	}
 	return llmprotocol.Event{
 		Type: llmprotocol.EventResponseFailed, Error: protocolError,

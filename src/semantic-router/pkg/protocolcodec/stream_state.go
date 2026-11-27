@@ -44,6 +44,9 @@ type streamState struct {
 	// a tool call whose arguments ended before forming a JSON object; only a
 	// max_tokens stop explains one, which the terminal event decides
 	cutToolArguments bool
+	// cutToolArgumentsEvidence names those arguments by length and shape for the
+	// rejection log; the payload itself is not kept
+	cutToolArgumentsEvidence error
 	// the streamed arguments a close replaced when a stream ended mid-call,
 	// kept for the encoders that already sent the fragments as deltas
 	closedToolArguments map[int]string
@@ -264,7 +267,7 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 	if state.cutToolArguments && isOutputItemEvent(event.Type) {
 		// A limit cuts only the final output, so a later item means the call's
 		// arguments were malformed rather than cut.
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsErrorWithCause(state.cutToolArgumentsEvidence)
 	}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:

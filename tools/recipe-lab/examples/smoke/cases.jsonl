@@ -1,0 +1,6 @@
+{"case_id": "case-deep-1", "prompt": "Analyse quicksort versus mergesort from first principles: derive their average-case complexities, then justify which one wins for small arrays.", "truth": "cloud_frontier_reasoning", "expected_contains": "cache locality"}
+{"case_id": "case-deep-2", "prompt": "We are evaluating two caching strategies for a routing layer. Compare TTL-based and LRU-based invalidation: analyse failure modes under skew, then justify a recommendation with trade-offs.", "truth": "cloud_frontier_reasoning", "expected_contains": "LRU"}
+{"case_id": "case-std-1", "prompt": "What is the capital of France?", "truth": "local_standard", "expected_contains": "Paris"}
+{"case_id": "case-std-2", "prompt": "Say hello in French.", "truth": "local_standard", "expected_contains": "Bonjour"}
+{"case_id": "case-std-3", "prompt": "Summarize what a for loop does in one sentence.", "truth": "local_standard", "expected_contains": "repeats"}
+{"case_id": "case-std-4", "prompt": "Tell me a fun fact about honey.", "truth": "local_standard", "expected_contains": "honey"}

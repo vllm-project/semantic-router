@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
 // Each client format states a reasoning preference in its own fields; an
@@ -162,6 +163,47 @@ func sentReasoning(t *testing.T, backend llmprotocol.WireFormat, sent map[string
 	var kwargs map[string]bool
 	require.NoError(t, json.Unmarshal(sent["chat_template_kwargs"], &kwargs))
 	return fmt.Sprintf("enable_thinking=%t", kwargs["enable_thinking"])
+}
+
+// A decision the Looper runs stages its hops with the same rule the
+// single-model path applies: a client limit below
+// providers.defaults.reasoning_min_output_tokens turns the hop's reasoning off,
+// and the context says why.
+func TestLooperHopTurnsReasoningOffForTheOutputBudget(t *testing.T) {
+	router := reasoningLaneRouter(t, llmprotocol.OpenAIChatV1, "qwen3", 512, "")
+	for _, test := range []struct {
+		name  string
+		limit int
+		want  string
+		mode  string
+		why   string
+	}{
+		{"small limit", 100, "enable_thinking=false", "off", reasoningOffForOutputBudget},
+		{"large limit", 1000, "enable_thinking=true", "on", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := fmt.Sprintf(`{"model":"worker","max_tokens":%d,"messages":[{"role":"user","content":"hi"}]}`, test.limit)
+			request, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, []byte(body))
+			require.NoError(t, err)
+			ctx := &RequestContext{
+				LooperRequest:                true,
+				Hop:                          &routing.Hop{Decision: "thinking"},
+				VSRSelectedDecision:          &router.Config.Decisions[0],
+				SourceFormat:                 llmprotocol.OpenAIChatV1,
+				SemanticRequest:              &request,
+				Headers:                      map[string]string{},
+				unstatedReasoningOutputLimit: unstatedReasoningOutputLimit(request),
+			}
+			response, err := router.handleLooperInternalRequestWithPlugins("worker", ctx)
+			require.NoError(t, err)
+			require.NotNil(t, response)
+			var sent map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(response.GetRequestBody().GetResponse().GetBodyMutation().GetBody(), &sent))
+			require.Equal(t, test.want, sentReasoning(t, llmprotocol.OpenAIChatV1, sent))
+			require.Equal(t, test.mode, ctx.VSRReasoningMode)
+			require.Equal(t, test.why, ctx.VSRReasoningReason)
+		})
+	}
 }
 
 // A fallback candidate runs with the reasoning its lane chose unless the

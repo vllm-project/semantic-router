@@ -152,7 +152,16 @@ line not on a deprecation path, since Palmyra X5 and Palmyra X4 are both
 scheduled for deprecation on 2026-12-14 with migration to X6. The Palmyra X5
 card stays in the catalog with `lifecycle: deprecated` so its mapping and
 evidence remain visible until Writer removes the model, but it is not a
-representative.
+representative. Meituan / LongCat holds a two-representative exception,
+reviewed on 2026-11-25. LongCat-2.5 and LongCat-2.0 meet the evidence rules and
+have a serving path that the provider or the runtime documents: the LongCat API
+and the SGLang cookbook. LongCat-Flash-Lite-Sparse meets the evidence rules
+too, but the SGLang change its model card cites was closed unmerged and its
+serving path is unverified; it becomes the third representative once that path
+is verified. LongCat-Next is not a candidate: it is an any-to-any model that
+also generates images and speech, and its results are a chart without
+settings. The other LongCat-Flash models were retired from Meituan's API as
+legacy on 2026-05-29.
 
 ## User configuration boundary
 
