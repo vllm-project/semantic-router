@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	stderrors "errors"
 	"sync"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -84,6 +85,12 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	baseSR := semanticrouter.DeepCopy()
 
 	if err := r.reconcileOwnedResources(ctx, semanticrouter, logger); err != nil {
+		var discoveryErr *backendDiscoveryError
+		if stderrors.As(err, &discoveryErr) {
+			if statusErr := r.updateBackendDiscoveryStatus(ctx, semanticrouter, discoveryErr); statusErr != nil {
+				logger.Error(statusErr, "Failed to update backend discovery status")
+			}
+		}
 		return ctrl.Result{}, err
 	}
 
