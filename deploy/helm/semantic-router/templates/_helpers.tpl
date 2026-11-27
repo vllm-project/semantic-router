@@ -171,6 +171,21 @@ replaces the chart's data volume.
 {{- end }}
 
 {{/*
+"true" when extraVolumeMounts supplies the Router's model directory, which then
+replaces the chart's model volume. The claim template reads this so a release
+that mounts its own models does not also render a claim nothing mounts.
+*/}}
+{{- define "semantic-router.customModelMount" -}}
+{{- $custom := false -}}
+{{- range .Values.extraVolumeMounts -}}
+{{- if eq (trimSuffix "/" (.mountPath | default "")) "/app/models" -}}
+{{- $custom = true -}}
+{{- end -}}
+{{- end -}}
+{{- $custom -}}
+{{- end }}
+
+{{/*
 The install note for a vector store that keeps its uploaded files in the
 chart's data directory while that is an emptyDir, which a new Pod starts empty.
 */}}
