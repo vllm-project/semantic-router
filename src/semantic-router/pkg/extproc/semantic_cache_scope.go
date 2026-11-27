@@ -4,9 +4,14 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func (r *OpenAIRouter) semanticCacheEnabledForRequest(ctx *RequestContext) bool {
+	// Speech responses are audio bytes, not a cacheable text answer.
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return false
+	}
 	if r == nil || r.Config == nil {
 		return true
 	}

@@ -16,6 +16,8 @@ plugin:
       budget:
         # Group total, divided before dispatch; at least two bytes per model.
         max_response_bytes: 2097152
+        # Optional group limit for estimated input and reserved output tokens.
+        # max_estimated_tokens: 16384
       capture:
         enabled: false
         # Group total for response excerpts, divided among candidates.

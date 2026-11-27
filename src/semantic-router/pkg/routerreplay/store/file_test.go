@@ -119,6 +119,40 @@ func TestFileStoreKeepsEndedRecordsAcrossReopen(t *testing.T) {
 	}
 }
 
+func TestFileStorePreservesRecordJSONLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "router-replay.jsonl")
+	store, err := OpenFileStore(path, 10, 0)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+
+	records := []Record{
+		{
+			ID: "unknown", LifecycleState: LifecycleCompleted, ConfidenceScore: 0.75,
+			Prompt: "<tool>&\n\u2028", SignalValues: map[string]float64{"sample": 1},
+		},
+		{
+			ID: "zero", LifecycleState: LifecycleFailed, ConfidenceScoreAvailable: true,
+			JailbreakScoreAvailable: true,
+		},
+	}
+	var want bytes.Buffer
+	for _, record := range records {
+		require.NoError(t, json.NewEncoder(&want).Encode(record))
+		_, addErr := store.Add(context.Background(), record)
+		require.NoError(t, addErr)
+	}
+
+	// Compare the appended lines and the final checkpoint to the public record encoding.
+	require.Eventually(t, func() bool { return fileHasLines(path, len(records)) }, 3*time.Second, 10*time.Millisecond)
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want.String(), string(data))
+	require.NoError(t, store.Close())
+	data, err = os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, want.String(), string(data))
+}
+
 func fileHasLines(path string, n int) bool {
 	data, err := os.ReadFile(path)
 	return err == nil && bytes.Count(data, []byte{'\n'}) == n

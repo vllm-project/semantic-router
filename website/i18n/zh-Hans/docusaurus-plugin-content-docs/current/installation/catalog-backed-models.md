@@ -34,6 +34,12 @@ recipes:
 
 在 **Models → Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Models → Backend models → Connect model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
+## GPT-6.2 Astra、GPT-6.2 Sol 和 GPT-6.1 Terra
+
+将 `openai/gpt-6.2-astra`、`openai/gpt-6.2-sol` 或 `openai/gpt-6.1-terra` 绑定到 `openai` Provider。三者在 Chat Completions 和 Responses 上均支持 `low`、`medium`、`high`、`xhigh`、`max`。只有 Terra 支持关闭推理：设置 `use_reasoning: false` 会发送 `none`。Terra 默认使用 `medium`。工具调用需要 Responses（`api_format: responses`）。
+
+目录为每张卡收录五条已发布的评测。Astra 和 Sol 的记录来自 `xhigh`，Terra 的记录来自 `high`；分数不会复制到其他档位。只有同一评测条件下可比模型数量足够时，结果才会进入 Model Hub 的公开对比。
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。
