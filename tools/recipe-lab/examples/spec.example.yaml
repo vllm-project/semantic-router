@@ -1,0 +1,21 @@
+﻿api_version: recipe-lab/v1alpha1
+
+objective:
+  metric_key: capability.score
+  direction: maximize
+  min_improvement_pct: 1.0
+  replay_metric: routed_accuracy
+
+workload:
+  manifest: cases.example.jsonl
+  content_hash: sha256:a73eb355c37c7ffce4d14530c8225d0d24dca528ac1d94299a134eb7e902292b
+  profile: quick
+
+attribution:
+  oracle_policy:
+    rules:
+      - when: {domain: code, difficulty: {gte: 3}}
+        expect: {decision: domain_code_complex, models: [m/pro, m/max]}
+      - when: {domain: code}
+        expect: {decision: domain_code, models: [m/code]}
+    default: {decision: simple_general, models: [m/general]}

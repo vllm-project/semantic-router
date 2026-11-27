@@ -1,0 +1,6 @@
+{"case_id": "case-1", "truth": {"signals": {"domain": "code", "difficulty": 4}}, "matched_decision": "domain_code_complex", "routed": "m/pro", "answer_ok": false, "signal_values": {"decision:domain:code": 0.92, "decision:domain:math": 0.08, "decision:difficulty": 4.0}}
+{"case_id": "case-2", "truth": {"signals": {"domain": "code", "difficulty": 2}}, "matched_decision": "simple_general", "routed": "m/general", "answer_ok": false}
+{"case_id": "case-3", "truth": {"signals": {"domain": "math", "difficulty": 1}}, "matched_decision": "simple_general", "routed": "m/general", "answer_ok": true, "signal_values": {"decision:domain:math": 0.9, "decision:difficulty": 1.0}}
+{"case_id": "case-4", "truth": {"signals": {"domain": "math", "difficulty": 5}}, "matched_decision": "simple_general", "routed": "m/general", "answer_ok": false, "signal_values": {"decision:domain:math": 0.93, "decision:difficulty": 1.5}}
+{"case_id": "case-5", "truth": {"signals": {"domain": "code", "difficulty": 1}}, "matched_decision": "domain_code", "routed": "m/code", "answer_ok": true, "signal_values": {"decision:domain:code": 0.9, "decision:difficulty": 1.0}}
+{"case_id": "case-6", "truth": {"signals": {"domain": "code", "difficulty": 4}}, "matched_decision": "domain_code", "routed": "m/code", "answer_ok": false, "signal_values": {"decision:domain:code": 0.94, "decision:difficulty": 4.0}}
