@@ -263,6 +263,7 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	if translateResponseErr != nil {
 		return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, translateResponseErr
 	}
+	trimDecodedAnswerSeparator(sourcePair.buffered, source == target, &response, &envelope)
 	if mutate != nil {
 		if err := mutate(&response); err != nil {
 			return ResponseResult{Response: response, Envelope: envelope, Diagnostics: diagnostics}, err
@@ -693,6 +694,7 @@ type StreamEngine struct {
 	finalized          bool
 	failure            error
 	pendingCompletion  *llmprotocol.Event
+	answerSeparator    answerSeparator
 	// continuityDropped reports the continuity drop once per stream.
 	continuityDropped bool
 }
@@ -764,6 +766,10 @@ func (engine *StreamEngine) encodeEvents(
 }
 
 func (engine *StreamEngine) prepareEvent(event *llmprotocol.Event) (llmprotocol.Diagnostics, error) {
+	// The separator is judged before request policy can hide the reasoning.
+	if err := engine.answerSeparator.trimEvent(event); err != nil {
+		return nil, err
+	}
 	if engine.mutation != nil {
 		if err := engine.mutation(event); err != nil {
 			return nil, err
