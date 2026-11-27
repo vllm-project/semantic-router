@@ -190,6 +190,28 @@ func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vll
 		return err
 	}
 
+	// Preserve the identity of the inference Service port across the
+	// migration to standalone mode (issues #7478, #7479 and #7483): renaming
+	// the port from "envoy-http" to "http-8801" or switching its targetPort
+	// to a named port reallocates NodePorts, breaks Ingress rules that pin
+	// the old port name, and drops still-ready legacy Pods from the
+	// Service endpoints.
+	for i := range svc.Spec.Ports {
+		if svc.Spec.Ports[i].Name != DefaultListenerName {
+			continue
+		}
+		for _, old := range found.Spec.Ports {
+			if old.Port != DefaultListenerPort || old.Name == DefaultListenerName {
+				continue
+			}
+			svc.Spec.Ports[i].Name = old.Name
+			svc.Spec.Ports[i].TargetPort = old.TargetPort
+			if old.NodePort != 0 {
+				svc.Spec.Ports[i].NodePort = old.NodePort
+			}
+		}
+	}
+
 	if !reflect.DeepEqual(found.Spec.Ports, svc.Spec.Ports) ||
 		found.Spec.Type != svc.Spec.Type ||
 		!reflect.DeepEqual(found.Spec.Selector, svc.Spec.Selector) {
