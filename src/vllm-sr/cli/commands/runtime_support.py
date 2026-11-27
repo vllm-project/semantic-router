@@ -371,6 +371,7 @@ def _resolve_effective_config_document(
     setup_mode: bool,
     *,
     materialize_local_runtime: bool = True,
+    enable_observability: bool = True,
 ) -> tuple[dict[str, object], bool]:
     with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
@@ -382,6 +383,12 @@ def _resolve_effective_config_document(
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
+        if not enable_observability:
+            # Repeat serve's projection for a stack without the local collector.
+            changed = (
+                apply_local_tracing_endpoint(config, stack, enable_observability=False)
+                or changed
+            )
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
@@ -392,13 +399,20 @@ def build_effective_config_bytes(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
+    *,
+    enable_observability: bool = True,
 ) -> bytes:
-    """Build the effective config bytes."""
+    """Build the effective config bytes.
+
+    *enable_observability* False also turns off tracing aimed at the local
+    collector, as serve does for a stack that does not run one.
+    """
 
     config, changed = _resolve_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
+        enable_observability=enable_observability,
     )
     if not changed:
         return config_path.read_bytes()
