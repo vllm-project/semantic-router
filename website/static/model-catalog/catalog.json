@@ -14251,6 +14251,134 @@
       }
     },
     {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.542
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "subset": "public",
+        "swe_harness": "internal version of the Antigravity harness",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0",
+      "metrics": {
+        "resolved": 0.54
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "terminal_harness": "Terminus-2",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "openai/mle-bench@1.0.0",
+      "benchmark_profile": "partial-30",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-mle-bench@1.0.0",
+      "metrics": {
+        "average_position": 0.392
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "runs_per_problem": 2,
+        "source_kind": "official_model_card",
+        "subset": "partial-30",
+        "tool_call_budget": 256,
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "osworld/verified@1.0.0",
+      "benchmark_profile": "official",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-osworld-verified@1.0.0",
+      "metrics": {
+        "success_rate": 0.74
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 5,
+        "max_steps": 100,
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-charxiv-reasoning@1.0.0",
+      "metrics": {
+        "score": 0.745
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "published-no-tools",
       "evidence": {
@@ -60425,6 +60553,635 @@
         "independent/gemini-3-6-flash-humanitys-last-exam@1.0.0",
         "independent/gemini-3-6-flash-scicode@1.0.0",
         "independent/gemini-3-6-flash-terminalbench-v2-1@1.0.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0",
+          "metric": "resolved",
+          "normalized": 0.54,
+          "status": "available",
+          "value": 0.54,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 54.0
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [
+        "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "high",
+      "score": 54.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.54,
+          "status": "available",
+          "value": 0.54,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [
+        "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0"
       ],
       "reasoning_effort": "high",
       "score": null,
@@ -111400,6 +112157,63 @@
         "video",
         "long_context"
       ],
+      "description": "Google's fastest, most cost-effective 3.5 model for high-throughput subagent tasks and document parsing.",
+      "display_name": "Gemini 3.5 Flash-Lite",
+      "distribution": {
+        "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+        "type": "proprietary_api"
+      },
+      "family": "gemini-3.5",
+      "id": "google/gemini-3.5-flash-lite",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:gemini",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemini-flash-four-level-minimal",
+      "released_at": "2026-07-21",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+        "status": "claimed",
+        "verified_at": "2026-11-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
       "description": "Google's Gemini 3 Pro-series reasoning model for software engineering and agentic workflows, available in preview.",
       "display_name": "Gemini 3.1 Pro",
       "distribution": {
@@ -118803,6 +119617,20 @@
           }
         },
         {
+          "catalog": "google/gemini-3.5-flash-lite",
+          "id": "gemini-3.5-flash-lite",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+            "status": "claimed",
+            "verified_at": "2026-11-24"
+          }
+        },
+        {
           "catalog": "google/gemini-3.7-flash",
           "id": "gemini-3.7-flash",
           "lifecycle": "active",
@@ -124295,6 +125123,22 @@
       "default": "medium",
       "default_mode": "enabled",
       "id": "gemini-flash-four-level-medium",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "minimal",
+      "default_mode": "enabled",
+      "id": "gemini-flash-four-level-minimal",
       "levels": [
         "minimal",
         "low",
