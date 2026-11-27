@@ -30,7 +30,6 @@ from cli.container_listener_tls import (
     LISTENER_TLS_PATHS_ENV,
     router_listener_tls_mounts,
 )
-from cli.container_listener_tls import _listener_tls_mounts as _listener_tls_mounts
 from cli.container_log_spool import (
     LOG_SPOOL_GID_ENV,
     LOG_SPOOL_READER_DIR,

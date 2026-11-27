@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 import yaml
 from cli import container_cli, container_start, core
+from cli.container_listener_tls import _listener_tls_mounts
 from cli.gateway_mode import GATEWAY_ENV, GATEWAY_EXTPROC, stack_gateway
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -122,13 +123,13 @@ def test_standalone_mounts_each_tls_listeners_certificate(tmp_path):
         },
         {"name": "http", "port": 8899},
     ]
-    assert container_start._listener_tls_mounts(listeners, str(tmp_path)) == [
+    assert _listener_tls_mounts(listeners, str(tmp_path)) == [
         f"{tmp_path}/certs/tls.crt:/app/certs/tls.crt:ro,z",
         f"{absolute_key}:{absolute_key}:ro,z",
     ]
     listeners[0]["tls"]["cert_file"] = "certs/missing.crt"
     with pytest.raises(ValueError, match=r"tls\.cert_file"):
-        container_start._listener_tls_mounts(listeners, str(tmp_path))
+        _listener_tls_mounts(listeners, str(tmp_path))
 
 
 @pytest.mark.parametrize("separate", [False, True])
