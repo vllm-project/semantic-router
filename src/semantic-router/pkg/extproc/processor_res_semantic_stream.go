@@ -32,6 +32,9 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	// sawContent marks the first model content, including a choice held by
+	// the decoder for ordering. It ignores keepalive and metadata frames.
+	sawContent bool
 	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
@@ -66,7 +69,6 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	recordStreamingTTFT(ctx)
 	if ctx.ResponseGuardHold != nil {
 		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
 	}
@@ -78,6 +80,11 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 		// The client gets what a buffered client gets for such a body.
 		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
+	// TTFT waits for the first upstream content: a keepalive or comment
+	// frame a gateway sends while it queues is not the model's answer.
+	// It is recorded before the stream settles, because the turn's session
+	// evidence is written there and takes the latency it has by then.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -140,6 +147,9 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 			buffers.errorFrame = frame
 		}
 		observeProtocolStream(ctx, events, diagnostics)
+		if state := ctx.SemanticStreamState; err == nil && state != nil && ctx.ProtocolResponseStream.HasPendingContent() {
+			state.sawContent = true
+		}
 		buffers.recordError(ctx, err, true)
 	}
 }
@@ -356,6 +366,9 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	if ctx == nil || ctx.TTFTRecorded || ctx.ProcessingStartTime.IsZero() || ctx.RequestModel == "" {
 		return
 	}
+	if state := ctx.SemanticStreamState; state == nil || !state.sawContent {
+		return
+	}
 
 	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 	if ttft <= 0 {
@@ -442,6 +455,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	}
 	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
+		state.sawContent = state.sawContent || streamEventCarriesContent(event)
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
@@ -542,6 +556,38 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			state.terminal = true
 			state.failed = event.Error
 		}
+	}
+}
+
+// streamEventCarriesContent recognizes the first model output for TTFT.
+func streamEventCarriesContent(event llmprotocol.Event) bool {
+	switch {
+	case event.Delta != "":
+		return true
+	case event.ToolCall != nil:
+		call := event.ToolCall
+		return call.ID != "" || call.Name != "" || call.Arguments != ""
+	case event.GeneratedImage != nil:
+		return event.GeneratedImage.PartialImage != ""
+	default:
+		return streamBlockCarriesContent(event.Content)
+	}
+}
+
+func streamBlockCarriesContent(block *llmprotocol.Content) bool {
+	if block == nil {
+		return false
+	}
+	switch block.Kind {
+	case llmprotocol.ContentReasoning:
+		return block.Text != "" || block.ReasoningDetail != nil && block.ReasoningDetail.PayloadBytes() > 0
+	case llmprotocol.ContentServerTool:
+		return len(block.Raw) > 0
+	case llmprotocol.ContentGeneratedImage:
+		image := block.GeneratedImage
+		return image != nil && image.Result != nil && *image.Result != ""
+	default:
+		return block.Text != ""
 	}
 }
 

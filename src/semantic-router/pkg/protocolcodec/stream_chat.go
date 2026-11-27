@@ -332,6 +332,12 @@ func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmp
 	return append(events, chunkEvents...), diagnostics, err
 }
 
+// A held opening choice already carries answer text; only its event order
+// is pending. Partial frames and rejected chunks never become held choices.
+func (decoder *chatStreamDecoder) hasPendingContent() bool {
+	return decoder.heldChoice != nil
+}
+
 func (decoder *chatStreamDecoder) opensWithoutOrder(chunk chatChunkWire) bool {
 	// A Chat target carries reasoning and answer in separate fields, so there is
 	// no block order to choose.
