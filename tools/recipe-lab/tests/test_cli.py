@@ -235,6 +235,65 @@ def test_run_round_beyond_budget_exits_2(tmp_path, capsys):
     assert "budget exhausted" in capsys.readouterr().err
 
 
+def test_run_baseline_incomplete_capture_surfaces_the_reason(monkeypatch, tmp_path):
+    # review follow-up: the baseline path read result["summary"] directly,
+    # so a partial baseline capture died as a bare KeyError. The run must
+    # surface the capture reason instead, and write no ledger records -
+    # the candidates' deltas would be silently null.
+    from recipe_lab import cli
+
+    spec_path, cases = _write_frozen_spec(tmp_path)
+    bank = tmp_path / "bank.jsonl"
+    bank.write_text("", encoding="utf-8")
+    cands = tmp_path / "cands"
+    cands.mkdir()
+    (cands / "cand-1.yaml").write_text("kind: config\n", encoding="utf-8")
+
+    def fake_evaluate(**kwargs):
+        return {
+            "statuses": {"c1": 200},
+            "join_stats": {"matched": 1},
+            "timings": {},
+            "reload": "restart",
+            "incomplete": True,
+            "incomplete_reason": (
+                "replay records for the restart run: 1 of 2 cases joined"
+            ),
+        }
+
+    monkeypatch.setattr(cli, "evaluate_candidate", fake_evaluate)
+    ledger_path = tmp_path / "ledger.jsonl"
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "run",
+                "--spec",
+                spec_path,
+                "--round",
+                "1",
+                "--cases",
+                str(cases),
+                "--bank",
+                str(bank),
+                "--baseline-config",
+                str(tmp_path / "baseline.yaml"),
+                "--ledger",
+                str(ledger_path),
+                "--candidates",
+                str(cands),
+                "--router-bin",
+                "/bin/true",
+                "--mock-backend",
+                str(tmp_path / "mock.py"),
+                "--output-dir",
+                str(tmp_path / "out"),
+            ]
+        )
+    assert "baseline replay capture incomplete" in str(exc.value)
+    assert "1 of 2 cases joined" in str(exc.value)
+    assert not ledger_path.exists()
+
+
 def test_run_records_declared_gates_as_not_evaluated(monkeypatch, tmp_path):
     # A3: replay never evaluates guards; every declared gate lands in the
     # replay record as explicitly not evaluated (never null).

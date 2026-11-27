@@ -617,6 +617,17 @@ def cmd_run(args: argparse.Namespace) -> int:
             if session is not None:
                 session.stop()  # H: no leaked router/backend on the exit path
             raise SystemExit(f"baseline evaluation failed: {exc}") from exc
+        if result.get("incomplete"):
+            # H: a partial baseline capture has no summary to read, and it
+            # cannot anchor the attribution deltas the candidates' records
+            # would cite - surface the capture reason instead of a KeyError
+            # on the missing summary.
+            if session is not None:
+                session.stop()  # no leaked router/backend on the exit path
+            raise SystemExit(
+                "baseline replay capture incomplete: "
+                f"{result.get('incomplete_reason', '')}"
+            )
         baseline_summary = result["summary"]
         run_results.append(
             {
