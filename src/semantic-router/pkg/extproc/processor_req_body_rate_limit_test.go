@@ -59,9 +59,9 @@ func TestDeferredModelQuotaRefusesCacheHitBeforeRecordingIt(t *testing.T) {
 	if response := router.applyRateLimit(&RequestContext{}, "wide"); response != nil {
 		t.Fatalf("first request was rejected: %v", response)
 	}
-	ctx := &RequestContext{
-		CacheSelectedModel: "wide", deferModelRateLimit: true,
-		RateLimitCtx: &ratelimit.Context{Model: "wide", CheckScope: ratelimit.RequestLimits},
+	ctx := &RequestContext{CacheSelectedModel: "wide"}
+	if response := router.reserveRateLimit(ctx, "small"); response != nil {
+		t.Fatalf("proposal was rejected: %v", response)
 	}
 	response, done := router.finishExactCacheLookup(ctx, "decision", cache.CacheResult{Found: true}, nil, 0, 0)
 	if !done || response.GetImmediateResponse().GetStatus().GetCode() != 429 || ctx.VSRCacheHit || ctx.RouterReplayID != "" {

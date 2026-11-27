@@ -77,111 +77,69 @@ func (l *LocalLimiter) Name() string {
 // the request is denied and quota consumed from buckets checked earlier for
 // this request is refunded, so denied requests do not burn budget.
 func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
+	decision, _ := l.reserve(ctx, false)
+	return decision, nil
+}
+
+type quotaCharge struct {
+	bucket      *bucket
+	cost        int64
+	windowEnd   time.Time
+	modelScoped bool
+}
+
+func (l *LocalLimiter) reserve(ctx Context, modelsOnly bool) (*Decision, []quotaCharge) {
 	now := time.Now()
 	l.pruneExpired(now)
-
-	var mostRestrictiveRemaining int64 = -1
-	var mostRestrictiveLimit int64 = -1
-	var earliestReset time.Time
-
-	// Quota consumed so far for this request, refunded if a later bucket denies.
-	type consumption struct {
-		b         *bucket
-		cost      int64
-		windowEnd time.Time
-	}
-	var consumed []consumption
-	refundConsumed := func() {
-		for _, c := range consumed {
-			c.b.refund(c.cost, c.windowEnd)
+	decision := &Decision{Allowed: true, Remaining: -1, Limit: -1, Provider: l.Name()}
+	var charges []quotaCharge
+	consume := func(rule *Rule, kind string, limit, cost int64) bool {
+		key := l.bucketKey(rule.Name, ctx.UserID, quotaModel(rule, ctx), kind)
+		b := l.lockedBucket(key, limit, rule.Unit)
+		allowed, remaining, resetAt := b.tryConsume(cost, now)
+		b.mu.Unlock()
+		if !allowed {
+			refundQuota(charges)
+			decision.Allowed = false
+			decision.Remaining, decision.Limit = remaining, limit
+			decision.ResetAt, decision.RetryAfter = resetAt, time.Until(resetAt)
+			return false
 		}
+		if cost > 0 {
+			charges = append(charges, quotaCharge{b, cost, resetAt, modelRule(rule)})
+		}
+		if decision.Remaining < 0 || remaining < decision.Remaining {
+			decision.Remaining = remaining
+		}
+		if decision.Limit < 0 || limit < decision.Limit {
+			decision.Limit = limit
+		}
+		if decision.ResetAt.IsZero() || resetAt.Before(decision.ResetAt) {
+			decision.ResetAt = resetAt
+		}
+		return true
 	}
 
 	for i := range l.rules {
 		rule := &l.rules[i]
-		if !l.ruleMatches(rule, ctx) || ctx.CheckScope == RequestLimits && modelRule(rule) ||
-			ctx.CheckScope == ModelLimits && !modelRule(rule) {
+		if !l.ruleMatches(rule, ctx) || modelsOnly && !modelRule(rule) {
 			continue
 		}
-		model := quotaModel(rule, ctx)
-
-		if rule.RequestsPerUnit > 0 {
-			key := l.bucketKey(rule.Name, ctx.UserID, model, "rpm")
-			b := l.lockedBucket(key, int64(rule.RequestsPerUnit), rule.Unit)
-			allowed, remaining, resetAt := b.tryConsume(1, now)
-			b.mu.Unlock()
-			if !allowed {
-				refundConsumed()
-				return &Decision{
-					Allowed:    false,
-					Remaining:  remaining,
-					Limit:      int64(rule.RequestsPerUnit),
-					ResetAt:    resetAt,
-					RetryAfter: time.Until(resetAt),
-					Provider:   l.Name(),
-				}, nil
-			}
-			consumed = append(consumed, consumption{b: b, cost: 1, windowEnd: resetAt})
-			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
-				mostRestrictiveRemaining = remaining
-			}
-			if mostRestrictiveLimit < 0 || int64(rule.RequestsPerUnit) < mostRestrictiveLimit {
-				mostRestrictiveLimit = int64(rule.RequestsPerUnit)
-			}
-			if earliestReset.IsZero() || resetAt.Before(earliestReset) {
-				earliestReset = resetAt
-			}
+		if rule.RequestsPerUnit > 0 && !consume(rule, "rpm", int64(rule.RequestsPerUnit), 1) {
+			return decision, nil
 		}
-
-		if rule.TokensPerUnit > 0 {
-			key := l.bucketKey(rule.Name, ctx.UserID, model, "tpm")
-			b := l.lockedBucket(key, int64(rule.TokensPerUnit), rule.Unit)
-			cost := int64(ctx.TokenCount)
-			if cost <= 0 {
-				cost = 0
-			}
-			allowed, remaining, resetAt := b.tryConsume(cost, now)
-			b.mu.Unlock()
-			if !allowed {
-				refundConsumed()
-				return &Decision{
-					Allowed:    false,
-					Remaining:  remaining,
-					Limit:      int64(rule.TokensPerUnit),
-					ResetAt:    resetAt,
-					RetryAfter: time.Until(resetAt),
-					Provider:   l.Name(),
-				}, nil
-			}
-			if cost > 0 {
-				consumed = append(consumed, consumption{b: b, cost: cost, windowEnd: resetAt})
-			}
-			if mostRestrictiveRemaining < 0 || remaining < mostRestrictiveRemaining {
-				mostRestrictiveRemaining = remaining
-			}
-			if mostRestrictiveLimit < 0 || int64(rule.TokensPerUnit) < mostRestrictiveLimit {
-				mostRestrictiveLimit = int64(rule.TokensPerUnit)
-			}
-			if earliestReset.IsZero() || resetAt.Before(earliestReset) {
-				earliestReset = resetAt
-			}
+		if rule.TokensPerUnit > 0 && !consume(rule, "tpm", int64(rule.TokensPerUnit), int64(max(0, ctx.TokenCount))) {
+			return decision, nil
 		}
 	}
+	decision.Remaining, decision.Limit = max(0, decision.Remaining), max(0, decision.Limit)
+	return decision, charges
+}
 
-	if mostRestrictiveRemaining < 0 {
-		mostRestrictiveRemaining = 0
+func refundQuota(charges []quotaCharge) {
+	for _, charge := range charges {
+		charge.bucket.refund(charge.cost, charge.windowEnd)
 	}
-	if mostRestrictiveLimit < 0 {
-		mostRestrictiveLimit = 0
-	}
-
-	return &Decision{
-		Allowed:   true,
-		Remaining: mostRestrictiveRemaining,
-		Limit:     mostRestrictiveLimit,
-		ResetAt:   earliestReset,
-		Provider:  l.Name(),
-	}, nil
 }
 
 // Report records actual token usage from LLM responses for TPM rules.

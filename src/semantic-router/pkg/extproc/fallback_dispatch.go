@@ -111,6 +111,21 @@ func (r *OpenAIRouter) shouldAttemptFallback(ctx *RequestContext) bool {
 	return len(ctx.VSREligibleModelRefs) > 1
 }
 
+func ensureFallbackRecord(orch *fallback.Orchestrator, ctx *RequestContext, model string) *fallback.ExecutionRecord {
+	if ctx.FallbackRecord == nil {
+		record := orch.NewExecutionRecord(ctx.RequestID, ctx.VSRSelectedDecisionName, model)
+		record.SessionID = ctx.SessionID
+		if ctx.SemanticRequest != nil {
+			record.ConversationID = ctx.SemanticRequest.ConversationID
+		}
+		if record.ConversationID == "" && ctx.ResponseObjectState != nil {
+			record.ConversationID = ctx.ResponseObjectState.ConversationID
+		}
+		ctx.FallbackRecord = record
+	}
+	return ctx.FallbackRecord
+}
+
 // maybeExecuteFallback evaluates the upstream failure and, if eligible, coordinates
 // bounded fallback across candidate models from the decision's hard-eligible list.
 func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *ext_proc.ProcessingResponse {
@@ -128,16 +143,7 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 	}
 	backendName := r.primaryBackendForAccounting(ctx, primaryModel)
 
-	if ctx.FallbackRecord == nil {
-		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, ctx.VSRSelectedDecisionName, primaryModel)
-		ctx.FallbackRecord.SessionID = ctx.SessionID
-		if ctx.SemanticRequest != nil {
-			ctx.FallbackRecord.ConversationID = ctx.SemanticRequest.ConversationID
-		}
-		if ctx.FallbackRecord.ConversationID == "" && ctx.ResponseObjectState != nil {
-			ctx.FallbackRecord.ConversationID = ctx.ResponseObjectState.ConversationID
-		}
-	}
+	ensureFallbackRecord(orch, ctx, primaryModel)
 	defer r.recordFallbackExecution(ctx)
 
 	var primaryDuration time.Duration

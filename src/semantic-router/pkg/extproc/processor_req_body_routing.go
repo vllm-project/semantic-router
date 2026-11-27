@@ -37,6 +37,7 @@ type providerDispatch struct {
 	callerMode                  llmprotocol.ReasoningMode
 	callerEffort, callerDisplay string
 	callerBudget                *int64
+	callerOutputLimit           *int64
 	entrypoint                  string
 	logicalModel                string
 	backendModel                string
@@ -72,6 +73,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	}
 	dispatch.callerMode, dispatch.callerEffort = request.ReasoningMode, request.ReasoningEffort
 	dispatch.callerDisplay, dispatch.callerBudget = request.ReasoningDisplay, request.ReasoningBudgetTokens
+	dispatch.callerOutputLimit = request.Sampling.MaxOutputTokens
 	changed, err := r.prepareProviderRequest(request, dispatch, ctx)
 	if err != nil {
 		return nil, err
@@ -87,17 +89,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 			return nil, err
 		}
 	}
-	ctx.TargetFormat = dispatch.targetFormat
-	if !ctx.LooperRequest {
-		ctx.primaryBackendName = dispatch.backendName
-	}
-	// Bind response policy where the backend is selected.
-	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
-	attachSemanticRequest(ctx, request)
-	// Per-model accounting keys off the validated concrete dispatch model.
-	ctx.RequestModel = dispatch.logicalModel
-
-	ctx.VSRSelectedModel = dispatch.logicalModel
+	bindProviderRequest(ctx, dispatch, request)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -105,6 +97,16 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		"wire_format": dispatch.targetFormat,
 	})
 	return dispatch, nil
+}
+
+func bindProviderRequest(ctx *RequestContext, dispatch *providerDispatch, request *llmprotocol.Request) {
+	ctx.TargetFormat = dispatch.targetFormat
+	if !ctx.LooperRequest {
+		ctx.primaryBackendName = dispatch.backendName
+	}
+	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
+	attachSemanticRequest(ctx, request)
+	ctx.RequestModel, ctx.VSRSelectedModel = dispatch.logicalModel, dispatch.logicalModel
 }
 
 func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat) (llmprotocol.CapabilitySet, bool) {
@@ -274,17 +276,18 @@ func (r *OpenAIRouter) applyDispatchDecision(
 		}
 		return r.addSemanticSystemPromptIfConfigured(request, "", dispatch.logicalModel, ctx)
 	}
-	changed := false
-	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
-		changed = r.applySemanticReasoningMode(
-			request, dispatch.effectiveBackendModel(), dispatch.targetFormat, dispatch.useReasoning,
-			ctx.decisionForBackend(dispatch.logicalModel),
-		)
-	}
+	changed := r.applyDispatchReasoning(request, dispatch, ctx)
 	injected, err := r.addSemanticSystemPromptIfConfigured(
 		request, dispatch.decisionName, dispatch.logicalModel, ctx,
 	)
 	return changed || injected, err
+}
+
+func (r *OpenAIRouter) applyDispatchReasoning(request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) bool {
+	return dispatch.targetFormat != llmprotocol.OpenAIChatV1 && r.applySemanticReasoningMode(
+		request, dispatch.effectiveBackendModel(), dispatch.targetFormat, dispatch.useReasoning,
+		ctx.decisionForBackend(dispatch.logicalModel),
+	)
 }
 
 func (r *OpenAIRouter) applyDispatchRequestParams(
@@ -296,9 +299,13 @@ func (r *OpenAIRouter) applyDispatchRequestParams(
 		decisionName = ctx.VSRSelectedDecision.Name
 	}
 	return r.applySemanticRequestParams(
-		config.RequestParamsPluginOf(requestPlugins(r.Config, ctx)), request,
+		r.dispatchRequestParams(ctx), request,
 		config.RoutingDecisionKey(ctx.Routing.RecipeName(), decisionName),
 	)
+}
+
+func (r *OpenAIRouter) dispatchRequestParams(ctx *RequestContext) *config.RequestParamsPluginConfig {
+	return config.RequestParamsPluginOf(requestPlugins(r.Config, ctx))
 }
 
 func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
@@ -390,7 +397,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		}
 	}
 	primary := dispatch.logicalModel
-	prepared, admission, err := r.prepareAdmittedDispatch(dispatch, ctx)
+	candidate, admission, err := r.prepareAdmittedDispatch(dispatch, ctx)
+	if candidate.alternate != nil {
+		commitDispatchCandidate(ctx, dispatch, candidate)
+	}
+	prepared := candidate.request
 	if admission.Source != "" {
 		ctx.finalAdmission = &admission
 		ctx.admissionProposalModel = primary
@@ -405,6 +416,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			return r.respondSelectionRejected(ctx, firstNonEmpty(dispatch.entrypoint, primary), err), nil
 		}
 		return nil, err
+	}
+	if cached, hit := r.lookupFinalModelCache(ctx, dispatch); hit {
+		return cached, nil
 	}
 	if limited := r.checkFinalModelRateLimit(ctx, dispatch.logicalModel); limited != nil {
 		return limited, nil
@@ -445,6 +459,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = dispatch.reasoningMode, dispatch.reasoningEffort
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
+	}
+	if ctx.FallbackRequest != nil {
+		if orch := r.fallbackOrchestratorForContext(ctx); orch != nil {
+			ensureFallbackRecord(orch, ctx, dispatch.logicalModel)
+		}
 	}
 	if observations != nil {
 		for _, record := range *observations {

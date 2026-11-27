@@ -47,18 +47,9 @@ type Context struct {
 	Groups       []string
 	Model        string
 	Headers      map[string]string
-	TokenCount   int // estimated input tokens from classification
-	CheckScope   CheckScope
+	TokenCount   int    // estimated input tokens from classification
 	RequestModel string // Model used to charge request limits before final selection.
 }
-
-type CheckScope uint8
-
-const (
-	AllLimits CheckScope = iota
-	RequestLimits
-	ModelLimits
-)
 
 // Decision is the result of a rate limit check.
 type Decision struct {

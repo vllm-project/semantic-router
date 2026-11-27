@@ -57,11 +57,11 @@ func (r *RateLimitResolver) FailOpen() bool {
 // The returned Decision aggregates the lowest Remaining/Limit across all
 // providers for response header generation.
 func (r *RateLimitResolver) Check(ctx Context) (*Decision, error) {
-	if r == nil {
-		return &Decision{Allowed: true}, nil
-	}
+	return r.checkProviders(ctx, func(provider Provider) (*Decision, error) { return provider.Check(ctx) })
+}
 
-	if len(r.providers) == 0 {
+func (r *RateLimitResolver) checkProviders(ctx Context, check func(Provider) (*Decision, error)) (*Decision, error) {
+	if r == nil || len(r.providers) == 0 {
 		return &Decision{Allowed: true}, nil
 	}
 
@@ -73,7 +73,7 @@ func (r *RateLimitResolver) Check(ctx Context) (*Decision, error) {
 
 	tried := make([]string, 0, len(r.providers))
 	for _, p := range r.providers {
-		d, err := p.Check(ctx)
+		d, err := check(p)
 		if err != nil {
 			tried = append(tried, p.Name())
 			if r.failOpen {
@@ -86,6 +86,9 @@ func (r *RateLimitResolver) Check(ctx Context) (*Decision, error) {
 				Provider:   p.Name(),
 				RetryAfter: 5 * time.Second,
 			}, fmt.Errorf("rate limit check failed at provider %q: %w", p.Name(), err)
+		}
+		if d == nil {
+			continue
 		}
 
 		tried = append(tried, p.Name())
@@ -119,6 +122,79 @@ func (r *RateLimitResolver) Check(ctx Context) (*Decision, error) {
 	logging.Debugf("Rate limit ALLOWED after checking [%s] for user=%s model=%s (remaining=%d)",
 		strings.Join(tried, " → "), ctx.UserID, ctx.Model, merged.Remaining)
 	return merged, nil
+}
+
+type Reservation struct {
+	model string
+	local []localReservation
+}
+
+type localReservation struct {
+	limiter *LocalLimiter
+	charges []quotaCharge
+}
+
+// ReserveLocal checks local quotas before a request whose selected model may change.
+func (r *RateLimitResolver) ReserveLocal(ctx Context) (*Reservation, *Decision) {
+	reservation := &Reservation{model: ctx.Model}
+	decision, _ := r.checkProviders(ctx, func(provider Provider) (*Decision, error) {
+		limiter, ok := provider.(*LocalLimiter)
+		if !ok {
+			return nil, nil
+		}
+		decision, charges := limiter.reserve(ctx, false)
+		if decision.Allowed {
+			reservation.local = append(reservation.local, localReservation{limiter, charges})
+		}
+		return decision, nil
+	})
+	if !decision.Allowed {
+		reservation.refund()
+		return nil, decision
+	}
+	return reservation, decision
+}
+
+// Finalize checks the final model and keeps external providers' checks grouped.
+func (r *RateLimitResolver) Finalize(ctx Context, reservation *Reservation) (*Decision, error) {
+	if ctx.Model != reservation.model {
+		for i := range reservation.local {
+			local := &reservation.local[i]
+			decision, charges := local.limiter.reserve(ctx, true)
+			if !decision.Allowed {
+				reservation.refund()
+				return decision, nil
+			}
+			kept := local.charges[:0]
+			for _, charge := range local.charges {
+				if charge.modelScoped {
+					charge.bucket.refund(charge.cost, charge.windowEnd)
+				} else {
+					kept = append(kept, charge)
+				}
+			}
+			kept = append(kept, charges...)
+			local.charges = kept
+		}
+	}
+	decision, err := r.checkProviders(ctx, func(provider Provider) (*Decision, error) {
+		if _, local := provider.(*LocalLimiter); local {
+			return nil, nil
+		}
+		return provider.Check(ctx)
+	})
+	if err != nil || !decision.Allowed {
+		reservation.refund()
+	}
+	reservation.local = nil
+	return decision, err
+}
+
+func (r *Reservation) refund() {
+	for _, local := range r.local {
+		refundQuota(local.charges)
+	}
+	r.local = nil
 }
 
 // Report forwards token usage to all providers for budget tracking.

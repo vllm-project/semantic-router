@@ -594,8 +594,8 @@ type RequestContext struct {
 
 	// RateLimitCtx is retained for the existing optional data-plane limiter.
 	// Protocol codecs never read or mutate admission state.
-	RateLimitCtx        *ratelimit.Context
-	deferModelRateLimit bool
+	RateLimitCtx         *ratelimit.Context
+	rateLimitReservation *ratelimit.Reservation
 
 	// Retention is a deep-clone snapshot of the matched Decision's retention
 	// attribute. The clone owns its own pointer fields so that any later

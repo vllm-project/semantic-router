@@ -18,11 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
-func TestFinalAdmissionAtGateway(t *testing.T) {
-	small, first := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
-	wide, second := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
-	preferred, third := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
-	const document = `version: v0.5
+const finalAdmissionGatewayConfig = `version: v0.5
 listeners: [{name: public, address: 127.0.0.1, port: 8899}]
 providers:
   defaults: {model: small}
@@ -58,6 +54,11 @@ recipes:
               placeholders: {redact: "[MASKED_VALUE_{index}]"}
 entrypoints: [{model_names: [auto], recipe: default, default: true}]
 `
+
+func TestFinalAdmissionAtGateway(t *testing.T) {
+	small, first := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
+	wide, second := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
+	preferred, third := newUmbrellaBackend(t, llmprotocol.OpenAIChatV1)
 	const static = `{type: static}`
 	const multiFactor = `{type: multi_factor, multi_factor: {weights: {quality: 0, latency: 0, cost: 1, load: 0}}}`
 	const pair = `{model: small}, {model: wide}`
@@ -73,7 +74,7 @@ entrypoints: [{model_names: [auto], recipe: default, default: true}]
 		{"model quota checks the winner", pair, static, "", &ratelimit.RuleMatch{Model: "wide"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(document, strings.TrimPrefix(first.URL, "http://"), strings.TrimPrefix(second.URL, "http://"), strings.TrimPrefix(third.URL, "http://"), test.refs, test.algorithm)))
+			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(finalAdmissionGatewayConfig, strings.TrimPrefix(first.URL, "http://"), strings.TrimPrefix(second.URL, "http://"), strings.TrimPrefix(third.URL, "http://"), test.refs, test.algorithm)))
 			require.NoError(t, err)
 			pools, err := upstream.Build(cfg, upstream.Options{})
 			require.NoError(t, err)
