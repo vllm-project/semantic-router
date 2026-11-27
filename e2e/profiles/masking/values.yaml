@@ -178,7 +178,10 @@ config:
           endpoint: http://provider-mocker.default.svc.cluster.local:8000/v1/systemone
           model: e2e/fake-systemone
           schema: vllm-sr/4.0
-          timeout_ms: 5000
+          # Above the cluster resolver's 5 s retry, so one lost DNS answer on
+          # the first scan of a case is not a masking outage. A fixture that
+          # is down still fails at once, and one that hangs at 10 s.
+          timeout_ms: 10000
           capabilities:
             question_types: [choice, noul, span]
       # The PII signal asks only the fixture, so a detection here is

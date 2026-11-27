@@ -47,7 +47,43 @@ func testRouterReplayRestartRecovery(ctx context.Context, client *kubernetes.Cli
 		return err
 	}
 
-	return verifyReplayRecordAfterRestart(ctx, client, opts, expected.RecordID, expected.PreparedDispatch)
+	if err := verifyReplayRecordAfterRestart(ctx, client, opts, expected.RecordID, expected.PreparedDispatch); err != nil {
+		return err
+	}
+	return waitForChatThroughEnvoy(ctx, client, opts)
+}
+
+// waitForChatThroughEnvoy returns once a chat completion through Envoy
+// succeeds again. The replay check above reaches the new pod directly, while
+// Envoy's ext_proc cluster can still refuse connections for a while, which
+// would fail the next case's first request.
+func waitForChatThroughEnvoy(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	const timeout = 90 * time.Second
+	deadline := time.Now().Add(timeout)
+	lastErr := fmt.Errorf("no attempt made")
+	for time.Now().Before(deadline) {
+		session, err := fixtures.OpenServiceSession(ctx, client, opts)
+		if err == nil {
+			var resp *fixtures.HTTPResponse
+			resp, err = fixtures.NewChatCompletionsClient(session, 30*time.Second).Create(ctx, fixtures.ChatCompletionsRequest{
+				Model:    "vllm-sr/auto",
+				Messages: []fixtures.ChatMessage{{Role: "user", Content: "What is 2+2? Reply with just the number."}},
+			}, nil)
+			session.Close()
+			if err == nil && resp.StatusCode == http.StatusOK {
+				return nil
+			}
+			if err == nil {
+				err = fmt.Errorf("status %d: %s", resp.StatusCode, string(resp.Body))
+			}
+		}
+		lastErr = err
+		if opts.Verbose {
+			fmt.Printf("[Test] Chat through Envoy not ready after the restart: %v — retrying\n", err)
+		}
+		time.Sleep(3 * time.Second)
+	}
+	return fmt.Errorf("chat through Envoy did not recover within %s after the restart: %w", timeout, lastErr)
 }
 
 type replayRecoveryExpectation struct {

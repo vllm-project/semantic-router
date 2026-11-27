@@ -170,7 +170,7 @@ func TestResolveReplayStoreBackend(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := resolveReplayStoreBackend(tt.cfg); got != tt.want {
+			if got := tt.cfg.StoreBackendName(); got != tt.want {
 				t.Fatalf("expected backend %q, got %q", tt.want, got)
 			}
 		})

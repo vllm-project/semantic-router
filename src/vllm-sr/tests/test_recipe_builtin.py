@@ -94,6 +94,19 @@ def _init(source, bindings, output, extra=(), recipe_name="balance"):
     )
 
 
+def test_init_refuses_a_catalog_snapshot_this_cli_cannot_serve(tmp_path):
+    source, bindings, _ = _inputs(tmp_path)
+    output = tmp_path / "v04.yaml"
+    result = _init(source, bindings, output, ["--catalog-version", "v0.4"])
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit), result.exception
+    assert (
+        "Catalog v0.4 bundle 'mom-v1' cannot be bound by this CLI (requires cli < 0.5.0)"
+        in result.output
+    )
+    assert not output.exists()
+
+
 def test_offline_list_and_export_preserve_verified_bundle(tmp_path):
     runner = CliRunner()
     result = runner.invoke(cli, ["recipe", "builtin", "list"])

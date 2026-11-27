@@ -403,6 +403,12 @@ type RouterReplayConfig struct {
 	Qdrant       *RouterReplayQdrantConfig   `json:"qdrant,omitempty" yaml:"qdrant,omitempty"`
 }
 
+// RouterReplayStoreBackends are the store_backend values Router Replay can
+// create; an empty one picks the default.
+func RouterReplayStoreBackends() []string {
+	return []string{"file", "memory", "redis", "postgres", "milvus", "qdrant"}
+}
+
 type RouterReplayRedisConfig struct {
 	Address       string `json:"address" yaml:"address"`
 	DB            int    `json:"db,omitempty" yaml:"db,omitempty"`

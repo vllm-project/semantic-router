@@ -290,7 +290,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		return
 	}
 
-	warnings, err := validateMergedDeploy(yamlBytes)
+	warnings, err := validateMergedDeploy(existingData, yamlBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
@@ -342,7 +342,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	log.Printf("[Deploy] Config written to %s: version=%s, size=%d bytes", configPath, version, len(yamlBytes))
 
 	// Step 6: Propagate the new config to the managed runtime before returning.
-	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 	if applyErr != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", applyErr), http.StatusInternalServerError)
 		return
@@ -371,8 +371,8 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 		DSLSnapshot: req.DSL,
 	})
 
-	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage, warnings)
+	if pending.status != "" {
+		writePendingResponse(w, version, pending, warnings)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -386,7 +386,7 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 // validateMergedDeploy checks a merged deploy document as the Router loads
 // it with its own environment, which the Dashboard may not share, and returns
 // the Router's warnings about it.
-func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
+func validateMergedDeploy(previous, data []byte) ([]routerconfig.ConfigWarning, error) {
 	if err := routerconfig.ValidateYAMLBytesDeferringEnv(data); err != nil {
 		return nil, err
 	}
@@ -396,7 +396,7 @@ func validateMergedDeploy(data []byte) ([]routerconfig.ConfigWarning, error) {
 	if err != nil {
 		return []routerconfig.ConfigWarning{}, nil
 	}
-	return savedConfigWarnings(cfg), nil
+	return savedConfigWarnings(previous, cfg), nil
 }
 
 func mergeDeployPayload(currentData []byte, req DeployRequest) ([]byte, error) {
@@ -670,7 +670,7 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	log.Printf("[Rollback] Config rolled back to version %s, written to %s", version, configPath)
 
-	restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+	pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 	if applyErr != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -701,8 +701,8 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 		DSLSnapshot: readArchivedDSL(configDir),
 	})
 
-	if restartMessage != "" {
-		writeRestartRequiredResponse(w, version, restartMessage, nil)
+	if pending.status != "" {
+		writePendingResponse(w, version, pending, nil)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

@@ -44,6 +44,9 @@ See a complete example:
 
 - Requires more than one `modelRef`, each with a backend in
   `providers.models[].backend_refs`.
+- Answers on the Chat Completions API only, the one API that carries several
+  `choices`. A Messages or Responses request that reaches a ratings decision
+  gets `400` with `unsupported_capability` before any candidate is called.
 - Every candidate receives the request content, so all candidate providers must
   be allowed by the route's data policy.
 - Cost grows with the number of candidates. Concurrency reduces wall-clock
