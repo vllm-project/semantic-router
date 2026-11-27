@@ -548,6 +548,38 @@ recipes:
     )
 
 
+def test_validate_command_names_the_router_replay_stores(tmp_path):
+    config_path = _write_config(
+        tmp_path,
+        """
+version: v0.5
+listeners: []
+providers:
+  models:
+    - name: frontier
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+global:
+  services:
+    router_replay:
+      store_backend: bogus
+""",
+    )
+
+    result = CliRunner().invoke(
+        main, ["config", "validate", "--config", str(config_path), "--offline"]
+    )
+
+    assert result.exit_code == 1
+    assert (
+        "store_backend: 'bogus' is not one of "
+        "['', 'file', 'memory', 'redis', 'postgres', 'milvus', 'qdrant']"
+        in " ".join(result.output.split())
+    )
+
+
 @pytest.mark.parametrize(
     "model_config",
     (

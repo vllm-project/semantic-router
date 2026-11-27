@@ -135,11 +135,13 @@ func drainNative(timeout time.Duration, listeners []*nativeListener) error {
 	return err
 }
 
+var errStandaloneNeedsListener = errors.New("standalone mode needs at least one listener in the configuration")
+
 // listenNative binds every listener of cfg, on bindAddress when it is set; a
 // failure closes those bound.
 func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Options) ([]*nativeListener, error) {
 	if len(cfg.Listeners) == 0 {
-		return nil, errors.New("standalone mode needs at least one listener in the configuration")
+		return nil, errStandaloneNeedsListener
 	}
 	var bound []*nativeListener
 	closeBound := func() {

@@ -42,6 +42,7 @@ var (
 		validateGlobalToolSessionsContracts,
 		validateGuardVerdictStore,
 		validateGlobalRouterReplayCaptureContracts,
+		validateGlobalRouterReplayStoreBackend,
 		validateGlobalPluginContracts,
 		validateMaskingIdentity,
 	}

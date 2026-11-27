@@ -77,6 +77,16 @@ describe('router defaults structured schemas', () => {
     expect((DEFAULT_SECTIONS.router_replay as { store_backend?: string }).store_backend).toBe('file')
   })
 
+  it('offers exactly the Replay stores the Router accepts', () => {
+    const card = buildRouterSectionCards({ config: null, routerConfig: {}, routerDefaults: null }).find(
+      (item) => item.key === 'router_replay',
+    )!
+    const offered = card.editFields.find((field) => field.name === 'store_backend')?.options
+    const accepted = routerConfigFieldAtPath(['global', 'services', 'router_replay', 'store_backend'])
+    expect(offered).toEqual(accepted?.options?.filter(Boolean))
+    expect(offered).toEqual(['file', 'memory', 'redis', 'postgres', 'milvus', 'qdrant'])
+  })
+
   it('normalizes typed lists and objects while preserving advanced keys', () => {
     const normalized = normalizeRouterStructuredFields('router_core', {
       list_backend_models: true,

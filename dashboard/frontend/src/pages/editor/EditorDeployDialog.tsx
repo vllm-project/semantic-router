@@ -157,8 +157,8 @@ function Outcome({ result }: { result: DeployResult }) {
             </Button>
           }
         >
-          The config was written, but the Router did not report healthy within five seconds. Check
-          its logs before you route traffic to the change.
+          The config was written, but the Router did not confirm it. Check its logs before you route
+          traffic to the change.
         </Alert>
       )
     default:

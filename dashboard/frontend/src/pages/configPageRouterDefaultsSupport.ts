@@ -1,6 +1,7 @@
 import type { EditFormData, FieldConfig } from '../components/EditModal'
 import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 import { X_AUTHZ_USER_ID } from '../generated/vsrHeaders'
+import { routerConfigFieldAtPath } from '../lib/routerConfigSchema'
 import {
   decisionBindingsBadges,
   decisionBindingsEditData,
@@ -33,6 +34,12 @@ import {
 
 export type { RouterLayerKey, RouterSystemKey } from './configPageRouterSectionCatalog'
 export type RouterConfigSectionData = Partial<Record<RouterSystemKey, unknown>>
+
+// The stores Router Replay can keep records in, as the Router's configuration
+// schema lists them.
+const ROUTER_REPLAY_STORES = (
+  routerConfigFieldAtPath(['global', 'services', 'router_replay', 'store_backend'])?.options ?? []
+).filter(Boolean)
 
 export interface RouterSectionBadge {
   label: string
@@ -473,7 +480,7 @@ export function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'store_backend',
           label: 'Store Backend',
           type: 'select',
-          options: ['file', 'memory', 'redis', 'postgres', 'milvus'],
+          options: ROUTER_REPLAY_STORES,
           required: true,
         },
         { name: 'ttl_seconds', label: 'TTL (seconds)', type: 'number', placeholder: '2592000' },

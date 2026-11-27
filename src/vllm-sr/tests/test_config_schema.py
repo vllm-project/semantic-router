@@ -208,6 +208,27 @@ def test_maintained_recipes_match_generated_structure(config_path: Path) -> None
     assert validate_config_structure(config) == []
 
 
+# The Router loads these deploy configs in its maintained asset contract test.
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "deploy/kubernetes/istio/config.yaml",
+        "deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
+        "deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",
+        "deploy/kubernetes/observability/dashboard/config.yaml",
+        "deploy/openshift/config-openshift.yaml",
+    ],
+)
+def test_maintained_deploy_configs_match_generated_structure(
+    relative_path: str,
+) -> None:
+    config_path = Path(__file__).resolve().parents[3] / relative_path
+    with config_path.open(encoding="utf-8") as stream:
+        config = safe_load_router_config(stream)
+
+    assert validate_config_structure(config) == []
+
+
 @pytest.mark.parametrize(
     "persistence",
     [
