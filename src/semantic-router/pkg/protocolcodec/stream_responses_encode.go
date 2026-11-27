@@ -318,6 +318,13 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolProgress(
 	if emitted == len(allArguments) {
 		return frames, nil
 	}
+	if encoder.context.Source == llmprotocol.OpenAIChatV1 && event.ToolCall.Kind == "" && event.Type == llmprotocol.EventToolCallDelta &&
+		emitted == 0 && strings.TrimSpace(allArguments) == "" {
+		// Keep an empty/whitespace prefix private until the call finishes.
+		// If an object follows, emit its original prefix with that object;
+		// otherwise completion emits the one normalized {} delta.
+		return frames, nil
+	}
 	wire := responsesEventWire{
 		Type:        "response.function_call_arguments.delta",
 		Sequence:    encoder.nextWireSequence(),
