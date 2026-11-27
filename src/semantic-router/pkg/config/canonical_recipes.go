@@ -24,6 +24,10 @@ type CanonicalEntrypoint struct {
 	// MemoryModel names another entrypoint model for agent memory extraction
 	// and consolidation.
 	MemoryModel string `yaml:"memory_model,omitempty"`
+	// AllowLossyTranslation replaces global.router.allow_lossy_translation
+	// for requests to this entrypoint. Unset, the global list applies; an
+	// empty list accepts no loss.
+	AllowLossyTranslation *[]string `yaml:"allow_lossy_translation,omitempty"`
 }
 
 // CanonicalRecipe is a named routing profile: its signals, projections and
@@ -247,6 +251,8 @@ func normalizeCanonicalEntrypoints(cfg *RouterConfig, canonical *CanonicalConfig
 			Default:     entrypoint.Default,
 			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
 			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
+
+			AllowLossyTranslation: cloneStringListPtr(entrypoint.AllowLossyTranslation),
 		})
 	}
 	view := *cfg
@@ -362,6 +368,8 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []CanonicalEntrypoi
 			Default:     entrypoint.Default,
 			ReviewModel: strings.TrimSpace(entrypoint.ReviewModel),
 			MemoryModel: strings.TrimSpace(entrypoint.MemoryModel),
+
+			AllowLossyTranslation: cloneStringListPtr(entrypoint.AllowLossyTranslation),
 		})
 	}
 	return entrypoints

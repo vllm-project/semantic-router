@@ -344,6 +344,7 @@ entrypoints:
 | `entrypoints[].default` | Marks the default chat entrypoint. |
 | `entrypoints[].review_model` | Optional model name of another entrypoint in the same API namespace for agent approval reviews. The target cannot have its own `review_model` or `memory_model`. See [Approve for me](agent-harness#approve-for-me-reviews). |
 | `entrypoints[].memory_model` | Optional model name of another entrypoint in the same API namespace for agent memory extraction and consolidation. The target cannot have its own `review_model` or `memory_model`. See [Codex memories](agent-harness#codex-memories). |
+| `entrypoints[].allow_lossy_translation` | Optional losses accepted for requests to this chat entrypoint, replacing `global.router.allow_lossy_translation`; `[]` accepts none. See [One gateway for Claude Code and Codex](agent-harness#one-gateway-for-claude-code-and-codex). |
 | `recipes[]` | One recipe's policy: its signals, projections, decisions, algorithms, plugins, cache, learning and routing state. |
 
 Providers, stores and the model catalog's deployments can be shared without

@@ -240,6 +240,10 @@ type RequestContext struct {
 	// Routing is the single source of truth for entrypoint resolution. A
 	// resolved context with no recipe represents concrete-model passthrough.
 	Routing RequestRoutingContext
+	// entrypoint is the entrypoint the request's model names, resolved before
+	// the ingress decode; nil for a concrete model. A hop takes its client
+	// request's. Its accepted losses are the request's (acceptedLosses).
+	entrypoint *config.EntrypointMapping
 
 	// VSR decision tracking
 	VSRSelectedCategory                 string                                      // The category from domain classification (MMLU category)

@@ -507,6 +507,38 @@ def test_codex_findings_cover_only_the_models_the_entrypoint_reaches():
     assert not signature("vllm-sr/chat")
 
 
+def test_router_check_reads_the_connected_entrypoints_own_losses():
+    session = {"enabled": True, "protection": {"enabled": True, "scope": "session"}}
+    doc = _router(["tools.defer_loading"], session)
+    doc["recipes"][0]["name"] = "default"
+    doc["entrypoints"] = [
+        {"model_names": ["vllm-sr/claude-code"], "recipe": "default", "default": True},
+        {
+            "model_names": ["vllm-sr/codex"],
+            "recipe": "default",
+            "allow_lossy_translation": [],
+        },
+    ]
+
+    def needs(model):
+        return rc.check_router_config(doc, "claude-code", model)
+
+    # an entrypoint without a list takes the global one
+    assert needs("vllm-sr/claude-code") == []
+    # its own list replaces the global one, and the advice names the entrypoint
+    (finding,) = needs("vllm-sr/codex")
+    assert finding.need.startswith("tools.defer_loading")
+    assert finding.snippet == (
+        "entrypoints:\n  - model_names: [vllm-sr/codex]\n"
+        "    allow_lossy_translation: [tools.defer_loading]"
+    )
+    doc["entrypoints"][1]["allow_lossy_translation"] = ["tools.defer_loading"]
+    doc["global"]["router"]["allow_lossy_translation"] = []
+    assert needs("vllm-sr/codex") == []
+    (finding,) = needs("vllm-sr/claude-code")
+    assert finding.snippet.startswith("global:")
+
+
 def test_a_preview_cuts_a_long_line_short():
     shown = hc.hide_secrets('{"base_instructions": "' + "x" * 5000 + '"}\n')
     assert shown.endswith("... (4,865 more characters)\n")

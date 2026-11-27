@@ -754,6 +754,93 @@ Protection reads the `session-id` and `thread-id` Codex sends with no identity
 headers configured, so the root thread and each subagent or review child keep
 their own models, and Replay files their calls under the Codex session.
 
+### One gateway for Claude Code and Codex
+
+One Router can serve both harnesses. Give each its own entrypoint and list the
+losses that harness needs on that entrypoint, so Claude Code's deferred tools
+are accepted only on its entrypoint and Codex's requests are held to Codex's
+list:
+
+```yaml
+version: v0.5
+listeners:
+  - name: http
+    address: 0.0.0.0
+    port: 8899
+    apis:
+      messages: {}
+      responses: {}
+providers:
+  defaults:
+    model: claude-sonnet-5-5
+  models:
+    - name: claude-sonnet-5-5
+      provider_model_id: claude-sonnet-5-5
+      api_format: anthropic
+      backend_refs:
+        - name: anthropic
+          endpoint: https://api.anthropic.com
+          provider: anthropic
+          auth: {api_key_env: ANTHROPIC_API_KEY}
+    - name: gpt-6-luna
+      provider_model_id: gpt-6-luna
+      api_format: responses
+      backend_refs:
+        - name: openai
+          endpoint: https://api.openai.com/v1
+          provider: openai
+          auth: {api_key_env: OPENAI_API_KEY}
+entrypoints:
+  - model_names: [vllm-sr/claude-code]
+    recipe: agents
+    default: true
+    allow_lossy_translation: [tools.defer_loading, tool_result.is_error, "messages[].role", content.file]
+  - model_names: [vllm-sr/codex]
+    recipe: agents
+    allow_lossy_translation: [reasoning.signature]
+recipes:
+  - name: agents
+    decisions:
+      - name: agents
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: claude-sonnet-5-5}, {model: gpt-6-luna}]
+        plugins:
+          - type: request_params
+            configuration:
+              default_max_tokens: 32000
+global:
+  router:
+    learning:
+      enabled: true
+      protection:
+        enabled: true
+        scope: session
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+```
+
+An entrypoint's `allow_lossy_translation` replaces
+`global.router.allow_lossy_translation` for the requests that name it. An
+entrypoint without one takes the global list, and `[]` accepts no loss, which
+narrows a global list for one entrypoint. A request that names a concrete model
+takes the global list, and a call the Router makes for a request, a Looper hop
+or a context-recovery follow-up, takes the request's list.
+
+Point each harness at its entrypoint with `--model`:
+
+```bash
+vllm-sr connect claude-code --config config.yaml --model vllm-sr/claude-code
+vllm-sr connect codex --config config.yaml --model vllm-sr/codex
+```
+
+Connect checks the entrypoint's own list when it sets one. Protection needs no
+identity headers here: it reads Claude Code's session and subagent ids and
+Codex's `session-id` and `thread-id` by default, so each session and subagent
+keeps its own model on either entrypoint.
+
 ### Codex on its own ChatGPT login
 
 Codex signed in with ChatGPT can use the gateway without an API key as well:

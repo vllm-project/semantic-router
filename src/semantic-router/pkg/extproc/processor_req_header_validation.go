@@ -67,7 +67,7 @@ func validateInferenceMethod(r *OpenAIRouter, method string) (*ext_proc.Processi
 // rejectBodylessInferenceRequest runs the ingress codec on the body Envoy will
 // never send, so end_of_stream headers get the body stage's own 400.
 func (r *OpenAIRouter) rejectBodylessInferenceRequest(ctx *RequestContext) *ext_proc.ProcessingResponse {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")
 	}

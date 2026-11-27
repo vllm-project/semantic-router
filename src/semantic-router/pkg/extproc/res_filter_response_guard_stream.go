@@ -280,7 +280,7 @@ func (r *OpenAIRouter) encodeStreamRefusal(ctx *RequestContext, protocolError *l
 // encodeClientStream renders a whole neutral response as a stream of the
 // client's protocol.
 func (r *OpenAIRouter) encodeClientStream(ctx *RequestContext, response llmprotocol.Response) ([]byte, error) {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return nil, err
 	}

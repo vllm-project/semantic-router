@@ -4,7 +4,8 @@
 # system messages inside the conversation as user text, which the main Router
 # forwards in place for protocol-codec-anthropic-per-message-effort. Its chat
 # model declares no file input, and files reach it as a note. It also sends
-# tools marked for deferred loading in full.
+# tools marked for deferred loading in full, except to its vllm-sr/codex
+# entrypoint, which accepts no loss.
 configOverride:
   version: v0.5
   listeners:
@@ -28,6 +29,13 @@ configOverride:
           - name: provider-mocker
             endpoint: provider-mocker.default.svc.cluster.local:8000
             provider: vllm
+  entrypoints:
+    - model_names: [vllm-sr/auto, vllm-sr/claude-code]
+      recipe: default
+      default: true
+    - model_names: [vllm-sr/codex]
+      recipe: default
+      allow_lossy_translation: []
   recipes:
     - name: default
       decisions:

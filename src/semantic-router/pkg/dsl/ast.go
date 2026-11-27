@@ -364,6 +364,10 @@ type EntrypointDecl struct {
 	ReviewModel string
 	MemoryModel string
 	Pos         Position
+
+	// AllowLossyTranslation is nil when the entrypoint takes the global
+	// accepted losses.
+	AllowLossyTranslation *[]string
 }
 
 // RecipeDecl is an isolated routing scope. Program contains only recipe-local

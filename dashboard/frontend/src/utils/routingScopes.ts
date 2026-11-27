@@ -18,6 +18,7 @@ export interface RoutingRecipeLike {
 export interface RoutingEntrypointLike {
   review_model?: string
   memory_model?: string
+  allow_lossy_translation?: string[]
   api?: 'chat' | 'systemone'
   model_names: string[]
   recipe: string

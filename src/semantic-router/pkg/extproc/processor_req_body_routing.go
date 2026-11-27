@@ -120,7 +120,7 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	ctx *RequestContext,
 ) error {
 	backendModel := dispatch.effectiveBackendModel()
-	projected, err := r.projectRequestForBackend(*request, backendModel, dispatch.targetFormat)
+	projected, err := r.projectRequestForBackend(ctx, *request, backendModel, dispatch.targetFormat)
 	if err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {

@@ -1092,6 +1092,31 @@ def test_entrypoint_delegate_model_rejects_chains_and_cycles(key, back):
     )
 
 
+@pytest.mark.parametrize(
+    "api, losses, message",
+    [
+        (None, None, None),
+        (None, [], None),
+        (None, ["tools.defer_loading"], None),
+        ("systemone", None, None),
+        ("systemone", ["store"], "translates no wire format"),
+    ],
+)
+def test_entrypoint_allow_lossy_translation_contract(api, losses, message):
+    config = recipe_config()
+    config.entrypoints[1].api = api
+    config.entrypoints[1].allow_lossy_translation = losses
+    errors = validate_user_config(config, log_summary=False)
+    field = "entrypoints[1].allow_lossy_translation"
+    found = [error for error in errors if error.field == field]
+    if message:
+        assert any(message in error.message for error in found)
+    else:
+        assert not found
+        dumped = config.model_dump(exclude_none=True)["entrypoints"][1]
+        assert dumped.get("allow_lossy_translation") == losses
+
+
 def test_entrypoint_takes_reviews_and_memories_to_one_target():
     config = recipe_config()
     config.entrypoints[1].review_model = "amd/rocm-v1-private"

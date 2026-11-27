@@ -38,7 +38,7 @@ func TestUnreadableFileOptInQualifiesModelsWithoutFileInput(t *testing.T) {
 		}}
 	}
 	qualify := func(r *OpenAIRouter, model string) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-		projected, diagnostics, err := r.projectRequestForBackendWithDiagnostics(request, model, llmprotocol.AnthropicMessagesV1)
+		projected, diagnostics, err := r.projectRequestForBackendWithDiagnostics(nil, request, model, llmprotocol.AnthropicMessagesV1)
 		if err != nil {
 			return projected, diagnostics, err
 		}

@@ -226,7 +226,7 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 	if replay == nil || !replay.Enabled || replay.Shadow == nil {
 		return
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		engine = nil
 	}
@@ -282,7 +282,7 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		projected, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(request, target.logicalModel, target.format, target)
+		projected, projectionDiagnostics, err := r.projectRequestForBackendWithDiagnostics(ctx, request, target.logicalModel, target.format, target)
 		if err != nil {
 			return nil, err
 		}

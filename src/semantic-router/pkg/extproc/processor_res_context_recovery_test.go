@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -250,6 +251,77 @@ func TestHandleContextRecoveryFollowupSkipsCompressionOnSessionCaller(t *testing
 	}
 	if !strings.Contains(string(got), "final answer") {
 		t.Fatalf("followup response = %s", got)
+	}
+}
+
+// hopSessionRecorder opens the router's sessions and keeps each one.
+type hopSessionRecorder struct {
+	router   *OpenAIRouter
+	mu       sync.Mutex
+	sessions []*routingSession
+}
+
+func (recorder *hopSessionRecorder) Open(ctx context.Context) (routing.Session, error) {
+	session := recorder.router.newRoutingSession(ctx, nil)
+	recorder.mu.Lock()
+	defer recorder.mu.Unlock()
+	recorder.sessions = append(recorder.sessions, session)
+	return session, nil
+}
+
+// The follow-up hop names a concrete model, so it takes the losses of the
+// client request's entrypoint.
+func TestContextRecoveryFollowupHopKeepsItsClientEntrypoint(t *testing.T) {
+	decision := contextRecoveryFollowupCompressionDecision("recoverable")
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{*decision}},
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{"model": {PreferredEndpoints: []string{"panel-backend"}}},
+				VLLMEndpoints: []config.VLLMEndpoint{{
+					Name: "panel-backend", Address: "127.0.0.1", Port: 8000, Type: "vllm", Weight: 1,
+				}},
+			},
+		},
+		CompressionRecovery: &recoveryStoreStub{},
+	}
+	router.CredentialResolver = newTestCredentialResolver(router.Config)
+	recorder := &hopSessionRecorder{router: router}
+	opts := routing.DefaultOptions
+	opts.ExecutesFallback = true
+	router.hopCaller = &graph.SessionCaller{
+		Engine: routing.NewEngine(recorder, opts),
+		Upstream: &capturingHopUpstream{responseBody: []byte(`{"id":"followup","object":"chat.completion","created":1,"model":"model",` +
+			`"choices":[{"index":0,"message":{"role":"assistant","content":"final answer"},"finish_reason":"stop"}]}`)},
+	}
+	semanticRequest := testNeutralRequest("model", "question")
+	semanticRequest.Tools = []llmprotocol.Tool{makeTool(contextcompression.RetrieveToolName)}
+	accepted := []string{llmprotocol.LossyFieldUnreadableFile}
+	ctx := &RequestContext{
+		RequestID: "request-1", RequestModel: "model", VSRSelectedModel: "model",
+		VSRSelectedDecisionName: decision.Name, VSRSelectedDecision: &router.Config.Decisions[0],
+		ContextCompressionRecoveryKeys: []string{"key-1"},
+		Headers:                        map[string]string{"x-authz-user-id": "user-1"},
+		SourceFormat:                   llmprotocol.OpenAIChatV1,
+		SemanticRequest:                semanticRequest,
+		entrypoint:                     &config.EntrypointMapping{ModelNames: []string{"vllm-sr/claude-code"}, AllowLossyTranslation: &accepted},
+	}
+	scope := router.contextCompressionScope(ctx)
+	router.CompressionRecovery.(*recoveryStoreStub).entries = map[string]contextcompression.RecoveryEntry{
+		scope + ":key-1": {Key: "key-1", Scope: scope, Content: "full original context"},
+	}
+	response := []byte(`{"id":"initial","object":"chat.completion","created":1,"model":"model",
+		"choices":[{"index":0,"finish_reason":"tool_calls","message":{"role":"assistant","content":null,"tool_calls":[{
+			"id":"retrieve-1","type":"function","function":{"name":"vsr_context_retrieve","arguments":"{\"key\":\"key-1\"}"}
+		}]}}]}`)
+	if _, err := router.handleContextRecoveryFollowup(context.Background(), response, ctx); err != nil {
+		t.Fatalf("handleContextRecoveryFollowup() error = %v", err)
+	}
+	if len(recorder.sessions) != 1 {
+		t.Fatalf("hop sessions = %d, want 1", len(recorder.sessions))
+	}
+	if got := router.acceptedLosses(recorder.sessions[0].ctx); len(got) != 1 || got[0] != accepted[0] {
+		t.Fatalf("follow-up hop accepts %v, want the client entrypoint's %v", got, accepted)
 	}
 }
 

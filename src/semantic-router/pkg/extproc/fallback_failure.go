@@ -121,7 +121,7 @@ func (r *OpenAIRouter) failedAttemptError(ctx *RequestContext, attempt *failedAt
 		}
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_unavailable", "the model service is unavailable", nil)
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(ctx)
 	if err != nil {
 		return upstreamTransportFallback(attempt.status, err)
 	}
@@ -165,7 +165,7 @@ func (r *OpenAIRouter) noteLengthRefusal(
 }
 
 func (r *OpenAIRouter) refusedForLength(format llmprotocol.WireFormat, status int, body []byte) bool {
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngine(nil)
 	if err != nil {
 		return false
 	}

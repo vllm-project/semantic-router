@@ -373,7 +373,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		return nil, evalResult, fmt.Errorf("candidate %s failed with status %d: %w", candidateModel, statusCode, callErr)
 	}
 
-	responseEngine, engineErr := r.protocolEngineForReply(resolveResponseVendor(dispatch.profile), reqCopy)
+	responseEngine, engineErr := r.protocolEngineForReply(ctx, resolveResponseVendor(dispatch.profile), reqCopy)
 	if engineErr != nil {
 		attemptOutcome.Error = engineErr
 		attemptOutcome.Discarded = true
@@ -715,7 +715,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		return nil, fallback.EvaluationResult{CanFallback: true}, protocolErr
 	}
 
-	engine, engineErr := r.protocolEngine()
+	engine, engineErr := r.protocolEngine(ctx)
 	if engineErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
@@ -725,7 +725,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); policyErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, policyErr
 	}
-	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
+	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(ctx, dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
 	if projectionErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
 	}

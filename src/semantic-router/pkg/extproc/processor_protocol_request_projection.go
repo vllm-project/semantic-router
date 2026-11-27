@@ -11,33 +11,35 @@ import (
 // qualification and again before encoding. Only the encoding pass publishes
 // diagnostics, so failed candidate probes cannot leak warnings to the client.
 func (r *OpenAIRouter) projectRequestForBackend(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, error) {
-	projected, _, err := r.projectRequestForBackendWithDiagnostics(request, model, target, shadows...)
+	projected, _, err := r.projectRequestForBackendWithDiagnostics(ctx, request, model, target, shadows...)
 	return projected, err
 }
 
 func (r *OpenAIRouter) projectRequestForBackendWithDiagnostics(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
 	shadows ...*shadowTarget,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
-	projected, systemDiagnostics := r.projectSystemMessages(request, target)
+	projected, systemDiagnostics := r.projectSystemMessages(ctx, request, target)
 	// An OpenAI-hosted Responses target leaves out unsigned thinking, so the
 	// signatures go before that projection runs.
-	projected, signatureDiagnostics, err := r.projectReasoningSignatures(projected, target)
+	projected, signatureDiagnostics, err := r.projectReasoningSignatures(ctx, projected, target)
 	if err != nil {
 		return request, nil, err
 	}
 	projected, reasoningDiagnostics := r.projectResponsesReasoningForBackend(projected, model, target, shadows...)
 	projected, verbosityDiagnostics := llmprotocol.ProjectTextVerbosity(projected, target)
 	projected, toolChoiceDiagnostics := llmprotocol.ProjectToolChoiceNone(projected, target)
-	projected, fileDiagnostics := r.projectUnreadableFiles(projected, model, target)
-	projected, storeDiagnostics := r.projectUnstoredRequest(projected, target)
+	projected, fileDiagnostics := r.projectUnreadableFiles(ctx, projected, model, target)
+	projected, storeDiagnostics := r.projectUnstoredRequest(ctx, projected, target)
 	projected, capabilityDiagnostics := r.projectUnsupportedCapabilities(projected, model, target)
 	projected, serverToolDiagnostics, err := r.projectServerToolsForBackend(projected, model, target)
 	if err != nil {
@@ -71,13 +73,14 @@ func (r *OpenAIRouter) projectControlTokens(request llmprotocol.Request, model s
 // operator accepts that loss, and otherwise not at all, with a refusal that
 // names the client's own field. An Anthropic backend keeps every signature.
 func (r *OpenAIRouter) projectReasoningSignatures(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics, error) {
 	if available, ok := r.codecCapabilitiesForFormat(target); !ok || available.Supports(llmprotocol.CapabilityReasoningSignature) {
 		return request, nil, nil
 	}
-	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldReasoningSignature) {
+	if !slices.Contains(r.acceptedLosses(ctx), llmprotocol.LossyFieldReasoningSignature) {
 		return request, nil, llmprotocol.RefuseReasoningSignatures(request)
 	}
 	projected, diagnostics := llmprotocol.ProjectReasoningSignatures(request, target)
@@ -90,10 +93,11 @@ func (r *OpenAIRouter) projectReasoningSignatures(
 // positions still describe the conversation, and before the developer-role
 // projection, which then finds no developer message to report.
 func (r *OpenAIRouter) projectSystemMessages(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics) {
-	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldSystemMessageRole) {
+	if !slices.Contains(r.acceptedLosses(ctx), llmprotocol.LossyFieldSystemMessageRole) {
 		return request, nil
 	}
 	return llmprotocol.ProjectSystemMessages(request, target)
@@ -129,10 +133,11 @@ func (r *OpenAIRouter) projectUnsupportedCapabilities(
 // projectUnstoredRequest sends store: true without it to a backend whose wire
 // format keeps no completions, once the operator accepts that loss.
 func (r *OpenAIRouter) projectUnstoredRequest(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics) {
-	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldStore) {
+	if !slices.Contains(r.acceptedLosses(ctx), llmprotocol.LossyFieldStore) {
 		return request, nil
 	}
 	if available, ok := r.codecCapabilitiesForFormat(target); ok && available.Supports(llmprotocol.CapabilityRequestStorage) {
@@ -146,11 +151,12 @@ func (r *OpenAIRouter) projectUnstoredRequest(
 // candidate qualification and dispatch project through here, so a model that
 // can read the file is never told it was left out.
 func (r *OpenAIRouter) projectUnreadableFiles(
+	ctx *RequestContext,
 	request llmprotocol.Request,
 	model string,
 	target llmprotocol.WireFormat,
 ) (llmprotocol.Request, llmprotocol.Diagnostics) {
-	if r == nil || r.Config == nil || !slices.Contains(r.Config.AllowLossyTranslation, llmprotocol.LossyFieldUnreadableFile) {
+	if !slices.Contains(r.acceptedLosses(ctx), llmprotocol.LossyFieldUnreadableFile) {
 		return request, nil
 	}
 	declared, annotated := r.declaredModelCapabilities(model)

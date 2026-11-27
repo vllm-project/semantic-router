@@ -125,7 +125,7 @@ func (r *OpenAIRouter) capableModelRefCount(refs []config.ModelRef, ctx *Request
 	requirements := r.candidateRequirements(ctx)
 	capable := make([]config.ModelRef, 0, len(refs))
 	for _, ref := range refs {
-		if r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands, contextReservesCounted(ctx)) == nil {
+		if r.candidateCapabilityMismatch(ctx, ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands, contextReservesCounted(ctx)) == nil {
 			capable = append(capable, ref)
 		}
 	}

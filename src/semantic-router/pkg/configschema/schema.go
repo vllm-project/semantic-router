@@ -317,6 +317,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 		string(routerconfig.ConfigSourceKubernetes),
 	})
 	setDefinitionPropertyItemsEnum(root, "CanonicalRouterGlobal", "allow_lossy_translation", llmprotocol.OptInLossyFields())
+	setDefinitionPropertyItemsEnum(root, "CanonicalEntrypoint", "allow_lossy_translation", llmprotocol.OptInLossyFields())
 	setDefinitionPropertyItemsEnum(root, "CanonicalProviderModel", "unsupported_capabilities", llmprotocol.UnsupportedCapabilityNames())
 	setDefinitionPropertyEnum(root, "RouterHeadersConfig", "debug", routerconfig.SupportedDebugHeadersModes())
 	setDefinitionPropertyEnum(root, "AlgorithmConfig", "type", routerconfig.SupportedDecisionAlgorithmTypes())

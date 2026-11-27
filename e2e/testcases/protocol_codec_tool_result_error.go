@@ -92,7 +92,8 @@ func runToolResultErrorPolicy(ctx context.Context, session, provider *fixtures.S
 // tool result its backend cannot carry: it names the setting that accepts the
 // loss.
 const toolResultErrorRefusal = "translation would lose tool_result.is_error; an operator can accept this loss " +
-	"by listing tool_result.is_error in global.router.allow_lossy_translation"
+	"by listing tool_result.is_error in global.router.allow_lossy_translation" +
+	" or, for an entrypoint that sets its own list, in that entrypoint's allow_lossy_translation"
 
 func assertToolResultErrorRejection(result protocolMatrixHTTPResult, dispatched bool) error {
 	// Messages renders unsupported-feature errors using its native error type

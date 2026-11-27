@@ -487,6 +487,7 @@ export interface ConfigData {
   entrypoints?: Array<{
     review_model?: string
     memory_model?: string
+    allow_lossy_translation?: string[]
     model_names: string[]
     recipe: string
   }>

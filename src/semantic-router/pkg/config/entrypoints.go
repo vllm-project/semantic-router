@@ -46,6 +46,7 @@ func (c *RouterConfig) EffectiveEntrypoints(api InferenceAPI) []EntrypointMappin
 		entrypoint.Source = EntrypointExplicit
 		entrypoint.ModelNames = append([]string(nil), entrypoint.ModelNames...)
 		entrypoint.ClientAuth = entrypoint.ClientAuth.Clone()
+		entrypoint.AllowLossyTranslation = cloneStringListPtr(entrypoint.AllowLossyTranslation)
 		result = append(result, entrypoint)
 		hasDefault = hasDefault || c.IsDefaultRecipe(entrypoint.Recipe)
 	}
@@ -68,6 +69,30 @@ func (c *RouterConfig) ResolveEntrypoint(api InferenceAPI, model string) (Entryp
 		}
 	}
 	return EntrypointMapping{}, false
+}
+
+// AcceptedLosses are the translation losses accepted for a request to
+// entrypoint: its own allow_lossy_translation when it sets one, else
+// global.router.allow_lossy_translation. A request that names no entrypoint
+// passes nil.
+func (c *RouterConfig) AcceptedLosses(entrypoint *EntrypointMapping) []string {
+	if c == nil {
+		return nil
+	}
+	if entrypoint != nil && entrypoint.AllowLossyTranslation != nil {
+		return *entrypoint.AllowLossyTranslation
+	}
+	return c.AllowLossyTranslation
+}
+
+// cloneStringListPtr copies an optional list, keeping an empty list apart
+// from an unset one.
+func cloneStringListPtr(list *[]string) *[]string {
+	if list == nil {
+		return nil
+	}
+	clone := append([]string{}, (*list)...)
+	return &clone
 }
 
 // DefaultEntrypointNames returns the default recipe's effective public names,
