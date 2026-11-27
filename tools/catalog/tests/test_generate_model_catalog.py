@@ -633,6 +633,52 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         for binding in vllm_bindings.values():
             self.assertEqual(binding["relationship"], "self_hosted")
 
+    def test_meta_muse_evidence_matches_the_api_variants(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        cases = [
+            (
+                "meta/muse-wonder-1.0",
+                "muse-wonder",
+                "max",
+                {
+                    "scicode-bench/scicode@1.0.0": ("score", 0.603009259259259),
+                    "cais/humanitys-last-exam@1.0.0": ("accuracy", 0.500926784059314),
+                    "artificial-analysis/gdp-pdf@1.0.0": ("all_pass", 0.306),
+                    "artificial-analysis/critpt@1.0.0": ("score", 0.282857142857143),
+                    "artificial-analysis/lcr@1.1.0": ("score", 0.806666666666667),
+                },
+            ),
+            (
+                "meta/muse-ember-1.0",
+                "muse-ember-xhigh",
+                "xhigh",
+                {
+                    "artificial-analysis/gdp-pdf@1.0.0": ("all_pass", 0.224),
+                    "harbor/terminal-bench@4.0.0": ("resolved", 0.353535353535354),
+                    "artificial-analysis/briefcase@1.1.0": ("elo", 1524.47),
+                    "artificial-analysis/omniscience@1.1.0": (
+                        "accuracy",
+                        0.21366666666666667,
+                    ),
+                    "cais/hle-diamond@1.0.0": ("accuracy", 0.236),
+                },
+            ),
+        ]
+        for model, slug, effort, expected in cases:
+            with self.subTest(model=model):
+                records = [
+                    r
+                    for r in resources["evaluations"]
+                    if r["model"] == model
+                    and r["subject"].get("source_model_slug") == slug
+                ]
+                self.assertEqual({r["benchmark"] for r in records}, set(expected))
+                for record in records:
+                    self.assertEqual(record["reasoning_effort"], effort)
+                    self.assertEqual(record["evidence"]["provenance"], "third_party")
+                    metric, score = expected[record["benchmark"]]
+                    self.assertEqual(record["metrics"][metric], score)
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {

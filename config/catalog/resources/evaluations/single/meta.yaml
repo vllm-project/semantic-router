@@ -1,3 +1,250 @@
+- id: independent/muse-wonder-1-0-max-gdp-pdf@1.0.0
+  model: meta/muse-wonder-1.0
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    source_model: Muse Wonder (Max)
+    source_model_slug: muse-wonder
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.306
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/muse-wonder-1-0-max-scicode@1.0.0
+  model: meta/muse-wonder-1.0
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: max
+  subject:
+    source_model: Muse Wonder (Max)
+    source_model_slug: muse-wonder
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/scicode
+    sample_count: 288
+    repeats: 3
+    dataset_status: under review by Artificial Analysis
+  metrics:
+    score: 0.603009259259259
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/muse-wonder-1-0-max-hle@1.0.0
+  model: meta/muse-wonder-1.0
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: max
+  subject:
+    source_model: Muse Wonder (Max)
+    source_model_slug: muse-wonder
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    sample_count: 2158
+    tool_policy: no_tools
+  metrics:
+    accuracy: 0.500926784059314
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/muse-wonder-1-0-max-critpt@1.0.0
+  model: meta/muse-wonder-1.0
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Muse Wonder (Max)
+    source_model_slug: muse-wonder
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/critpt
+    sample_count: 70
+    agent_harness: none
+  metrics:
+    score: 0.282857142857143
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/muse-wonder-1-0-max-lcr@1.1.0
+  model: meta/muse-wonder-1.0
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: max
+  subject:
+    source_model: Muse Wonder (Max)
+    source_model_slug: muse-wonder
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    sample_count: 100
+  metrics:
+    score: 0.806666666666667
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/muse-ember-1-0-xhigh-gdp-pdf@1.0.0
+  model: meta/muse-ember-1.0
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Ember (Xhigh)
+    source_model_slug: muse-ember-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    judge: GPT-5.6 Luna (medium)
+    scoring: all_pass
+  metrics:
+    all_pass: 0.224
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra
+    redistributable: true
+- id: independent/muse-ember-1-0-xhigh-terminal-bench@4.0.0
+  model: meta/muse-ember-1.0
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Ember (Xhigh)
+    source_model_slug: muse-ember-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/terminalbench-4-0
+    agent_harness: mini-swe-agent
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    context_compaction: false
+  metrics:
+    resolved: 0.353535353535354
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra
+    redistributable: true
+- id: independent/muse-ember-1-0-xhigh-briefcase@1.1.0
+  model: meta/muse-ember-1.0
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Ember (Xhigh)
+    source_model_slug: muse-ember-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/aa-briefcase
+    agent_harness: Stirrup
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    rating_method: Crowd-BT
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+  metrics:
+    elo: 1524.47
+    elo_lower: 1514.44
+    elo_upper: 1535.13
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra
+    redistributable: true
+- id: independent/muse-ember-1-0-xhigh-omniscience@1.1.0
+  model: meta/muse-ember-1.0
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Ember (Xhigh)
+    source_model_slug: muse-ember-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/omniscience
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.21366666666666667
+    net_score: 7.733333333333333
+    hallucination_rate: 0.17337855023314963
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra
+    redistributable: true
+- id: independent/muse-ember-1-0-xhigh-hle-diamond@1.0.0
+  model: meta/muse-ember-1.0
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Ember (Xhigh)
+    source_model_slug: muse-ember-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/hle-diamond
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.236
+  status: available
+  observed_at: 2026-11-27
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra
+    redistributable: true
 - id: arc-prize/muse-spark-open-arc-agi-1@1.0.0
   model: meta/muse-spark-open
   benchmark: arc-prize/arc-agi-1@1.0.0
