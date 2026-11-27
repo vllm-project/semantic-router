@@ -184,3 +184,58 @@ func TestRedactedThinkingBufferedDecodeThenStream(t *testing.T) {
 		t.Fatalf("replayed stream lost the redacted scope: %+v", replayed.Output)
 	}
 }
+
+// A signed thinking block after a redacted one must not join the redacted
+// group: the redacted block has no delta, so a mixed group asks the encoder to
+// stream a signature into it and fails. Buffered decode then stream of this
+// order is a valid Anthropic-to-Anthropic replay.
+func TestRedactedThinkingFollowedBySignedThinkingReplays(t *testing.T) {
+	engine := NewBuiltinEngine()
+	const signedPayload = "signed-opaque-payload"
+	responseBody := []byte(`{"id":"msg_1","type":"message","role":"assistant","model":"m",` +
+		`"content":[{"type":"redacted_thinking","data":"` + redactedPayload + `"},` +
+		`{"type":"thinking","thinking":"consider","signature":"` + signedPayload + `"},` +
+		`{"type":"text","text":"answer"}],` +
+		`"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+	response, _, _, err := engine.DecodeResponse(llmprotocol.AnthropicMessagesV1, responseBody)
+	if err != nil {
+		t.Fatalf("DecodeResponse() error = %v", err)
+	}
+	wire, _, err := engine.EncodeResponseStream(
+		llmprotocol.AnthropicMessagesV1, response,
+		llmprotocol.StreamContext{Context: t.Context(), PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("EncodeResponseStream() error = %v", err)
+	}
+	if !bytes.Contains(wire, []byte(`"type":"redacted_thinking"`)) ||
+		!bytes.Contains(wire, []byte(redactedPayload)) ||
+		!bytes.Contains(wire, []byte(signedPayload)) ||
+		!bytes.Contains(wire, []byte("answer")) {
+		t.Fatalf("replayed stream lost a block: %s", wire)
+	}
+	if bytes.Contains(wire, []byte(`"signature_delta":"`+redactedPayload)) {
+		t.Fatal("a redacted block must not emit a synthetic signature delta: " + string(wire))
+	}
+	replayed, _, err := engine.DecodeResponseStream(
+		llmprotocol.AnthropicMessagesV1, wire,
+		llmprotocol.StreamContext{Context: t.Context(), PublicModel: response.Model},
+	)
+	if err != nil {
+		t.Fatalf("DecodeResponseStream() error = %v\n%s", err, wire)
+	}
+	var redactedFound, signedFound bool
+	for _, output := range replayed.Output {
+		for _, block := range output.Content {
+			if block.Reasoning == llmprotocol.ReasoningScopeRedacted && block.Signature == redactedPayload {
+				redactedFound = true
+			}
+			if block.Signature == signedPayload {
+				signedFound = true
+			}
+		}
+	}
+	if !redactedFound || !signedFound {
+		t.Fatalf("replayed stream lost the redacted or signed block: redacted=%v signed=%v: %+v", redactedFound, signedFound, replayed.Output)
+	}
+}

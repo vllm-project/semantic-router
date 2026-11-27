@@ -139,19 +139,24 @@ func groupResponseStreamContent(contents []llmprotocol.Content) []responseStream
 		return []responseStreamContentGroup{{family: llmprotocol.ContentText}}
 	}
 	groups := make([]responseStreamContentGroup, 0, len(contents))
+	previousRedacted := false
 	for _, content := range contents {
 		family := responseStreamContentFamily(content.Kind)
 		// A redacted block carries all of its data in the content_block_start
 		// frame. Give it its own item so neutralResponseEvents can put the
 		// block on the item-start event rather than on a delta, which would
-		// ask the encoder to stream a signature into it and be refused.
+		// ask the encoder to stream a signature into it and be refused. The
+		// following content starts a new item too: a redacted block shares a
+		// reasoning family with signed thinking, and a mixed group would fall
+		// through to the delta path and try to stream into the redacted block.
 		redacted := content.Kind == llmprotocol.ContentReasoning &&
 			content.Reasoning == llmprotocol.ReasoningScopeRedacted
-		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool || redacted ||
+		if family == llmprotocol.ContentToolCall || family == llmprotocol.ContentServerTool || redacted || previousRedacted ||
 			len(groups) == 0 || groups[len(groups)-1].family != family {
 			groups = append(groups, responseStreamContentGroup{family: family})
 		}
 		groups[len(groups)-1].contents = append(groups[len(groups)-1].contents, content)
+		previousRedacted = redacted
 	}
 	return groups
 }
