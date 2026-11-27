@@ -160,6 +160,16 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 
 	r.prepareLooperInternalContext(decisionName, decision, modelName, ctx)
 	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
+	if useReasoning {
+		// The same rule the single-model path applies: a request that states no
+		// reasoning preference and sets an output limit below
+		// providers.defaults.reasoning_min_output_tokens would spend the whole
+		// budget thinking, so this hop stages reasoning off instead.
+		if reason := r.unstatedReasoningOffReason(ctx, modelName); reason != "" {
+			useReasoning, reasoningEffort = false, ""
+			ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reason
+		}
+	}
 	applyLooperReasoningContext(ctx, modelName, useReasoning, reasoningEffort)
 
 	request, err := r.parseLooperRequestForPlugins(ctx)
