@@ -2,12 +2,16 @@
 
 Closed-loop experiments for semantic-router routing recipes (RSI workbench).
 
-This is the first slice of the [recipe-lab umbrella](https://github.com/vllm-project/semantic-router/issues/5404):
-the misroute attribution report ([#5489](https://github.com/vllm-project/semantic-router/issues/5489)).
+This is the first slice of the [recipe-lab umbrella](https://github.com/vllm-project/semantic-router/issues/5404).
 It turns "routing accuracy is X%" into a prioritized, executable fix queue:
 every wrong outcome on a labeled dataset is classified into an actionable
-error class, and the class distribution decides where the later recipe-lab
-phases spend effort.
+error class ([#5489](https://github.com/vllm-project/semantic-router/issues/5489)),
+and the class distribution decides where the later recipe-lab phases spend
+effort. On top of the attribution report this slice closes the smallest
+replay-tier loop ([#5490](https://github.com/vllm-project/semantic-router/issues/5490)):
+propose candidate configs deterministically, evaluate them through the real
+router against a frozen answer bank, and rank the results into an append-only
+ledger - no LLM generation anywhere in the replay tier.
 
 ## Install
 
@@ -21,8 +25,15 @@ pip install -e '.[dev]'
 | command | purpose |
 |---|---|
 | `plan` | load and validate an experiment spec, print it normalized |
+| `hash` | frozen dataset identity: sha256 over the raw bytes (A4) |
+| `split` | deterministic group-wise calib / dev / frozen_test split (B) |
 | `collect-replays` | pull `router_replay` records from the router management API and join them against the labeled case list (`--unlabeled` emits raw diagnostic rows) |
 | `attribute` | run the E1 / decision_mismatch / E2 / E3 misroute attribution over labeled records |
+| `bank` | build / apply the per-case, per-model answer bank |
+| `propose-thresholds` | bounded single-signal threshold perturbations over a base config |
+| `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
+| `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
+| `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
 
 Worked examples with a runnable spec and records live in
 [`examples/`](examples/):
@@ -45,6 +56,90 @@ its content hash is the downstream reference - later recipe-lab phases cite
 it as `attribution_ref`) and `report.md` (class distribution, E1 breakdowns
 per signal family and per failing signal, decision confusion pairs, policy
 deviation and per-domain E3 candidates).
+
+## Replay-tier loop
+
+The replay tier re-plays a frozen dataset through the real router for each
+candidate config and grades answers by looking them up in the answer bank -
+routing decisions always come from the real router, never from a Python
+reimplementation, and no generation is invoked. The workflow:
+
+1. **Frozen identity (A4).** The spec's workload pins every split's
+   `content_hash`; `attribute`, `run` and the proposers recompute it before
+   touching the data and refuse any drift (exit 2).
+2. **Splits (B).** `split` cuts a labeled dataset group-wise into
+   calib / dev / frozen_test; `frozen_test` is quarantined (replay / propose
+   / attribute refuse to touch it) and reserved for the live verdict.
+3. **Answer bank.** `bank build` asks each candidate model directly for every
+   case once, offline; `bank apply` joins correctness onto replay records by
+   (case, routed model). Cases routed to a model without a saved answer are
+   no-evidence, never wrong; a candidate above the coverage threshold is
+   flagged with `coverage_warning`.
+4. **Proposals.** `propose-thresholds` perturbs a single decision-signal
+   threshold (bounded, clamped, baseline dropped); `propose-rule-thresholds`
+   moves all predicate sites of one signal within a decision rule in one
+   calibrated step. Both read the canonical v0.5 layout (signals and decisions
+   live in `recipes[]`); a document with several recipes takes `--recipe
+   <name>` or `--public-model <name>` to name the one to edit. Every
+   candidate YAML is accompanied by a
+   `<stem>.candidate.json` sidecar (kind / ref / change_summary /
+   provenance / sites).
+5. **Replay evaluation (`run`).** Each candidate boots the real router with
+   the candidate config, the frozen cases are routed, grades come from the
+   bank, and one RANKED record per candidate is appended to the ledger with
+   the dataset hash and proposer provenance. `--reload hot` keeps one router
+   alive and swaps candidates through the management API, falling back to a
+   per-candidate restart when the API rejects the change. `--validate`
+   pre-flights each candidate with the validator binary; rejected candidates
+   never reach the ledger (exit 2 when all are rejected).
+6. **Ledger.** `ledger show` filters by round / verdict / proposer, and
+   `ledger top --spec` prints the best replay candidate by the spec's
+   objective metric. Records are append-only, fingerprinted with stable
+   content-derived IDs, and publication is atomic (a killed writer leaves
+   the previous ledger intact). Appending the same content again stores
+   nothing new, and writers are serialized by a `<ledger>.lock` file next to
+   the ledger.
+
+```bash
+# cut the frozen dataset into splits (same dataset + args => byte-identical output)
+recipe-lab split --cases labeled.jsonl --output-dir splits/
+
+# calibrate a rule-level gate in one step (all difficulty sites 2.5 -> 1.75)
+recipe-lab propose-rule-thresholds --base-config config.yaml \
+  --signal difficulty --from 2.5 --values 1.75 --output-dir cands/
+
+# a document with several recipes: edit the one a public model serves
+recipe-lab propose-thresholds --base-config config.yaml \
+  --public-model vllm-sr/mom-v1-blend --signal verification --deltas 0.1 \
+  --output-dir cands/
+
+# replay evaluation over the dev split with pre-flight validation
+recipe-lab run --spec spec.yaml --split dev --cases splits/dev.jsonl \
+  --bank bank.jsonl --candidates cands/ --ledger ledger.jsonl \
+  --router-bin build/bin/semantic-router \
+  --mock-backend scripts/mock_backend.py \
+  --output-dir out/ --validate --reload hot
+
+# ledger
+recipe-lab ledger show --file ledger.jsonl --tier replay --json
+recipe-lab ledger top --file ledger.jsonl --spec spec.yaml
+```
+
+A ledger record example lives at
+[`examples/ledger-record.example.json`](examples/ledger-record.example.json).
+
+## Insight references
+
+`run` and `ledger append` accept comma-separated provenance references which
+are merged into the record's `candidate.provenance.insight_refs` (dedup);
+unverifiable references are rejected (exit 2):
+
+- `rec-<id>`: an existing ledger record ID
+- `bench:<run_id>`: a benchmark run ID (format-checked only)
+- `attr:<path>@sha256:<hex>`: an attribution artifact; the hash must match
+  the file bytes
+- `diag:<path>@sha256:<hex>#<anchor>`: a diagnosis artifact anchored at a
+  location inside the file
 
 ## Record format (attribution input)
 
@@ -125,13 +220,13 @@ without signal evidence keep whatever `family` tag the input record carries
 
 ## Scope of this slice
 
-The replay-tier loop, answer bank, proposers and the ledger arrive with
-[sub-issue 2](https://github.com/vllm-project/semantic-router/issues/5490);
-the live tier with
-[sub-issue 3](https://github.com/vllm-project/semantic-router/issues/5491).
-This slice owns the contract fields the attribution needs (objective, frozen
-workload identity, oracle policy); the remaining experiment/budget/candidate
-contract surface lands with sub-issue 2.
+This slice owns the replay tier: contracts (spec/candidate/gates/budget),
+splits, the answer bank, the deterministic proposers, replay evaluation
+through the real router, and the ledger. The live tier (sr-bench integration,
+AB/BA and verdict gating) arrives with
+[sub-issue 3](https://github.com/vllm-project/semantic-router/issues/5491);
+reports, context export and provenance manifests with
+[sub-issue 4](https://github.com/vllm-project/semantic-router/issues/5492).
 
 ## Tests
 
