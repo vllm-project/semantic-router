@@ -64,7 +64,7 @@ func reconcileDeploymentConfigTest(t *testing.T, r *SemanticRouterReconciler, sr
 	if err := r.reconcileConfigMap(ctx, sr); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.reconcileDeployment(ctx, sr, mode); err != nil {
+	if err := r.reconcileDeployment(ctx, sr, mode, false); err != nil {
 		t.Fatal(err)
 	}
 	deployment := &appsv1.Deployment{}
@@ -151,7 +151,7 @@ func TestDeploymentChecksumTracksMountedConfigContent(t *testing.T) {
 
 func TestDeploymentWaitsForMountedConfiguration(t *testing.T) {
 	r, sr := deploymentConfigTestRouter(t)
-	if err := r.reconcileDeployment(context.Background(), sr, GatewayModeStandalone); err == nil {
+	if err := r.reconcileDeployment(context.Background(), sr, GatewayModeStandalone, false); err == nil {
 		t.Fatal("missing mounted configuration must not produce an unversioned deployment")
 	}
 }

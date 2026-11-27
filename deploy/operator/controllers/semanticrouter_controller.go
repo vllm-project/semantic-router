@@ -19,12 +19,14 @@ package controllers
 import (
 	"context"
 	"sync"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	coreclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,7 +37,8 @@ import (
 // SemanticRouterReconciler reconciles a SemanticRouter object
 type SemanticRouterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	probeLogs coreclient.PodsGetter
 
 	// Cache for OpenShift detection
 	isOpenShift   *bool
@@ -46,6 +49,9 @@ type SemanticRouterReconciler struct {
 // +kubebuilder:rbac:groups=vllm.ai,resources=semanticrouters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=vllm.ai,resources=semanticrouters/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=apps,resources=replicasets,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;delete
+// +kubebuilder:rbac:groups=core,resources=pods/log,verbs=get
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -74,19 +80,34 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	if requeue, err := r.ensureInitialProgressingStatus(ctx, req, semanticrouter, logger); requeue || err != nil {
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+	requeue, err := r.ensureInitialProgressingStatus(ctx, req, semanticrouter, logger)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if requeue {
 		return ctrl.Result{Requeue: true}, nil //nolint:staticcheck // SA1019: keep rate-limited requeue semantics until the status flow moves to RequeueAfter
 	}
 
+	if err = r.reconcileServiceAccount(ctx, semanticrouter); err != nil {
+		return ctrl.Result{}, err
+	}
 	baseSR := semanticrouter.DeepCopy()
 
-	if err := r.reconcileOwnedResources(ctx, semanticrouter, logger); err != nil {
+	migration, err := r.checkStandaloneMigration(ctx, semanticrouter)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if migration != nil && !migration.approved {
+		// Pod watches deliver progress. Also retry transient probe failures.
+		return ctrl.Result{RequeueAfter: time.Minute}, r.reportMigration(ctx, semanticrouter, baseSR, migration)
+	}
+	if err := r.reconcileOwnedResources(ctx, semanticrouter, logger, migration != nil); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	if migration != nil {
+		return ctrl.Result{}, r.reportMigration(ctx, semanticrouter, baseSR, migration)
+	}
 	if err := r.updateStatus(ctx, semanticrouter, baseSR); err != nil {
 		logger.Error(err, "Failed to update SemanticRouter status, will retry on next reconcile")
 	}
@@ -96,9 +117,15 @@ func (r *SemanticRouterReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SemanticRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	pods, err := coreclient.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return err
+	}
+	r.probeLogs = pods
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&vllmv1alpha1.SemanticRouter{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.ConfigMap{}).

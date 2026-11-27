@@ -61,7 +61,7 @@ func TestRouterContainerServesItsGatewayMode(t *testing.T) {
 			liveness: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
 				Path: "/health", Port: listener, Scheme: corev1.URISchemeHTTP,
 			}},
-			service: corev1.ServicePort{Name: DefaultListenerName, Port: 8801, TargetPort: listener, Protocol: corev1.ProtocolTCP},
+			service: corev1.ServicePort{Name: DefaultListenerName, Port: 8801, TargetPort: intstr.FromInt32(8801), Protocol: corev1.ProtocolTCP},
 		},
 		{
 			mode:     GatewayModeIntegration,

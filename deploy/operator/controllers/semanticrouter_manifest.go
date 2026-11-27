@@ -84,7 +84,7 @@ func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRout
 		traffic = corev1.ServicePort{
 			Name:       DefaultListenerName,
 			Port:       DefaultListenerPort,
-			TargetPort: intstr.FromString(DefaultListenerName),
+			TargetPort: intstr.FromInt32(DefaultListenerPort),
 			Protocol:   corev1.ProtocolTCP,
 		}
 	}
