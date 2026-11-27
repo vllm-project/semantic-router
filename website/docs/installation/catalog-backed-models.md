@@ -99,6 +99,66 @@ The catalog records five published evaluations per card: Astra and Sol at
 `xhigh`, Terra at `high`. Scores are not copied to other efforts. The Model
 Hub's public comparisons show only benchmark profiles with enough models to compare.
 
+## Qwen4 Max
+
+`dashscope` maps `qwen/qwen4-max` to the native model ID `qwen4-max` on
+[Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope).
+This binding reuses `top_level_effort_boolean_switch`. An enabled decision
+sends top-level `reasoning_effort` and `enable_thinking: true`. Model Studio
+accepts `low`, `high`, and `xhigh`, and the declared default is `high`.
+`minimal`, `medium`, and `max` are provider aliases for those levels, not
+separate catalog levels. A disabled decision sends `enable_thinking: false`
+and leaves `reasoning_effort` off the request, matching Alibaba's
+[Chat Completions example](https://www.alibabacloud.com/help/en/model-studio/multi-round-conversation).
+
+The provider default host stays `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+for the models already mapped there. Qwen4-Max calls should set `endpoint` to
+the workspace host for the region that issued the API key. Replace
+`{WorkspaceId}` with the workspace ID from the Model Studio console:
+
+| Region | `endpoint` |
+| --- | --- |
+| China (Beijing) | `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| Singapore | `https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+| US (Virginia) | `https://{WorkspaceId}.us-east-1.maas.aliyuncs.com/compatible-mode/v1` |
+| China (Hong Kong) | `https://{WorkspaceId}.cn-hongkong.maas.aliyuncs.com/compatible-mode/v1` |
+| Japan (Tokyo) | `https://{WorkspaceId}.ap-northeast-1.maas.aliyuncs.com/compatible-mode/v1` |
+
+```yaml
+version: v0.5
+providers:
+  models:
+    - name: qwen4
+      catalog: qwen/qwen4-max
+      backend_refs:
+        - name: primary
+          provider: dashscope
+          endpoint: https://ws-example.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1
+          auth: {api_key_env: DASHSCOPE_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: qwen4_xhigh
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: qwen4
+            use_reasoning: true
+            reasoning_effort: xhigh
+```
+
+The card uses the published 1,000,000-token context window. Thinking mode
+accepts 983,616 input tokens and 262,144 output tokens, which is the card's
+output limit. The five imported
+[Artificial Analysis](https://artificialanalysis.ai/models/qwen4-max) records
+are the `xhigh` run: GDP.pdf All-pass, Terminal-Bench 4.0 pass@1, AA-Briefcase
+v1.1 Elo with its 95% bounds, AA-Omniscience v1.1 Accuracy, Net Score, and
+Hallucination Rate, and HLE-Diamond pass@1 over all 1,000 questions. `low` and
+`high` stay unmeasured. These versioned benchmarks do not replace Intelligence
+1.0, and the scores are not local Router reproductions.
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` identifies the

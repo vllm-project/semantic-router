@@ -1,3 +1,158 @@
+- id: independent/qwen4-max-xhigh-gdp-pdf@1.0.0
+  model: qwen/qwen4-max
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen4 Max (xhigh)
+    source_model_slug: qwen4-max
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    document_preparation: LiteParse 2.5.0 with English OCR; complete extracted text and page images when
+      context and payload limits permit
+    max_turns: 1
+    judge: GPT-5.6 Luna (medium)
+    grading: Each rubric criterion judged independently; all criteria must pass
+  metrics:
+    all_pass: 0.262
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen4-max
+    redistributable: true
+- id: independent/qwen4-max-xhigh-terminal-bench@4.0.0
+  model: qwen/qwen4-max
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen4 Max (xhigh)
+    source_model_slug: qwen4-max
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: mini-swe-agent
+    harness_version: not disclosed
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    task_resources: Upstream task timeouts and sandbox resources
+    agent_config: Interactive mini config and prompts; native bash tool
+    context_compaction: false
+  metrics:
+    resolved: 0.484848484848485
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen4-max
+    redistributable: true
+- id: independent/qwen4-max-xhigh-briefcase@1.1.0
+  model: qwen/qwen4-max
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen4 Max (xhigh)
+    source_model_slug: qwen4-max
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: Stirrup
+    harness_version: not disclosed
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    grading: Rubric, analytical quality, and presentation; Crowd-BT Elo fitting
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+    judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
+      matches
+  metrics:
+    elo: 1686.07
+    elo_lower: 1675.59
+    elo_upper: 1696.55
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen4-max
+    redistributable: true
+- id: independent/qwen4-max-xhigh-omniscience@1.1.0
+  model: qwen/qwen4-max
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen4 Max (xhigh)
+    source_model_slug: qwen4-max
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+    grading: CORRECT, INCORRECT, PARTIAL_ANSWER, or NOT_ATTEMPTED
+  metrics:
+    accuracy: 0.437
+    net_score: 27.7
+    hallucination_rate: 0.2841918294849023
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen4-max
+    redistributable: true
+- id: independent/qwen4-max-xhigh-hle-diamond@1.0.0
+  model: qwen/qwen4-max
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: xhigh
+  subject:
+    source_model: Qwen4 Max (xhigh)
+    source_model_slug: qwen4-max
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    prompts: Official HLE system prompt and judge prompt/response format
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.449
+  status: available
+  observed_at: 2026-11-22
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/qwen4-max
+    redistributable: true
 - id: independent/qwen3-7-max-critpt@1.0.0
   model: qwen/qwen3.7-max
   benchmark: artificial-analysis/critpt@1.0.0
