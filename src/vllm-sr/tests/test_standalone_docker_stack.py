@@ -74,9 +74,9 @@ def test_standalone_runs_no_envoy_and_the_router_publishes_the_listeners(
     assert rendered == [], "no Envoy config is rendered for a stack without Envoy"
     assert images[0]["include_envoy"] is False, "no Envoy image is pulled either"
     router = containers["vllm-sr-router-container"]
-    assert "127.0.0.1:8899:8899" in router, (
-        "the configured address governs host publication"
-    )
+    assert (
+        "127.0.0.1:8899:8899" in router
+    ), "the configured address governs host publication"
     assert f"{GATEWAY_ENV}=standalone" in router
     dashboard = containers["vllm-sr-dashboard-container"]
     assert "TARGET_ENVOY_URL=http://vllm-sr-router-container:8899" in dashboard
@@ -92,9 +92,8 @@ def test_extproc_keeps_the_split_envoy_stack(tmp_path, monkeypatch):
     assert "127.0.0.1:8899:8899" in containers["vllm-sr-envoy-container"]
     assert "127.0.0.1:8899:8899" not in containers["vllm-sr-router-container"]
     assert f"{GATEWAY_ENV}=extproc" in containers["vllm-sr-router-container"]
-    assert (
-        "TARGET_ENVOY_URL=http://vllm-sr-envoy-container:8899"
-        in (containers["vllm-sr-dashboard-container"])
+    assert "TARGET_ENVOY_URL=http://vllm-sr-envoy-container:8899" in (
+        containers["vllm-sr-dashboard-container"]
     )
 
 
