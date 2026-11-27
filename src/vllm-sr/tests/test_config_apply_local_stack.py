@@ -12,6 +12,8 @@ import pytest
 import yaml
 from cli import local_stack_config, runtime_service_status
 from cli.commands import config_management
+from cli.commands.runtime_observability import runtime_tracing_disabled
+from cli.commands.runtime_serve_config import _prepare_docker_runtime_config
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
 from cli.pending_activation import ORIGIN_CLI, read_pending_activation
@@ -472,6 +474,82 @@ def test_apply_waits_for_model_warmup_by_default():
     assert (
         timeout.default == config_management.MUTATION_TIMEOUT_SECONDS == WARMUP_SECONDS
     )
+
+
+def _tracing(document: dict) -> dict:
+    return document["global"]["services"]["observability"]["tracing"]
+
+
+def _serve(monkeypatch, config_path: Path, *, minimal: bool) -> dict:
+    """The runtime config `vllm-sr serve` leaves for config_path."""
+
+    monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(config_path.parent))
+    monkeypatch.setattr(
+        "cli.commands.runtime_serve_config.stop_runtime_before_config_replacement",
+        lambda stack: None,
+    )
+    runtime, _, lock = _prepare_docker_runtime_config(
+        config_path, None, False, None, (), False, minimal=minimal
+    )
+    lock.close()
+    return yaml.safe_load(runtime.read_text(encoding="utf-8"))
+
+
+def _on_stack(monkeypatch, stack: LocalStack, stack_name: str | None) -> LocalStack:
+    """The fixture's stack, or the same state under a named stack."""
+
+    if stack_name is None:
+        return stack
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", stack_name)
+    stack = replace(stack, layout=resolve_runtime_stack())
+    _publish_management_endpoint(monkeypatch, stack, 8080, 8080)
+    return stack
+
+
+# #6768: serve --minimal turns tracing off because it starts no collector.
+# Apply sends the tracing serve left, or the Router refuses every change as a
+# tracing change that needs a restart. A named stack scopes the collector
+# endpoint and its runtime files to its name.
+@pytest.mark.parametrize("stack_name", [None, "named-trial"])
+@pytest.mark.parametrize("minimal", [True, False])
+def test_apply_sends_the_tracing_serve_left(
+    monkeypatch, stack, tmp_path, minimal, stack_name
+):
+    stack = _on_stack(monkeypatch, stack, stack_name)
+    served = _serve(monkeypatch, tmp_path / "config.yaml", minimal=minimal)
+    assert ("enabled" in _tracing(served)) == minimal
+    assert _tracing(served)["exporter"]["endpoint"] == (
+        stack.layout.otlp_service_endpoint.removeprefix("http://")
+    )
+
+    client = FakeClient()
+    result = _apply(monkeypatch, stack, client, tmp_path / "config.yaml")
+
+    assert result.exit_code == 0, result.output
+    assert _tracing(yaml.safe_load(client.sent[-1])) == _tracing(served)
+
+
+# A pending change is the next serve's to project: that serve turns tracing off
+# and records it only if it starts without the collector. Turning it off when
+# saving would leave an `enabled: false` no serve recorded: a full serve would
+# keep tracing off, and a --minimal serve would drop the record apply reads.
+@pytest.mark.parametrize("next_minimal", [True, False])
+def test_the_next_serve_projects_a_pending_tracing_change(
+    monkeypatch, stack, tmp_path, next_minimal
+):
+    source = tmp_path / "config.yaml"
+    _serve(monkeypatch, source, minimal=True)
+    document = yaml.safe_load(source.read_text(encoding="utf-8"))
+    document.setdefault("global", {}).setdefault("services", {})["observability"] = {
+        "tracing": {"sampling": {"type": "probabilistic", "rate": 0.5}}
+    }
+    source.write_text(yaml.safe_dump(document), encoding="utf-8")
+    save_pending_restart(stack, source, "tracing configuration changed")
+
+    served = _serve(monkeypatch, source, minimal=next_minimal)
+
+    assert ("enabled" in _tracing(served)) == next_minimal
+    assert runtime_tracing_disabled(stack.runtime_config()) == next_minimal
 
 
 def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):
