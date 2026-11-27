@@ -221,14 +221,71 @@ value the writer cannot see wherever it sits: a backend `api_key`, a store
 prompt or any other string. A reference is `auth.api_key_file`,
 `auth.api_key_env` of any name, or an environment reference (`${NAME}` or
 `$NAME`, with or without a default) in any value the Router expands, anywhere
-in the configuration. Such a user can save a reference only where the saved
-configuration already uses it, on the same destination (`endpoint`,
-`provider`, `protocol` and the other fields a redacted key is checked on). A
-listener's `api_keys` and `api_key_files` check what clients send and are not
-included. Naming a new reference, moving the backend, plugin or store that
-names one to another host, or naming a file the configuration does not use is
-refused with `403`. To send a value somewhere new, enter the value itself. A
-user with `config.secrets.read` can name any reference.
+in the configuration. A listener's `api_keys` and `api_key_files` check what
+clients send and are not included.
+
+The Dashboard reads a save by such a user, and the configuration it replaces,
+as the Router does, with older forms rewritten to the current ones, and keeps
+each reference only where all of these hold:
+
+- **Same place.** The saved configuration names the reference at the same
+  place: the same field under the same fields, and in a list the item with
+  the same `name` or `id`, else at the same position. A reference moved to
+  another field, a new block around it, or an item whose name repeats has no
+  counterpart.
+- **Same blocks around it.** Every mapping that encloses the reference keeps
+  its destination fields (`endpoint`, `address`, `url`, `host`, `port`,
+  `provider`, `protocol` and the other fields a redacted key is checked on)
+  and every other field that holds a plain value, such as `backend`,
+  `backend_type`, `type`, `deployment` or `primary`. These say where a
+  backend, a store, a RAG source or a judge sends what it reads. A model in
+  `providers.models`, and `providers` itself, keep only their destination
+  fields and the model fields that choose where its backends' requests go:
+  `deployment`, `api_format`, `schema`, `catalog` and `provider_profile`. A
+  model's limits, pricing, description, reasoning settings and
+  `provider_model_id` stay editable beside a key in its backend.
+- **Same models reached.** A value that rides on the requests the Router
+  sends to models reaches no backend it did not reach. That is any value in a
+  model outside its backends, in a recipe, in `global.plugins` or in
+  `global.integrations`, and any other value outside a backend or a block
+  that names a destination. A model's backends are its `backend_refs` and the
+  `global.model_catalog.deployments` entry it names. A value in a model
+  reaches that model. A value in a decision reaches each model named, by its
+  name, an external model ID or a LoRA adapter, by any value outside
+  `providers.models`, the other recipes and the recipe's other decisions: its
+  `modelRefs`, which Looper and fallback draw from, a route `action`, a model
+  a recipe or global plugin names, such as a `router_replay` shadow model,
+  and `providers.defaults.model`. A value elsewhere in a recipe reaches what
+  all of the recipe's decisions reach. Any other value, `global.plugins`
+  included, which also shape a request that names a model directly, reaches
+  every model, and so does every value while learning may search beyond a
+  decision (a `candidate_set` of `tier` or `global`). A document without a
+  `providers.models` list counts every block that names a destination.
+- **Same global connections.** A reference whose value rides on the
+  requests sent to models, outside `providers.models`, keeps the effective
+  `global.stores`, `global.services`, `global.integrations`,
+  `global.model_catalog` deployments, embeddings, bindings and system models,
+  and its recipe's `model_bindings`. A RAG source that reuses the cache
+  connection, a vector store search, a judge and a signal send what they read
+  through these. A reference inside a store, a service or a deployment, such
+  as a store `password`, goes to that block, which the blocks around it
+  already compare, and leaves the other connections editable.
+
+A save that breaks any of these is refused with `403`: for example moving a
+backend whose header names a reference, moving a RAG source's `endpoint` or
+switching its `backend`, pointing a judge at another deployment, moving a
+store, routing a decision whose system prompt names one to another model,
+moving that model or changing the default model, or adding a model at a new
+address while a global plugin names one. The rule refuses more than it must:
+such a user cannot edit a plain field, such as a description, a priority, a
+threshold or `enabled`, on a block that holds a reference or on any block
+around it other than a model and `providers`, nor change a global connection
+while a plugin, a RAG source, a decision or a recipe holds a reference. Edits
+elsewhere save: routing, descriptions and plugins of decisions that hold no
+reference, models no reference reaches, a keyed model's limits and pricing,
+and a store or service setting with no reference in or below it. To send a
+value somewhere new, enter the value itself. A user with
+`config.secrets.read` can name any reference.
 
 A Recipe package carries its own configuration, which can bind an environment
 reference the same way. Activating one makes the Router load and expand it, so
