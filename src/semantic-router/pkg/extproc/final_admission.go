@@ -19,6 +19,11 @@ func isFinalContextOverflow(err error) bool {
 	return errors.As(err, &budget) && budget.Code == "context_length_exceeded"
 }
 
+func isDispatchBudgetError(err error) bool {
+	var budget *selection.RequestBudgetError
+	return errors.As(err, &budget)
+}
+
 // A candidate projection publishes plugin observations only if it is dispatched.
 func (ctx *RequestContext) observeProjection(record func()) {
 	if ctx == nil || ctx.projectionObservations == nil {
@@ -136,10 +141,25 @@ func (r *OpenAIRouter) materializeAdmittedCandidate(dispatch *providerDispatch, 
 	return prepared, admission, err
 }
 
-func (r *OpenAIRouter) prepareFinalCandidate(dispatch *providerDispatch, ctx *RequestContext, allowCompression bool) (*preparedProviderRequest, dispatchAdmission, error) {
+func (r *OpenAIRouter) prepareFinalCandidate(dispatch *providerDispatch, ctx *RequestContext, primary bool) (*preparedProviderRequest, dispatchAdmission, error) {
+	model := dispatch.effectiveBackendModel()
+	preparationErr := dispatch.preparationBudgetError
+	if !primary {
+		_, _, preparationErr = r.dispatchCompressionBudget(ctx, ctx.SemanticRequest, model)
+	}
+	if preparationErr != nil {
+		if !isDispatchBudgetError(preparationErr) {
+			return nil, dispatchAdmission{}, preparationErr
+		}
+		admission := dispatchAdmission{
+			Model: model, ContextWindow: r.contextWindowSize(model), Source: "provider_preparation", Verdict: "exceeds",
+		}
+		metrics.RecordFinalAdmission(admission.Source, admission.Verdict)
+		return nil, admission, preparationErr
+	}
 	diagnostics := len(ctx.ProtocolDiagnostics)
 	prepared, admission, err := r.materializeAdmittedCandidate(dispatch, ctx)
-	if allowCompression && ctx.SemanticRequest.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
+	if primary && ctx.SemanticRequest.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
 		err = r.compressAutomaticOverflow(ctx, ctx.SemanticRequest, dispatch, err)
 		if err == nil {
 			ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]

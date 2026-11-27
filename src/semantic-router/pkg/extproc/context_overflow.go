@@ -116,7 +116,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand); err != nil {
 			continue
 		}
-		budget := r.contextOverflowInputBudget(ref.Model, demand, cfg)
+		budget, _ := r.contextOverflowInputBudget(ref.Model, demand, cfg)
 		if budget > available {
 			model, available = ref.Model, budget
 		}
@@ -130,42 +130,56 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 	return nil
 }
 
-func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection.CandidateDemand, cfg *config.ContextPluginConfig) int {
+func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection.CandidateDemand, cfg *config.ContextPluginConfig) (int, error) {
 	params, _ := selection.CandidateModelParams(r.Config.ModelConfig, nil, model)
 	if params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 {
-		return 0
+		return 0, fmt.Errorf("%w: selected model has no usable known input budget for context compression", selection.ErrNoEligibleCandidates)
 	}
 	reserve := params.MaxOutputTokens
 	if demand.MaxOutputTokens != nil {
 		if *demand.MaxOutputTokens <= 0 || *demand.MaxOutputTokens > int64(params.MaxOutputTokens) {
-			return 0
+			return 0, &selection.RequestBudgetError{
+				Code:    "max_output_tokens_exceeded",
+				Message: fmt.Sprintf("requested output token limit must be between 1 and %d for model %q", params.MaxOutputTokens, model),
+			}
 		}
 		reserve = int(*demand.MaxOutputTokens)
 	}
 	if cfg.Budget != nil && cfg.Budget.ReserveOutputTokens != nil && !cfg.Budget.ReserveOutputTokens.Auto {
 		reserve = max(reserve, cfg.Budget.ReserveOutputTokens.Value)
 	}
-	return max(0, params.ContextWindowSize-reserve)
+	if reserve >= params.ContextWindowSize {
+		return 0, overflowBudgetError(fmt.Sprintf("The %d-token output reserve leaves no input capacity in the %d-token context window", reserve, params.ContextWindowSize))
+	}
+	return params.ContextWindowSize - reserve, nil
 }
 
 // Repeat the bound after enrichment and deterministic provider preparation.
 // This checks the actual dispatch body rather than trusting the earlier view.
 func (r *OpenAIRouter) prepareDispatchContextOverflow(ctx *RequestContext, request *llmprotocol.Request, model string) error {
+	cfg, available, err := r.dispatchCompressionBudget(ctx, request, model)
+	if err != nil || cfg == nil {
+		return err
+	}
+	return r.applyContextOverflow(ctx, request, cfg, nil, model, available)
+}
+
+func (r *OpenAIRouter) dispatchCompressionBudget(ctx *RequestContext, request *llmprotocol.Request, model string) (*config.ContextPluginConfig, int, error) {
 	if request != nil && request.Sampling.AutomaticOutput {
-		return nil
+		return nil, 0, nil
 	} // Exact render owns automatic admission and confirmed-overflow compression.
 	cfg := contextOverflowConfig(r.Config, ctx)
 	if cfg == nil {
-		return nil
+		return nil, 0, nil
 	}
-	available := r.contextOverflowInputBudget(model, selection.DemandForRequest(request), cfg)
-	if available == 0 {
-		if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(request)); err != nil {
-			return err
+	demand := selection.DemandForRequest(request)
+	available, err := r.contextOverflowInputBudget(model, demand, cfg)
+	if err != nil {
+		if validationErr := r.validateModelDemand(r.candidateRequirements(ctx), model, demand); validationErr != nil {
+			err = validationErr
 		}
-		return fmt.Errorf("%w: selected model has no usable known input budget for context compression", selection.ErrNoEligibleCandidates)
 	}
-	return r.applyContextOverflow(ctx, request, cfg, nil, model, available)
+	return cfg, available, err
 }
 
 func overflowBudgetError(message string) error {

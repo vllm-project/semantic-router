@@ -28,8 +28,11 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 	cacheAction, cacheReason := ctx.PromptCacheAction, ctx.PromptCacheReason
 	cacheInserted, cachePreserved := ctx.PromptCacheInserted, ctx.PromptCachePreserved
 	prepared, admission, err := r.prepareFinalCandidate(dispatch, ctx, true)
-	if !isFinalContextOverflow(err) {
+	if !isDispatchBudgetError(err) {
 		return dispatchCandidate{request: prepared}, admission, err
+	}
+	if cancellation := selectionRequestContext(ctx).Err(); cancellation != nil {
+		return dispatchCandidate{request: prepared}, admission, cancellation
 	}
 	admission.ExcludedCandidates = 1
 	if dispatch.entrypoint == "" || ctx.VSRSelectedDecision == nil || finalModelLocked(ctx) {
@@ -84,7 +87,7 @@ func (r *OpenAIRouter) prepareAdmittedDispatch(dispatch *providerDispatch, ctx *
 		}
 		candidateRequest, candidateAdmission, candidateErr := r.prepareFinalCandidate(alternate, &view, false)
 		candidateAdmission.ExcludedCandidates = admission.ExcludedCandidates
-		if isFinalContextOverflow(candidateErr) {
+		if isDispatchBudgetError(candidateErr) {
 			candidateAdmission.ExcludedCandidates++
 			admission, err = candidateAdmission, candidateErr
 			continue

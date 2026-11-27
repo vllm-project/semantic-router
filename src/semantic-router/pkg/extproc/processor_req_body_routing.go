@@ -34,6 +34,7 @@ type routeHeaderState struct {
 }
 
 type providerDispatch struct {
+	preparationBudgetError      error
 	callerMode                  llmprotocol.ReasoningMode
 	callerEffort, callerDisplay string
 	callerBudget                *int64
@@ -64,6 +65,17 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	useReasoning bool,
 	ctx *RequestContext,
 ) (*providerDispatch, error) {
+	return r.prepareModelDispatch(request, logicalModel, decisionName, useReasoning, "", ctx)
+}
+
+func (r *OpenAIRouter) prepareModelDispatch(
+	request *llmprotocol.Request,
+	logicalModel string,
+	decisionName string,
+	useReasoning bool,
+	entrypoint string,
+	ctx *RequestContext,
+) (*providerDispatch, error) {
 	if request == nil || ctx == nil || r == nil || r.Config == nil {
 		return nil, status.Error(codes.Internal, "neutral inference request is unavailable")
 	}
@@ -71,6 +83,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err != nil {
 		return nil, err
 	}
+	dispatch.entrypoint = entrypoint
 	dispatch.callerMode, dispatch.callerEffort = request.ReasoningMode, request.ReasoningEffort
 	dispatch.callerDisplay, dispatch.callerBudget = request.ReasoningDisplay, request.ReasoningBudgetTokens
 	dispatch.callerOutputLimit = request.Sampling.MaxOutputTokens
@@ -81,13 +94,16 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel()); err != nil {
-		return nil, err
+	preparationErr := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel())
+	if preparationErr == nil && !request.Sampling.AutomaticOutput {
+		preparationErr = r.rejectDispatchCapabilityMismatch(request, dispatch, ctx)
 	}
-	if !request.Sampling.AutomaticOutput {
-		if err := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); err != nil {
-			return nil, err
+	if preparationErr != nil {
+		// Only a movable entrypoint can try another candidate.
+		if !isDispatchBudgetError(preparationErr) || entrypoint == "" || ctx.VSRSelectedDecision == nil || finalModelLocked(ctx) {
+			return nil, preparationErr
 		}
+		dispatch.preparationBudgetError = preparationErr
 	}
 	bindProviderRequest(ctx, dispatch, request)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
@@ -408,11 +424,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	}
 	observations := ctx.projectionObservations
 	ctx.projectionObservations = nil
-	if err == nil || isFinalContextOverflow(err) || prepared != nil {
+	if err == nil || isDispatchBudgetError(err) || prepared != nil {
 		captureRequestDemand(ctx, requestDemandStageProviderBound, ctx.SemanticRequest, dispatch.logicalModel)
 	}
 	if err != nil {
-		if isFinalContextOverflow(err) || errors.Is(err, selection.ErrNoEligibleCandidates) && admission.ExcludedCandidates > 0 {
+		if isDispatchBudgetError(err) || errors.Is(err, selection.ErrNoEligibleCandidates) && admission.ExcludedCandidates > 0 {
 			return r.respondSelectionRejected(ctx, firstNonEmpty(dispatch.entrypoint, primary), err), nil
 		}
 		return nil, err

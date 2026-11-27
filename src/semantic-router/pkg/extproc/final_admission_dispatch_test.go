@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -75,6 +76,88 @@ func (g *finalAdmissionGateway) post(path, body, user string) *httptest.Response
 
 func finalAdmissionChatBody(prompt string) string {
 	return fmt.Sprintf(`{"model":"auto","max_tokens":16,"messages":[{"role":"user","content":%q}]}`, prompt)
+}
+
+func TestFinalAdmissionReselectsAfterRAGOverflow(t *testing.T) {
+	for mode, adapter := range looperAdapters {
+		t.Run(mode, func(t *testing.T) {
+			for _, test := range []struct {
+				name, winner                    string
+				wideWindow, wideOutput, reserve int
+				compress                        bool
+			}{
+				{"alternate_fits", "wide", 20000, 512, 0, true},
+				{"all_candidates_overflow", "", 1500, 512, 0, true},
+				{"strict_context_limit", "wide", 20000, 512, 0, false},
+				{"reserve_leaves_no_input_capacity", "wide", 20000, 512, 1500, true},
+				{"alternate_output_limit_too_small", "preferred", 20000, 8, 0, true},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					var lookups atomic.Int32
+					rag := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						lookups.Add(1)
+						_ = json.NewEncoder(w).Encode(map[string]string{
+							"content": strings.Repeat("Audit report confirms the office opens Monday. ", 290),
+						})
+					}))
+					t.Cleanup(rag.Close)
+					refs := finalAdmissionModelPair
+					if test.winner == "preferred" {
+						refs += ", {model: preferred}"
+					}
+					g := newFinalAdmissionGateway(t, adapter, llmprotocol.OpenAIChatV1, refs, func(document string) string {
+						document = strings.Replace(document, "context_window_size: 96", "context_window_size: 1500\n      max_output_tokens: 512", 1)
+						document = strings.Replace(document, "context_window_size: 4096", fmt.Sprintf("context_window_size: %d\n      max_output_tokens: %d", test.wideWindow, test.wideOutput), 1)
+						document = strings.Replace(document, "context_window_size: 4096", "context_window_size: 20000\n      max_output_tokens: 512", 1)
+						compression := ""
+						if test.compress {
+							compression = `              compress:
+                match: {recall: {method: bm25, top_k: 3}}
+                targets:
+                  current_user: {mode: truncate}
+                  rag: {mode: preserve}
+`
+							if test.reserve > 0 {
+								compression += fmt.Sprintf("              budget: {reserve_output_tokens: %d}\n", test.reserve)
+							}
+						} else {
+							document = strings.Replace(document, "  - name: default\n", "  - name: default\n    candidate_requirements: {context: known_limits}\n", 1)
+						}
+						return strings.Replace(document, "entrypoints:", fmt.Sprintf(`          - type: context
+            configuration:
+              enabled: true
+              sources:
+                - type: rag
+                  backend: external_api
+                  max_context_length: 24000
+                  on_failure: block
+                  match: {recall: {method: embedding, top_k: 3}}
+                  backend_config:
+                    endpoint: "%s"
+                    request_format: custom
+                    request_template: '{"query":"{{.Query}}"}'
+%sentrypoints:`, rag.URL, compression), 1)
+					})
+					g.router.Embeddings = ragBlockEmbeddings()
+
+					response := g.post("/v1/chat/completions", finalAdmissionChatBody("What are the refund terms?"), "")
+
+					require.EqualValues(t, 1, lookups.Load())
+					require.Empty(t, g.small.ownCalls())
+					calls := append(g.wide.ownCalls(), g.preferred.ownCalls()...)
+					if test.winner == "" {
+						require.Equal(t, http.StatusBadRequest, response.Code, response.Body.String())
+						require.Empty(t, calls)
+						require.Contains(t, response.Body.String(), "context_length_exceeded")
+						return
+					}
+					require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+					require.Len(t, calls, 1)
+					require.Equal(t, test.winner, calls[0].Model)
+				})
+			}
+		})
+	}
 }
 
 func TestFinalAdmissionModelDenialRefundsRequestQuota(t *testing.T) {

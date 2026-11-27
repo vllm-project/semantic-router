@@ -222,7 +222,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)
 		if err != nil {
-			return r.imageFileDispatchFailure(err, ctx)
+			return r.providerPreparationFailure(err, originalModel, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.applyToolsPlugin(request, response, ctx)
@@ -239,14 +239,13 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}
 
 	r.trackVSRDecision(ctx, ctx.VSRSelectedCategory, decisionName, matchedModel, reasoningDecision.UseReasoning)
-	dispatch, err := r.prepareProviderDispatch(
-		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
+	dispatch, err := r.prepareModelDispatch(
+		request, matchedModel, decisionName, reasoningDecision.UseReasoning, originalModel, ctx,
 	)
 	if err != nil {
-		return r.imageFileDispatchFailure(err, ctx)
+		return r.providerPreparationFailure(err, originalModel, ctx)
 	}
 
-	dispatch.entrypoint = originalModel
 	response := buildRequestBodyContinueResponse(&routeHeaderState{}, nil, false)
 
 	// Persist the final dispatch demand, including automatic output resolved
@@ -310,7 +309,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	dispatch, err := r.prepareProviderDispatch(request, originalModel, "", false, ctx)
 	if err != nil {
-		return r.imageFileDispatchFailure(err, ctx)
+		return r.providerPreparationFailure(err, originalModel, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
@@ -332,6 +331,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	r.recordRoutingLatency(ctx)
 
 	return response, nil
+}
+
+func (r *OpenAIRouter) providerPreparationFailure(err error, model string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if isDispatchBudgetError(err) {
+		return r.respondSelectionRejected(ctx, model, err), nil
+	}
+	return r.imageFileDispatchFailure(err, ctx)
 }
 
 func (r *OpenAIRouter) unavailableModelResponse(
