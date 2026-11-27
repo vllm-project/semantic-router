@@ -74,11 +74,10 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 		Kind:    "InferenceService",
 	})
 
-	err := c.Get(ctx, types.NamespacedName{
+	if err := c.Get(ctx, types.NamespacedName{
 		Name:      inferenceServiceName,
 		Namespace: namespace,
-	}, inferenceService)
-	if err != nil {
+	}, inferenceService); err != nil {
 		logger.Error(err, "Failed to get InferenceService", "name", inferenceServiceName, "namespace", namespace)
 		return nil, fmt.Errorf("failed to get InferenceService %s/%s: %w", namespace, inferenceServiceName, err)
 	}
