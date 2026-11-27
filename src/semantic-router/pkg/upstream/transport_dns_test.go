@@ -105,7 +105,7 @@ func backendDNSDialer(t *testing.T) *net.Dialer {
 				return
 			}
 			var query dnsmessage.Message
-			if err := query.Unpack(buf[:n]); err != nil || len(query.Questions) != 1 {
+			if unpackErr := query.Unpack(buf[:n]); unpackErr != nil || len(query.Questions) != 1 {
 				continue
 			}
 			question := query.Questions[0]
