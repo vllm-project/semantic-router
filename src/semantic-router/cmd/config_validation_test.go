@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 const outputValidationConfig = `
@@ -218,6 +219,86 @@ func TestValidateConfigRefusesAnHTTPSBackendIPWhereStartupDoes(t *testing.T) {
 			}
 			if !strings.Contains(report.Error, refused) {
 				t.Fatalf("error %q is not the startup error %q", report.Error, refused)
+			}
+		})
+	}
+}
+
+// referenceConfig is a loadable document with the listener timeout, when it
+// is not empty, and one backend at endpoint; either may hold an environment
+// reference.
+func referenceConfig(timeout, endpoint string) string {
+	document := outputValidationConfig
+	if timeout != "" {
+		document = strings.Replace(document, "    port: 8899\n", "    port: 8899\n    timeout: \""+timeout+"\"\n", 1)
+	}
+	backend := "        - name: local\n" +
+		"          endpoint: \"" + endpoint + "\"\n" +
+		"          provider: vllm\n"
+	document = strings.Replace(document, "        - endpoint: 127.0.0.1:8000\n", backend, 1)
+	return strings.NewReplacer("CONDITION", "wants_text", "OUTPUT", "").Replace(document)
+}
+
+// startupUpstreamError is the error a standalone Router that routes gets
+// when it loads the document in environment and compiles its upstream.
+func startupUpstreamError(t *testing.T, document string, environment map[string]string) error {
+	t.Helper()
+	for name, value := range environment {
+		t.Setenv(name, value)
+	}
+	cfg, err := config.ParseYAMLBytes([]byte(document))
+	if err != nil {
+		return err
+	}
+	_, err = upstream.Compile(cfg)
+	return err
+}
+
+// -validate-config keeps environment references as written, and the serving
+// Router resolves them before it compiles the upstream, so standalone
+// validation leaves a value that holds one to that Router. Every other value
+// is checked as startup checks it, and the verdict is the one startup reaches
+// in the deployment's environment.
+func TestValidateConfigLeavesEnvironmentReferencesToTheServingRouter(t *testing.T) {
+	environment := map[string]string{
+		"LISTENER_TIMEOUT": "30s",
+		"AZURE_RESOURCE":   "example",
+		"AZURE_DEPLOYMENT": "gpt",
+	}
+	const plainBackend = "http://localhost:8000/v1"
+	cases := []struct {
+		name     string
+		timeout  string
+		endpoint string
+		refused  string
+	}{
+		{"listener timeout reference", "${LISTENER_TIMEOUT}", plainBackend, ""},
+		{"listener timeout reference with a default", "${LISTENER_TIMEOUT:-30s}", plainBackend, ""},
+		{"unbraced listener timeout reference", "$LISTENER_TIMEOUT", plainBackend, ""},
+		{"backend host reference", "", "https://${AZURE_RESOURCE}.openai.azure.com/openai/deployments/${AZURE_DEPLOYMENT}", ""},
+		{"listener timeout that is not a duration", "soon", plainBackend, `listeners[http-8899].timeout "soon" is not a valid duration`},
+		{"backend host placeholder no environment resolves", "", "https://{{resource}}.openai.azure.com/v1", "invalid base URL"},
+		{"HTTPS backend IP beside a listener timeout reference", "${LISTENER_TIMEOUT}", "https://127.0.0.1:8000/v1", "HTTPS endpoint must use a DNS hostname"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			document := referenceConfig(tc.timeout, tc.endpoint)
+			status, report := runValidation(t, document)
+			startupErr := startupUpstreamError(t, document, environment)
+			if tc.refused == "" {
+				if startupErr != nil {
+					t.Fatalf("startup refuses the document: %v", startupErr)
+				}
+				if status != 0 || !report.Valid {
+					t.Fatalf("status %d, report %+v: the Router starts with this document", status, report)
+				}
+				return
+			}
+			if startupErr == nil || !strings.Contains(startupErr.Error(), tc.refused) {
+				t.Fatalf("startup error %v, want one containing %q", startupErr, tc.refused)
+			}
+			if status != 1 || report.Valid || !strings.Contains(report.Error, tc.refused) {
+				t.Fatalf("status %d, report %+v: want the startup error containing %q", status, report, tc.refused)
 			}
 		})
 	}
