@@ -170,52 +170,61 @@ spec:
           insecure: true
         sampling:
           type: probabilistic
-          probability: "0.1"  # Sample 10% of traces
+          rate: "0.1"  # Sample 10% of traces
         resource:
           service_name: semantic-router
-          environment: production
+          deployment_environment: production
 
   # ====================
   # Tools Database
   # ====================
   # Define tools for auto-selection based on query similarity
   toolsDb:
-    - name: get_weather
-      description: Get the current weather for a location
-      parameters:
-        type: object
-        properties:
-          location:
-            type: string
-            description: City name or coordinates
-          unit:
-            type: string
-            enum: [celsius, fahrenheit]
-        required: [location]
+    - tool:
+        type: function
+        function:
+          name: get_weather
+          description: Get the current weather for a location
+          parameters:
+            type: object
+            properties:
+              location:
+                type: string
+                description: City name or coordinates
+              unit:
+                type: string
+                enum: [celsius, fahrenheit]
+            required: [location]
 
-    - name: search_knowledge_base
-      description: Search internal knowledge base for company information
-      parameters:
-        type: object
-        properties:
-          query:
-            type: string
-            description: Search query
-          max_results:
-            type: integer
-            description: Maximum number of results
-            default: 5
-        required: [query]
+    - tool:
+        type: function
+        function:
+          name: search_knowledge_base
+          description: Search internal knowledge base for company information
+          parameters:
+            type: object
+            properties:
+              query:
+                type: string
+                description: Search query
+              max_results:
+                type: integer
+                description: Maximum number of results
+                default: 5
+            required: [query]
 
-    - name: calculate
-      description: Perform mathematical calculations
-      parameters:
-        type: object
-        properties:
-          expression:
-            type: string
-            description: Mathematical expression to evaluate
-        required: [expression]
+    - tool:
+        type: function
+        function:
+          name: calculate
+          description: Perform mathematical calculations
+          parameters:
+            type: object
+            properties:
+              expression:
+                type: string
+                description: Mathematical expression to evaluate
+            required: [expression]
 
   # ====================
   # Autoscaling (HPA)
