@@ -20,10 +20,18 @@ import (
 // post-selection boundary. The selected logical model is part of the rule key,
 // and actual provider usage is settled by the response pipeline.
 func (r *OpenAIRouter) applyRateLimit(ctx *RequestContext, selectedModel string) *ext_proc.ProcessingResponse {
+	return r.applyScopedRateLimit(ctx, selectedModel, ratelimit.AllLimits)
+}
+
+func (r *OpenAIRouter) applyScopedRateLimit(ctx *RequestContext, selectedModel string, scope ratelimit.CheckScope) *ext_proc.ProcessingResponse {
 	if r == nil || r.RateLimiter == nil || ctx == nil {
 		return nil
 	}
 	limitContext := r.buildRateLimitContext(ctx, selectedModel)
+	limitContext.CheckScope = scope
+	if scope == ratelimit.ModelLimits && ctx.RateLimitCtx != nil {
+		limitContext.RequestModel = ctx.RateLimitCtx.Model
+	}
 	decision, err := r.RateLimiter.Check(limitContext)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "rate_limit_check_failed", map[string]interface{}{
@@ -45,6 +53,14 @@ func (r *OpenAIRouter) applyRateLimit(ctx *RequestContext, selectedModel string)
 	}
 	ctx.RateLimitCtx = &limitContext
 	return nil
+}
+
+func (r *OpenAIRouter) checkFinalModelRateLimit(ctx *RequestContext, model string) *ext_proc.ProcessingResponse {
+	if !ctx.deferModelRateLimit {
+		return nil
+	}
+	ctx.deferModelRateLimit = false
+	return r.applyScopedRateLimit(ctx, model, ratelimit.ModelLimits)
 }
 
 func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel string) ratelimit.Context {

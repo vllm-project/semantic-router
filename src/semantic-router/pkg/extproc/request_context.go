@@ -242,16 +242,17 @@ type RequestContext struct {
 	Routing RequestRoutingContext
 
 	// VSR decision tracking
-	VSRSelectedCategory                 string                                      // The category from domain classification (MMLU category)
-	VSRSelectedDecisionName             string                                      // The decision name from DecisionEngine evaluation
-	VSRSelectedDecisionConfidence       float64                                     // Confidence score from DecisionEngine evaluation
-	VSRSelectedDecisionConfidenceScored bool                                        // False for structural and error-policy matches without model scores
-	VSRReasoningMode                    string                                      // "on" or "off" - whether reasoning mode was determined to be used
-	VSRReasoningReason                  string                                      // Why VSRReasoningMode is not the decision's choice, such as "output_budget"
-	VSRSelectedModel                    string                                      // The model selected by VSR
-	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "static", "systemone", "escalate")
-	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
-	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
+	VSRSelectedCategory                 string                               // The category from domain classification (MMLU category)
+	VSRSelectedDecisionName             string                               // The decision name from DecisionEngine evaluation
+	VSRSelectedDecisionConfidence       float64                              // Confidence score from DecisionEngine evaluation
+	VSRSelectedDecisionConfidenceScored bool                                 // False for structural and error-policy matches without model scores
+	VSRReasoningMode                    string                               // "on" or "off" - whether reasoning mode was determined to be used
+	VSRReasoningReason                  string                               // Why VSRReasoningMode is not the decision's choice, such as "output_budget"
+	VSRSelectedModel                    string                               // The model selected by VSR
+	VSRSelectionMethod                  string                               // Model selection algorithm used (e.g., "static", "systemone", "escalate")
+	VSRSelectionReasoning               string                               // Bounded human-readable selector rationale for replay
+	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective // Base objective evidence, before Router Learning
+	dispatchSelection                   *selection.SelectionResult
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRLearningPolicy                   *routerLearningPolicy                       // Primary Router Learning trace
@@ -452,6 +453,9 @@ type RequestContext struct {
 	// preparedDispatchReceipt identifies the final primary payload returned to
 	// Envoy without retaining its bytes beyond the existing body mutation.
 	preparedDispatchReceipt *routerreplay.PreparedDispatchReceipt
+	projectionObservations  *[]func()
+	finalAdmission          *dispatchAdmission
+	admissionProposalModel  string
 
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
@@ -590,7 +594,8 @@ type RequestContext struct {
 
 	// RateLimitCtx is retained for the existing optional data-plane limiter.
 	// Protocol codecs never read or mutate admission state.
-	RateLimitCtx *ratelimit.Context
+	RateLimitCtx        *ratelimit.Context
+	deferModelRateLimit bool
 
 	// Retention is a deep-clone snapshot of the matched Decision's retention
 	// attribute. The clone owns its own pointer fields so that any later

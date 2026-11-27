@@ -27,6 +27,54 @@ func TestTokenUsageFields(t *testing.T) {
 	}
 }
 
+func TestSplitQuotaChargesRequestAndSelectedModelOnce(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{Name: "request", RequestsPerUnit: 2, TokensPerUnit: 5, Unit: time.Hour},
+		{Name: "alternate", Match: RuleMatch{Model: "wide"}, RequestsPerUnit: 1, TokensPerUnit: 4, Unit: time.Hour},
+	})
+	request := Context{UserID: "user", Model: "small", TokenCount: 1, CheckScope: RequestLimits}
+	admission, err := limiter.Check(request)
+	if err != nil || !admission.Allowed {
+		t.Fatalf("request quota denied: %+v, %v", admission, err)
+	}
+	selected := Context{UserID: "user", Model: "wide", RequestModel: "small", TokenCount: 1, CheckScope: ModelLimits}
+	admission, err = limiter.Check(selected)
+	if err != nil || !admission.Allowed {
+		t.Fatalf("selected model quota denied: %+v, %v", admission, err)
+	}
+	if reportErr := limiter.Report(selected, TokenUsage{OutputTokens: 3}); reportErr != nil {
+		t.Fatal(reportErr)
+	}
+	probe := request
+	probe.TokenCount = 2
+	admission, err = limiter.Check(probe)
+	if err != nil || admission.Allowed {
+		t.Fatalf("selected response usage was not settled in the original request bucket: %+v, %v", admission, err)
+	}
+	admission, err = limiter.Check(request)
+	if err != nil || !admission.Allowed {
+		t.Fatalf("request quota was charged twice: %+v, %v", admission, err)
+	}
+	admission, err = limiter.Check(selected)
+	if err != nil || admission.Allowed {
+		t.Fatalf("selected model quota allowed another request: %+v, %v", admission, err)
+	}
+}
+
+func TestEnvoySplitQuotaDescriptors(t *testing.T) {
+	provider := &EnvoyRLSProvider{}
+	ctx := Context{UserID: "user", Groups: []string{"group"}, Model: "wide", CheckScope: RequestLimits}
+	request := provider.buildDescriptors(ctx)
+	if len(request) != 1 || len(request[0].GetEntries()) != 1 || request[0].GetEntries()[0].GetKey() != "group" {
+		t.Fatalf("request limit descriptors = %v, want group", request)
+	}
+	ctx.CheckScope = ModelLimits
+	model := provider.buildDescriptors(ctx)
+	if len(model) != 1 || len(model[0].GetEntries()) != 2 || model[0].GetEntries()[1].GetValue() != "wide" {
+		t.Fatalf("model limit descriptors = %v, want user and selected model", model)
+	}
+}
+
 // ── ParseUnit ──
 
 func TestParseUnit(t *testing.T) {

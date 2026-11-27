@@ -702,51 +702,18 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		}
 	}
 
-	if err := r.prepareAutomaticDispatch(ctx, reqCopy, dispatch); err != nil {
-		if isContextExpired(callCtx) {
-			return nil, fallback.EvaluationResult{CanFallback: false}, err
-		}
-		return nil, fallback.EvaluationResult{CanFallback: true}, err
-	}
-	if protocolErr := r.rejectDispatchCapabilityMismatch(reqCopy, dispatch, ctx); protocolErr != nil {
-		if isContextExpired(callCtx) {
-			return nil, fallback.EvaluationResult{CanFallback: false}, protocolErr
-		}
-		return nil, fallback.EvaluationResult{CanFallback: true}, protocolErr
-	}
-
 	engine, engineErr := r.protocolEngine()
 	if engineErr != nil {
 		return nil, fallback.EvaluationResult{CanFallback: true}, engineErr
 	}
 
-	// As for the primary, prompt-cache markers go on the provider-bound copy only.
-	dispatchRequest := *reqCopy
-	if policyErr := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); policyErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, policyErr
+	requestBody, err := r.prepareFallbackCandidateBody(engine, reqCopy, dispatch, ctx)
+	if err == nil {
+		err = r.rejectDispatchCapabilityMismatch(reqCopy, dispatch, ctx)
 	}
-	projected, projectionDiagnostics, projectionErr := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
-	if projectionErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, projectionErr
+	if err != nil {
+		return nil, fallback.EvaluationResult{CanFallback: !isContextExpired(callCtx)}, err
 	}
-	requestBackendStreamUsage(dispatch.targetFormat, &projected)
-	r.requestUnstoredOnCallerLogin(dispatch.targetFormat, &projected)
-	encoded, encodeErr := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
-	if encodeErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, encodeErr
-	}
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, projectionDiagnostics...)
-	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-
-	requestBody := encoded.Body
-	adaptedBody, adaptErr := r.adaptProviderRequest(encoded.Body, dispatch, ctx)
-	if adaptErr != nil {
-		return nil, fallback.EvaluationResult{CanFallback: true}, adaptErr
-	}
-	if len(adaptedBody) > 0 {
-		requestBody = adaptedBody
-	}
-
 	if rateLimitResponse := r.applyRateLimit(ctx, candidateModel); rateLimitResponse != nil {
 		logging.ComponentEvent("extproc", "fallback_candidate_rate_limited", map[string]interface{}{
 			"request_id":      ctx.RequestID,
@@ -770,6 +737,61 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
 		engine: engine,
 	}, fallback.EvaluationResult{CanFallback: true}, nil
+}
+
+func (r *OpenAIRouter) prepareFallbackCandidateBody(engine *protocolcodec.Engine, request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) ([]byte, error) {
+	diagnostics := len(ctx.ProtocolDiagnostics)
+	previous := ctx.projectionObservations
+	var observations []func()
+	ctx.projectionObservations = &observations
+	defer func() {
+		ctx.projectionObservations = previous
+		for _, record := range observations {
+			ctx.observeProjection(record)
+		}
+	}()
+
+	body, admission, err := r.encodeAndAdmitFallbackBody(engine, request, dispatch, ctx)
+	if request.Sampling.AutomaticOutput && isFinalContextOverflow(err) {
+		err = r.compressAutomaticOverflow(ctx, request, dispatch, err)
+		if err == nil {
+			ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnostics]
+			observations = nil
+			body, admission, err = r.encodeAndAdmitFallbackBody(engine, request, dispatch, ctx)
+		}
+	}
+	if admission.Source != "" {
+		metrics.RecordFinalAdmission(admission.Source, admission.Verdict)
+	}
+	return body, err
+}
+
+func (r *OpenAIRouter) encodeAndAdmitFallbackBody(engine *protocolcodec.Engine, request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) ([]byte, dispatchAdmission, error) {
+	dispatchRequest := *request
+	if err := r.applyPromptCachePolicy(&dispatchRequest, ctx, dispatch.targetFormat); err != nil {
+		return nil, dispatchAdmission{}, err
+	}
+	projected, diagnostics, err := r.projectRequestForBackendWithDiagnostics(dispatchRequest, dispatch.effectiveBackendModel(), dispatch.targetFormat)
+	if err != nil {
+		return nil, dispatchAdmission{}, err
+	}
+	requestBackendStreamUsage(dispatch.targetFormat, &projected)
+	r.requestUnstoredOnCallerLogin(dispatch.targetFormat, &projected)
+	encoded, err := engine.EncodeRequest(dispatch.targetFormat, projected, ctx.ProtocolEnvelope)
+	if err != nil {
+		return nil, dispatchAdmission{}, err
+	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
+
+	body, err := r.adaptProviderRequest(encoded.Body, dispatch, ctx)
+	if err != nil {
+		return nil, dispatchAdmission{}, err
+	}
+	if len(body) == 0 {
+		body = encoded.Body
+	}
+	return r.admitProviderBody(body, request, dispatch, ctx)
 }
 
 func (r *OpenAIRouter) settleFallbackCandidateUsage(ctx *RequestContext, attemptDuration time.Duration) {

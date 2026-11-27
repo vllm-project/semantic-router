@@ -2,6 +2,8 @@ package selection
 
 import (
 	"math"
+	"math/rand/v2"
+	"slices"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -125,6 +127,35 @@ func (result *SelectionResult) ScoresFor(refs []config.ModelRef) CandidateScores
 		}
 	}
 	return out
+}
+
+func (result *SelectionResult) OrderCandidates(refs []config.ModelRef) []config.ModelRef {
+	if result == nil {
+		return refs
+	}
+	if result.Method == MethodRandom {
+		ordered := slices.Clone(refs)
+		rand.Shuffle(len(ordered), func(i, j int) { ordered[i], ordered[j] = ordered[j], ordered[i] })
+		return ordered
+	}
+	scores := result.ScoresFor(refs)
+	ordered := make([]config.ModelRef, 0, len(refs))
+	ranked := make(map[CandidateID]bool, len(scores))
+	for winner := scores.Best(result.ScoreDirection, true); winner >= 0; winner = scores.Best(result.ScoreDirection, true) {
+		ref := scores[winner].Candidate
+		id := CandidateIdentity(ref)
+		if !ranked[id] {
+			ordered = append(ordered, ref)
+			ranked[id] = true
+		}
+		scores = slices.Delete(scores, winner, winner+1)
+	}
+	for _, ref := range refs {
+		if !ranked[CandidateIdentity(ref)] {
+			ordered = append(ordered, ref)
+		}
+	}
+	return ordered
 }
 
 func (result *SelectionResult) WithCandidate(ref config.ModelRef) *SelectionResult {

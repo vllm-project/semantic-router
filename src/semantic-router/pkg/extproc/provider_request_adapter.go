@@ -44,7 +44,7 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	}
 	enabled := dispatch != nil && dispatch.useReasoning && !explicitAnthropicReasoningDisabled(ctx, dispatch)
 	if mutation != nil {
-		r.observeReasoningMutation(mutation, enabled)
+		ctx.observeProjection(func() { r.observeReasoningMutation(mutation, enabled) })
 	}
 	if dispatch != nil {
 		dispatch.reasoningMode = r.sentReasoningMode(dispatch, mutation, enabled)

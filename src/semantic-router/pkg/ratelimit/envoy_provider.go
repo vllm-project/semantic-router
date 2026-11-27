@@ -55,6 +55,9 @@ func (p *EnvoyRLSProvider) Name() string {
 // Descriptors are built from the request context: user_id, model, and each group.
 func (p *EnvoyRLSProvider) Check(ctx Context) (*Decision, error) {
 	descriptors := p.buildDescriptors(ctx)
+	if len(descriptors) == 0 {
+		return &Decision{Allowed: true, Provider: p.Name()}, nil
+	}
 
 	reqCtx, cancel := context.WithTimeout(context.Background(), p.timeout)
 	defer cancel()
@@ -108,17 +111,16 @@ func (p *EnvoyRLSProvider) Close() error {
 }
 
 func (p *EnvoyRLSProvider) buildDescriptors(ctx Context) []*ratelimitv3common.RateLimitDescriptor {
-	entries := []*ratelimitv3common.RateLimitDescriptor_Entry{
-		{Key: "user_id", Value: ctx.UserID},
+	var descriptors []*ratelimitv3common.RateLimitDescriptor
+	if ctx.CheckScope != RequestLimits || ctx.Model == "" {
+		entries := []*ratelimitv3common.RateLimitDescriptor_Entry{{Key: "user_id", Value: ctx.UserID}}
+		if ctx.Model != "" {
+			entries = append(entries, &ratelimitv3common.RateLimitDescriptor_Entry{Key: "model", Value: ctx.Model})
+		}
+		descriptors = append(descriptors, &ratelimitv3common.RateLimitDescriptor{Entries: entries})
 	}
-	if ctx.Model != "" {
-		entries = append(entries, &ratelimitv3common.RateLimitDescriptor_Entry{
-			Key: "model", Value: ctx.Model,
-		})
-	}
-
-	descriptors := []*ratelimitv3common.RateLimitDescriptor{
-		{Entries: entries},
+	if ctx.CheckScope == ModelLimits {
+		return descriptors
 	}
 
 	// Add group-based descriptors for group-specific rate limits

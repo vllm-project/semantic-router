@@ -238,16 +238,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		return finalized, nil
 	}
 
-	// Record routing decision with tracing
-	r.recordRoutingDecision(ctx, decisionName, originalModel, matchedModel, reasoningDecision)
-
-	// Track VSR decision information
-	// categoryName is already set in ctx.VSRSelectedCategory by performDecisionEvaluation
 	r.trackVSRDecision(ctx, ctx.VSRSelectedCategory, decisionName, matchedModel, reasoningDecision.UseReasoning)
-
-	// Track model routing metrics
-	metrics.RecordModelRouting(originalModel, matchedModel)
-
 	dispatch, err := r.prepareProviderDispatch(
 		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
 	)
@@ -255,10 +246,8 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		return r.imageFileDispatchFailure(err, ctx)
 	}
 
-	response := r.buildProviderDispatchResponse(dispatch, ctx)
-
-	// Log routing decision
-	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
+	dispatch.entrypoint = originalModel
+	response := buildRequestBodyContinueResponse(&routeHeaderState{}, nil, false)
 
 	// Persist the final dispatch demand, including automatic output resolved
 	// below. Defer also preserves a record when finalization fails or panics;
@@ -283,6 +272,12 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}
 	// An immediate response rejects the request, so there is nothing to mirror.
 	dispatched = response.GetImmediateResponse() == nil
+	if dispatched {
+		reasoningDecision.UseReasoning = dispatch.useReasoning
+		r.recordRoutingDecision(ctx, decisionName, originalModel, dispatch.logicalModel, reasoningDecision)
+		metrics.RecordModelRouting(originalModel, dispatch.logicalModel)
+		r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, dispatch.logicalModel, decisionName, reasoningDecision.UseReasoning)
+	}
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

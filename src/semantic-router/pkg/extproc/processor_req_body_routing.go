@@ -24,6 +24,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 type routeHeaderState struct {
@@ -33,15 +34,19 @@ type routeHeaderState struct {
 }
 
 type providerDispatch struct {
-	logicalModel   string
-	backendModel   string
-	upstreamModel  string
-	backendAddress string
-	backendName    string
-	profile        *config.ProviderProfile
-	targetFormat   llmprotocol.WireFormat
-	decisionName   string
-	useReasoning   bool
+	callerMode                  llmprotocol.ReasoningMode
+	callerEffort, callerDisplay string
+	callerBudget                *int64
+	entrypoint                  string
+	logicalModel                string
+	backendModel                string
+	upstreamModel               string
+	backendAddress              string
+	backendName                 string
+	profile                     *config.ProviderProfile
+	targetFormat                llmprotocol.WireFormat
+	decisionName                string
+	useReasoning                bool
 	// reasoningMode and reasoningEffort are the reasoning the adapted provider
 	// request carries; the mode is empty where the Router wrote none.
 	reasoningMode   string
@@ -65,6 +70,8 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err != nil {
 		return nil, err
 	}
+	dispatch.callerMode, dispatch.callerEffort = request.ReasoningMode, request.ReasoningEffort
+	dispatch.callerDisplay, dispatch.callerBudget = request.ReasoningDisplay, request.ReasoningBudgetTokens
 	changed, err := r.prepareProviderRequest(request, dispatch, ctx)
 	if err != nil {
 		return nil, err
@@ -75,13 +82,10 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.effectiveBackendModel()); err != nil {
 		return nil, err
 	}
-	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
-		return nil, err
-	}
-	// Selection already compared capable candidates. Late mutations may still
-	// invalidate the result, but cannot restart routing or bypass its policies.
-	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
-		return nil, protocolErr
+	if !request.Sampling.AutomaticOutput {
+		if err := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); err != nil {
+			return nil, err
+		}
 	}
 	ctx.TargetFormat = dispatch.targetFormat
 	if !ctx.LooperRequest {
@@ -357,7 +361,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	response *ext_proc.ProcessingResponse,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if dispatch == nil || response == nil {
+	if ctx == nil || dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
 	if err := selectionRequestContext(ctx).Err(); err != nil {
@@ -365,17 +369,13 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	}
 	if ctx != nil {
 		ctx.preparedDispatchReceipt = nil
+		ctx.finalAdmission = nil
+		ctx.admissionProposalModel = ""
 	}
 	if response.GetImmediateResponse() != nil {
 		return response, nil
 	}
 	if ctx != nil && ctx.SemanticRequest != nil {
-		if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
-			return nil, err
-		}
-		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
-			return nil, err
-		}
 		// Masking is the last provider-bound content mutation, and it runs
 		// before the fallback snapshot so a retry cannot replay unmasked
 		// content. All dispatch paths reach this function (#3566).
@@ -388,28 +388,51 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 			})
 			return nil, err
 		}
-		if r.shouldAttemptFallback(ctx) {
-			snapshot, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "capture fallback request: %v", err)
-			}
-			ctx.FallbackRequest = snapshot
+	}
+	primary := dispatch.logicalModel
+	prepared, admission, err := r.prepareAdmittedDispatch(dispatch, ctx)
+	if admission.Source != "" {
+		ctx.finalAdmission = &admission
+		ctx.admissionProposalModel = primary
+	}
+	observations := ctx.projectionObservations
+	ctx.projectionObservations = nil
+	if err == nil || isFinalContextOverflow(err) || prepared != nil {
+		captureRequestDemand(ctx, requestDemandStageProviderBound, ctx.SemanticRequest, dispatch.logicalModel)
+	}
+	if err != nil {
+		if isFinalContextOverflow(err) || errors.Is(err, selection.ErrNoEligibleCandidates) && admission.ExcludedCandidates > 0 {
+			return r.respondSelectionRejected(ctx, firstNonEmpty(dispatch.entrypoint, primary), err), nil
 		}
+		return nil, err
+	}
+	if limited := r.checkFinalModelRateLimit(ctx, dispatch.logicalModel); limited != nil {
+		return limited, nil
+	}
+	if dispatch.entrypoint != "" {
+		response = r.buildProviderDispatchResponse(dispatch, ctx)
+		if response.GetImmediateResponse() != nil {
+			return response, nil
+		}
+	}
+	if r.shouldAttemptFallback(ctx) {
+		snapshot, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "capture fallback request: %v", err)
+		}
+		ctx.FallbackRequest = snapshot
 	}
 	// Every dispatch, a Looper hop's included, reserves its estimated cost
 	// last, on the request the provider receives.
 	if refusal := r.reserveDispatchSpend(ctx, dispatch.logicalModel, ctx.SemanticRequest); refusal != nil {
 		return r.respondBudgetRefused(ctx, dispatch.logicalModel, refusal), nil
 	}
-	captureRequestDemand(
-		ctx,
-		requestDemandStageProviderBound,
-		ctx.SemanticRequest,
-		dispatch.logicalModel,
-	)
-	prepared, err := r.materializePreparedProviderRequest(dispatch, ctx)
-	if err != nil {
-		return nil, err
+	if r.KVHandoff != nil {
+		body, encodeErr := r.encodeKVHandoff(prepared.body, dispatch.targetFormat, ctx)
+		if encodeErr != nil {
+			return nil, encodeErr
+		}
+		prepared = newPreparedProviderRequest(body, prepared.metadata)
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -422,6 +445,11 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = dispatch.reasoningMode, dispatch.reasoningEffort
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
+	}
+	if observations != nil {
+		for _, record := range *observations {
+			record()
+		}
 	}
 	bindPreparedDispatchArtifact(common, ctx, prepared)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{

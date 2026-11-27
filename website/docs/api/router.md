@@ -543,6 +543,8 @@ only the budget check, it returns HTTP 400:
 | `context_length_exceeded` | The prepared input and requested output do not fit. |
 | `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
 
+Before dispatch, the router checks the prepared input and its output reserve against the selected model's window. Automatic output uses the final vLLM render after masking. A confirmed overflow can select another eligible model in the same decision using the selector's ranking. A pinned model stays pinned. Near a local tokenizer's uncertainty band, the backend decides whether the request fits.
+
 Missing capabilities, unknown limits, unavailable selection evidence, and mixed
 failures retain their selection-error behavior, `no_eligible_model`. Budget checks do not
 truncate requests by themselves; opt into

@@ -74,7 +74,7 @@ func (r *OpenAIRouter) encodeKVHandoff(body []byte, format llmprotocol.WireForma
 	_, hadHint := wire["kv_transfer_params"]
 	delete(wire, "kv_transfer_params")
 	var hint *kvtransfer.Hint
-	if !ctx.LooperRequest && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
+	if ctx.projectionObservations == nil && !ctx.LooperRequest && ctx.AuthenticatedPrincipal != "" && ctx.SessionID != "" &&
 		(ctx.SessionProvenance == SessionProvenanceHeader || ctx.SessionProvenance == SessionProvenanceResponseAPI) &&
 		ctx.PreviousModel != "" && ctx.PreviousModel != ctx.RequestModel {
 		hint, _ = r.KVHandoff.PlanDispatch(selectionRequestContext(ctx), KVDispatch{

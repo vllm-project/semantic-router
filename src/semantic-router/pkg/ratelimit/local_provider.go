@@ -99,12 +99,14 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 
 	for i := range l.rules {
 		rule := &l.rules[i]
-		if !l.ruleMatches(rule, ctx) {
+		if !l.ruleMatches(rule, ctx) || ctx.CheckScope == RequestLimits && modelRule(rule) ||
+			ctx.CheckScope == ModelLimits && !modelRule(rule) {
 			continue
 		}
+		model := quotaModel(rule, ctx)
 
 		if rule.RequestsPerUnit > 0 {
-			key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "rpm")
+			key := l.bucketKey(rule.Name, ctx.UserID, model, "rpm")
 			b := l.lockedBucket(key, int64(rule.RequestsPerUnit), rule.Unit)
 			allowed, remaining, resetAt := b.tryConsume(1, now)
 			b.mu.Unlock()
@@ -132,7 +134,7 @@ func (l *LocalLimiter) Check(ctx Context) (*Decision, error) {
 		}
 
 		if rule.TokensPerUnit > 0 {
-			key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "tpm")
+			key := l.bucketKey(rule.Name, ctx.UserID, model, "tpm")
 			b := l.lockedBucket(key, int64(rule.TokensPerUnit), rule.Unit)
 			cost := int64(ctx.TokenCount)
 			if cost <= 0 {
@@ -192,7 +194,7 @@ func (l *LocalLimiter) Report(ctx Context, usage TokenUsage) error {
 			continue
 		}
 
-		key := l.bucketKey(rule.Name, ctx.UserID, ctx.Model, "tpm")
+		key := l.bucketKey(rule.Name, ctx.UserID, quotaModel(rule, ctx), "tpm")
 
 		// The Check() already consumed estimated input tokens.
 		// Now add the output tokens (the part we didn't know during Check).
@@ -212,7 +214,7 @@ func (l *LocalLimiter) ruleMatches(rule *Rule, ctx Context) bool {
 	if rule.Match.User != "" && rule.Match.User != "*" && rule.Match.User != ctx.UserID {
 		return false
 	}
-	if rule.Match.Model != "" && rule.Match.Model != "*" && rule.Match.Model != ctx.Model {
+	if modelRule(rule) && rule.Match.Model != ctx.Model {
 		return false
 	}
 	if rule.Match.Group != "" && rule.Match.Group != "*" {
@@ -228,6 +230,17 @@ func (l *LocalLimiter) ruleMatches(rule *Rule, ctx Context) bool {
 		}
 	}
 	return true
+}
+
+func modelRule(rule *Rule) bool {
+	return rule.Match.Model != "" && rule.Match.Model != "*"
+}
+
+func quotaModel(rule *Rule, ctx Context) string {
+	if ctx.RequestModel != "" && !modelRule(rule) {
+		return ctx.RequestModel
+	}
+	return ctx.Model
 }
 
 func (l *LocalLimiter) bucketKey(ruleName, userID, model, kind string) string {

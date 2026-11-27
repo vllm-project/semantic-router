@@ -84,6 +84,9 @@ func (r *OpenAIRouter) finishExactCacheLookup(
 	if !result.Found {
 		return nil, false
 	}
+	if refusal := r.checkFinalModelRateLimit(ctx, ctx.CacheSelectedModel); refusal != nil {
+		return refusal, true
+	}
 
 	ctx.VSRCacheHit = true
 	ctx.VSRCacheSimilarity = 1

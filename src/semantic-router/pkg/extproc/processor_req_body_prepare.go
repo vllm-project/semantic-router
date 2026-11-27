@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -125,7 +126,13 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
-	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
+	ctx.deferModelRateLimit = r.RateLimiter != nil && selectedModel != originalModel && ctx.Routing.SelectedRecipe() != nil &&
+		!r.routeExecutesLooper(ctx) && len(ctx.VSREligibleModelRefs) > 1
+	scope := ratelimit.AllLimits
+	if ctx.deferModelRateLimit {
+		scope = ratelimit.RequestLimits
+	}
+	if resp := r.applyScopedRateLimit(ctx, selectedModel, scope); resp != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp

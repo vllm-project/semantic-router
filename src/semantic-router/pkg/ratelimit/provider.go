@@ -43,12 +43,22 @@ type Provider interface {
 
 // Context carries the per-request information needed for rate limit evaluation.
 type Context struct {
-	UserID     string
-	Groups     []string
-	Model      string
-	Headers    map[string]string
-	TokenCount int // estimated input tokens from classification
+	UserID       string
+	Groups       []string
+	Model        string
+	Headers      map[string]string
+	TokenCount   int // estimated input tokens from classification
+	CheckScope   CheckScope
+	RequestModel string // Model used to charge request limits before final selection.
 }
+
+type CheckScope uint8
+
+const (
+	AllLimits CheckScope = iota
+	RequestLimits
+	ModelLimits
+)
 
 // Decision is the result of a rate limit check.
 type Decision struct {
