@@ -441,6 +441,12 @@ export function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           label: 'List Backend Models',
           type: 'boolean',
         },
+        {
+          name: 'entrypoints_only',
+          label: 'Require Explicit Entrypoints',
+          type: 'boolean',
+          description: 'Allow requests and model discovery only for explicitly configured entrypoints.',
+        },
         routerStructuredField(key, 'streamed_body'),
         routerStructuredField(key, 'skip_processing'),
       ]

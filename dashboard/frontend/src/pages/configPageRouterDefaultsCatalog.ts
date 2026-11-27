@@ -28,6 +28,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
     config_source: 'file',
     list_backend_models: false,
+    entrypoints_only: false,
     clear_route_cache: true,
     model_selection: {
       enabled: true,

@@ -16,6 +16,8 @@ import (
 // namespace. A nil Policy protects nothing.
 type Policy struct {
 	protected map[name][]digest
+	// Non-nil only in entrypoints-only mode. An empty set admits no external targets.
+	explicit map[name]struct{}
 }
 
 type name struct {
@@ -34,14 +36,24 @@ type Problem struct {
 	Message string
 }
 
-// Compile resolves the keys of every protected entrypoint with lookup, which
+// Compile uses the source declarations (without built-in aliases) as the set
+// of allowed targets in entrypoints-only mode. It resolves keys with lookup, which
 // reads the serving process's environment. Each referenced variable must hold
 // one Bearer token. Compile returns every Problem it finds, and a Policy only
 // when there is none.
-func Compile(entrypoints []config.EntrypointMapping, lookup func(string) (string, bool)) (*Policy, []Problem) {
+func Compile(entrypoints []config.EntrypointMapping, entrypointsOnly bool, lookup func(string) (string, bool)) (*Policy, []Problem) {
 	policy := &Policy{protected: make(map[name][]digest)}
+	if entrypointsOnly {
+		policy.explicit = make(map[name]struct{})
+	}
 	var problems []Problem
 	for index, entrypoint := range entrypoints {
+		api := namespace(entrypoint.API)
+		if entrypointsOnly {
+			for _, model := range entrypoint.ModelNames {
+				policy.explicit[name{api: api, model: model}] = struct{}{}
+			}
+		}
 		auth := entrypoint.ClientAuth
 		if auth == nil {
 			continue
@@ -66,7 +78,6 @@ func Compile(entrypoints []config.EntrypointMapping, lookup func(string) (string
 		if !resolved {
 			digests = nil
 		}
-		api := namespace(entrypoint.API)
 		for _, model := range entrypoint.ModelNames {
 			policy.protected[name{api: api, model: model}] = digests
 		}
@@ -149,6 +160,23 @@ func (p *Policy) Authorize(api config.InferenceAPI, model, key string) bool {
 // objects without an origin are accessible only while it is false.
 func (p *Policy) AnyRequired() bool {
 	return p != nil && len(p.protected) > 0
+}
+
+// EntrypointsOnly reports whether a client must use an explicit entrypoint.
+func (p *Policy) EntrypointsOnly() bool { return p != nil && p.explicit != nil }
+
+// RequiresTarget reports whether forwarding an unparsed request could skip admission.
+// Unlike AnyRequired, this includes an explicit-only router with no client keys.
+func (p *Policy) RequiresTarget() bool {
+	return p.EntrypointsOnly() || p.AnyRequired()
+}
+
+func (p *Policy) allowsTarget(api config.InferenceAPI, model string) bool {
+	if !p.EntrypointsOnly() {
+		return true
+	}
+	_, ok := p.explicit[name{api: namespace(api), model: model}]
+	return ok
 }
 
 func (p *Policy) keys(api config.InferenceAPI, model string) ([]digest, bool) {

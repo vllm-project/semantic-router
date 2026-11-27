@@ -21,10 +21,9 @@ import (
 func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_RequestHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
 	ctx.StartTime = time.Now()
 
-	// The skip-processing opt-out would bypass a listener's model allow-list
-	// and an entrypoint's client keys, so a restricted listener and a
-	// configuration with client keys do not honor it.
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.clientKeysRequired())
+	// Skip-processing would bypass the listener's model allow-list,
+	// strict entrypoint names, and entrypoint client keys.
+	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.targetAdmissionRequired())
 	// A path under a listener's API prefix is read as the API's own path.
 	if canonical := r.Config.APIRequestTarget(path); canonical != path {
 		ctx.Headers[":path"] = canonical

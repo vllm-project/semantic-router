@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"net/http"
+	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
@@ -35,6 +36,10 @@ func (r *OpenAIRouter) clientAdmissionRefusal(ctx *RequestContext, model string)
 	}
 	served, active := r.clientPolicies()
 	switch clientauth.Admit(served, active, config.ChatAPI, model, headerValueCI(ctx, headers.Authorization)) {
+	case clientauth.TargetNotAllowed:
+		const message = "The model is not an explicitly configured entrypoint on this API."
+		ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorPermission, "model_not_allowed", message, nil)
+		return r.createErrorResponse(http.StatusForbidden, message)
 	case clientauth.Unauthorized:
 		logging.ComponentDebugEvent("extproc", "client_key_refused", map[string]interface{}{
 			"request_id": ctx.RequestID, "model": model,
@@ -46,14 +51,25 @@ func (r *OpenAIRouter) clientAdmissionRefusal(ctx *RequestContext, model string)
 	case clientauth.Superseded:
 		return r.supersededResponse(ctx)
 	}
+	// In compatibility mode a listener can rewrite a withheld name to its
+	// catch-all entrypoint. In strict mode the client must name the actual
+	// entrypoint on that listener, not a different alias served elsewhere.
+	model = strings.TrimSpace(model)
+	if ctx.UnservedModelRoute != "" && ctx.ListenerModels != nil && !ctx.ListenerModels.Allows(model) {
+		if served.EntrypointsOnly() != active.EntrypointsOnly() {
+			return r.supersededResponse(ctx)
+		}
+		if served.EntrypointsOnly() {
+			return r.listenerModelRejection(model, ctx)
+		}
+	}
 	return nil
 }
 
 // skippedRequestRefusal answers a request that took the skip-processing
-// opt-out, which only a configuration without client keys honors, once the
-// configuration active when its body arrives has some.
+// opt-out before a reload made target admission mandatory.
 func (r *OpenAIRouter) skippedRequestRefusal(ctx *RequestContext) *ext_proc.ProcessingResponse {
-	if _, active := r.clientPolicies(); !active.AnyRequired() {
+	if _, active := r.clientPolicies(); !active.RequiresTarget() {
 		return nil
 	}
 	return r.supersededResponse(ctx)
@@ -64,11 +80,10 @@ func (r *OpenAIRouter) supersededResponse(ctx *RequestContext) *ext_proc.Process
 	return r.createErrorResponse(http.StatusConflict, supersededMessage)
 }
 
-// clientKeysRequired reports whether an entrypoint of the router's
-// configuration takes a client key.
-func (r *OpenAIRouter) clientKeysRequired() bool {
+// targetAdmissionRequired reports whether this generation must parse the model.
+func (r *OpenAIRouter) targetAdmissionRequired() bool {
 	served, _ := r.clientPolicies()
-	return served.AnyRequired()
+	return served.RequiresTarget()
 }
 
 // clientPolicies returns the client policy of the configuration the router

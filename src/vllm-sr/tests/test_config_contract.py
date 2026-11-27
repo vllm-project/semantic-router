@@ -12,7 +12,22 @@ from cli.config_contract import (
     build_signal_reference_index,
     signal_reference_exists,
 )
-from cli.models import Decision, PIIRule, Projections, Signals
+from cli.models import Decision, PIIRule, Projections, Signals, UserConfig
+
+
+def test_entrypoints_only_round_trips_as_a_boolean():
+    for mode in (False, True):
+        router = {"entrypoints_only": mode}
+        config = UserConfig.model_validate(
+            {"version": "v0.5", "global": {"router": router}}
+        )
+        assert config.model_dump(by_alias=True)["global"]["router"] == router
+    with pytest.raises(
+        ValueError, match=r"global\.router\.entrypoints_only must be a boolean"
+    ):
+        UserConfig.model_validate(
+            {"version": "v0.5", "global": {"router": {"entrypoints_only": "false"}}}
+        )
 
 
 def test_pii_input_survives_cli_round_trip_and_rejects_unknown_fields():

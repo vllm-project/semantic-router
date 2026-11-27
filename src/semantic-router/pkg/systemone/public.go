@@ -207,6 +207,9 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 		// An entrypoint with client_auth admits the request before its
 		// recipe, signals or any model runs.
 		switch clients.admit(model, r.Header.Get("Authorization")) {
+		case clientauth.TargetNotAllowed:
+			publicSystemOneErrorMessage(w, http.StatusForbidden, "model_not_allowed", "The model is not an explicitly configured entrypoint on this API.")
+			return
 		case clientauth.Unauthorized:
 			w.Header().Set("WWW-Authenticate", `Bearer realm="vllm-semantic-router"`)
 			publicSystemOneError(w, http.StatusUnauthorized, "invalid_api_key")
@@ -336,7 +339,10 @@ func publishedModels(config *routerconfig.RouterConfig, listener *routerconfig.L
 	names := listenerSystemOneModels(config, listener)
 	models := make([]map[string]any, 0, len(names))
 	for _, id := range names {
-		_, routed := config.ResolveEntrypoint(routerconfig.SystemOneAPI, id)
+		entrypoint, routed := config.ResolveEntrypoint(routerconfig.SystemOneAPI, id)
+		if config.EntrypointsOnly && (!routed || entrypoint.Source != routerconfig.EntrypointExplicit) {
+			continue
+		}
 		if routed && !config.RoutingEnabled() {
 			continue
 		}

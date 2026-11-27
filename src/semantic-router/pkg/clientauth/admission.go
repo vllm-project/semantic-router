@@ -20,6 +20,8 @@ const (
 	// while the request was arriving protects differently from the one that
 	// serves it. A retry is served by the active configuration.
 	Superseded
+	// TargetNotAllowed refuses a name not declared in this API namespace.
+	TargetNotAllowed
 )
 
 // Admit decides a request for model, in the api namespace, that presents the
@@ -31,8 +33,12 @@ const (
 // resolution trims it.
 func Admit(served, active *Policy, api config.InferenceAPI, model, authorization string) Decision {
 	model = strings.TrimSpace(model)
-	if !served.protectsAlike(active, api, model) {
+	allowed := served.allowsTarget(api, model)
+	if allowed != active.allowsTarget(api, model) || !served.protectsAlike(active, api, model) {
 		return Superseded
+	}
+	if !allowed {
+		return TargetNotAllowed
 	}
 	if !served.Authorize(api, model, BearerToken(authorization)) {
 		return Unauthorized
