@@ -425,20 +425,50 @@ def _management_headers(env: RunnerEnv) -> dict[str, str]:
 _HTTP_RESTART_REQUIRED = 409  # the management API answers 409 RESTART_REQUIRED
 
 
+def _get_config_etag(management_url: str, env: RunnerEnv, timeout: float) -> str:
+    """Read GET /api/v1/config and return its ETag (H).
+
+    The management API requires optimistic concurrency on every config
+    mutation: a PUT without `If-Match` is answered 428 PRECONDITION_REQUIRED,
+    and a stale ETag is answered 412/409 CONFIG_CHANGED. The ETag is the
+    quoted sha256 of the persisted source config document.
+    """
+    request = urllib.request.Request(
+        management_url.rstrip("/") + "/api/v1/config",
+        headers=_management_headers(env),
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            etag = (response.headers.get("ETag") or "").strip()
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise RunnerError(
+            f"cannot GET config from management API at {management_url}: {exc}"
+        ) from exc
+    if not etag:
+        raise RunnerError("management API GET /api/v1/config returned no ETag")
+    return etag
+
+
 def _put_router_config(
     management_url: str, env: RunnerEnv, yaml_text: str, timeout: float
 ) -> tuple[int, dict]:
     """PUT /api/v1/config with replace semantics (H).
 
-    Returns (http_status, response_json). Connection failures raise
-    RunnerError; non-2xx replies are returned for the caller to classify
-    (409 RESTART_REQUIRED -> HotReloadRejectedError).
+    Proves the read with the current document's ETag (If-Match; see
+    _get_config_etag). Returns (http_status, response_json). Connection
+    failures raise RunnerError; non-2xx replies are returned for the caller
+    to classify (409 RESTART_REQUIRED -> HotReloadRejectedError).
     """
+    etag = _get_config_etag(management_url, env, timeout)
     body = json.dumps({"yaml": yaml_text}).encode("utf-8")
     request = urllib.request.Request(
         management_url.rstrip("/") + "/api/v1/config",
         data=body,
-        headers={**_management_headers(env), "Content-Type": "application/json"},
+        headers={
+            **_management_headers(env),
+            "Content-Type": "application/json",
+            "If-Match": etag,
+        },
         method="PUT",
     )
     try:

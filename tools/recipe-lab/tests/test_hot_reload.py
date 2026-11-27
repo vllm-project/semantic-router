@@ -54,7 +54,7 @@ BANK = {
 }
 
 FAKE_ROUTER_SCRIPT = """#!/usr/bin/env python3
-import json, os, re, sys, threading
+import hashlib, json, os, re, sys, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 config_path = sys.argv[sys.argv.index("-config") + 1]
@@ -65,6 +65,22 @@ GATE = int(re.search(r"^\\s*port:\\s*(\\d+)", text, re.M).group(1))
 API = int(sys.argv[sys.argv.index("-api-port") + 1])
 STATE = os.environ["FAKE_STATE"]
 lock = threading.Lock()
+
+
+def _etag(doc):
+    # The real management API's ETag is the quoted sha256 of the current
+    # config document; mutations require If-Match to present it.
+    return '"' + hashlib.sha256(doc.encode("utf-8")).hexdigest() + '"'
+
+
+def _current_doc():
+    state = _load()
+    doc = state.get("config_doc")
+    if doc is None:
+        doc = open(config_path, encoding="utf-8").read()
+        state["config_doc"] = doc
+        _save(state)
+    return doc
 
 
 def _load():
@@ -121,9 +137,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not found"})
             return
         raw = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode("utf-8")
+        if self.headers.get("If-Match", "").strip() != _etag(_current_doc()):
+            self._send(412, {"error": {"code": "CONFIG_CHANGED", "message": "stale etag"}})
+            return
+        new_doc = json.loads(raw).get("yaml", "")
         with lock:
             state = _load()
             state["put_count"] += 1
+            state["config_doc"] = new_doc
             pending = "hot-pending" in raw
             if pending:
                 state["pending_hash_polls"] = 1
@@ -157,6 +178,16 @@ class Handler(BaseHTTPRequestHandler):
                     "activation_status": "pending" if pending else "active",
                 },
             )
+            return
+        if self.path.startswith("/api/v1/config"):
+            doc = _current_doc()
+            body = doc.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("ETag", _etag(doc))
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if self.path.startswith("/api/v1/observability/replays"):
             with lock:
