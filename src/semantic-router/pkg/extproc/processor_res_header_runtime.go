@@ -105,10 +105,12 @@ func recordNonStreamingFirstResponse(ctx *RequestContext, elapsed time.Duration)
 		return
 	}
 
-	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
-	latency.UpdateTTFT(ctx.RequestModel, ttft)
+	if !ctx.LooperStreamingActive {
+		metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
+		latency.UpdateTTFT(ctx.RequestModel, ttft)
+	}
 	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
 		Model:       ctx.RequestModel,
 		TTFTSeconds: ttft,
