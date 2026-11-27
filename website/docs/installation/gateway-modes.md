@@ -271,6 +271,37 @@ Token-bucket rate limiting, mTLS, JWT or OIDC, and advanced route matching are
 planned for standalone mode. Until then they need Envoy.
 :::
 
+### Listener APIs behind Envoy
+
+A listener's `apis` apply to the path the client sent, in both modes. With
+`--gateway extproc`, the Router applies them when it reads the request headers,
+before it sets the provider's path. A Messages client is served by a Chat
+Completions model, and a path the listener does not serve answers `404` with the
+same `detail` as in standalone mode.
+
+The Router learns the listener from the `x-vsr-listener` request header. The
+Envoy listener the CLI generates sets it to the listener's `name` ahead of
+ext_proc, replacing any value a client sends, and removes it before the request
+goes upstream. An Envoy you configure yourself gets the listener's `apis` only
+when a filter ahead of ext_proc sets the header the same way:
+
+```yaml
+- name: name-listener
+  typed_config:
+    "@type": type.googleapis.com/envoy.extensions.filters.http.header_mutation.v3.HeaderMutation
+    mutations:
+      request_mutations:
+      - append:
+          header:
+            key: x-vsr-listener
+            value: claude   # the listener's name in the Router's config
+          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+```
+
+Without it, the Router applies no listener's `apis`, and a client can name a
+listener itself. A name the Router's configuration does not have answers
+`503`. Standalone mode ignores the header.
+
 ## Targets and platforms
 
 `--platform auto` detects the execution backend on the selected target.

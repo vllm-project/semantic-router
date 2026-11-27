@@ -208,6 +208,46 @@ func (l Listener) ServedAPIs() []string {
 	return names
 }
 
+// PathGrant answers which models the listener accepts on a request path, as
+// the listener's API answers it (APIPath). With apis, a path of an API it
+// does not serve, or of no API, is not served, and detail names the listener
+// and the APIs it serves. Both gateways apply it to the client's path.
+func (l Listener) PathGrant(path string) (models []string, detail string, served bool) {
+	refuse := func() ([]string, string, bool) {
+		return nil, fmt.Sprintf("listener %q does not serve %s; it serves %s", l.Name, path,
+			strings.Join(l.ServedAPIs(), ", ")), false
+	}
+	api, isAPI := apiregistry.ForPath(path)
+	if !isAPI {
+		if l.APIs == nil {
+			return nil, "", true
+		}
+		return refuse()
+	}
+	entry, ok := l.API(api.Name)
+	if !ok {
+		if l.APIs == nil && api.Name == apiregistry.SystemOne {
+			// The System One API answers its own 404 there, as before.
+			return nil, "", true
+		}
+		return refuse()
+	}
+	return entry.Models, "", true
+}
+
+// ListenerByName is the listener named name, and whether there is one.
+func (c *RouterConfig) ListenerByName(name string) (Listener, bool) {
+	if c == nil {
+		return Listener{}, false
+	}
+	for _, listener := range c.Listeners {
+		if listener.Name == name {
+			return listener, true
+		}
+	}
+	return Listener{}, false
+}
+
 // LLMModels are the request models the listener's LLM APIs accept, and
 // whether they are restricted: nil and false when one of them accepts every
 // model. A listener that serves no LLM API accepts none.

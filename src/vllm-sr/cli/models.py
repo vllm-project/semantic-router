@@ -403,14 +403,6 @@ class Listener(BaseModel):
             return DEFAULT_LISTENER_APIS
         return tuple(name for name in API_NAMES if name in self.apis)
 
-    def api_prefixes(self) -> dict[str, str]:
-        """The path root each served API is also mounted under, by API name."""
-        return {
-            name: entry.prefix
-            for name, entry in (self.apis or {}).items()
-            if entry.prefix
-        }
-
     def systemone_models(self) -> Optional[List[str]]:
         """The models the listener's systemone API names; None when it serves systemone for every model, or
         serves no systemone."""

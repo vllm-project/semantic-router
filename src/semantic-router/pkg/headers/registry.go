@@ -223,6 +223,7 @@ var registry = []Header{
 
 	// Routing and transport internals.
 	{VSRRouteModel, FromClient | ToProvider, SurfaceInternal, SensitivityNone, "routing", "v0.5", "Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own."},
+	{VSRListener, FromClient, SurfaceInternal, SensitivityNone, "routing", "v0.5", "Listener an Envoy gateway received the request on; the generated Envoy listener sets it ahead of ext_proc, replacing a client's value, and the Router applies that listener's `apis`. The standalone gateway ignores it."},
 	{VSRUpstreamHost, FromProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.5", "Endpoint Envoy reports on the provider response for KV registry writes; removed before the client."},
 	{VSRKVSourcePod, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Address of the pod that holds the source model's KV cache."},
 	{VSRKVCacheID, ToProvider, SurfaceInternal, SensitivityNone, "kv_transfer", "v0.4", "Opaque id of the source KV block."},

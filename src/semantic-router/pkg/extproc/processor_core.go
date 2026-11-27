@@ -125,6 +125,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 		Headers:       make(map[string]string),
 		TraceContext:  stream.Context(),
 		ConfigVersion: r.configVersion.Load(),
+		envoyStream:   true,
 	}
 
 	for {

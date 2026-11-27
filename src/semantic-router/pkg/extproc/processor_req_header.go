@@ -25,6 +25,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// and an entrypoint's client keys, so a restricted listener and a
 	// configuration with client keys do not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.clientKeysRequired())
+	clientTarget := path
 	// A path under a listener's API prefix is read as the API's own path.
 	if canonical := r.Config.APIRequestTarget(path); canonical != path {
 		ctx.Headers[":path"] = canonical
@@ -45,6 +46,11 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		span.SetAttributes(run.Attributes()...)
 	}
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
+	// The listener's grant reads the path the client sent, before the
+	// skip-processing opt-out and before any phase rewrites it.
+	if rejected := r.listenerPathRejection(method, clientTarget, ctx); rejected != nil {
+		return rejected, nil
+	}
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
 	}
@@ -166,6 +172,11 @@ func captureRequestHeaders(
 		}
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
+		}
+		// Read before markLooperHop drops it from the Router's own view, and
+		// only from the Envoy gateway, which replaces a client's value.
+		if ctx.envoyStream && lowerKey == headers.VSRListener {
+			ctx.GatewayListener = strings.TrimSpace(headerValue)
 		}
 		// The x-vsr-skip-processing opt-out is gated by the deployment-level
 		// global.router.skip_processing.enabled flag. When disabled (the

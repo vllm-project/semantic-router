@@ -286,9 +286,12 @@ recipes:
         )
 
 
-def test_envoy_routes_only_the_paths_of_the_apis_a_listener_serves(
+def test_envoy_listener_names_itself_and_leaves_its_apis_to_the_router(
     tmp_path, monkeypatch
 ):
+    # The Router applies a listener's apis to the client's path. A route that
+    # matched them would read the provider path the body phase sets instead
+    # (#7447), so every route matches any path.
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -318,37 +321,62 @@ recipes:
         extproc_host="localhost",
         router_api_host="localhost",
     )
-    gated, open_listener = rendered["static_resources"]["listeners"][:2]
-
-    def routes(listener):
+    listeners = rendered["static_resources"]["listeners"][:2]
+    assert [listener["name"] for listener in listeners] == ["public", "open"]
+    for listener in listeners:
         manager = listener["filter_chains"][0]["filters"][0]["typed_config"]
-        return manager["route_config"]["virtual_hosts"][0]["routes"]
+        assert _listener_name_mutations(manager) == [
+            {
+                "append": {
+                    "header": {"key": "x-vsr-listener", "value": listener["name"]},
+                    "append_action": "OVERWRITE_IF_EXISTS_OR_ADD",
+                }
+            }
+        ]
+        virtual_host = manager["route_config"]["virtual_hosts"][0]
+        assert "x-vsr-listener" in virtual_host["request_headers_to_remove"]
+        routes = virtual_host["routes"]
+        assert routes and all(
+            route["match"]["prefix"] == "/" and "safe_regex" not in route["match"]
+            for route in routes
+        )
+        assert not any("direct_response" in route for route in routes)
 
-    served = routes(gated)
-    pattern = re.compile(served[0]["match"]["safe_regex"]["regex"])
-    for path in (
-        "/v1/chat/completions",
-        "/openai/deployments/gpt/chat/completions",
-        "/v1/messages",
-        "/v1/models",
-    ):
-        assert pattern.fullmatch(path), path
-    for path in ("/v1/responses", "/v1/systemone", "/v1/images/generations"):
-        assert not pattern.fullmatch(path), path
-    # Envoy refuses a regex over 100 RE2 instructions by default, and the
-    # three model APIs with the model listing compile to about 200
-    runtime = rendered["layered_runtime"]["layers"][0]["static_layer"]
-    assert runtime["re2.max_program_size.error_level"] >= 1000
-    refused = served[-1]
-    assert (
-        refused["match"] == {"prefix": "/"}
-        and refused["direct_response"]["status"] == 404
+
+def test_default_envoy_listener_names_no_listener_to_the_router(tmp_path, monkeypatch):
+    # The Router's config has no listener of that name, and answers 503 for a
+    # listener it does not know, so a client's value is removed too.
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.5
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+recipes:
+  - name: default
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
     )
-    assert (
-        "chat_completions, messages"
-        in refused["direct_response"]["body"]["inline_string"]
-    )
-    assert all(route["match"].get("prefix") == "/" for route in routes(open_listener))
+    (listener,) = rendered["static_resources"]["listeners"]
+    manager = listener["filter_chains"][0]["filters"][0]["typed_config"]
+    assert _listener_name_mutations(manager) == [{"remove": "x-vsr-listener"}]
+
+
+def _listener_name_mutations(manager):
+    """The x-vsr-listener mutations of the filter that names the listener ahead of ext_proc."""
+    names = [f["name"] for f in manager["http_filters"]]
+    at = names.index("name-listener")
+    assert at < names.index("envoy.filters.http.ext_proc"), names
+    mutations = manager["http_filters"][at]["typed_config"]["mutations"]
+    return mutations["request_mutations"]
 
 
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):

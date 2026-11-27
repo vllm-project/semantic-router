@@ -1,13 +1,11 @@
 """Envoy configuration generator for vLLM Semantic Router."""
 
-import json
 import os
 import re
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from cli.api_registry import served_path_regex
 from cli.catalog_provider_projection import project_provider_models_for_envoy
 from cli.config_contract import iter_routing_profiles
 from cli.consts import DEFAULT_LISTENER_PORT
@@ -289,23 +287,8 @@ def generate_envoy_config_from_user_config(
                     "does not serve the System One API; serve with --gateway "
                     "standalone or remove systemone from the listener's apis"
                 )
-            gate = {}
-            if listener.apis is not None:
-                served = listener.served_apis()
-                gate = {
-                    "served_path_regex": served_path_regex(
-                        served, listener.api_prefixes()
-                    ),
-                    "unserved_body": json.dumps(
-                        {
-                            "detail": f"listener {json.dumps(listener.name)} does not serve "
-                            f"this path; it serves {', '.join(served)}"
-                        }
-                    ),
-                }
             listeners.append(
                 {
-                    **gate,
                     "name": listener.name,
                     "address": os.getenv(
                         ENVOY_CONTAINER_LISTENER_ADDRESS_ENV, listener.address
@@ -314,6 +297,8 @@ def generate_envoy_config_from_user_config(
                     "timeout": envoy_duration(listener.timeout or "300s"),
                     "api_keys": _envoy_listener_keys(listener),
                     "trust_identity_headers": _trusts_identity_headers(listener),
+                    # The Router applies this listener's apis by its name.
+                    "names_itself": True,
                 }
             )
     else:
