@@ -27,7 +27,7 @@ export interface SetupProviderOption {
   description: string
   placeholder: string
   initialBaseUrl: string
-  apiFormat: Exclude<ModelProviderPreset['apiFormat'], 'systemone'>
+  apiFormat: Exclude<ModelProviderPreset['apiFormat'], 'images' | 'speech' | 'systemone'>
   supportTier: ModelProviderPreset['supportTier']
 }
 
@@ -51,7 +51,13 @@ function requireCatalogProvider(id: ProviderKind): ModelProviderPreset {
 
 function projectSetupProvider(id: ProviderKind): SetupProviderOption {
   const provider = requireCatalogProvider(id)
-  if (provider.apiFormat === 'systemone') throw new Error('Chat setup requires a Chat provider.')
+  if (
+    provider.apiFormat === 'images' ||
+    provider.apiFormat === 'speech' ||
+    provider.apiFormat === 'systemone'
+  ) {
+    throw new Error('Chat setup requires a Chat provider.')
+  }
   // These addresses are defaults for the local vllm-sr container stack.
   const runtimeBaseUrl =
     provider.supportTier === 'runtime'

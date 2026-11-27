@@ -202,6 +202,30 @@ global:
 
 早期版本在这里选择固定的 ONNX Runtime 计算图（`head: onnx/model_rocm_32k.onnx`）和 MIGraphX 编译缓存。`vllm-sr config migrate` 会移除这些设置，见[从原生绑定迁移](../model-runtime/deploy/migrate.md)。
 
+### 减少 Decision 3.0 长输入的显存碎片 {#reduce-allocator-fragmentation-for-long-decision-30-inputs}
+
+在 PyTorch 2.12 和 ROCm 7.2 上独立运行 d3-ultra 时，可以在启动模型运行时前启用扩展分段：
+
+```bash
+PYTORCH_HIP_ALLOC_CONF=expandable_segments:True \
+  vllm-srun serve vllm-sr/d3-ultra --device rocm:0 --port 8100
+```
+
+使用容器时，请将该变量传入运行 `vllm-srun` 的容器。扩展分段让 PyTorch 缓存分配器按需映射
+GPU 物理显存来扩展分段，从而减少存活分配之间的显存碎片。参见
+[PyTorch 2.12 的 ROCm 说明](https://pytorch.org/blog/pytorch-2-12-release-blog/)。
+
+以下是在单张 AMD Instinct MI300X 上运行 BF16 d3-ultra 的结果。每个请求有 130,962 个输入
+token，每组预热一次后顺序发送三个请求。表中为三次测量的中位数。
+
+| 分配器设置 | PyTorch 已分配显存峰值 | PyTorch 保留显存峰值 | 设备显存采样峰值 |
+| --- | ---: | ---: | ---: |
+| 默认 | 73.89 GiB | 86.65 GiB | 88.37 GiB |
+| 扩展分段 | 73.88 GiB | 75.25 GiB | 77.17 GiB |
+
+设备显存约每 20 毫秒采样一次，PyTorch 分配器峰值另行记录。三个输入的 Choice 标签和分数一致。
+请按实际部署的模型精度、输入长度和并发数测量显存峰值。
+
 ## 生产检查清单
 
 - 固定 Router、vLLM 镜像和模型 revision。

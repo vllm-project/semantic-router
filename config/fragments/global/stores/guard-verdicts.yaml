@@ -1,0 +1,14 @@
+# Merge into global.stores. Redis must be private to the Routers and
+# authenticated. Give all replicas the same 32-byte HMAC key as 64 hex digits.
+# This runtime fragment uses an external Redis service. Replace its address;
+# vllm-sr serve does not provision a guard-only managed Redis service.
+# ACL: allow GETRANGE and SET on ~vsr:guard-verdicts:v1:*.
+guard_verdicts:
+  backend: redis
+  hmac_key_env: VLLM_SR_GUARD_HMAC_KEY
+  timeout_ms: 50
+  redis:
+    address: redis.example.com:6379
+    password_env: VLLM_SR_GUARD_REDIS_PASSWORD
+    database: 0
+    tls: false

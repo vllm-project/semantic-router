@@ -66,6 +66,7 @@ from ...plugins.base import (
 )
 from ...plugins.decisions import LONG_CONTEXT, DecisionModel, RequestPlan
 from ...registry import builtin, policy
+from ...supervision.readiness import recorded_at
 from ...systemone import (
     GOLDEN_STATE,
     MAX_LEVELS,
@@ -288,6 +289,15 @@ class Decision3Family(ModelFamily):
                 # opts in to BF16). A quantized package keeps its format's BF16
                 # activations.
                 cpu_weights=None if quantized is None else "bfloat16",
+                # docs/records/d3-cpu-bf16-native.md: BF16, the published
+                # precision, is as accurate as FP32 and faster where the CPU
+                # computes BF16 natively, so a CPU class with its own BF16
+                # references computes in BF16.
+                cpu_bf16_references=(
+                    recorded_at(self.golden(package), "bfloat16")
+                    if quantized is None
+                    else frozenset()
+                ),
                 # docs/records/decision3-quantized.md: the fused int4 kernel and,
                 # in the FP8 d3-mini table, the fused element-wise kernels change
                 # few of a quantized package's answers; BF16 packages keep exact

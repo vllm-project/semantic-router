@@ -214,6 +214,7 @@ func decodeChatResponseEnvelope(wire chatResponseWire) llmprotocol.Response {
 		response.Error = &llmprotocol.ProtocolError{
 			Category: decodeProviderErrorCategory(wire.Error.Type, string(wire.Error.Code)),
 			Code:     string(wire.Error.Code), Message: wire.Error.Message, Parameter: wire.Error.Param,
+			ProviderFramed: true,
 		}
 		response.StopReason = llmprotocol.StopError
 	}

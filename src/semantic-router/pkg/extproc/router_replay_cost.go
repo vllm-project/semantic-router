@@ -11,7 +11,7 @@ import (
 
 func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseUsageMetrics) routerreplay.UsageCost {
 	var selectedPricing *config.ModelPricing
-	if r != nil && r.Config != nil && ctx != nil && ctx.RequestModel != "" {
+	if r != nil && r.Config != nil && ctx != nil && ctx.RequestModel != "" && !ctx.LooperStreamingActive {
 		if pricing, ok := r.Config.GetFullModelPricing(ctx.RequestModel); ok {
 			selectedPricing = &pricing
 		}
@@ -42,7 +42,6 @@ func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseU
 		accounting.UnpricedReason = store.UnpricedPricingNotConfigured
 		return snapshot
 	}
-
 	actualCost := costForResponseUsage(usage, *selectedPricing)
 	currency := normalizeReplayCurrency(selectedPricing.Currency)
 	snapshot.ActualCost = replayFloat64Ptr(actualCost)

@@ -680,3 +680,76 @@ func TestHandlerWritesAnAccessRecord(t *testing.T) {
 		t.Fatalf("record = %+v", r)
 	}
 }
+
+// A 200 with Content-Length: 0 and no body must not be treated as a bodyless
+// response: the response-body phase still has to validate the completion and
+// reject a missing body. Otherwise the gateway forwards an empty 200 that
+// clients count as a successful inference. See issue #7328.
+func TestHandlerRejectsAZeroLengthCompletion(t *testing.T) {
+	const invalid = "The selected model returned an invalid response"
+	for name, header := range map[string]http.Header{
+		"content-length zero": {"Content-Length": {"0"}, "Content-Type": {"application/json"}},
+		"no framing":          {"Content-Type": {"application/json"}},
+		"empty chunked body":  {"Transfer-Encoding": {"chunked"}, "Content-Type": {"application/json"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// The processor models the real router's response-body validation:
+			// an empty completion yields a structured 502 immediate response.
+			p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
+				routing.PhaseResponseBody: {{Immediate: &routing.ImmediateResponse{
+					Status: http.StatusBadGateway, Body: []byte(invalid),
+				}}},
+			}}
+			u := &fakeUpstream{resp: func() *upstream.Response {
+				return &upstream.Response{
+					StatusCode: 200, Header: header.Clone(),
+					Body: io.NopCloser(strings.NewReader("")),
+				}
+			}}
+			rec := httptest.NewRecorder()
+			newTestHandler(t, p, u).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader("{}")))
+			if rec.Code != http.StatusBadGateway || rec.Body.String() != invalid {
+				t.Fatalf("response = %d %q, want 502 %q", rec.Code, rec.Body.String(), invalid)
+			}
+			// The response-body phase must have been reached with the empty body.
+			if len(p.headers) < 2 {
+				t.Fatalf("phases saw %d header sets, want the response headers phase too", len(p.headers))
+			}
+		})
+	}
+}
+
+// HEAD, 204 and 304 legitimately have no body and must keep bypassing the
+// response-body phase even when a Content-Length header is present.
+func TestHandlerKeepsBodylessResponsesBodyless(t *testing.T) {
+	for name, tc := range map[string]struct {
+		method string
+		resp   *upstream.Response
+	}{
+		"HEAD": {
+			method: http.MethodHead,
+			resp:   &upstream.Response{StatusCode: 200, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+		"204": {
+			method: http.MethodPost,
+			resp:   &upstream.Response{StatusCode: 204, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+		"304": {
+			method: http.MethodPost,
+			resp:   &upstream.Response{StatusCode: 304, Header: http.Header{"Content-Length": {"0"}}, Body: io.NopCloser(strings.NewReader(""))},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := &fakeProcessor{effects: map[routing.Phase][]*routing.Effect{
+				routing.PhaseResponseBody: {{Immediate: &routing.ImmediateResponse{Status: 599, Body: []byte("body phase ran")}}},
+			}}
+			u := &fakeUpstream{resp: func() *upstream.Response { return tc.resp }}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(tc.method, "/v1/chat/completions", strings.NewReader("{}"))
+			newTestHandler(t, p, u).ServeHTTP(rec, req)
+			if rec.Code == 599 || rec.Body.String() == "body phase ran" {
+				t.Fatalf("bodyless response entered the body phase: %d %q", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}

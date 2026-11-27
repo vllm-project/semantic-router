@@ -86,6 +86,16 @@ protocols:
     path: /v1/models
   capabilities:
   - image_generation
+- id: openai/audio-speech@1
+  display_name: OpenAI Speech
+  wire_format: openai.speech.v1
+  default_base_path: /v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/audio/speech
+  capabilities:
+  - speech_generation
 - id: anthropic/messages@1
   display_name: Anthropic Messages
   wire_format: anthropic.messages.v1
@@ -1114,6 +1124,26 @@ providers:
   conformance:
     status: unverified
   models:
+  - catalog: meta/muse-spark-open
+    relationship: managed_cloud
+    id: accounts/fireworks/models/muse-spark-open
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.25
+      cached_input_per_1m: 0.15
+      completion_per_1m: 4.25
+    restrictions:
+      input_modalities:
+      - text
+      - image
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://fireworks.ai/models/fireworks/muse-spark-open
   - catalog: meta/muse-glimmer-30b
     relationship: managed_cloud
     id: accounts/fireworks/models/muse-glimmer-30b
@@ -1228,6 +1258,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://ai.google.dev/gemini-api/docs/models
+  - catalog: google/gemini-3.5-flash-lite
+    relationship: first_party
+    id: gemini-3.5-flash-lite
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-24'
+      source: https://aistudio.google.com/docs/models/gemini-3.5-flash-lite
   - catalog: google/gemini-3.7-flash
     relationship: first_party
     id: gemini-3.7-flash
@@ -1403,6 +1443,42 @@ providers:
     featured: true
   conformance:
     status: unverified
+- id: longcat
+  display_name: LongCat
+  description: LongCat models from Meituan through the LongCat API Platform.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.longcat.chat/openai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - openai/chat-completions@1#list_models
+  reasoning_transport: thinking_object
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: true
+  conformance:
+    status: unverified
+  models:
+  - catalog: meituan/longcat-2.5
+    relationship: first_party
+    id: LongCat-2.5
+    protocols:
+    - openai/chat-completions@1
+    restrictions:
+      max_output_tokens: 262144
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-23'
+      source: https://longcat.ai/platform/docs/api/chat
 - id: meta
   display_name: Meta Model API
   description: Muse models through Meta's OpenAI-compatible Model API.
@@ -1695,6 +1771,17 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://platform.moonshot.ai/docs/api/chat
+  - catalog: moonshot/kimi-k3.1-pro
+    relationship: first_party
+    id: kimi-k3.1-pro
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-20'
+      source: https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart
 - id: nebius
   display_name: Nebius AI Studio
   description: Hosted open models from Nebius AI Studio.
@@ -1818,7 +1905,8 @@ providers:
     monochrome: true
     featured: true
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-11-21'
 - id: openai-compatible
   display_name: OpenAI Compatible
   description: Connect any compatible private endpoint.
@@ -1881,6 +1969,133 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
+  - catalog: openai/gpt-6.2-astra
+    relationship: first_party
+    id: gpt-6.2-astra
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    pricing:
+      currency: USD
+      prompt_per_1m: 8.0
+      cached_input_per_1m: 0.4
+      cache_write_per_1m: 10.0
+      completion_per_1m: 40.0
+    restrictions:
+      tools_protocols:
+      - openai/responses@1
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - temperature
+        - top_p
+        - top_logprobs
+        - logprobs
+        openai/responses@1:
+        - temperature
+        - top_p
+        - top_logprobs
+      unsupported_include_values:
+      - message.output_text.logprobs
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+  - catalog: openai/gpt-6.2-sol
+    relationship: first_party
+    id: gpt-6.2-sol
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    pricing:
+      currency: USD
+      prompt_per_1m: 2.0
+      cached_input_per_1m: 0.1
+      cache_write_per_1m: 2.5
+      completion_per_1m: 10.0
+    restrictions:
+      tools_protocols:
+      - openai/responses@1
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - temperature
+        - top_p
+        - top_logprobs
+        - logprobs
+        openai/responses@1:
+        - temperature
+        - top_p
+        - top_logprobs
+      unsupported_include_values:
+      - message.output_text.logprobs
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://developers.openai.com/api/docs/models/gpt-6.2-sol
+  - catalog: openai/gpt-6.1-terra
+    relationship: first_party
+    id: gpt-6.1-terra
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    - disabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.05
+      cache_write_per_1m: 1.25
+      completion_per_1m: 5.0
+    restrictions:
+      tools_protocols:
+      - openai/responses@1
+      long_context_pricing:
+        input_threshold_tokens: 272000
+        prompt_multiplier: 2.0
+        cached_input_multiplier: 2.0
+        cache_write_multiplier: 2.0
+        completion_multiplier: 1.5
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
   - catalog: openai/gpt-6-astra
     relationship: first_party
     id: gpt-6-astra
@@ -2077,17 +2292,6 @@ providers:
       status: claimed
       verified_at: '2026-11-16'
       source: https://developers.openai.com/api/docs/pricing
-  - id: gpt-6.1-terra
-    pricing:
-      currency: USD
-      prompt_per_1m: 1.0
-      cached_input_per_1m: 0.05
-      cache_write_per_1m: 1.25
-      completion_per_1m: 5.0
-    verification:
-      status: claimed
-      verified_at: '2026-11-16'
-      source: https://developers.openai.com/api/docs/pricing
   - id: gpt-6-sol
     pricing:
       currency: USD
@@ -2184,6 +2388,36 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/tencent/hy4-preview
+  - catalog: tencent/hy4
+    relationship: gateway
+    id: tencent/hy4
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.834
+      cached_input_per_1m: 0.042
+      completion_per_1m: 2.501
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://openrouter.ai/tencent/hy4
+  - catalog: tencent/hy4-flash
+    relationship: gateway
+    id: tencent/hy4-flash
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.07
+      cached_input_per_1m: 0.003
+      completion_per_1m: 0.281
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://openrouter.ai/tencent/hy4-flash
   - catalog: thinking-machines/inkling
     relationship: gateway
     id: thinkingmachines/inkling
@@ -2975,6 +3209,16 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+  - catalog: meituan/longcat-2.0
+    relationship: self_hosted
+    id: meituan-longcat/LongCat-2.0-FP8
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-23'
+      source: https://docs.sglang.io/cookbook/autoregressive/Meituan/LongCat-2.0
 - id: snowflake-cortex
   display_name: Snowflake Cortex AI
   description: Frontier models hosted and governed inside your Snowflake perimeter.
@@ -3247,6 +3491,28 @@ providers:
   conformance:
     status: fixture_verified
     verified_at: '2026-09-04'
+- id: vllm-omni
+  display_name: vLLM-Omni
+  description: Connect a private vLLM-Omni endpoint. vLLM-Omni serves text-to-speech on POST /v1/audio/speech. Plain vLLM
+    does not, so this protocol is not listed on the vllm provider.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - openai/audio-speech@1
+  default_protocol: openai/audio-speech@1
+  supported_operations:
+  - openai/audio-speech@1#create
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: package:vllm
+    monogram: O
+    monochrome: false
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-11-17'
 - id: vllm
   display_name: vLLM
   description: Connect a private vLLM endpoint.
@@ -3341,6 +3607,38 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+  - catalog: nvidia/nemotron-3.5-super-vl
+    relationship: self_hosted
+    id: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: experimental
+    restrictions:
+      reference_vllm_image: vllm/vllm-openai:v0.32.0
+      evaluated_vllm_version: 0.30.0
+      trust_remote_code: true
+      reference_deployments:
+      - 4x H100 (tensor parallel 4)
+      - 2x GB200 (tensor parallel 2)
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+  - catalog: nvidia/nemotron-3.5-bolt
+    relationship: self_hosted
+    id: nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: experimental
+    restrictions:
+      trust_remote_code: true
+      reasoning_parser_plugin: ultra_v3_reasoning_parser.py
+      required_environment:
+        VLLM_USE_V2_MODEL_RUNNER: '1'
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
   - catalog: ai21/jamba-large-1.7
     relationship: self_hosted
     id: ai21labs/AI21-Jamba-Large-1.7
@@ -3492,6 +3790,58 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/google/gemma-4-31b-it
+  - catalog: google/gemma-4-12b-it
+    relationship: self_hosted
+    id: google/gemma-4-12B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.23.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-12B-it
+  - catalog: google/gemma-4-26b-a4b-it
+    relationship: self_hosted
+    id: google/gemma-4-26B-A4B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.25.0
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-26B-A4B-it
+  - catalog: google/gemma-4-e4b-it
+    relationship: self_hosted
+    id: google/gemma-4-E4B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.19.1
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-E4B-it
+  - catalog: google/gemma-4-e2b-it
+    relationship: self_hosted
+    id: google/gemma-4-E2B-it
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: chat_template_kwargs
+    lifecycle: experimental
+    restrictions:
+      minimum_vllm_version: 0.19.1
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://recipes.vllm.ai/Google/gemma-4-E2B-it
   - catalog: meta/llama-4-scout-17b-16e-instruct
     relationship: self_hosted
     id: meta-llama/Llama-4-Scout-17B-16E-Instruct
@@ -3878,6 +4228,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/thinkingmachines/Inkling-Small
+  - catalog: thinking-machines/inkling-2-small
+    relationship: self_hosted
+    id: thinkingmachines/Inkling-2-Small
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-11-20'
+      source: https://recipes.vllm.ai/thinkingmachines/Inkling-2-Small
   - catalog: meta/muse-glimmer-30b
     relationship: self_hosted
     id: meta-models/Muse-Glimmer-30B
@@ -4906,6 +5266,18 @@ reasoning_families:
   - enabled
   - disabled
   default_mode: enabled
+- id: muse-spark-open
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  default: xhigh
+  modes:
+  - enabled
+  default_mode: enabled
 - id: muse-spark
   type: reasoning_effort
   parameter: reasoning_effort
@@ -4931,6 +5303,20 @@ reasoning_families:
   modes:
   - enabled
   default_mode: enabled
+- id: longcat-2.0
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes:
+  - enabled
+  - disabled
+  default_mode: enabled
+- id: longcat-2.5
+  type: chat_template_kwargs
+  parameter: enable_thinking
+  modes:
+  - enabled
+  - disabled
+  default_mode: disabled
 - id: gemma4
   type: chat_template_kwargs
   parameter: enable_thinking
@@ -4982,6 +5368,18 @@ reasoning_families:
   - medium
   - high
   default: medium
+  modes:
+  - enabled
+  default_mode: enabled
+- id: gemini-flash-four-level-minimal
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - minimal
+  - low
+  - medium
+  - high
+  default: minimal
   modes:
   - enabled
   default_mode: enabled
@@ -6590,6 +6988,52 @@ models:
   - multimodal
   - agentic
   released_at: '2026-07-21'
+- id: google/gemini-3.5-flash-lite
+  display_name: Gemini 3.5 Flash-Lite
+  description: Google's fastest, most cost-effective 3.5 model for high-throughput subagent tasks and document parsing.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:gemini
+    monogram: G
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://aistudio.google.com/docs/models/gemini-3.5-flash-lite
+  family: gemini-3.5
+  reasoning_family: gemini-flash-four-level-minimal
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 65536
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    - video
+    - pdf
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-24'
+    source: https://aistudio.google.com/docs/models/gemini-3.5-flash-lite
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
+  released_at: '2026-07-21'
 - id: google/gemini-3.1-pro
   display_name: Gemini 3.1 Pro
   description: Google's Gemini 3 Pro-series reasoning model for software engineering and agentic workflows, available in preview.
@@ -6676,6 +7120,169 @@ models:
   - open_weights
   - multimodal
   released_at: '2026-04-02'
+- id: google/gemma-4-12b-it
+  display_name: Gemma 4 12B IT
+  description: Google's encoder-free Gemma 4 instruction model for text, image, and audio workloads.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-12B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 12B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-12B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-26b-a4b-it
+  display_name: Gemma 4 26B A4B IT
+  description: Google's mixture-of-experts Gemma 4 instruction model with roughly 4B active parameters.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 26B
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-26B-A4B-it
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+- id: google/gemma-4-e4b-it
+  display_name: Gemma 4 E4B IT
+  description: Google's compact Gemma 4 instruction model with 4.5B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E4B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-E4B-it
+  tags:
+  - open_weights
+  - multimodal
+- id: google/gemma-4-e2b-it
+  display_name: Gemma 4 E2B IT
+  description: Google's smallest Gemma 4 instruction model with 2.3B effective parameters and image and audio inputs.
+  kind: physical
+  publisher: Google
+  presentation:
+    logo: package:google
+    monogram: G
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/google/gemma-4-E2B-it
+    license: Apache-2.0
+  family: gemma-4
+  reasoning_family: gemma4
+  parameter_size: 5.1B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - audio
+    output:
+    - text
+  verification:
+    authority: Google
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/google/gemma-4-E2B-it
+  tags:
+  - open_weights
+  - multimodal
 - id: google/gemma-3-27b-it
   display_name: Gemma 3 27B IT
   description: Largest Gemma 3 instruction-tuned checkpoint for multimodal and long-context use.
@@ -6879,6 +7486,139 @@ models:
   - agentic
   - efficient
   released_at: '2026-08-25'
+- id: meituan/longcat-2.5
+  display_name: LongCat-2.5
+  description: Open-weight multimodal Meituan MoE model for long-horizon coding and agentic work.
+  kind: physical
+  publisher: Meituan / LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5
+    license: MIT
+  family: longcat-2.5
+  reasoning_family: longcat-2.5
+  parameter_size: 1.6T (48B active)
+  revision: 60032d966e6369b822f0e61d2eff01368d38b111
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Meituan
+    status: claimed
+    verified_at: '2026-11-23'
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-11-02'
+- id: meituan/longcat-2.0
+  display_name: LongCat-2.0
+  description: Open-weight Meituan MoE language model for long-context coding and agentic work.
+  kind: physical
+  publisher: Meituan / LongCat
+  presentation:
+    logo: monogram
+    monogram: LC
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0
+    license: MIT
+  family: longcat-2.0
+  reasoning_family: longcat-2.0
+  parameter_size: 1.6T (48B active)
+  revision: 834bf5ffe3047aa9f6cc7a64a9bc068b146b8274
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Meituan
+    status: claimed
+    verified_at: '2026-11-23'
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+  tags:
+  - open_weights
+  - moe
+  - coding
+  - agentic
+  released_at: '2026-06-30'
+- id: meta/muse-spark-open
+  display_name: Muse Spark Open
+  description: Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+    license: Muse Model License
+  family: muse-spark
+  parameter_size: 816B (42B active)
+  released_at: '2026-10-15'
+  reasoning_family: muse-spark-open
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - long_context
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.
@@ -7630,6 +8370,52 @@ models:
   - dense
   - efficient
   released_at: '2025-12-02'
+- id: moonshot/kimi-k3.1-pro
+  display_name: Kimi K3.1 Pro
+  description: Open-weight multimodal Kimi model post-trained from Kimi K3 for long-horizon coding and agentic work.
+  kind: physical
+  publisher: Moonshot / Kimi
+  presentation:
+    logo: package:moonshot
+    monogram: K
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro
+    license: Kimi-K3.1-Pro
+  family: kimi-k3.1
+  reasoning_family: kimi-k3
+  parameter_size: 2.8T (104B active)
+  revision: d9e99b0792a5e93b78ea9bea62a68167e36ddd9e
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Moonshot AI
+    status: claimed
+    verified_at: '2026-11-20'
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+  tags:
+  - open_weights
+  - frontier
+  - multimodal
+  - moe
+  - agentic
+  released_at: '2026-10-23'
 - id: moonshot/kimi-k3
   display_name: Kimi K3
   description: Moonshot AI native multimodal MoE model for long-context agents.
@@ -7888,6 +8674,97 @@ models:
   - reasoning
   - moe
   released_at: '2026-08-11'
+- id: nvidia/nemotron-3.5-super-vl
+  display_name: NVIDIA Nemotron 3.5 Super VL
+  description: Open-weight NVIDIA vision-language MoE model for reasoning, coding, tool use, and document and video understanding.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    license: OpenMDW-1.1
+  family: nemotron-3.5
+  reasoning_family: nemotron-ultra
+  parameter_size: 120B (12B active)
+  released_at: '2026-10-15'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - vision
+  - video
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - reasoning
+  - moe
+  - agentic
+- id: nvidia/nemotron-3.5-bolt
+  display_name: NVIDIA Nemotron 3.5 Bolt
+  description: Open-weight NVIDIA vision-language MoE model compressed from Nemotron 3.5 Super VL; the BF16 release targets
+    customization and post-training.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    license: OpenMDW-1.1
+  family: nemotron-3.5
+  reasoning_family: nemotron-ultra
+  parameter_size: 74B (9B active)
+  released_at: '2026-10-15'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - vision
+  - video
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - efficient
+  - reasoning
+  - moe
 - id: nvidia/nemotron-3-ultra
   display_name: NVIDIA Nemotron 3 Ultra
   description: NVIDIA open-weight frontier model for reasoning and complex agentic workflows.
@@ -8142,6 +9019,132 @@ models:
   - dense
   - efficient
   released_at: '2025-12-08'
+- id: openai/gpt-6.2-astra
+  display_name: GPT-6.2 Astra
+  description: Multimodal reasoning model for complex software, computer-use, and document tasks.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+  family: gpt-6.2
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-6-astra
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-11-17'
+  knowledge_cutoff: '2026-05-18'
+- id: openai/gpt-6.2-sol
+  display_name: GPT-6.2 Sol
+  description: General-purpose model for coding and tool-using agents.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-sol
+  family: gpt-6.2
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-6-astra
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://developers.openai.com/api/docs/models/gpt-6.2-sol
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-11-17'
+  knowledge_cutoff: '2026-06-01'
+- id: openai/gpt-6.1-terra
+  display_name: GPT-6.1 Terra
+  description: Efficient model for visual reasoning, computer use, and writing.
+  kind: physical
+  publisher: OpenAI
+  presentation:
+    logo: package:openai
+    monogram: O
+    monochrome: true
+  distribution:
+    type: proprietary_api
+    source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
+  family: gpt-6.1
+  lifecycle: active
+  limits:
+    context_window_size: 1050000
+    max_output_tokens: 128000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: gpt-5.6
+  verification:
+    authority: OpenAI
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://developers.openai.com/api/docs/models/gpt-6.1-terra
+  tags:
+  - frontier
+  - proprietary
+  - agentic
+  released_at: '2026-10-26'
+  knowledge_cutoff: '2026-06-01'
 - id: openai/gpt-6-astra
   display_name: GPT-6 Astra
   description: OpenAI flagship model for complex reasoning, coding, computer use, research, and document creation.
@@ -9248,6 +10251,96 @@ models:
   - long_context
   - preview
   released_at: '2026-08-28'
+- id: tencent/hy4
+  display_name: Tencent Hy4
+  description: Open-weight Tencent Hy flagship MoE model with text, image, and video understanding and a one-million-token
+    context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4/tree/c10c0de5b6f850703fb0a90e65d1c32b558b9167
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 770B (49B active)
+  reasoning_family: hunyuan-hy4
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/README.md
+  tags:
+  - open_weights
+  - frontier
+  - moe
+  - multimodal
+  - agentic
+  released_at: '2026-11-04'
+- id: tencent/hy4-flash
+  display_name: Tencent Hy4 Flash
+  description: Cost-efficient open-weight Tencent Hy MoE model with text and image input and a one-million-token context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: Hy
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hy4-flash/tree/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f
+    license: Tencent-Hy-License-1.0
+  family: hy4
+  parameter_size: 220B (12B active)
+  reasoning_family: hunyuan
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Tencent Hy Team
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/README.md
+  tags:
+  - open_weights
+  - efficient
+  - moe
+  - multimodal
+  released_at: '2026-11-16'
 - id: tencent/hy3
   display_name: Tencent Hy3
   description: Open-weight Tencent Hy flagship MoE model for reasoning, coding, and productivity agents.
@@ -9460,6 +10553,47 @@ models:
   - moe
   - agentic
   - efficient
+- id: thinking-machines/inkling-2-small
+  display_name: Inkling 2 Small
+  description: Multimodal mixture-of-experts model with a native NVFP4 checkpoint and an alternative MXFP8 release.
+  kind: physical
+  publisher: Thinking Machines Lab
+  presentation:
+    logo: monogram
+    monogram: TM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/thinkingmachines/Inkling-2-Small
+    license: Apache-2.0
+  family: inkling
+  generation: 2
+  parameter_size: 594B (17B active)
+  released_at: '2026-11-05'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Thinking Machines Lab
+    status: claimed
+    verified_at: '2026-11-20'
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/
+  tags:
+  - open_weights
+  - multimodal
+  - moe
 - id: tii/falcon-h1r-7b
   display_name: Falcon-H1R 7B
   description: TII's 7B hybrid Falcon model designed for efficient test time scaling and advanced reasoning.
@@ -10817,9 +11951,11 @@ benchmarks:
   default_profile: public-games
   profiles:
   - id: public-games
-    display_name: Public games
-    description: Normalized standing across the public games for programs generated at the named reasoning setting; the immutable
-      public-release identity remains on each evaluation record.
+    display_name: Public games (sequential Elo)
+    description: Public-game scores based on sequential Elo ratings for programs generated at the named reasoning setting.
+  - id: public-games-bradley-terry
+    display_name: Public games (Bradley–Terry)
+    description: Public-game scores based on fitted Bradley–Terry ratings for programs generated at the named reasoning setting.
   metrics:
   - id: score
     unit: score
@@ -10950,6 +12086,24 @@ benchmarks:
     description: Vendor-published AutomationBench score using the stated benchmark release and harness.
   metrics:
   - id: score
+    unit: proportion
+    direction: higher_is_better
+    range:
+    - 0
+    - 1
+- id: mercor/apex-agents@1.1.0
+  display_name: APEX-Agents 1.1
+  domain: knowledge_work
+  source: https://huggingface.co/datasets/mercor/apex-agents-v1.1
+  default_profile: published-loop-250-steps
+  profiles:
+  - id: published-loop-250-steps
+    display_name: Published Loop agent, 250 steps
+    description: Vendor-published APEX-Agents 1.1 pass@1 with the official Loop reference agent at 250 steps per trial, which
+      is not comparable to the 100-step leaderboard harness. The ID names minor version 1.1; records keep the dataset patch
+      (1.1.1 or 1.1.2) unspecified when the source does not state it.
+  metrics:
+  - id: pass_at_1
     unit: proportion
     direction: higher_is_better
     range:
@@ -21612,6 +22766,109 @@ evaluations:
     verification: claimed
     source: https://deepmind.google/models/model-cards/gemini-3-1-pro
     redistributable: true
+- id: google/gemini-3.5-flash-lite-model-card-swe-bench-pro@1.0.0
+  model: google/gemini-3.5-flash-lite
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.5 Flash-Lite Thinking (High)
+    reasoning_mode: high
+    subset: public
+    swe_harness: internal version of the Antigravity harness
+    methodology_source: https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.542
+  status: available
+  observed_at: '2026-11-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+    redistributable: true
+- id: google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0
+  model: google/gemini-3.5-flash-lite
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.5 Flash-Lite Thinking (High)
+    reasoning_mode: high
+    terminal_harness: Terminus-2
+    methodology_source: https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.54
+  status: available
+  observed_at: '2026-11-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+    redistributable: true
+- id: google/gemini-3.5-flash-lite-model-card-mle-bench@1.0.0
+  model: google/gemini-3.5-flash-lite
+  benchmark: openai/mle-bench@1.0.0
+  benchmark_profile: partial-30
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.5 Flash-Lite Thinking (High)
+    reasoning_mode: high
+    subset: partial-30
+    runs_per_problem: 2
+    tool_call_budget: 256
+    methodology_source: https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/
+    source_kind: official_model_card
+  metrics:
+    average_position: 0.392
+  status: available
+  observed_at: '2026-11-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+    redistributable: true
+- id: google/gemini-3.5-flash-lite-model-card-osworld-verified@1.0.0
+  model: google/gemini-3.5-flash-lite
+  benchmark: osworld/verified@1.0.0
+  benchmark_profile: official
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.5 Flash-Lite Thinking (High)
+    reasoning_mode: high
+    averaged_runs: 5
+    max_steps: 100
+    methodology_source: https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/
+    source_kind: official_model_card
+  metrics:
+    success_rate: 0.74
+  status: available
+  observed_at: '2026-11-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+    redistributable: true
+- id: google/gemini-3.5-flash-lite-model-card-charxiv-reasoning@1.0.0
+  model: google/gemini-3.5-flash-lite
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: high
+  subject:
+    variant: Gemini 3.5 Flash-Lite Thinking (High)
+    reasoning_mode: high
+    methodology_source: https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/
+    source_kind: official_model_card
+  metrics:
+    score: 0.745
+  status: available
+  observed_at: '2026-11-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/
+    redistributable: true
 - id: google/gemma-4-31b-model-card-humanitys-last-exam@1.0.0
   model: google/gemma-4-31b-it
   benchmark: cais/humanitys-last-exam@1.0.0
@@ -21666,6 +22923,366 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/google/gemma-4-31b-it
+    redistributable: true
+- id: google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.772
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.788
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-scicode@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.38
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-ifbench@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.74
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-12b-it-report-ifeval@1.0.0
+  model: google/gemma-4-12b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 12B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.972
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.826
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.823
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-scicode@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.4
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-ifbench@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.72
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-26b-a4b-it-report-ifeval@1.0.0
+  model: google/gemma-4-26b-a4b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 26B-A4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.694
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.586
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-scicode@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.24
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-ifbench@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.44
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e4b-it-report-ifeval@1.0.0
+  model: google/gemma-4-e4b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E4B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.967
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.6
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-gpqa-diamond@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.434
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-scicode@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    score: 0.21
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-ifbench@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.38
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
+    redistributable: true
+- id: google/gemma-4-e2b-it-report-ifeval@1.0.0
+  model: google/gemma-4-e2b-it
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: enabled
+  subject:
+    variant: Gemma 4 E2B
+    reasoning_mode: enabled
+    source_kind: technical_report
+  metrics:
+    accuracy: 0.946
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://arxiv.org/html/2607.02770v1#S2.T5
     redistributable: true
 - id: cognition/gemini-3-6-flash-low-frontiercode-1-1@1.0.0
   model: google/gemini-3.6-flash
@@ -22264,6 +23881,380 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: claude-code
+    agent_version: 2.1.280
+    context_window: 512K
+    averaged_runs: 3
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.884
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-terminal-bench-4@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: claude-code
+    agent_version: 2.1.280
+    context_window: 512K
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.385
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-deepswe@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    harness: mini-swe-agent
+    context_window: 1M
+    averaged_runs: 3
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.646
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-automation-bench@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    subset: public
+    task_count: 600
+    evaluation_harness: official evaluation code
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    score: 0.518
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.5-model-card-humanitys-last-exam-with-tools@1.0.0
+  model: meituan/longcat-2.5
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: enabled
+  subject:
+    variant: LongCat-2.5
+    thinking_mode: enabled
+    tool_policy: with_tools
+    harness: claude-code
+    agent_version: 2.1.116
+    subset: full
+    maximum_output_tokens: 256K
+    sampling_temperature: 1.0
+    sampling_top_p: 0.95
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.631
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    harness: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.708
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-swe-bench-pro@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    harness: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.595
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-gpqa-diamond@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.889
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-model-card-ifeval@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.9
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-terminal-bench-4@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.03
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-deepswe@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.097
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-automation-bench@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    score: 0.158
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: meituan/longcat-2.0-comparison-humanitys-last-exam-with-tools@1.0.0
+  model: meituan/longcat-2.0
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: LongCat-2.0
+    thinking_mode: unspecified_by_source
+    tool_policy: with_tools
+    reported_in: LongCat-2.0 column of the LongCat-2.5 model card
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.375
+  status: available
+  observed_at: '2026-11-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: arc-prize/muse-spark-open-arc-agi-1@1.0.0
+  model: meta/muse-spark-open
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (XHigh)
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    evaluator: ARC Prize
+  metrics:
+    accuracy: 0.89
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/meta-muse-spark-open
+    redistributable: true
+- id: arc-prize/muse-spark-open-arc-agi-2@1.0.0
+  model: meta/muse-spark-open
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (XHigh)
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    evaluator: ARC Prize
+  metrics:
+    accuracy: 0.575
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/meta-muse-spark-open
+    redistributable: true
+- id: duellab/muse-spark-open-xhigh-gamebench-2@1.0.0
+  model: meta/muse-spark-open
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games-bradley-terry
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    track: full_freedom/mixed
+    provider_route: openrouter
+    provider_model: meta/muse-spark-open
+    provider_setting: XHigh
+  metrics:
+    score: 58.95964511856345
+  status: available
+  measured_at: '2026-11-19'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/muse-spark-open-scicode@1.0.0
+  model: meta/muse-spark-open
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (xhigh)
+    source_model_slug: muse-spark-open
+    source_kind: official_vendor_republication
+    run_kind: independent
+    evaluator: Artificial Analysis
+    methodology_source: https://research.meta.ai/static/muse-spark-open-evaluation-methodology
+  metrics:
+    score: 0.585
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks
+    redistributable: true
+- id: independent/muse-spark-open-terminalbench-2-1@1.0.0
+  model: meta/muse-spark-open
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (xhigh)
+    source_model_slug: muse-spark-open
+    source_kind: official_vendor_republication
+    run_kind: independent
+    evaluator: Artificial Analysis
+    harness: Terminus 2
+    environment: E2B
+    methodology_source: https://research.meta.ai/static/muse-spark-open-evaluation-methodology
+  metrics:
+    resolved: 0.764
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks
     redistributable: true
 - id: independent/muse-spark-1-3-aa-briefcase@1.0.0
   model: meta/muse-spark-1.3
@@ -27704,6 +29695,141 @@ evaluations:
     verification: claimed
     source: https://arxiv.org/abs/2510.26692v2
     redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-terminal-bench-4@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    terminal_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.657
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-deepswe@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    swe_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.755
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    hle_mode: full_no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.511
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam-with-tools@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    hle_mode: full_with_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.942
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    tool_policy: no_tools
+    trials: 4
+    source_kind: official_model_card
+  metrics:
+    score: 0.89
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning-with-tools@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    tool_policy: with_tools
+    tools: python
+    trials: 4
+    source_kind: official_model_card
+  metrics:
+    score: 0.934
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
 - id: nvidia/nemotron-cascade-2-model-card-scicode@1.0.0
   model: nvidia/nemotron-cascade-2-30b-a3b
   benchmark: scicode-bench/scicode@1.0.0
@@ -27865,6 +29991,232 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: GPQA-Diamond
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+  metrics:
+    accuracy: 0.8952
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: LiveCodeBench v6
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.8822
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-swe-bench-verified@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: SWE-bench Verified
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    swe_harness: OpenCode
+    agent_version: 1.17.11
+    sandbox: OpenSandbox
+  metrics:
+    resolved: 0.711
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-swe-bench-pro@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: SWE-bench Pro
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    swe_harness: OpenCode
+    agent_version: 1.17.11
+    sandbox: OpenSandbox
+  metrics:
+    resolved: 0.5178
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: Terminal-Bench 2.1
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    terminal_harness: Terminus-2
+    sandbox: OpenSandbox
+    benchmark_revision: 36d417f5
+  metrics:
+    resolved: 0.6067
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: GPQA Diamond
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    accuracy: 0.8883
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: HLE (no tools)
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    accuracy: 0.2873
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SciCode
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    score: 0.4449
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: Terminal-Bench 2.1
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    resolved: 0.5393
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-mcp-atlas@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: MCP-Atlas
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    score: 0.556
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
     redistributable: true
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
   model: nvidia/nemotron-3-ultra
@@ -28833,6 +31185,332 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: arc-prize/gpt-6-2-astra-xhigh-arc-agi-1@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: openai-gpt-6-2-astra
+    variant: astra-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.985
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: arc-prize/gpt-6-2-astra-xhigh-arc-agi-2@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: openai-gpt-6-2-astra
+    variant: astra-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.9583333333333334
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: duellab/gpt-6-2-astra-xhigh-gamebench@2.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games-bradley-terry
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra
+    source_model_slug: gpt-6-2-astra
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    suite_version: 2-known8-r3
+    track: full_freedom/intensive
+    row_kind: track
+    provider_setting: xhigh
+  metrics:
+    score: 97.146404
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/gpt-6-2-astra-xhigh-terminal-bench@4.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra (Xhigh)
+    source_model_slug: gpt-6-2-astra-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/terminalbench-4-0
+    agent_harness: mini-swe-agent
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    context_compaction: false
+  metrics:
+    resolved: 0.641414141414141
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-2-astra-xhigh-gdp-pdf@1.0.0
+  model: openai/gpt-6.2-astra
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Astra (Xhigh)
+    source_model_slug: gpt-6-2-astra-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.28
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: arc-prize/gpt-6-2-sol-xhigh-arc-agi-1@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: openai-gpt-6-2-sol
+    variant: sol-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.97
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: arc-prize/gpt-6-2-sol-xhigh-arc-agi-2@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: openai-gpt-6-2-sol
+    variant: sol-xhigh
+    run_kind: independent
+    subset: semi-private
+  metrics:
+    accuracy: 0.8583333333333333
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/openai-gpt-6-2
+    redistributable: true
+- id: duellab/gpt-6-2-sol-xhigh-gamebench@2.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games-bradley-terry
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol
+    source_model_slug: gpt-6-2-sol
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    suite_version: 2-known8-r3
+    track: full_freedom/intensive
+    row_kind: track
+    provider_setting: xhigh
+  metrics:
+    score: 94.330527
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/gpt-6-2-sol-xhigh-terminal-bench@4.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol (Xhigh)
+    source_model_slug: gpt-6-2-sol-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/terminalbench-4-0
+    agent_harness: mini-swe-agent
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    context_compaction: false
+  metrics:
+    resolved: 0.560606060606061
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-2-sol-xhigh-gdp-pdf@1.0.0
+  model: openai/gpt-6.2-sol
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: GPT-6.2 Sol (Xhigh)
+    source_model_slug: gpt-6-2-sol-xhigh
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.284
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-2-astra-vs-gpt-6-2-sol
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-gdp-pdf@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/gdp-pdf
+    task_count: 100
+    repeats: 5
+    scoring: all_pass
+  metrics:
+    all_pass: 0.28
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-scicode@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/scicode
+    sample_count: 288
+    repeats: 3
+    dataset_status: under review by Artificial Analysis
+  metrics:
+    score: 0.516203703703704
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-hle@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/humanitys-last-exam
+    sample_count: 2158
+    tool_policy: no_tools
+  metrics:
+    accuracy: 0.432808155699722
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-critpt@1.0.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/critpt
+    sample_count: 70
+    agent_harness: none
+  metrics:
+    score: 0.257142857142857
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
+    redistributable: true
+- id: independent/gpt-6-1-terra-high-lcr@1.1.0
+  model: openai/gpt-6.1-terra
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: GPT-6.1 Terra (High)
+    source_model_slug: gpt-6-1-terra-high
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning
+    sample_count: 100
+  metrics:
+    score: 0.823333333333333
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/comparisons/gpt-6-1-terra-high-vs-agnes-2-5-pro-beta
     redistributable: true
 - id: independent/gpt-5-4-non-reasoning-critpt@1.0.0
   model: openai/gpt-5.4
@@ -38116,6 +40794,220 @@ evaluations:
     verification: claimed
     source: https://huggingface.co/tencent/Hy4-preview
     redistributable: true
+- id: tencent/hy4-model-card-deep-swe@1.0.0
+  model: tencent/hy4
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    swe_harness: mini-swe-agent
+    sandbox: 8 CPU cores, 16 GB memory
+  metrics:
+    resolved: 0.749
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-terminal-bench-4-0@1.0.0
+  model: tencent/hy4
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: Terminal-Bench 4.0
+    terminal_harness: Claude Code
+    max_turns: 500
+    timeout_per_trial: 13 hours
+    sandbox: 16 CPUs, 32 GB RAM; one H100 for the three GPU-dependent tasks
+  metrics:
+    resolved: 0.444
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-apex-agents@1.0.0
+  model: tencent/hy4
+  benchmark: mercor/apex-agents@1.1.0
+  benchmark_profile: published-loop-250-steps
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: APEX-Agents v1.1 (pass@1)
+    harness: Loop (official reference agent)
+    max_steps: 250
+    benchmark_revision: unspecified_by_source
+  metrics:
+    pass_at_1: 0.752
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-automation-bench@1.0.0
+  model: tencent/hy4
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: AutomationBench v1.0.6
+    task_count: 600
+    harness: official AutomationBench method
+  metrics:
+    score: 0.562
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-model-card-humanitys-last-exam-tools@1.0.0
+  model: tencent/hy4
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: high
+  subject:
+    variant: Hy4
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: HLE-Full (with tools)
+    hle_mode: full_with_tools
+  metrics:
+    accuracy: 0.591
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4/blob/c10c0de5b6f850703fb0a90e65d1c32b558b9167/assets/benchmark-appendix.jpg
+    redistributable: true
+- id: tencent/hy4-flash-model-card-deep-swe@1.0.0
+  model: tencent/hy4-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    swe_harness: mini-swe-agent
+    sandbox: 8 CPU cores, 16 GB memory
+  metrics:
+    resolved: 0.646
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-terminal-bench-4-0@1.0.0
+  model: tencent/hy4-flash
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: Terminal-Bench 4.0
+    terminal_harness: Claude Code
+    max_turns: 500
+    timeout_per_trial: 13 hours
+    sandbox: 16 CPUs, 32 GB RAM; one H100 for the three GPU-dependent tasks
+  metrics:
+    resolved: 0.192
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-apex-agents@1.0.0
+  model: tencent/hy4-flash
+  benchmark: mercor/apex-agents@1.1.0
+  benchmark_profile: published-loop-250-steps
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: APEX-Agents v1.1 (pass@1)
+    harness: Loop (official reference agent)
+    max_steps: 250
+    benchmark_revision: unspecified_by_source
+  metrics:
+    pass_at_1: 0.631
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-automation-bench@1.0.0
+  model: tencent/hy4-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: AutomationBench v1.0.6
+    task_count: 600
+    harness: official AutomationBench method
+  metrics:
+    score: 0.522
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
+- id: tencent/hy4-flash-model-card-humanitys-last-exam-tools@1.0.0
+  model: tencent/hy4-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: enabled
+  subject:
+    variant: Hy4 flash
+    reasoning_effort: highest
+    source_kind: official_model_card
+    source_label: HLE-Full (with tools)
+    hle_mode: full_with_tools
+  metrics:
+    accuracy: 0.552
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hy4-flash/blob/b2498eba6a1a3f9bbcab4190bc1313a3c7010c2f/assets/benchmark.png
+    redistributable: true
 - id: independent/hy3-critpt@1.0.0
   model: tencent/hy3
   benchmark: artificial-analysis/critpt@1.0.0
@@ -38960,6 +41852,94 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://benchmarks.duellab.org/model-thinkingmachines-inkling-small
+    redistributable: true
+- id: thinking-machines/inkling-2-small-deep-swe@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.721
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: terminus v2
+  metrics:
+    resolved: 0.813
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-terminal-bench-4-0@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+    harness: mini-swe-agent v2.4.6
+  metrics:
+    resolved: 0.131
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-gpqa-diamond@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.93
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
+    redistributable: true
+- id: thinking-machines/inkling-2-small-hmmt-feb-2026@1.0.0
+  model: thinking-machines/inkling-2-small
+  benchmark: matharena/hmmt-feb@2026.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Inkling 2 Small
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.958
+  status: available
+  observed_at: '2026-11-20'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://thinkingmachines.ai/model-card/inkling-2-small/#5-evaluations
     redistributable: true
 - id: tii/falcon-h1r-7b-aime-2025@1.0.0
   model: tii/falcon-h1r-7b
@@ -46235,6 +49215,28 @@ index_results:
   - independent/gemini-3-6-flash-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 77.52808988764049
+- model: google/gemini-3.5-flash-lite
+  reasoning_effort: high
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 54.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.54
+    normalized: 0.54
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0
+    benchmark_profile: published-agent
+  provenance:
+  - google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0
+  domains:
+    agentic_systems: 54.0
 - model: google/gemma-4-31b-it
   reasoning_effort: enabled
   index: vllm-sr/general@1.0.0
@@ -46440,6 +49442,94 @@ index_results:
   - independent/gemma-4-31b-non-reasoning-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 29.213483146067396
+- model: google/gemma-4-12b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 77.2
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.772
+    normalized: 0.772
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-12b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 77.2
+- model: google/gemma-4-26b-a4b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 82.6
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.826
+    normalized: 0.826
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-26b-a4b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 82.6
+- model: google/gemma-4-e4b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 69.39999999999999
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.694
+    normalized: 0.694
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-e4b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 69.39999999999999
+- model: google/gemma-4-e2b-it
+  reasoning_effort: enabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 60.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6
+    normalized: 0.6
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - google/gemma-4-e2b-it-report-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 60.0
 - model: google/gemma-3-27b-it
   reasoning_effort: disabled
   index: vllm-sr/general@1.0.0
@@ -46838,6 +49928,72 @@ index_results:
   domains:
     competitive_programming: 69.71000000000001
     scientific_coding: 24.11
+- model: meituan/longcat-2.5
+  reasoning_effort: enabled
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 88.4
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.884
+    normalized: 0.884
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - meituan/longcat-2.5-model-card-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 88.4
+- model: meituan/longcat-2.0
+  reasoning_effort: unspecified
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 70.8
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.708
+    normalized: 0.708
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 70.8
+- model: meta/muse-spark-open
+  reasoning_effort: xhigh
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 76.4
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.764
+    normalized: 0.764
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/muse-spark-open-terminalbench-2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/muse-spark-open-terminalbench-2-1@1.0.0
+  domains:
+    agentic_systems: 76.4
 - model: meta/muse-spark-1.3
   reasoning_effort: xhigh
   index: vllm-sr/reasoning@1.0.0
@@ -48591,6 +51747,50 @@ index_results:
   - nvidia/nemotron-3.5-lightning-model-card-terminal-bench-2-1@1.0.0
   domains:
     agentic_systems: 24.58
+- model: nvidia/nemotron-3.5-super-vl
+  reasoning_effort: high
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 60.67
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6067
+    normalized: 0.6067
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 60.67
+- model: nvidia/nemotron-3.5-bolt
+  reasoning_effort: unspecified
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 53.93
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.5393
+    normalized: 0.5393
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 53.93
 - model: nvidia/nemotron-3-ultra
   reasoning_effort: high
   index: vllm-sr/general@1.0.0
@@ -52963,6 +56163,28 @@ index_results:
   - thinking-machines/inkling-small-model-card-terminal-bench@1.0.0
   domains:
     agentic_systems: 64.7
+- model: thinking-machines/inkling-2-small
+  reasoning_effort: unspecified
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 81.3
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.813
+    normalized: 0.813
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - thinking-machines/inkling-2-small-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 81.3
 - model: tii/falcon-h1-0.5b-instruct
   reasoning_effort: unspecified
   index: vllm-sr/general@1.0.0

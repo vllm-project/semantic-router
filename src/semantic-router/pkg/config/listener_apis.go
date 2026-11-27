@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -24,6 +25,12 @@ type ListenerAPI struct {
 	// speaks to its clients; omitted, the API's listener default. Naming one
 	// on an API without versions is a load error.
 	Schema string `yaml:"schema,omitempty" json:"schema,omitempty" jsonschema:"enum=vllm-sr/5.0,enum=vllm-sr/4.0"`
+	// Prefix, when set, mounts the API under that path root as well: a
+	// listener with prefix /anthropic on messages answers
+	// /anthropic/v1/messages as it answers /v1/messages, the way a gateway
+	// registers a provider's endpoints under a root. The upstream request
+	// never carries it. Omitted, the API is served at its own paths only.
+	Prefix string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
 	// Models, when set, are the only request models the API accepts, by
 	// exact `model` value; others get 403 model_not_allowed, or, on an LLM
 	// API, 404 model_not_found when the Router serves them on no listener.
@@ -96,6 +103,54 @@ type VSRProfile struct {
 // VSRRouterGoals are the router goals a vsr profile can name.
 var VSRRouterGoals = []string{"quality", "balanced", "save"}
 
+// listenerAPIPrefix is what a prefix must look like: one or more path
+// segments, each of unreserved characters, with no trailing slash.
+var listenerAPIPrefix = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+)+$`)
+
+// APIPath is the path a request to the listener asks for, as the API it
+// belongs to answers it: a path under one of the listener's API prefixes
+// without the prefix, any other path unchanged.
+func (l Listener) APIPath(path string) string {
+	for name, entry := range l.APIs {
+		api, ok := apiregistry.Lookup(name)
+		if !ok {
+			continue
+		}
+		if rest, ok := api.Unprefixed(entry.Prefix, path); ok {
+			return rest
+		}
+	}
+	return path
+}
+
+// APIPath is the path a request asks for, as the API it belongs to answers
+// it, under the API prefix of whichever listener mounts it.
+func (c *RouterConfig) APIPath(path string) string {
+	if c == nil {
+		return path
+	}
+	for _, listener := range c.Listeners {
+		if rest := listener.APIPath(path); rest != path {
+			return rest
+		}
+	}
+	return path
+}
+
+// APIRequestTarget is APIPath of a request target, a path with its query: the
+// query is kept as the client sent it.
+func (c *RouterConfig) APIRequestTarget(target string) string {
+	path, query, hasQuery := strings.Cut(target, "?")
+	canonical := c.APIPath(path)
+	if canonical == path {
+		return target
+	}
+	if hasQuery {
+		return canonical + "?" + query
+	}
+	return canonical
+}
+
 // settingValues are the settings an entry sets, by name, for the registry's
 // check of which settings the API takes.
 func (a ListenerAPI) settingValues() []string {
@@ -113,7 +168,7 @@ func (a ListenerAPI) settingValues() []string {
 }
 
 // EffectiveAPIs are the APIs the listener serves: its apis, or without them
-// the APIs on by default (chat_completions, responses, messages and images),
+// the APIs on by default (chat_completions, responses, messages, images and speech),
 // each with no settings.
 func (l Listener) EffectiveAPIs() ListenerAPIs {
 	if l.APIs != nil {
@@ -306,7 +361,7 @@ func listenerPath(listener Listener, rest string) string {
 func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 	if listener.APIs != nil && len(listener.APIs) == 0 {
 		return CheckError(listenerPath(listener, "apis"), CodeInvalidValue,
-			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages and images")
+			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages, images and speech")
 	}
 	names := make([]string, 0, len(listener.APIs))
 	for name := range listener.APIs {
@@ -328,6 +383,10 @@ func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 				return CheckError(path+"."+setting, CodeInvalidValue,
 					fmt.Sprintf("the %s API takes no %s setting", api.Name, setting))
 			}
+		}
+		if entry.Prefix != "" && !listenerAPIPrefix.MatchString(entry.Prefix) {
+			return CheckError(path+".prefix", CodeInvalidValue,
+				fmt.Sprintf("%q is not a path prefix; write path segments with a leading slash and no trailing slash, as /anthropic", entry.Prefix))
 		}
 		if limit := entry.MaxDeadlineMs; limit != nil && *limit <= 0 {
 			return CheckError(path+".max_deadline_ms", CodeInvalidValue,

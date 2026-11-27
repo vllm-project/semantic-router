@@ -34,6 +34,12 @@ recipes:
 
 在 **Models → Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Models → Backend models → Connect model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
+## GPT-6.2 Astra、GPT-6.2 Sol 和 GPT-6.1 Terra
+
+将 `openai/gpt-6.2-astra`、`openai/gpt-6.2-sol` 或 `openai/gpt-6.1-terra` 绑定到 `openai` Provider。三者在 Chat Completions 和 Responses 上均支持 `low`、`medium`、`high`、`xhigh`、`max`。只有 Terra 支持关闭推理：设置 `use_reasoning: false` 会发送 `none`。Terra 默认使用 `medium`。工具调用需要 Responses（`api_format: responses`）。
+
+目录为每张卡收录五条已发布的评测。Astra 和 Sol 的记录来自 `xhigh`，Terra 的记录来自 `high`；分数不会复制到其他档位。只有同一评测条件下可比模型数量足够时，结果才会进入 Model Hub 的公开对比。
+
 ## Qwen4 Max
 
 `dashscope` 将 `qwen/qwen4-max` 映射到原生模型 ID `qwen4-max`，协议为 [Chat Completions](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope)。该绑定复用 `top_level_effort_boolean_switch`：开启推理的决策在请求顶层发送 `reasoning_effort` 和 `enable_thinking: true`。Model Studio 接受 `low`、`high` 和 `xhigh`，声明的默认值为 `high`。`minimal`、`medium` 和 `max` 是这些档位的提供方别名，不是目录中的独立档位。关闭推理的决策发送 `enable_thinking: false`，请求中不带 `reasoning_effort`，与阿里云的 [Chat Completions 示例](https://www.alibabacloud.com/help/en/model-studio/multi-round-conversation) 一致。
