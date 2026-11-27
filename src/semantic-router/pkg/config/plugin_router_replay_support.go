@@ -315,3 +315,96 @@ func (c *RouterConfig) replayNeedsPIIEvidenceForDecisions(decisions []Decision) 
 	}
 	return false
 }
+
+// StoreBackendName is the store store_backend names, else the one a
+// connection block implies, else memory.
+func (c RouterReplayConfig) StoreBackendName() string {
+	if backend := strings.ToLower(strings.TrimSpace(c.StoreBackend)); backend != "" {
+		return backend
+	}
+	switch {
+	case c.Postgres != nil:
+		return "postgres"
+	case c.Redis != nil:
+		return "redis"
+	case c.Milvus != nil:
+		return "milvus"
+	case c.Qdrant != nil:
+		return "qdrant"
+	}
+	return "memory"
+}
+
+// RouterReplayStoreBackend is the store that keeps the configuration's Replay
+// records. The file store holds routing data only, so where a router_replay
+// plugin of some layer a request can run captures a prompt, the records stay
+// in memory instead.
+func (c *RouterConfig) RouterReplayStoreBackend() string {
+	backend := c.RouterReplay.StoreBackendName()
+	if backend != "file" {
+		return backend
+	}
+	keepsText := false
+	c.VisitEveryPlugins(func(plugins []DecisionPlugin) {
+		keepsText = keepsText || RouterReplayPolicyOf(plugins).PromptCaptureMode() != PromptCaptureNone
+	})
+	if keepsText {
+		return "memory"
+	}
+	return backend
+}
+
+// RouterReplayPreDecisionPolicy sizes the store for requests without a
+// decision. A recipe's defaults layer its own plugins over the global ones,
+// so a recipe can record before a decision when the global plugins do not.
+// Each request still captures under its own recipe's policy.
+func (c *RouterConfig) RouterReplayPreDecisionPolicy() *RouterReplayPluginConfig {
+	policy := c.EffectiveRouterReplayConfig(nil)
+	for i := 0; policy == nil && i < len(c.Recipes); i++ {
+		policy = RouterReplayPolicyOf(c.Recipes[i].Profile.DefaultPlugins)
+	}
+	return policy
+}
+
+// RouterReplayMemoryStore is one store a Router keeps Replay records in while
+// they stay in memory: its recorder's name, the policy that sizes it, and the
+// routing decision keys whose records it keeps.
+type RouterReplayMemoryStore struct {
+	Name      string
+	Global    bool
+	Policy    *RouterReplayPluginConfig
+	Decisions []string
+}
+
+// RouterReplayMemoryStores lists those stores in the order the Router opens
+// them: the global one for requests before a decision, when some layer
+// records then, and one per decision with its own policy. The decisions on
+// the default record share the global store when it records by default, else
+// the first of them names the store they share.
+func (c *RouterConfig) RouterReplayMemoryStores() []RouterReplayMemoryStore {
+	var stores []RouterReplayMemoryStore
+	shared := -1
+	if policy := c.RouterReplayPreDecisionPolicy(); policy != nil {
+		stores = append(stores, RouterReplayMemoryStore{Name: "global", Global: true, Policy: policy})
+		if c.RecordsByDefault(nil) {
+			shared = 0
+		}
+	}
+	for _, ref := range c.RoutingDecisionRefs() {
+		policy := c.EffectiveRouterReplayConfig(ref.Decision)
+		if policy == nil {
+			continue
+		}
+		key := RoutingDecisionKey(ref.Recipe, ref.Decision.Name)
+		byDefault := c.RecordsByDefault(ref.Decision)
+		if byDefault && shared >= 0 {
+			stores[shared].Decisions = append(stores[shared].Decisions, key)
+			continue
+		}
+		stores = append(stores, RouterReplayMemoryStore{Name: key, Policy: policy, Decisions: []string{key}})
+		if byDefault {
+			shared = len(stores) - 1
+		}
+	}
+	return stores
+}

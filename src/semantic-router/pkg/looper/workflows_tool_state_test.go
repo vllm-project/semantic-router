@@ -768,12 +768,16 @@ func TestWorkflowsResumeLongerThanLeaseConcurrentRetry(t *testing.T) {
 	t.Run("memory", func(t *testing.T) {
 		s := newWorkflowMemoryToolStateStore(time.Hour)
 		t.Cleanup(func() { _ = s.Close() })
-		assertResumeLongerThanLeaseConcurrentRetry(t, s, nil)
+		clock := newWorkflowStateManualClock()
+		useWorkflowStateClock(t, s, clock)
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, clock.Advance)
 	})
 	t.Run("file", func(t *testing.T) {
 		s := newWorkflowFileToolStateStore(filepath.Join(t.TempDir(), "state"), time.Hour)
 		t.Cleanup(func() { _ = s.Close() })
-		assertResumeLongerThanLeaseConcurrentRetry(t, s, nil)
+		clock := newWorkflowStateManualClock()
+		useWorkflowStateClock(t, s, clock)
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, clock.Advance)
 	})
 	t.Run("redis", func(t *testing.T) {
 		mr := miniredis.RunT(t)
@@ -782,16 +786,41 @@ func TestWorkflowsResumeLongerThanLeaseConcurrentRetry(t *testing.T) {
 			KeyPrefix: "test-resume-lease:",
 		}, time.Hour)
 		t.Cleanup(func() { _ = s.Close() })
-		assertResumeLongerThanLeaseConcurrentRetry(t, s, mr)
+		assertResumeLongerThanLeaseConcurrentRetry(t, s, mr.FastForward)
 	})
 }
 
-func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowToolStateStore, mr *miniredis.Miniredis) {
+// renewWatchStore reports each claim renewal with the clock step it began in,
+// so the test moves the store clock only after the held resume has renewed.
+type renewWatchStore struct {
+	workflowToolStateStore
+	step    atomic.Int64
+	renewed chan int64
+}
+
+func (s *renewWatchStore) Renew(ctx context.Context, recipe config.RecipeName, id, token string) error {
+	step := s.step.Load()
+	err := s.workflowToolStateStore.Renew(ctx, recipe, id, token)
+	if err == nil {
+		select {
+		case s.renewed <- step:
+		default:
+		}
+	}
+	return err
+}
+
+// assertResumeLongerThanLeaseConcurrentRetry moves the store clock with
+// advance, never the wall clock, so a slow disk or a loaded host cannot age
+// the claim between two renewals.
+func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, inner workflowToolStateStore, advance func(time.Duration)) {
 	t.Helper()
+	store := &renewWatchStore{workflowToolStateStore: inner, renewed: make(chan int64, 1)}
 	var workerResumes atomic.Int32
 	inWorker := make(chan struct{})
 	releaseWorker := make(chan struct{})
-	var startOnce sync.Once
+	var startOnce, releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(releaseWorker) }) }
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Model    string                   `json:"model"`
@@ -820,6 +849,8 @@ func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowTool
 		}
 	}))
 	t.Cleanup(server.Close)
+	// A failed assertion must not leave the held worker blocking server.Close.
+	t.Cleanup(release)
 
 	newLooper := func() *WorkflowsLooper {
 		return &WorkflowsLooper{
@@ -844,11 +875,11 @@ func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowTool
 	case <-inWorker:
 	case execErr := <-firstErr:
 		t.Fatalf("first resume ended before hold: %v", execErr)
-	case <-time.After(5 * time.Second):
+	case <-time.After(time.Minute):
 		t.Fatal("timed out waiting for first resume to hold the claim")
 	}
 
-	holdClaimPastLease(mr)
+	holdClaimPastLease(t, store, advance)
 
 	_, retryErr := newLooper().Execute(context.Background(), resumeReq)
 	if retryErr == nil {
@@ -858,7 +889,7 @@ func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowTool
 		t.Fatalf("retry error = %v, want a busy claim", retryErr)
 	}
 
-	close(releaseWorker)
+	release()
 	if execErr := <-firstErr; execErr != nil {
 		t.Fatalf("first resume failed: %v", execErr)
 	}
@@ -867,11 +898,19 @@ func assertResumeLongerThanLeaseConcurrentRetry(t *testing.T, store workflowTool
 	}
 }
 
-func holdClaimPastLease(mr *miniredis.Miniredis) {
+// holdClaimPastLease moves the store clock three leases ahead in steps of half
+// a lease and waits after each step for a renewal that began after it.
+func holdClaimPastLease(t *testing.T, store *renewWatchStore, advance func(time.Duration)) {
+	t.Helper()
 	for i := 0; i < 6; i++ {
-		time.Sleep(40 * time.Millisecond)
-		if mr != nil {
-			mr.FastForward(40 * time.Millisecond)
+		advance(40 * time.Millisecond)
+		step := store.step.Add(1)
+		for renewed := int64(0); renewed < step; {
+			select {
+			case renewed = <-store.renewed:
+			case <-time.After(time.Minute):
+				t.Fatalf("held resume did not renew its claim after clock step %d", step)
+			}
 		}
 	}
 }

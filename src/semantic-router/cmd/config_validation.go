@@ -77,5 +77,14 @@ func validateConfigInto(report *configValidationReport, data []byte, gateway con
 		return err
 	}
 	report.Warnings = append(report.Warnings, config.Warnings(cfg)...)
+	return validateGatewayConfig(cfg, mode)
+}
+
+// validateGatewayConfig refuses what the gateway mode cannot serve, the same
+// way at start and for -validate-config.
+func validateGatewayConfig(cfg *config.RouterConfig, mode config.GatewayMode) error {
+	if mode == config.GatewayStandalone && len(cfg.Listeners) == 0 {
+		return errStandaloneNeedsListener
+	}
 	return config.ValidateGatewayCapabilities(cfg, mode)
 }

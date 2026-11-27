@@ -115,8 +115,16 @@ def test_dev_install_refreshes_cached_catalog_and_keeps_dependency_cache(
         )
 
         def run(*args: str) -> subprocess.CompletedProcess[str]:
+            # Outside the checkout, so neither pip nor the version check sees
+            # metadata a local build left there, such as vllm_sr.egg-info.
             result = subprocess.run(
-                args, env=env, text=True, capture_output=True, timeout=60, check=False
+                args,
+                env=env,
+                cwd=tmp_path,
+                text=True,
+                capture_output=True,
+                timeout=60,
+                check=False,
             )
             assert result.returncode == 0, result.stdout + result.stderr
             return result

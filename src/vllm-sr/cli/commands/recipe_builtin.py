@@ -100,6 +100,8 @@ def initialize(
 
     No model, endpoint, capability, or candidate pool is invented. Every recipe
     decision must meet its declared minimum_candidates before this succeeds.
+    A --catalog-version made for another CLI release is refused; list and
+    export still read it.
     """
     return initialize_builtin_recipe(
         name,

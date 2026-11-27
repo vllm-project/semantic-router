@@ -20,9 +20,10 @@ import { responseErrorMessage } from './configPageRequestErrors'
 import type { OpenViewModal } from './configPageRouterSectionSupport'
 import { withRequestTimeout } from '../utils/boundedRequest'
 
-/** What a configuration save reports: whether the running stack applies it or a restart does. */
+/** What a configuration save reports: whether the running stack applies it, a restart does, or the Router has not said. */
 interface ConfigSaveResult {
   restartRequired: boolean
+  unconfirmed?: boolean
   message?: string
 }
 
@@ -31,6 +32,7 @@ async function responseSaveResult(response: Response): Promise<ConfigSaveResult>
     const body = (await response.clone().json()) as { status?: unknown; message?: unknown }
     return {
       restartRequired: body?.status === 'restart_required',
+      unconfirmed: body?.status === 'unconfirmed',
       message: typeof body?.message === 'string' ? body.message : undefined,
     }
   } catch {
@@ -159,9 +161,15 @@ const ConfigPage: React.FC<ConfigPageProps> = ({ activeSection = 'global-config'
           description: result.message,
           duration: 15000,
         })
+      } else if (result.unconfirmed) {
+        toast.warning('Saved, but the Router has not confirmed it', {
+          description: result.message,
+          duration: 15000,
+        })
       }
 
-      // Refresh in place so the section keeps its state instead of remounting.
+      // Refresh in place: the loading state would unmount the section, and
+      // with it the warnings and editor state a section keeps.
       await fetchConfig(false)
     } catch (err) {
       throw new Error(err instanceof Error ? err.message : 'Failed to save configuration')

@@ -6255,7 +6255,16 @@
     "RouterReplayConfig": {
       "properties": {
         "store_backend": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "file",
+            "memory",
+            "redis",
+            "postgres",
+            "milvus",
+            "qdrant"
+          ]
         },
         "ttl_seconds": {
           "type": "integer"

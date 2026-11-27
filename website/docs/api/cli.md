@@ -1301,6 +1301,8 @@ Bind one installed recipe to explicit models and validate the new config.
 
 No model, endpoint, capability, or candidate pool is invented. Every recipe
 decision must meet its declared minimum_candidates before this succeeds.
+A --catalog-version made for another CLI release is refused; list and
+export still read it.
 
 | Parameter | Description |
 | --- | --- |

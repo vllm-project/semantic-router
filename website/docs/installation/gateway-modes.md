@@ -46,7 +46,9 @@ See the [release note](../release-notes/standalone-mode).
 
 ## What a standalone Router does
 
-- **Listeners:** each entry of `listeners` is served with HTTP/1.1 and HTTP/2
+- **Listeners:** a standalone Router needs at least one, and a config without
+  any fails `vllm-sr config validate` as it fails the start. Each entry of
+  `listeners` is served with HTTP/1.1 and HTTP/2
   (h2c in cleartext). Its `timeout` bounds reading a request, so a client that
   stops sending its body gets 408, and how long an idle connection stays open;
   it does not bound a response the backend is still streaming. A request body
@@ -234,6 +236,11 @@ lifecycle:
   `standalone_drain_incomplete` with how many (`in_flight`); they are cut when
   the Router exits. A drain whose requests all finished logs
   `standalone_drain_completed` with its duration.
+- Trace spans still queued after the drain get at most 2 s to reach the
+  tracing collector. Spans it has not taken by then, as when nothing answers
+  at `global.services.observability.tracing.exporter.endpoint`, are dropped
+  with a `tracing_flush_abandoned` warning, so an unreachable collector does
+  not hold a stopping Router.
 - Only standalone mode honors `drain_timeout_seconds`: behind Envoy, Envoy
   drains the client connections, and a config that sets it fails to load with
   `--gateway extproc`.

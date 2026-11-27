@@ -133,7 +133,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
-		warnings := savedConfigWarnings(parsedConfig)
+		warnings := savedConfigWarnings(existingData, parsedConfig)
 
 		// Explicitly validate vLLM endpoints (Parse doesn't validate endpoints by default)
 		if len(parsedConfig.VLLMEndpoints) > 0 {
@@ -161,7 +161,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
+		pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 		if applyErr != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
@@ -181,8 +181,8 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			DSLSnapshot: readArchivedDSL(configDir),
 		})
 
-		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage, warnings)
+		if pending.status != "" {
+			writePendingResponse(w, "", pending, warnings)
 			return
 		}
 		writeConfigSavedResponse(w, warnings)
@@ -271,7 +271,7 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
-		warnings := savedConfigWarnings(parsedConfig)
+		warnings := savedConfigWarnings(existingData, parsedConfig)
 
 		if auth.RejectRevokedMutation(w, r) {
 			return
@@ -286,7 +286,7 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		restartMessage, applyErr := applyWrittenConfig(configPath, configDir, existingData, false)
+		pending, applyErr := applyWrittenConfig(configPath, configDir, existingData, true)
 		if applyErr != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", applyErr), http.StatusInternalServerError)
 			return
@@ -299,8 +299,8 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
-		if restartMessage != "" {
-			writeRestartRequiredResponse(w, "", restartMessage, warnings)
+		if pending.status != "" {
+			writePendingResponse(w, "", pending, warnings)
 			return
 		}
 		writeConfigSavedResponse(w, warnings)

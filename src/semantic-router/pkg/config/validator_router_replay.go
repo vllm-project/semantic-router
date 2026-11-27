@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // Tool results are raw client data. Storing them while Replay keeps only a
 // verified prompt would contradict the declared policy, so the combination is
@@ -31,4 +35,15 @@ func validateDecisionRouterReplayCaptureContracts(cfg *RouterConfig) error {
 		}
 	}
 	return nil
+}
+
+// validateGlobalRouterReplayStoreBackend refuses a store the Router cannot
+// create, which would otherwise pass validation and fail the start.
+func validateGlobalRouterReplayStoreBackend(cfg *RouterConfig) error {
+	backend := cfg.RouterReplay.StoreBackend
+	if backend == "" || slices.Contains(RouterReplayStoreBackends(), backend) {
+		return nil
+	}
+	return fmt.Errorf("global.services.router_replay.store_backend %q is not supported: use one of %s",
+		backend, strings.Join(RouterReplayStoreBackends(), ", "))
 }

@@ -356,6 +356,7 @@ func setCoreEnums(root *jsonschema.Schema) {
 		routerconfig.RouterLearningScopeSession,
 	})
 	setDefinitionPropertyEnum(root, "RouterLearningStateStoreConfig", "backend", []string{"", "local", "redis"})
+	setDefinitionPropertyEnum(root, "RouterReplayConfig", "store_backend", append([]string{""}, routerconfig.RouterReplayStoreBackends()...))
 	for _, definition := range []string{
 		"DecisionAdaptationsConfig",
 		"DecisionLearningAdaptationConfig",

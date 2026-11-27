@@ -57,8 +57,8 @@ global:
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("runRouterProcess() error = %v, want context canceled", err)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("runRouterProcess() did not finish after startup cancellation")
+	case <-time.After(readinessWait):
+		t.Fatalf("runRouterProcess() did not finish after startup cancellation:\n%s", goroutineDump())
 	}
 
 	requireListenerReleased(t, "management", fmt.Sprintf("127.0.0.1:%d", apiPort))
@@ -445,7 +445,7 @@ func waitForTestSignal(t *testing.T, signal <-chan struct{}, failure string) {
 	t.Helper()
 	select {
 	case <-signal:
-	case <-time.After(time.Second):
+	case <-time.After(readinessWait):
 		t.Fatal(failure)
 	}
 }
@@ -464,14 +464,16 @@ func waitForTestError(t *testing.T, result <-chan error, failure string) error {
 	select {
 	case err := <-result:
 		return err
-	case <-time.After(time.Second):
+	case <-time.After(readinessWait):
 		t.Fatal(failure)
 		return nil
 	}
 }
 
-// readinessWait bounds how long a test waits for a listener to come up. It is
-// not what the tests check, so it leaves room for a loaded CI runner.
+// readinessWait bounds how long a test waits for something to happen: a
+// listener to come up, a start or a shutdown to return, a signal to arrive.
+// How fast it happens is not what the tests check, so it leaves room for a
+// loaded CI runner.
 const readinessWait = time.Minute
 
 // goroutineDump is every goroutine's stack, so a wait that runs out shows

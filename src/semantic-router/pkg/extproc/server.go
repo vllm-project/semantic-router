@@ -493,6 +493,7 @@ func (rs *RouterService) swapSnapshot(r *OpenAIRouter, snapshot *configsnapshot.
 	generation.service = rs
 	old := rs.current.Swap(generation)
 	r.commitReplayFileRetention()
+	r.activateReplayStores()
 	if publish != nil {
 		publish(generation.acquire)
 	}

@@ -2,6 +2,7 @@ package tracing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -149,12 +150,28 @@ func createOTLPExporter(ctx context.Context, cfg TracingConfig) (sdktrace.SpanEx
 	return otlptracegrpc.New(ctxWithTimeout, opts...)
 }
 
-// ShutdownTracing gracefully shuts down the tracing provider
+// shutdownFlushTimeout bounds the export of the spans still queued at
+// shutdown. The exporter retries an unreachable collector for 10 s per batch,
+// which would otherwise hold a stopping Router that has drained its requests.
+const shutdownFlushTimeout = 2 * time.Second
+
+// ShutdownTracing flushes the queued spans for at most shutdownFlushTimeout
+// and shuts the tracing provider down; spans that could not be sent by then
+// are dropped with a warning.
 func ShutdownTracing(ctx context.Context) error {
-	if tracerProvider != nil {
-		return tracerProvider.Shutdown(ctx)
+	if tracerProvider == nil {
+		return nil
 	}
-	return nil
+	flushCtx, cancel := context.WithTimeout(ctx, shutdownFlushTimeout)
+	defer cancel()
+	err := tracerProvider.Shutdown(flushCtx)
+	if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+		logging.ComponentWarnEvent("tracing", "tracing_flush_abandoned", map[string]interface{}{
+			"timeout_ms": shutdownFlushTimeout.Milliseconds(),
+		})
+		return nil
+	}
+	return err
 }
 
 // GetTracer returns the global tracer instance

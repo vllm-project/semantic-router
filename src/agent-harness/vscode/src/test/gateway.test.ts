@@ -219,9 +219,15 @@ test('gives up on a gateway that accepts the request and never answers', { timeo
     return true;
   };
   for (const request of [() => listModels(impatient, []), () => chat(impatient, { model: 'vllm-sr/auto', messages: [] }, parts, () => {})]) {
-    const started = Date.now();
-    await assert.rejects(request(), timedOut);
-    assert.ok(Date.now() - started >= 100);
+    // A timer of the same length started first fires first, on the clock the
+    // deadline runs on, so the request must still be waiting when it does.
+    const deadlineReached = new Promise((resolve) => setTimeout(resolve, impatient.timeoutMs));
+    let settled = false;
+    const outcome = request();
+    outcome.then(() => (settled = true), () => (settled = true));
+    await deadlineReached;
+    assert.equal(settled, false, 'gave up before its deadline');
+    await assert.rejects(outcome, timedOut);
   }
 });
 
