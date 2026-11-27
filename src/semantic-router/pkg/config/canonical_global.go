@@ -28,6 +28,8 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
+	// EntrypointsOnly restricts model-addressed requests and discovery to explicitly declared entrypoints.
+	EntrypointsOnly   bool                     `yaml:"entrypoints_only,omitempty"`
 	Enabled           *bool                    `yaml:"enabled,omitempty"`
 	ConfigSource      ConfigSource             `yaml:"config_source,omitempty"`
 	Strategy          RoutingStrategy          `yaml:"strategy,omitempty"`
@@ -235,6 +237,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Strategy = router.Strategy
 
 	cfg.ListBackendModels = router.ListBackendModels
+	cfg.EntrypointsOnly = router.EntrypointsOnly
 	cfg.RouterEnabled = router.Enabled
 	cfg.ClearRouteCache = router.ClearRouteCache
 	cfg.StreamedBodyMode = router.StreamedBody.Enabled

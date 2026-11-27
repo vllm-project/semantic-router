@@ -63,6 +63,7 @@ type OpenAIModelList struct {
 func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList {
 	builder := modelListBuilder{
 		created: created,
+		models:  []OpenAIModel{}, // An empty catalog is a JSON array, not null.
 		seen:    map[string]struct{}{},
 	}
 	builder.appendEntrypointAliases(cfg)
@@ -83,6 +84,9 @@ type modelListBuilder struct {
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 	defaultNames := cfg.DefaultEntrypointNames()
 	for _, entrypoint := range cfg.EffectiveEntrypoints(config.ChatAPI) {
+		if cfg != nil && cfg.EntrypointsOnly && entrypoint.Source != config.EntrypointExplicit {
+			continue
+		}
 		description := "Entrypoint for the default routing recipe"
 		if cfg != nil {
 			description = cfg.EntrypointRecipeDescription(entrypoint.Recipe)
@@ -100,7 +104,7 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 }
 
 func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.ListBackendModels {
+	if cfg == nil || !cfg.ListBackendModels || cfg.EntrypointsOnly {
 		return
 	}
 	// List, in a stable order, exactly the names a direct request is served

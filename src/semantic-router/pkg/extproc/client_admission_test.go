@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -70,7 +71,12 @@ func (s *countingResponseStore) GetConversationChain(ctx context.Context, id str
 // taking the keys envs hold.
 func clientAuthGeneration(t *testing.T, store *countingResponseStore, envs ...string) (*OpenAIRouter, *configsnapshot.Snapshot) {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(clientAuthTestConfig))
+	return clientAuthGenerationFrom(t, clientAuthTestConfig, store, envs...)
+}
+
+func clientAuthGenerationFrom(t *testing.T, document string, store *countingResponseStore, envs ...string) (*OpenAIRouter, *configsnapshot.Snapshot) {
+	t.Helper()
+	cfg, err := config.ParseYAMLBytes([]byte(document))
 	require.NoError(t, err)
 	if len(envs) > 0 {
 		cfg.Entrypoints[0].ClientAuth = &config.EntrypointClientAuth{Type: config.ClientAuthBearerAPIKey, APIKeyEnvs: envs}
@@ -330,4 +336,66 @@ func TestSkipProcessingGivesWayToClientKeys(t *testing.T) {
 		require.NoError(t, reloaded.swapSnapshot(router, snapshot, nil))
 	})
 	requireRefusal(t, response, 409, refusedSuperseded)
+}
+
+func TestEntrypointsOnlyReloadDuringRequest(t *testing.T) {
+	store := &countingResponseStore{MockResponseStore: NewMockResponseStore()}
+	document := strings.Replace(clientAuthTestConfig, "  router:\n", "  router:\n    entrypoints_only: true\n", 1)
+	for _, tc := range []struct {
+		name, model   string
+		skip, allowed bool
+	}{
+		{"backend no longer allowed", "worker", false, false},
+		{"unparsed request must retry", "worker", true, false},
+		{"public alias still allowed", "company/public", false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service := clientAuthService(t, store)
+			header := map[string]string{}
+			if tc.skip {
+				header["x-vsr-skip-processing"] = "true"
+			}
+			requests := clientAuthRequest("/v1/chat/completions", header, `{"model":"`+tc.model+`","messages":[{"role":"user","content":"hi"}]}`)
+			response := processClientAuthRequest(t, service, requests, func() {
+				router, snapshot := clientAuthGenerationFrom(t, document, store)
+				require.NoError(t, service.swapSnapshot(router, snapshot, nil))
+			})
+			if tc.allowed {
+				requireDispatched(t, response)
+			} else {
+				requireRefusal(t, response, 409, refusedSuperseded)
+			}
+			// A new request sees strict mode. Admission precedes any history lookup.
+			response = processClientAuthRequest(t, service, clientAuthRequest("/v1/responses", nil,
+				`{"model":"worker","input":"hi","previous_response_id":"resp_previous"}`), nil)
+			requireRefusal(t, response, 403, "not an explicitly configured entrypoint")
+			require.Zero(t, store.reads)
+		})
+	}
+}
+
+func TestEntrypointsOnlyKeepsListenerGrantsAndStoredObjectAccess(t *testing.T) {
+	store := &countingResponseStore{MockResponseStore: NewMockResponseStore()}
+	document := strings.Replace(clientAuthTestConfig, "  router:\n", "  router:\n    entrypoints_only: true\n", 1)
+	router, snapshot := clientAuthGenerationFrom(t, document, store)
+	service := NewRouterServiceForSnapshot(router, snapshot)
+	t.Cleanup(func() { _ = service.Close() })
+	ctx := routing.WithUnservedModelRoute(routing.WithListenerModels(t.Context(), []string{"company/fast"}), "company/fast")
+	session := router.newRoutingSession(ctx, nil)
+	_, err := session.RequestHeaders(routing.Header{{Name: ":method", Value: "POST"}, {Name: ":path", Value: "/v1/chat/completions"}}, false)
+	require.NoError(t, err)
+	effect, err := session.RequestBody([]byte(`{"model":"company/public","messages":[{"role":"user","content":"hi"}]}`), true)
+	require.NoError(t, err)
+	require.NotNil(t, effect.Immediate, "a listener must not rewrite a withheld alias into a different entrypoint")
+	require.Equal(t, 403, effect.Immediate.Status)
+
+	const id = "resp_existing"
+	require.NoError(t, store.StoreResponse(t.Context(), &responseapi.StoredResponse{ID: id, Model: "worker", Status: "completed"}))
+	for _, method := range []string{"GET", "DELETE"} {
+		session := router.newRoutingSession(t.Context(), nil)
+		effect, err := session.RequestHeaders(routing.Header{{Name: ":method", Value: method}, {Name: ":path", Value: "/v1/responses/" + id}}, true)
+		require.NoError(t, err)
+		require.NotNil(t, effect.Immediate)
+		require.Equal(t, 200, effect.Immediate.Status, "strict mode is not an object access policy")
+	}
 }
