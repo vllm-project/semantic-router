@@ -195,6 +195,11 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
 			return nil, err
 		}
+		if state.normalizesEmptyChatToolArguments(event, kind) && strings.TrimSpace(string(arguments)) == "" && event.ToolCall.Arguments == "{}" {
+			// The decoder normalized held whitespace; the encoder still has the
+			// original fragments, none of which it exposed as argument deltas.
+			arguments = nil
+		}
 		if len(arguments) > 0 && string(arguments) != event.ToolCall.Arguments {
 			// A stream that ends mid-call closes the members the model finished:
 			// the final arguments replace the streamed fragments when they are
@@ -210,6 +215,15 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		}
 		arguments = []byte(event.ToolCall.Arguments)
 	}
+	// Only Chat-to-Responses completed function calls have this wire policy.
+	// The Chat decoder supplies the confirmed stop after any trailing usage,
+	// so an output-limit cut never becomes a successful empty-object call.
+	if state.normalizesEmptyChatToolArguments(event, kind) && strings.TrimSpace(string(arguments)) == "" {
+		if err := state.validateStreamToolArgumentAppend(nil, "{}"); err != nil {
+			return nil, err
+		}
+		return []byte("{}"), nil
+	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
 			return nil, nonObjectToolArgumentsErrorWithShape(arguments)
@@ -221,6 +235,11 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		state.cutToolArgumentsEvidence = toolArgumentsEvidence(arguments)
 	}
 	return arguments, nil
+}
+
+func (state *streamState) normalizesEmptyChatToolArguments(event llmprotocol.Event, kind llmprotocol.ToolKind) bool {
+	return state.context.Source == llmprotocol.OpenAIChatV1 && state.context.Target == llmprotocol.OpenAIResponsesV1 && kind == "" &&
+		(event.StopReason == llmprotocol.StopToolCall || event.StopReason == llmprotocol.StopEndTurn || event.StopReason == llmprotocol.StopSequence)
 }
 
 // nonObjectToolArgumentsErrorWithCause rejects a completed tool call whose
