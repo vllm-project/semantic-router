@@ -452,20 +452,6 @@ def attribute(
     return rows
 
 
-# Routing verdicts the taxonomy can resolve: the answer branches classified
-# these rows against a resolved expectation. E1 rows contradict their own
-# signal truth, policy_gap rows have no expectation, and no_evidence rows
-# keep the answer unknown, so none of them carries a routing verdict.
-ROUTABLE_CLASSES = (
-    CORRECT,
-    E3_CAPABILITY,
-    SUBOPTIMAL,
-    E2_POLICY,
-    DECISION_MISMATCH,
-)
-ROUTED_AS_EXPECTED_CLASSES = (CORRECT, E3_CAPABILITY)
-
-
 def summarize(rows: list[dict[str, Any]], top_k: int = 5) -> dict[str, Any]:
     counts = Counter(row["error_class"] for row in rows)
     # every case with a known answer outcome counts: a misrouted wrong answer
@@ -474,9 +460,17 @@ def summarize(rows: list[dict[str, Any]], top_k: int = 5) -> dict[str, Any]:
     n_evaluated = len(evaluated)
     n_answer_ok = sum(1 for r in evaluated if r["answer_ok"])
     answer_accuracy = n_answer_ok / n_evaluated if n_evaluated else None
-    routable = [r for r in evaluated if r["error_class"] in ROUTABLE_CLASSES]
+    # routing correctness compares the two routes directly: every row with a
+    # resolved expectation counts, whatever its class. An E1 signal misfire
+    # and an answer-unknown row still carry both routes, and skipping either
+    # hides a misroute behind its answer or its signal question; only
+    # policy_gap rows have no expectation to compare against.
+    routable = [r for r in rows if r.get("expected_decision") is not None]
     n_routed_ok = sum(
-        1 for r in routable if r["error_class"] in ROUTED_AS_EXPECTED_CLASSES
+        1
+        for r in routable
+        if r["matched_decision"] == r["expected_decision"]
+        and (not r.get("expected_models") or r["routed"] in r["expected_models"])
     )
     routing_correctness = n_routed_ok / len(routable) if routable else None
     # the runner's ledger metric (routed_accuracy) reads these keys: the

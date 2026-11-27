@@ -108,9 +108,13 @@ def test_summary_math():
     assert summary["answered"] == 6
     assert summary["answer_ok"] == 3  # correct + suboptimal + policy_gap
     assert summary["answer_accuracy"] == pytest.approx(0.5)
-    assert summary["routable"] == 5  # the policy_gap row has no expectation
-    assert summary["routed_ok"] == 2  # correct + e3_capability
-    assert summary["routing_correctness"] == pytest.approx(0.4)
+    # routing correctness compares routes directly: the answer-unknown
+    # no_evidence row joins the denominator (both routes are known) and its
+    # as-expected route counts in the numerator; only the policy_gap row,
+    # which has no expectation, stays out
+    assert summary["routable"] == 6
+    assert summary["routed_ok"] == 3  # correct + e3_capability + no_evidence
+    assert summary["routing_correctness"] == pytest.approx(0.5)
     # the ledger metric keeps its routed-outcome numerator over the fixed
     # denominator: the decision_mismatch case now counts against it
     assert summary["correct"] == 1
@@ -155,6 +159,76 @@ def test_decision_mismatch_counts_against_the_reported_metrics():
     text = render_markdown(summary)
     assert "answer accuracy: **50.00%** (1/2 known-answer cases)" in text
     assert "routing correctness: **50.00%** (1/2 routable cases)" in text
+
+
+def test_e1_misroute_counts_against_routing_correctness():
+    # one correct answer plus one E1 signal misfire that misroutes the case:
+    # the direct route comparison must report 50%, not the 100% an E1-free
+    # denominator produced for this pair
+    rows = attribute(
+        [
+            make_signal_case(
+                "case-ok",
+                {"domain": "code", "difficulty": 2},
+                "domain_code",
+                "m/code",
+                True,
+                signal_values={"decision:domain:code": 0.9, "decision:difficulty": 2.0},
+            ),
+            make_signal_case(
+                "case-e1",
+                {"domain": "physics", "difficulty": 3},
+                "domain_chemistry",
+                "m/chem",
+                False,
+                signal_values={
+                    "decision:domain:physics": 0.3,
+                    "decision:domain:chemistry": 0.7,
+                    "decision:difficulty": 3.0,
+                },
+            ),
+        ],
+        RULES_POLICY,
+    )
+    summary = summarize(rows)
+    assert summary["answer_accuracy"] == pytest.approx(0.5)
+    assert summary["routable"] == 2
+    assert summary["routed_ok"] == 1
+    assert summary["routing_correctness"] == pytest.approx(0.5)
+    text = render_markdown(summary)
+    assert "routing correctness: **50.00%** (1/2 routable cases)" in text
+
+
+def test_answer_unknown_case_joins_routing_correctness():
+    # a no_evidence row (answer outcome unknown) still carries both routes:
+    # it counts in the routing denominator and its miss lowers the metric
+    rows = attribute(
+        [
+            make_signal_case(
+                "case-ok",
+                {"domain": "code", "difficulty": 2},
+                "domain_code",
+                "m/code",
+                True,
+                signal_values={"decision:domain:code": 0.9, "decision:difficulty": 2.0},
+            ),
+            make_signal_case(
+                "case-noev-miss",
+                {"domain": "code", "difficulty": 4},
+                "domain_code",
+                "m/code",
+                None,
+                signal_values={"decision:domain:code": 0.9, "decision:difficulty": 4.0},
+            ),
+        ],
+        RULES_POLICY,
+    )
+    summary = summarize(rows)
+    assert summary["answered"] == 1  # only the known-answer case
+    assert summary["answer_accuracy"] == pytest.approx(1.0)
+    assert summary["routable"] == 2
+    assert summary["routed_ok"] == 1  # the no_evidence row's decision missed
+    assert summary["routing_correctness"] == pytest.approx(0.5)
 
 
 def test_report_renders_family_aware_hints():
