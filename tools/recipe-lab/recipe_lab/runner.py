@@ -383,6 +383,23 @@ def evaluate_candidate(
             for c in cases
         ]
         rows, join_stats = records_to_cases(records, join_cases, family=family)
+        joined = {str(row.get("case_id") or "") for row in rows}
+        if len(joined) != len(cases):
+            # H: the capture must hold every case's replay; anything less
+            # means records were lost and the metrics would rank a partial
+            # pull - a lost wrong-case replay scores 100% over the remaining
+            # cases. Same contract as the hot path's record-count check.
+            return {
+                "statuses": statuses,
+                "join_stats": join_stats,
+                "timings": timings,
+                "reload": "restart",
+                "incomplete": True,
+                "incomplete_reason": (
+                    f"replay records for the restart run: {len(joined)} of "
+                    f"{len(cases)} cases joined (join_stats={json.dumps(join_stats)})"
+                ),
+            }
         rows, bank_stats = apply_bank(rows, bank)
         classified = attribute(
             [CaseInput.from_dict(r, i) for i, r in enumerate(rows)],
