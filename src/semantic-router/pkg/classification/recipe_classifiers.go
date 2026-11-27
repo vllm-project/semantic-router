@@ -22,7 +22,8 @@ type RecipeClassifiers struct {
 	runtimeOrder []config.RecipeName
 	routingOrder []config.RecipeName
 	// defaultRecipe names the recipe whose classifier serves the default APIs.
-	defaultRecipe config.RecipeName
+	defaultRecipe  config.RecipeName
+	sharedVerdicts *sharedVerdictStore
 }
 
 // RecipeRuntimeOptions borrows the generation's model runtime and default
@@ -120,6 +121,11 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 		if recipeName == s.defaultRecipe && !s.routingRecipe(recipeName) {
 			continue
 		}
+		classifier := s.byRecipe[recipeName]
+		if err := s.bindSharedVerdicts(classifier); err != nil {
+			_ = s.Close()
+			return fmt.Errorf("initialize shared guard verdict store: %w", err)
+		}
 		if err := s.byRecipe[recipeName].InitializeRuntime(); err != nil {
 			if closeErr := s.Close(); closeErr != nil {
 				logging.ComponentWarnEvent("classifier", "recipe_runtime_initialization_rollback_failed", map[string]interface{}{
@@ -130,6 +136,21 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 			return fmt.Errorf("initialize routing recipe %q: %w", recipeName, err)
 		}
 	}
+	return nil
+}
+
+func (s *RecipeClassifiers) bindSharedVerdicts(c *Classifier) error {
+	if c.sharedVerdicts != nil || !c.needsSharedVerdicts() {
+		return nil
+	}
+	if s.sharedVerdicts == nil {
+		view, err := newSharedWindowVerdicts(c.Config.GuardVerdicts, string(c.Config.RoutingScope))
+		if err != nil {
+			return err
+		}
+		s.sharedVerdicts = view.sharedVerdictStore
+	}
+	c.sharedVerdicts = s.sharedVerdicts.forRecipe(string(c.Config.RoutingScope))
 	return nil
 }
 
@@ -172,6 +193,9 @@ func (s *RecipeClassifiers) Close() error {
 		if err := s.byRecipe[recipeName].Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close routing recipe %q: %w", recipeName, err))
 		}
+	}
+	if s.sharedVerdicts != nil {
+		errs = append(errs, s.sharedVerdicts.Close())
 	}
 	return errors.Join(errs...)
 }

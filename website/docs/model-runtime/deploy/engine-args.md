@@ -164,7 +164,11 @@ CPU with AVX-512 BF16, for the Decision 3.0 sizes. BF16 and FP32 answer the same
 decisions there
 ([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/d3-cpu-bf16-native.md)).
 A CPU without its own reference, such as an Intel Xeon with AMX until one is
-recorded, keeps FP32. `--dtype float32` keeps FP32 on every CPU. If a CPU's
+recorded, keeps FP32. `--dtype float32` keeps FP32 on every CPU. With
+`VLLM_SRUN_ZENTORCH` set on AMD EPYC Turin onwards, Decision 3.0's BF16 runs
+zentorch's linear, 1.04 to 1.16 times faster than without it, and checks references recorded
+with it
+([record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/cpu-zentorch-d3-bf16.md)). If a CPU's
 BF16 answers fail its golden check there (they differ from its class's
 reference, or two runs differ), `auto` loads the model again in FP32, and the
 model card's `reason` says which. That load is placed at the FP32 size, about

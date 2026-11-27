@@ -214,20 +214,34 @@ def validate_results(events: list[dict], expected: set[str]) -> dict:
     skipped = sorted(
         {e["Test"] for e in events if e.get("Action") == "skip" and "Test" in e}
     )
+
     failed = sorted(
-        {
-            e.get("Test", e.get("Package", "unknown"))
-            for e in events
-            if e.get("Action") == "fail"
-        }
+        {e["Test"] for e in events if e.get("Action") == "fail" and "Test" in e}
     )
+
+    # Go initialization panics can fail the package without producing
+    # any terminal test-level events.
+    has_terminal_test_event = any(
+        e.get("Action") in {"pass", "skip", "fail"} and "Test" in e for e in events
+    )
+    package_failed = (
+        any(
+            e.get("Action") == "fail" and "Package" in e and "Test" not in e
+            for e in events
+        )
+        and not has_terminal_test_event
+    )
+
     missing = sorted(expected - passed)
+
     return {
         "passed": sorted(passed),
         "skipped": skipped,
         "failed": failed,
+        "package_failed": package_failed,
         "missing": missing,
-        "success": bool(expected) and not (skipped or failed or missing),
+        "success": bool(expected)
+        and not (skipped or failed or package_failed or missing),
     }
 
 

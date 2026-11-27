@@ -162,8 +162,9 @@ class DtypePolicy:
     a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
     slot, or the names of the slots (``linear``, ``sdpa``) the family's record
     covers, so a kernel added to another slot later does not change its answers.
-    ``approximate_accelerators`` scopes that accelerator consent to the named
-    accelerators (None: every accelerator the spec runs on).
+    ``approximate_accelerators`` scopes ``approximate_kernels`` to the named
+    accelerators (None: every GPU and NPU accelerator the spec runs on); the
+    CPU consent is ``approximate_cpu_kernels`` alone.
     ``cpu_bf16_references`` names the CPU hardware keys
     (``CPUAccelerator.golden_reference``) on which every golden request has a
     BF16 reference: on such a host ``--dtype auto`` holds BF16 instead of
@@ -186,6 +187,21 @@ class DtypePolicy:
     approximate_cpu_kernels: bool | frozenset[str] = False
     cpu_bf16_references: frozenset[str] = frozenset()
     approximate_accelerators: frozenset[str] | None = None
+
+    def consents_on(self, accelerator: str, cpu: bool) -> bool | frozenset[str]:
+        """The approximate kernels this policy consents to on ``accelerator`` (a CPU's or another device class's).
+
+        ``approximate_accelerators`` scopes ``approximate_kernels`` only: the
+        CPU consent rests on a CPU record of its own.
+        """
+        if cpu:
+            return self.approximate_cpu_kernels
+        if (
+            self.approximate_accelerators is not None
+            and accelerator not in self.approximate_accelerators
+        ):
+            return False
+        return self.approximate_kernels
 
     @property
     def needs_gpu_bf16(self) -> bool:

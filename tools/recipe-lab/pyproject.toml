@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recipe-lab"
+version = "0.1.0"
+description = "recipe-lab: closed-loop experiments for semantic-router routing recipes (RSI workbench)"
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+recipe-lab = "recipe_lab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["recipe_lab*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

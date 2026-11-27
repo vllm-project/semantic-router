@@ -275,6 +275,8 @@ func TestReplayShadowRejectsInvalidDSL(t *testing.T) {
 		`models: ["a"] budget: "bad"`,
 		`models: ["a"] budget: {max_response_bytes: "2"}`,
 
+		`models: ["a"] budget: {max_estimated_tokens: 0}`,
+		`models: ["a"] budget: {max_estimated_tokens: 2.5}`,
 		`models: ["a"] budget: {max_estimated_cost: 0}`,
 		`models: ["a"] budget: {max_estimated_cost: -0.01}`,
 		`models: ["a"] budget: {max_estimated_cost: "0.01"}`,

@@ -457,6 +457,36 @@ def choose_spin_count(config: ServeConfig) -> None:
     os.environ["GOMP_SPINCOUNT"] = value
 
 
+ALLOCATOR_SETTINGS = (
+    "PYTORCH_ALLOC_CONF",
+    "PYTORCH_CUDA_ALLOC_CONF",
+    "PYTORCH_HIP_ALLOC_CONF",
+)
+
+
+def expand_cuda_segments() -> None:
+    """Let PyTorch's CUDA allocator grow its segments; an operator's allocator settings are kept.
+
+    With fixed segments a long Decision 3.0 forward kept about as much memory
+    reserved but unused as its activations took (#7179). PyTorch reads the
+    setting when CUDA initializes, so it is set after ``choose_spin_count``
+    and before the server touches the device. ROCm is left as it is: its
+    allocator reads the same variable and was not measured.
+    """
+    if any(name in os.environ for name in ALLOCATOR_SETTINGS):
+        return
+    import torch
+
+    if torch.version.cuda is None or torch.version.hip is not None:
+        return
+    if torch.cuda.is_initialized():
+        log.warning(
+            "CUDA is already initialized, so expandable_segments takes effect only in a new process"
+        )
+        return
+    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     default_identity()
     args = build_parser().parse_args(argv)
@@ -467,6 +497,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         config = config_from_args(args)
         choose_spin_count(config)
+        expand_cuda_segments()
         from .api.server import serve
 
         serve(config)

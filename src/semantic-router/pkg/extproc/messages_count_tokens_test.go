@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/stretchr/testify/require"
 
@@ -215,5 +216,90 @@ func TestCountTokensScannerMatchesThePattern(t *testing.T) {
 		}
 		text := b.String()
 		require.Equal(t, byPattern(text), textPieceTokens(text), "%q", text)
+	}
+}
+
+func TestConfiguredAPIPrefixIsReadAsTheAPIPath(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+listeners:
+  - name: public
+    port: 8899
+    apis:
+      anthropic: {prefix: /anthropic}
+providers:
+  defaults:
+    model: m
+  models:
+    - name: m
+      api_format: anthropic
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+recipes:
+  - name: default
+`))
+	require.NoError(t, err)
+	for sent, countTokens := range map[string]bool{"/anthropic/v1/messages": false, "/anthropic/v1/messages/count_tokens?x=1": true} {
+		path := cfg.APIRequestTarget(sent)
+		require.Equal(t, strings.Replace(sent, "/anthropic", "", 1), path)
+		router := &OpenAIRouter{Config: cfg}
+		response, wantsBody := router.classifyRequestHeaders("POST", path)
+		require.Nil(t, response, path)
+		require.True(t, wantsBody, path)
+		ctx := &RequestContext{Headers: map[string]string{":path": path}}
+		detectSourceFormat(path, ctx)
+		require.Equal(t, llmprotocol.AnthropicMessagesV1, ctx.SourceFormat, path)
+		require.Equal(t, countTokens, isCountTokensRequest(ctx), path)
+	}
+}
+
+func prefixedMessagesConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
+	cfg, err := config.ParseYAMLBytes([]byte(`version: v0.5
+listeners:
+  - name: public
+    port: 8899
+    apis:
+      anthropic: {prefix: /anthropic}
+providers:
+  defaults:
+    model: m
+  models:
+    - name: m
+      api_format: anthropic
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          protocol: http
+          provider: vllm
+recipes:
+  - name: default
+`))
+	require.NoError(t, err)
+	return cfg
+}
+
+// A prefixed request keeps its query through the header handler, which every
+// later step reads from the request context.
+func TestHandleRequestHeadersKeepsTheQueryOfAPrefixedPath(t *testing.T) {
+	for target, want := range map[string]string{
+		"/anthropic/v1/messages?beta=true":            "/v1/messages?beta=true",
+		"/anthropic/v1/messages/count_tokens?a=1&b=2": "/v1/messages/count_tokens?a=1&b=2",
+		"/anthropic/v1/messages":                      "/v1/messages",
+		"/v1/messages?beta=true":                      "/v1/messages?beta=true",
+	} {
+		router := &OpenAIRouter{Config: prefixedMessagesConfig(t)}
+		ctx := &RequestContext{Headers: make(map[string]string)}
+		request := &ext_proc.ProcessingRequest_RequestHeaders{RequestHeaders: &ext_proc.HttpHeaders{
+			Headers: &core.HeaderMap{Headers: []*core.HeaderValue{
+				{Key: ":method", Value: "POST"},
+				{Key: ":path", Value: target},
+			}},
+		}}
+		_, err := router.handleRequestHeaders(request, ctx)
+		require.NoError(t, err, target)
+		require.Equal(t, want, ctx.Headers[":path"], target)
+		require.Equal(t, llmprotocol.AnthropicMessagesV1, ctx.SourceFormat, target)
+		require.Equal(t, strings.Contains(want, "count_tokens"), isCountTokensRequest(ctx), target)
 	}
 }

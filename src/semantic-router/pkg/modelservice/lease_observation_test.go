@@ -9,6 +9,43 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/runtimetest"
 )
 
+func TestCurrentCardReportsEligibleWorkerPrecision(t *testing.T) {
+	lease, _ := testReplicaPool(t, runtimetest.Model{ID: "a", Dtype: "fp32"}, runtimetest.Model{ID: "b", Dtype: "fp32"})
+	setWorker := func(i int, precision string, ready bool) {
+		w := lease.members["primary"].pool.workers[i].member
+		w.group.mu.Lock()
+		defer w.group.mu.Unlock()
+		card := *w.served.card
+		card.Dtype = precision
+		w.served.card = &card
+		w.served.ready.Store(ready)
+	}
+	check := func(want string) {
+		t.Helper()
+		card, ok := lease.CurrentCard("primary")
+		if !ok || card.Dtype != want {
+			t.Fatalf("observed precision = %q (ready=%t), want %q", card.Dtype, ok, want)
+		}
+	}
+	check("fp32")
+	initial, _ := lease.CurrentCard("primary")
+	setWorker(1, "", true)
+	check("") // An eligible worker did not report a precision.
+	setWorker(1, "bf16/fp32-readout", true)
+	check("")
+	setWorker(0, "fp32", false)
+	check("bf16/fp32-readout") // Only the non-baseline worker can now serve.
+	setWorker(0, "bf16/fp32-readout", true)
+	check("bf16/fp32-readout")
+	setWorker(0, "fp32", true)
+	setWorker(1, "fp32", true)
+	check("fp32")
+	restored, _ := lease.CurrentCard("primary")
+	if initial.PrecisionEpoch == 0 || restored.PrecisionEpoch == initial.PrecisionEpoch {
+		t.Fatal("returning to the initial precision must not validate windows planned before the change")
+	}
+}
+
 func TestCurrentCardTracksReadinessAndGenerationRetirement(t *testing.T) {
 	lease, _ := testReplicaPool(t, runtimetest.Model{ID: "a"})
 	observed := lease.members["primary"].pool.workers[0].member

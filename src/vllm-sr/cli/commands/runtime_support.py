@@ -145,8 +145,8 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            # A masking identity namespace may read its key from key_env.
-            for field in (API_KEY_ENV_FIELD, "key_env"):
+            # Runtime credentials may be named rather than interpolated.
+            for field in (API_KEY_ENV_FIELD, "key_env", "hmac_key_env", "password_env"):
                 named = node.get(field)
                 if isinstance(named, str) and named.strip():
                     names.add(named.strip())
@@ -156,6 +156,25 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
         elif isinstance(node, str):
             names.update(_router_consulted_env_names(node))
     return names
+
+
+def guard_verdict_secret_env_names(config_path: Path | str) -> set[str]:
+    """Guard signing and store credentials belong only to the Router."""
+    try:
+        node = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return set()
+    for field in ("global", "stores", "guard_verdicts"):
+        node = node.get(field) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or node.get("backend") != "redis":
+        return set()
+    redis = node.get("redis")
+    values = [node.get("hmac_key_env")]
+    if isinstance(redis, dict):
+        values.append(redis.get("password_env"))
+    return {
+        value.strip() for value in values if isinstance(value, str) and value.strip()
+    }
 
 
 def _router_consulted_env_names(value: str) -> set[str]:

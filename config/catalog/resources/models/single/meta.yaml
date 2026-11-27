@@ -1,3 +1,40 @@
+- id: meta/muse-spark-open
+  display_name: Muse Spark Open
+  description: Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+    license: Muse Model License
+  family: muse-spark
+  parameter_size: 816B (42B active)
+  released_at: '2026-10-15'
+  reasoning_family: muse-spark-open
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input: [text, image, video, audio]
+    output: [text]
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+  tags: [open_weights, multimodal, moe, long_context]
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.

@@ -21,8 +21,12 @@ Three gates, all required, keep it off elsewhere:
   only where that zentorch provides its ops (``SLOT_OPS``).
 
 Like oneDNN's ``PackedLinear``, the layer keeps only the reordered weight, so
-the model's linear weights are held once. FP32 only: a layer in another dtype
-keeps ``nn.Linear``.
+the model's linear weights are held once. FP32 and BF16 layers: a layer in
+another dtype keeps ``nn.Linear``. At BF16 the GEMM sums in FP32 and rounds
+once, as oneDNN's does, but in its own order, so BF16 answers move by BF16's
+rounding and a BF16 reference recorded with oneDNN can't check them: a BF16
+``auto`` model keeps the kernel only where its CPU key's references name it
+(``dtypes.on_host``; ``docs/records/cpu-zentorch-d3-bf16.md``).
 """
 
 from __future__ import annotations
@@ -143,7 +147,7 @@ def enabled() -> frozenset[str]:
 
 
 class ZentorchLinear(nn.Module):
-    """An FP32 ``nn.Linear`` whose weight zentorch reordered once."""
+    """An FP32 or BF16 ``nn.Linear`` whose weight zentorch reordered once."""
 
     packed: torch.Tensor
 
@@ -172,9 +176,12 @@ class ZentorchLinear(nn.Module):
         return out.reshape(*x.shape[:-1], self.out_features)
 
 
+LAID_OUT = frozenset({torch.float32, torch.bfloat16})
+
+
 def lay_out(linear: nn.Linear) -> nn.Module:
-    """The ``linear`` slot's layout: zentorch's for FP32 layers, ``nn.Linear`` otherwise."""
-    if linear.weight.dtype != torch.float32:
+    """The ``linear`` slot's layout: zentorch's for FP32 and BF16 layers, ``nn.Linear`` otherwise."""
+    if linear.weight.dtype not in LAID_OUT:
         return linear
     return ZentorchLinear(linear)
 

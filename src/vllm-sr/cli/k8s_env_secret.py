@@ -6,8 +6,10 @@ import hashlib
 import json
 import re
 import secrets
-from collections.abc import Mapping, Set
+from collections.abc import Iterable, Iterator, Mapping, Set
 from dataclasses import dataclass
+
+import yaml
 
 LEGACY_ENV_SECRET_NAME = "vllm-sr-env-secrets"
 ENV_SECRET_NAME_PREFIX = "vllm-sr-env"
@@ -92,6 +94,39 @@ def referenced_secret_names(payload: str) -> set[str]:
     """Extract metadata-only envFrom names returned by kubectl jsonpath."""
 
     return {name for line in payload.splitlines() if (name := line.strip())}
+
+
+def _manifest_deployments(resources: Iterable[object]) -> Iterator[dict]:
+    """Yield Deployments, including those wrapped in Kubernetes Lists."""
+    for resource in resources:
+        if not isinstance(resource, dict):
+            continue
+        kind = resource.get("kind")
+        if kind == "Deployment":
+            yield resource
+        elif kind == "List":
+            items = resource["items"]
+            if not isinstance(items, list):
+                raise ValueError("Expected Kubernetes List items")
+            yield from _manifest_deployments(items)
+
+
+def manifest_env_secret_names(payload: str) -> set[str]:
+    """Extract Deployment env Secret references from a Helm manifest."""
+    names: set[str] = set()
+    for deployment in _manifest_deployments(yaml.safe_load_all(payload)):
+        pod_spec = deployment["spec"]["template"]["spec"]
+        containers = (pod_spec.get("containers") or []) + (
+            pod_spec.get("initContainers") or []
+        )
+        for container in containers:
+            for source in container.get("envFrom") or []:
+                if secret := source.get("secretRef"):
+                    names.add(secret["name"])
+            for env in container.get("env") or []:
+                if secret := (env.get("valueFrom") or {}).get("secretKeyRef"):
+                    names.add(secret["name"])
+    return names
 
 
 def managed_env_secret_names(payload: str, owner: str) -> set[str]:

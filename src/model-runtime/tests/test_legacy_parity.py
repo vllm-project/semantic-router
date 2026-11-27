@@ -5,6 +5,7 @@ import asyncio
 import importlib.util
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -282,3 +283,361 @@ def test_corpus_refuses_to_substitute_edge_prompts_when_e2e_pool_is_empty(
     monkeypatch.setattr(lp, "prompts", lambda: [])
     with pytest.raises(SystemExit, match="acceptance corpus is empty"):
         lp.corpus(0)
+
+
+def test_ab_rounds_counts_failed_pairs_instead_of_dropping_them(lp):
+    """Reproduction: a pair whose runtime side fails must be counted as failed,
+    not silently excluded from every total."""
+    specs = [sequence_spec(["a", "b", "c"])]
+    report: dict[str, Any] = {}
+
+    async def failing_pair(spec, item, runtime_first):
+        return 1_000, -1
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, failing_pair, ["legacy"], None, lambda: None)
+    )
+    entry = report["domain"]
+    assert entry["total_pairs"] == 3
+    assert entry["failed_pairs"] == 3
+    assert entry["legacy"] == [] and entry["runtime"] == [] and entry["ratio"] == []
+
+
+def test_ab_rounds_records_successful_and_failed_pairs(lp):
+    specs = [sequence_spec(["a", "b"])]
+    report: dict[str, Any] = {}
+
+    async def mixed_pair(spec, item, runtime_first):
+        # "a" succeeds on both sides, "b" fails on the runtime side.
+        return (3_000, 1_000) if item["id"] == "a" else (3_000, -1)
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, mixed_pair, ["legacy"], None, lambda: None)
+    )
+    entry = report["domain"]
+    assert entry["total_pairs"] == 2
+    assert entry["failed_pairs"] == 1
+    assert entry["legacy"] == [3_000]
+    assert entry["runtime"] == [1_000]
+    assert entry["ratio"] == [3.0]
+
+
+def test_ab_rounds_resume_preserves_pair_accounting(lp, tmp_path):
+    specs = [sequence_spec(["a", "b"])]
+    raw = tmp_path / "ab.raw.json"
+
+    def save(state):
+        raw.write_text(json.dumps(state))
+
+    async def mixed_pair(spec, item, runtime_first):
+        return (3_000, 1_000) if item["id"] == "a" else (3_000, -1)
+
+    fresh = {"pair_rounds": 0, "window_rounds": 0, "report": {}}
+    asyncio.run(
+        lp.ab_rounds(fresh, specs, 1, mixed_pair, ["legacy"], None, lambda: save(fresh))
+    )
+    state = json.loads(raw.read_text())
+    entry = state["report"]["domain"]
+    assert entry["total_pairs"] == 2
+    assert entry["failed_pairs"] == 1
+    # Resuming continues accounting rather than resetting it.
+    asyncio.run(
+        lp.ab_rounds(state, specs, 2, mixed_pair, ["legacy"], None, lambda: save(state))
+    )
+    entry = state["report"]["domain"]
+    assert entry["total_pairs"] == 4
+    assert entry["failed_pairs"] == 2
+    assert entry["ratio"] == [3.0, 3.0]
+
+
+def test_ab_summary_all_failed_pairs_report_null_speedup(lp):
+    """The issue's reproduction: every attempt fails, so the summary exposes
+    the attempted/failed counts rather than only empty, NaN percentiles."""
+    report = {
+        "domain": {
+            "legacy": [],
+            "runtime": [],
+            "ratio": [],
+            "total_pairs": 3,
+            "failed_pairs": 3,
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    assert row["total_pairs"] == 3
+    assert row["pairs"] == 0
+    assert row["failed_pairs"] == 3
+    assert row["pairs"] == 0 and row["total_pairs"] == 3
+    assert row["failed_pairs"] / row["total_pairs"] == 1.0
+    assert row["median_speedup"] is None
+    assert row["legacy_ms"]["p50"] is None
+    assert row["runtime_ms"]["p95"] is None
+    assert "ci95" not in row
+
+
+def test_ab_summary_mixed_success_and_failure(lp):
+    report = {
+        "domain": {
+            "legacy": [2_000_000],
+            "runtime": [1_000_000],
+            "ratio": [2.0],
+            "total_pairs": 4,
+            "failed_pairs": 3,
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    assert row["total_pairs"] == 4
+    assert row["pairs"] == 1
+    assert row["failed_pairs"] == 3
+    assert row["pairs"] / row["total_pairs"] == pytest.approx(0.25)
+    assert row["failed_pairs"] / row["total_pairs"] == pytest.approx(0.75)
+    assert row["median_speedup"] == 2.0
+
+
+def test_ab_summary_unknown_historical_accounting(lp):
+    """Old checkpoints predate pair accounting, so attempted/failed totals are
+    unknown rather than assumed zero; successful pairs stay derivable."""
+    report = {
+        "domain": {
+            "legacy": [1_000_000],
+            "runtime": [500_000],
+            "ratio": [2.0],
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    assert row["total_pairs"] is None
+    assert row["failed_pairs"] is None
+    assert row["pairs"] == 1
+    assert row["median_speedup"] == 2.0
+
+
+def test_ab_rounds_all_pairs_successful(lp):
+    specs = [sequence_spec(["a", "b", "c"])]
+    report: dict[str, Any] = {}
+
+    async def ok_pair(spec, item, runtime_first):
+        return 3_000, 1_000
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(lp.ab_rounds(state, specs, 1, ok_pair, ["legacy"], None, lambda: None))
+    entry = report["domain"]
+    assert entry["total_pairs"] == 3
+    assert entry["failed_pairs"] == 0
+    assert entry["new_total_pairs"] == 3
+    assert entry["new_failed_pairs"] == 0
+    assert entry["legacy"] == [3_000, 3_000, 3_000]
+    assert entry["runtime"] == [1_000, 1_000, 1_000]
+    assert entry["ratio"] == [3.0, 3.0, 3.0]
+
+
+def test_ab_rounds_legacy_requests_failing(lp):
+    specs = [sequence_spec(["a", "b"])]
+    report: dict[str, Any] = {}
+
+    async def legacy_fails(spec, item, runtime_first):
+        return -1, 1_000
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, legacy_fails, ["legacy"], None, lambda: None)
+    )
+    entry = report["domain"]
+    assert entry["total_pairs"] == 2
+    assert entry["failed_pairs"] == 2
+    assert entry["new_total_pairs"] == 2
+    assert entry["new_failed_pairs"] == 2
+    assert entry["legacy"] == []
+    assert entry["runtime"] == []
+    assert entry["ratio"] == []
+
+
+def test_ab_rounds_both_sides_failing(lp):
+    specs = [sequence_spec(["a", "b"])]
+    report: dict[str, Any] = {}
+
+    async def both_fail(spec, item, runtime_first):
+        return -1, -1
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, both_fail, ["legacy"], None, lambda: None)
+    )
+    entry = report["domain"]
+    assert entry["total_pairs"] == 2
+    assert entry["failed_pairs"] == 2
+    assert entry["legacy"] == []
+    assert entry["runtime"] == []
+    assert entry["ratio"] == []
+
+
+def test_ab_rounds_zero_attempted_pairs(lp):
+    specs = [sequence_spec([])]
+    report: dict[str, Any] = {}
+
+    async def unused_pair(spec, item, runtime_first):
+        return 3_000, 1_000
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, unused_pair, ["legacy"], None, lambda: None)
+    )
+    entry = report["domain"]
+    assert entry["total_pairs"] == 0
+    assert entry["failed_pairs"] == 0
+    assert entry["legacy"] == []
+    assert entry["runtime"] == []
+    assert entry["ratio"] == []
+
+
+def test_ab_rounds_resume_historical_checkpoint_counts_new_attempts(lp, tmp_path):
+    """Resuming an old checkpoint (no total_pairs/failed_pairs) must count new
+    attempts without fabricating historical totals."""
+    raw = tmp_path / "ab.raw.json"
+
+    def save(state):
+        raw.write_text(json.dumps(state))
+
+    # Old checkpoint: has successful pairs but no pair accounting.
+    old_state = {
+        "pair_rounds": 1,
+        "window_rounds": 0,
+        "report": {
+            "domain": {
+                "legacy": [3_000],
+                "runtime": [1_000],
+                "ratio": [3.0],
+            }
+        },
+    }
+    raw.write_text(json.dumps(old_state))
+    state = json.loads(raw.read_text())
+
+    specs = [sequence_spec(["a", "b"])]
+
+    async def mixed_pair(spec, item, runtime_first):
+        return (3_000, 1_000) if item["id"] == "a" else (3_000, -1)
+
+    asyncio.run(
+        lp.ab_rounds(state, specs, 2, mixed_pair, ["legacy"], None, lambda: save(state))
+    )
+    entry = state["report"]["domain"]
+    # Historical totals remain unknown (None).
+    assert entry["total_pairs"] is None
+    assert entry["failed_pairs"] is None
+    # New attempts are counted separately.
+    assert entry["new_total_pairs"] == 2
+    assert entry["new_failed_pairs"] == 1
+    # Successful pairs include both historical and new.
+    assert entry["legacy"] == [3_000, 3_000]
+    assert entry["runtime"] == [1_000, 1_000]
+    assert entry["ratio"] == [3.0, 3.0]
+
+
+def test_ab_rounds_save_resume_without_double_counting(lp, tmp_path):
+    """Repeated checkpoint saves and resumes must not double-count attempts."""
+    raw = tmp_path / "ab.raw.json"
+
+    def save(state):
+        raw.write_text(json.dumps(state))
+
+    specs = [sequence_spec(["a", "b"])]
+
+    async def mixed_pair(spec, item, runtime_first):
+        return (3_000, 1_000) if item["id"] == "a" else (3_000, -1)
+
+    # First run: 1 round.
+    fresh = {"pair_rounds": 0, "window_rounds": 0, "report": {}}
+    asyncio.run(
+        lp.ab_rounds(fresh, specs, 1, mixed_pair, ["legacy"], None, lambda: save(fresh))
+    )
+    state = json.loads(raw.read_text())
+    entry = state["report"]["domain"]
+    assert entry["new_total_pairs"] == 2
+    assert entry["new_failed_pairs"] == 1
+    assert entry["total_pairs"] == 2
+    assert entry["failed_pairs"] == 1
+
+    # Resume: run 1 more round (round_index 1). Must not re-count round 0.
+    asyncio.run(
+        lp.ab_rounds(state, specs, 2, mixed_pair, ["legacy"], None, lambda: save(state))
+    )
+    entry = state["report"]["domain"]
+    assert entry["new_total_pairs"] == 4
+    assert entry["new_failed_pairs"] == 2
+    assert entry["total_pairs"] == 4
+    assert entry["failed_pairs"] == 2
+    assert entry["legacy"] == [3_000, 3_000]
+    assert entry["runtime"] == [1_000, 1_000]
+    assert entry["ratio"] == [3.0, 3.0]
+
+
+def test_ab_summary_json_contains_no_nan(lp):
+    """Empty latency percentiles and median speedup serialize as JSON null,
+    never NaN or Infinity."""
+    report = {
+        "domain": {
+            "legacy": [],
+            "runtime": [],
+            "ratio": [],
+            "total_pairs": 3,
+            "failed_pairs": 3,
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    payload = json.dumps(row)
+    assert "NaN" not in payload
+    assert "Infinity" not in payload
+    assert row["legacy_ms"]["p50"] is None
+    assert row["legacy_ms"]["p95"] is None
+    assert row["runtime_ms"]["p50"] is None
+    assert row["runtime_ms"]["p95"] is None
+    assert row["median_speedup"] is None
+    assert row["pairs"] == 0 and row["total_pairs"] == 3
+    assert row["failed_pairs"] / row["total_pairs"] == 1.0
+
+
+def test_ab_summary_all_successful(lp):
+    report = {
+        "domain": {
+            "legacy": [3_000_000, 3_200_000, 3_100_000],
+            "runtime": [1_000_000, 1_100_000, 1_050_000],
+            "ratio": [3.0, 3.0, 3.0],
+            "total_pairs": 3,
+            "failed_pairs": 0,
+        }
+    }
+    row = lp.ab_summary(report)["domain"]
+    assert row["total_pairs"] == 3
+    assert row["pairs"] == 3
+    assert row["failed_pairs"] == 0
+    assert row["pairs"] / row["total_pairs"] == 1.0
+    assert row["median_speedup"] == 3.0
+
+
+@pytest.mark.parametrize(
+    "latencies",
+    [
+        (0, 1_000),
+        (1_000, 0),
+        (0, 0),
+    ],
+)
+def test_ab_rounds_counts_zero_latency_as_failure(lp, latencies):
+    specs = [sequence_spec(["a"])]
+    report: dict[str, Any] = {}
+
+    async def zero_latency_pair(spec, item, runtime_first):
+        return latencies
+
+    state = {"pair_rounds": 0, "window_rounds": 0, "report": report}
+    asyncio.run(
+        lp.ab_rounds(state, specs, 1, zero_latency_pair, ["legacy"], None, lambda: None)
+    )
+
+    entry = report["domain"]
+    assert entry["total_pairs"] == 1
+    assert entry["failed_pairs"] == 1
+    assert entry["legacy"] == []
+    assert entry["runtime"] == []
+    assert entry["ratio"] == []

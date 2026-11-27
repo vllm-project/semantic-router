@@ -208,7 +208,7 @@ instead of being silently dropped.
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
-| Multiple response candidates | Supported | Not supported | Not supported |
+| Multiple response candidates (`n` above 1) | Buffered only. A streamed request fails with `stream_multiple_choices` before dispatch, unless `request_params` `max_n: 1` lowers it to one choice | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
