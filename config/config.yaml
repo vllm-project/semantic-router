@@ -3124,6 +3124,9 @@ global:
         auth:
           api_key_env: SYSTEMONE_STANDARD_KEY
         timeout_ms: 6000
+        # Custom System One signals can try this ordered list after a
+        # retryable outage, within the original signal deadline.
+        fallbacks: [decision-kai]
         # A routing question (a rule that does not read its whole input)
         # reads at most max_tokens of a long input: its head (head_share of
         # it) and its tail around a marker. A guard rule (jailbreak, safety,
