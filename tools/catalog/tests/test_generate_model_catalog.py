@@ -1246,6 +1246,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         fireworks = providers["fireworks"]
         expected_mappings = {
             "meta/muse-glimmer-30b": "accounts/fireworks/models/muse-glimmer-30b",
+            "meta/muse-spark-open": "accounts/fireworks/models/muse-spark-open",
             "moonshot/kimi-k3": "accounts/fireworks/models/kimi-k3",
             "thinking-machines/inkling": "accounts/fireworks/models/inkling",
         }

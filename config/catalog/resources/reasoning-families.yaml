@@ -234,6 +234,13 @@
   disabled: none
   modes: [enabled, disabled]
   default_mode: enabled
+- id: muse-spark-open
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh]
+  default: xhigh
+  modes: [enabled]
+  default_mode: enabled
 - id: muse-spark
   type: reasoning_effort
   parameter: reasoning_effort

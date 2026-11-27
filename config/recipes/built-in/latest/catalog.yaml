@@ -1113,6 +1113,26 @@ providers:
   conformance:
     status: unverified
   models:
+  - catalog: meta/muse-spark-open
+    relationship: managed_cloud
+    id: accounts/fireworks/models/muse-spark-open
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.25
+      cached_input_per_1m: 0.15
+      completion_per_1m: 4.25
+    restrictions:
+      input_modalities:
+      - text
+      - image
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-21'
+      source: https://fireworks.ai/models/fireworks/muse-spark-open
   - catalog: meta/muse-glimmer-30b
     relationship: managed_cloud
     id: accounts/fireworks/models/muse-glimmer-30b
@@ -5222,6 +5242,18 @@ reasoning_families:
   - enabled
   - disabled
   default_mode: enabled
+- id: muse-spark-open
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  default: xhigh
+  modes:
+  - enabled
+  default_mode: enabled
 - id: muse-spark
   type: reasoning_effort
   parameter: reasoning_effort
@@ -7517,6 +7549,52 @@ models:
   - coding
   - agentic
   released_at: '2026-06-30'
+- id: meta/muse-spark-open
+  display_name: Muse Spark Open
+  description: Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+    license: Muse Model License
+  family: muse-spark
+  parameter_size: 816B (42B active)
+  released_at: '2026-10-15'
+  reasoning_family: muse-spark-open
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: '2026-11-21'
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+  tags:
+  - open_weights
+  - multimodal
+  - moe
+  - long_context
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.
@@ -23912,6 +23990,111 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/meituan-longcat/LongCat-2.5/blob/60032d966e6369b822f0e61d2eff01368d38b111/README.md
+    redistributable: true
+- id: arc-prize/muse-spark-open-arc-agi-1@1.0.0
+  model: meta/muse-spark-open
+  benchmark: arc-prize/arc-agi-1@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (XHigh)
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    evaluator: ARC Prize
+  metrics:
+    accuracy: 0.89
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/meta-muse-spark-open
+    redistributable: true
+- id: arc-prize/muse-spark-open-arc-agi-2@1.0.0
+  model: meta/muse-spark-open
+  benchmark: arc-prize/arc-agi-2@1.0.0
+  benchmark_profile: semi-private
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (XHigh)
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    evaluator: ARC Prize
+  metrics:
+    accuracy: 0.575
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://arcprize.org/results/meta-muse-spark-open
+    redistributable: true
+- id: duellab/muse-spark-open-xhigh-gamebench-2@1.0.0
+  model: meta/muse-spark-open
+  benchmark: duellab/gamebench@2.0.0
+  benchmark_profile: public-games-bradley-terry
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open
+    source_model_slug: meta-muse-spark-open
+    run_kind: independent
+    benchmark_release: gb2-20261119-235af8c04037
+    track: full_freedom/mixed
+    provider_route: openrouter
+    provider_model: meta/muse-spark-open
+    provider_setting: XHigh
+  metrics:
+    score: 58.95964511856345
+  status: available
+  measured_at: '2026-11-19'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/
+    redistributable: true
+- id: independent/muse-spark-open-scicode@1.0.0
+  model: meta/muse-spark-open
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (xhigh)
+    source_model_slug: muse-spark-open
+    source_kind: official_vendor_republication
+    run_kind: independent
+    evaluator: Artificial Analysis
+    methodology_source: https://research.meta.ai/static/muse-spark-open-evaluation-methodology
+  metrics:
+    score: 0.585
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks
+    redistributable: true
+- id: independent/muse-spark-open-terminalbench-2-1@1.0.0
+  model: meta/muse-spark-open
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Muse Spark Open (xhigh)
+    source_model_slug: muse-spark-open
+    source_kind: official_vendor_republication
+    run_kind: independent
+    evaluator: Artificial Analysis
+    harness: Terminus 2
+    environment: E2B
+    methodology_source: https://research.meta.ai/static/muse-spark-open-evaluation-methodology
+  metrics:
+    resolved: 0.764
+  status: available
+  observed_at: '2026-11-21'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks
     redistributable: true
 - id: independent/muse-spark-1-3-aa-briefcase@1.0.0
   model: meta/muse-spark-1.3
@@ -49475,6 +49658,28 @@ index_results:
   - meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0
   domains:
     agentic_systems: 70.8
+- model: meta/muse-spark-open
+  reasoning_effort: xhigh
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 76.4
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.764
+    normalized: 0.764
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/muse-spark-open-terminalbench-2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/muse-spark-open-terminalbench-2-1@1.0.0
+  domains:
+    agentic_systems: 76.4
 - model: meta/muse-spark-1.3
   reasoning_effort: xhigh
   index: vllm-sr/reasoning@1.0.0

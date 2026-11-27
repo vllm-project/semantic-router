@@ -43,6 +43,16 @@ type catalogReasoningWireCase struct {
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
 		{
+			name: "Fireworks Muse Spark Open default effort", catalog: "meta/muse-spark-open", provider: "fireworks",
+			enabled: true, wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Fireworks Muse Spark Open low effort", catalog: "meta/muse-spark-open", provider: "fireworks",
+			enabled: true, effort: "low", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "low"},
+		},
+		{
 			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
 			providerModelID: "astra-prod",
 			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
