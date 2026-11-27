@@ -64,7 +64,8 @@ var replayPromptReadable = (*classification.Classifier).ReplayPromptReadable
 // and attaches stored, the prompt the record withheld, when that read is
 // complete and clean.
 func (r *OpenAIRouter) attachPromptOnceVerified(ctx *RequestContext, recorder *routerreplay.Recorder, stored string) {
-	if !ctx.RouterReplayPluginConfig.VerifiesPrompt() {
+	policy := ctx.RouterReplayPluginConfig
+	if !policy.VerifiesPrompt() || !policy.CapturesRequestText() {
 		return
 	}
 	classifier := r.classifierForRequest(ctx)
