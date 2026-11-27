@@ -253,6 +253,13 @@
   levels: [minimal, low, medium, high, xhigh, max]
   modes: [enabled]
   default_mode: enabled
+- id: muse-max-default
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [minimal, low, medium, high, xhigh, max]
+  default: max
+  modes: [enabled]
+  default_mode: enabled
 - id: longcat-2.0
   type: chat_template_kwargs
   parameter: enable_thinking

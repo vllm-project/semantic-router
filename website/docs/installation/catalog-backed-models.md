@@ -99,6 +99,19 @@ The catalog records five published evaluations per card: Astra and Sol at
 `xhigh`, Terra at `high`. Scores are not copied to other efforts. The Model
 Hub's public comparisons show only benchmark profiles with enough models to compare.
 
+## Muse Wonder and Muse Ember
+
+Bind `meta/muse-wonder-1.0` or `meta/muse-ember-1.0` to the `meta` Provider.
+Wonder is in preview. Both API model IDs use Meta's Standard service mode.
+The catalog includes five independent evaluations for each model, measured
+at `max` for Wonder and `xhigh` for Ember. [Meta models](https://dev.meta.ai/docs/models)
+
+Both models use reasoning on every request and default to `max`. Set
+`use_reasoning: true` on the decision's model reference. Use `reasoning_effort` to choose `minimal`, `low`,
+`medium`, `high`, `xhigh`, or `max`. The Router sends it as `reasoning_effort`
+on Chat Completions and as `reasoning.effort` on Responses.
+[Meta reasoning controls](https://dev.meta.ai/docs/reasoning)
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` identifies the
