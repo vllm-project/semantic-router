@@ -160,6 +160,232 @@
     verification: claimed
     source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
     redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: GPQA-Diamond
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+  metrics:
+    accuracy: .8952
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-livecodebench-v6@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: LiveCodeBench v6
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: .8822
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-swe-bench-verified@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: SWE-bench Verified
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    swe_harness: OpenCode
+    agent_version: 1.17.11
+    sandbox: OpenSandbox
+  metrics:
+    resolved: .711
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-swe-bench-pro@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: SWE-bench Pro
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    swe_harness: OpenCode
+    agent_version: 1.17.11
+    sandbox: OpenSandbox
+  metrics:
+    resolved: .5178
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-super-vl-model-card-terminal-bench-2-1@1.0.0
+  model: nvidia/nemotron-3.5-super-vl
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: high
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16
+    precision: BF16
+    reasoning_mode: enabled
+    effort_source: nemo_gym_super_3_5_common_recipe
+    source_kind: official_model_card
+    source_label: Terminal-Bench 2.1
+    source_column: Nemotron 3.5 SuperGA BF16
+    evaluation_harness: NVIDIA NeMo Gym
+    terminal_harness: Terminus-2
+    sandbox: OpenSandbox
+    benchmark_revision: '36d417f5'
+  metrics:
+    resolved: .6067
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/fb0ee0bc6b3f70342afd8d84cb80dbadbaa8a1fe/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: GPQA Diamond
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    accuracy: .8883
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-humanitys-last-exam@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: HLE (no tools)
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    accuracy: .2873
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-scicode@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SciCode
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    score: .4449
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-terminal-bench-2-1@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: Terminal-Bench 2.1
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    resolved: .5393
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
+- id: nvidia/nemotron-3.5-bolt-model-card-mcp-atlas@1.0.0
+  model: nvidia/nemotron-3.5-bolt
+  benchmark: scale/mcp-atlas@1.0.0
+  benchmark_profile: published-unspecified
+  reasoning_effort: unspecified
+  subject:
+    variant: NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16
+    precision: BF16
+    source_kind: official_model_card
+    source_label: MCP-Atlas
+    source_column: Nemotron 3.5 Bolt 74B-A9B (BF16)
+  metrics:
+    score: .556
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-BF16/blob/e09a4cedb1787db1760375ee5539f222cae0c672/README.md
+    redistributable: true
 - id: nvidia/nemotron-3-ultra-nvfp4-model-card-mmlu-pro@1.0.0
   model: nvidia/nemotron-3-ultra
   benchmark: tiger-ai-lab/mmlu-pro@1.0.0

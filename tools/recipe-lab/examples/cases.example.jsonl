@@ -1,0 +1,5 @@
+{"case_id": "case-1", "prompt": "Add a retry helper to the storage backend.", "truth": {"signals": {"domain": "code", "difficulty": 4}}}
+{"case_id": "case-2", "prompt": "Fix the date parser for negative durations.", "truth": {"signals": {"domain": "code", "difficulty": 2}}}
+{"case_id": "case-3", "prompt": "What is the integral of x^2 dx?", "truth": {"signals": {"domain": "math", "difficulty": 1}}}
+{"case_id": "case-4", "prompt": "Prove that the group is abelian.", "truth": {"signals": {"domain": "math", "difficulty": 5}}}
+{"case_id": "case-5", "prompt": "Refactor the settings loader into two modules.", "truth": {"signals": {"domain": "code", "difficulty": 1}}}

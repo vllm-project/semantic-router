@@ -97,7 +97,7 @@ func matchingConfigSequenceItem(old, updated *yaml.Node, index int) *yaml.Node {
 	return nil
 }
 
-var configSecretTargetFields = [...]string{"name", "id", "address", "addresses", "cluster_addresses", "cluster_mode", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "api_key_env", "api_key_file"}
+var configSecretTargetFields = [...]string{"name", "id", "address", "addresses", "cluster_addresses", "cluster_mode", "host", "hosts", "hostname", "port", "endpoint", "endpoints", "url", "base_url", "baseURL", "provider", "provider_profile", "type", "protocol", "scheme", "command", "transport", "tls", "api_key_env", "api_key_file"}
 
 // Config editors submit a whole document, and some schemas associate a secret
 // with a target in another branch. Without a schema-level association for every
@@ -277,6 +277,9 @@ func configSecretRoutingMetadata(path string) bool {
 }
 
 func emptyConfigSecretTarget(node *yaml.Node, key string) bool {
+	if key == "tls" && node != nil && node.Kind == yaml.ScalarNode && node.Tag == "!!bool" && node.Value == "false" {
+		return true
+	}
 	if key == "cluster_addresses" || key == "cluster_mode" {
 		return defaultConfigSecretClusterTarget(node, key)
 	}

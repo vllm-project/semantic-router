@@ -49,6 +49,9 @@ const (
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
 	APIFormatImages = string(apiregistry.Images)
+	// APIFormatSpeech selects the OpenAI Speech API dialect
+	// (POST /v1/audio/speech) served by TTS backends such as vLLM-Omni.
+	APIFormatSpeech = string(apiregistry.Speech)
 	// APIFormatOpenAI and APIFormatAnthropic are aliases of
 	// APIFormatChatCompletions and APIFormatMessages.
 	APIFormatOpenAI    = "openai"
@@ -90,14 +93,15 @@ type RouterConfig struct {
 	RoutingDefaults  RoutingDefaults `yaml:"-" json:"-"`
 	InlineModels     `yaml:",inline"`
 	SemanticCache    `yaml:"semantic_cache"`
-	Memory           MemoryConfig            `yaml:"memory"`
-	VectorStore      *VectorStoreConfig      `yaml:"vector_store,omitempty"`
-	ToolSessions     *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
-	ResponseAPI      ResponseAPIConfig       `yaml:"response_api"`
-	RouterReplay     RouterReplayConfig      `yaml:"router_replay"`
-	MaskingIdentity  MaskingIdentityConfig   `yaml:"-" json:"-"`
-	StartupStatus    StartupStatusConfig     `yaml:"startup_status"`
-	Looper           LooperConfig            `yaml:"looper,omitempty"`
+	Memory           MemoryConfig             `yaml:"memory"`
+	VectorStore      *VectorStoreConfig       `yaml:"vector_store,omitempty"`
+	ToolSessions     *ToolSessionStoreConfig  `yaml:"tool_sessions,omitempty"`
+	GuardVerdicts    *GuardVerdictStoreConfig `yaml:"guard_verdicts,omitempty"`
+	ResponseAPI      ResponseAPIConfig        `yaml:"response_api"`
+	RouterReplay     RouterReplayConfig       `yaml:"router_replay"`
+	MaskingIdentity  MaskingIdentityConfig    `yaml:"-" json:"-"`
+	StartupStatus    StartupStatusConfig      `yaml:"startup_status"`
+	Looper           LooperConfig             `yaml:"looper,omitempty"`
 	LLMObservability `yaml:",inline"`
 	APIServer        `yaml:",inline"`
 	RouterOptions    `yaml:",inline"`
@@ -242,8 +246,8 @@ type Listener struct {
 	// APIs, when set, are the only APIs the listener serves, by API name (an
 	// alias reads as its API), each with its schema, models and settings;
 	// other paths answer 404. Omitted, the listener serves chat_completions,
-	// responses, messages and images with their default schemas, and not
-	// systemone.
+	// responses, messages, images and speech with their default schemas, and
+	// not systemone.
 	APIs ListenerAPIs `yaml:"apis,omitempty"`
 	// TLS, when set, makes a standalone Router serve this listener over TLS.
 	TLS *ListenerTLS `yaml:"tls,omitempty"`

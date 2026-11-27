@@ -8,16 +8,32 @@ The generated config schema lists the same names (tests check the two agree).
 
 from __future__ import annotations
 
-API_NAMES = ("chat_completions", "responses", "messages", "images", "systemone")
+import re
+
+API_NAMES = (
+    "chat_completions",
+    "responses",
+    "messages",
+    "images",
+    "speech",
+    "systemone",
+)
 ALIASES = {"openai": "chat_completions", "anthropic": "messages"}
 # The APIs a listener without apis serves.
-DEFAULT_LISTENER_APIS = ("chat_completions", "responses", "messages", "images")
+DEFAULT_LISTENER_APIS = (
+    "chat_completions",
+    "responses",
+    "messages",
+    "images",
+    "speech",
+)
 # Each API's schema IDs; the first is an upstream's default, except systemone's.
 SCHEMAS = {
     "chat_completions": ("openai/v1",),
     "responses": ("openai/v1",),
     "messages": ("anthropic/2023-06-01",),
     "images": ("openai/v1",),
+    "speech": ("openai/v1",),
     "systemone": ("vllm-sr/5.0", "vllm-sr/4.0", "systemone/0.2"),
 }
 # The schemas a listener may serve a versioned API in; the first is the default.
@@ -38,15 +54,24 @@ PATTERNS = {
     "responses": r"^(/v1/responses(/[^/]+(/input_items)?)?|/openai/responses|/openai/v1/responses)$",
     "messages": r"^/v1/messages(/count_tokens)?$",
     "images": r"^/v1/images/generations$",
+    "speech": r"^/v1/audio/speech$",
     "systemone": r"^/v1/(systemone(/batch|/models)?|decisions)$",
 }
 # The model listing every listener serves.
 MODELS_PATH = "/v1/models"
 
 
-def served_path_regex(apis: tuple[str, ...]) -> str:
-    """One RE2 expression a whole request path matches when one of the APIs, or the model listing, serves it."""
-    alternatives = [PATTERNS[name].removeprefix("^").removesuffix("$") for name in apis]
+def served_path_regex(
+    apis: tuple[str, ...], prefixes: dict[str, str] | None = None
+) -> str:
+    """One RE2 expression a whole request path matches when one of the APIs, or the model listing, serves it;
+    an API with a prefix is also served under it."""
+    alternatives = []
+    for name in apis:
+        inner = PATTERNS[name].removeprefix("^").removesuffix("$")
+        alternatives.append(inner)
+        if prefix := (prefixes or {}).get(name):
+            alternatives.append(re.escape(prefix) + "(?:" + inner + ")")
     return "(" + "|".join([*alternatives, MODELS_PATH]) + ")"
 
 

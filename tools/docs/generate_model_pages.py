@@ -67,11 +67,17 @@ BACKBONES = {
 # (``Accelerator.golden_reference``); a reference recorded at another
 # ``--dtype`` than ``auto`` carries it after ``@`` (``readiness.qualified``).
 DTYPES = {"bfloat16": "BF16"}
+# Hardware keys that also name the approximate kernels their answers were
+# computed with (``dtypes.with_kernels``): a CPU class's, not a class of their own.
+KERNEL_KEYS = frozenset({"cpu:x86_64:avx512:bf16_native:amd:zentorch"})
 DEVICES = {
     "cpu": "CPU",
     "cpu:x86_64:avx2:bf16_emulated": "x86-64 CPU with AVX2 (BF16 emulated)",
     "cpu:x86_64:avx512:bf16_native": "x86-64 CPU with AVX-512 BF16",
     "cpu:x86_64:avx512:bf16_native:amd": "AMD x86-64 CPU with AVX-512 BF16",
+    "cpu:x86_64:avx512:bf16_native:amd:zentorch": (
+        "AMD x86-64 CPU with AVX-512 BF16, with zentorch's linear"
+    ),
     "rocm": "AMD GPU (ROCm)",
     "rocm:gfx942": "AMD Instinct MI300X or MI325X (gfx942)",
     "cuda": "NVIDIA GPU (CUDA)",
@@ -174,7 +180,10 @@ class Model:
 
     @property
     def cpu_bf16(self) -> list[str]:
-        """The CPU classes on which ``--dtype auto`` computes BF16: native BF16 and their own BF16 reference."""
+        """The CPU classes on which ``--dtype auto`` computes BF16: native BF16 and their own BF16 reference.
+
+        A key that also names kernels (``…:amd:zentorch``) is its class's, not another class.
+        """
         if self.family not in CPU_BF16_FAMILIES:
             return []
         return sorted(
@@ -183,6 +192,7 @@ class Model:
             if key.startswith("cpu:")
             and key.endswith("@bfloat16")
             and ":bf16_native" in key
+            and key.partition("@")[0] not in KERNEL_KEYS
         )
 
 

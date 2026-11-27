@@ -35,6 +35,7 @@ from cli.k8s_env_secret import (
     env_secret_owner,
     is_managed_env_secret_name,
     managed_env_secret_names,
+    manifest_env_secret_names,
     referenced_secret_names,
 )
 from cli.logo import print_vllm_logo
@@ -299,6 +300,7 @@ class K8sBackend:
             active_secret_name=secret_name,
             previous_secret_refs=previous_secret_refs,
             previous_managed_secrets=previous_managed_secrets,
+            preserve_helm_history=True,
         )
         log.info("Helm release deployed successfully")
 
@@ -693,12 +695,40 @@ class K8sBackend:
                 "reference could not be verified; existing Secrets were preserved"
             )
 
+    def _helm_history_env_secret_refs(self, candidates: set[str]) -> set[str]:
+        """Find credential references in retained release manifests."""
+        helm = self._helm_base_cmd()
+        scope = [self.release_name, "--namespace", self.namespace]
+        # Helm defaults to showing only 256 revisions, regardless of retention.
+        history = self._run(
+            [*helm, "history", *scope, "--max", str(2**31 - 1), "--output", "json"],
+            capture_output=True,
+        )
+        revisions = json.loads(history.stdout)
+        if not isinstance(revisions, list) or not revisions:
+            raise ValueError("Expected retained Helm revisions")
+
+        protected: set[str] = set()
+        for entry in revisions:
+            revision = entry["revision"]
+            if type(revision) is not int or revision < 1:
+                raise ValueError("Invalid Helm revision")
+            manifest = self._run(
+                [*helm, "get", "manifest", *scope, "--revision", str(revision)],
+                capture_output=True,
+            )
+            protected.update(candidates & manifest_env_secret_names(manifest.stdout))
+            if protected == candidates:
+                break
+        return protected
+
     def _cleanup_obsolete_env_secrets(
         self,
         *,
         active_secret_name: str | None,
         previous_secret_refs: set[str],
         previous_managed_secrets: set[str],
+        preserve_helm_history: bool = False,
     ) -> None:
         """Delete stale owned revisions only after Helm commits successfully."""
 
@@ -719,6 +749,24 @@ class K8sBackend:
             and not self._namespace_references_secret(LEGACY_ENV_SECRET_NAME)
         ):
             obsolete.add(LEGACY_ENV_SECRET_NAME)
+        if obsolete and preserve_helm_history:
+            try:
+                obsolete -= self._helm_history_env_secret_refs(obsolete)
+            except (
+                OSError,
+                subprocess.CalledProcessError,
+                AttributeError,
+                KeyError,
+                RecursionError,
+                TypeError,
+                ValueError,
+                yaml.YAMLError,
+            ):
+                log.warning(
+                    "Could not verify Helm release history; existing Kubernetes "
+                    "credential Secrets were preserved"
+                )
+                return
         for name in sorted(obsolete):
             self._delete_secret_if_exists(name, required=True)
 
