@@ -119661,7 +119661,8 @@ const builtInCatalogJSON = `{
       },
       "category": "private_runtime",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-11-21"
       },
       "default_protocol": "openai/chat-completions@1",
       "description": "Connect a private Ollama endpoint.",
