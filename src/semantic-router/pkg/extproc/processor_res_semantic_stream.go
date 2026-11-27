@@ -54,6 +54,7 @@ type semanticStreamItem struct {
 	refusal          string
 	reasoning        string
 	reasoningSig     string
+	reasoningScope   llmprotocol.ReasoningScope
 	toolCall         *llmprotocol.ToolCall
 	image            *llmprotocol.GeneratedImage
 	completed        bool
@@ -482,6 +483,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
+				item.reasoningScope = event.Content.Reasoning
 			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentServerTool {
 				item.serverTool = event.Content.Raw
@@ -515,8 +517,13 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				continue
 			}
 			item.reasoning += event.Delta
-			if event.Content != nil && event.Content.Signature != "" {
-				item.reasoningSig = event.Content.Signature
+			if event.Content != nil {
+				if event.Content.Signature != "" {
+					item.reasoningSig = event.Content.Signature
+				}
+				if event.Content.Reasoning != "" {
+					item.reasoningScope = event.Content.Reasoning
+				}
 			}
 		case llmprotocol.EventToolCallDelta:
 			item := state.item(event.ItemIndex)
@@ -659,7 +666,7 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if item.reasoning != "" || item.reasoningSig != "" {
 			contents = append(contents, llmprotocol.Content{
 				Kind: llmprotocol.ContentReasoning, Text: item.reasoning,
-				Signature: item.reasoningSig,
+				Signature: item.reasoningSig, Reasoning: item.reasoningScope,
 			})
 		}
 		if item.refusal != "" {
