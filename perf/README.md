@@ -80,7 +80,10 @@ separately in this module.
 The previous classification and cache baseline files contain no measurements.
 CI therefore measures those families against the PR base revision (or the prior
 main revision for scheduled runs), using the current benchmark program and the
-same pinned models on both revisions:
+same pinned models on both revisions. The comparison runs cache, regular
+classification, and long-input classification in separate Go test processes.
+Each process releases its model runtime when it exits. The current revision
+also runs the remaining component benchmarks in a separate process.
 
 ```bash
 bash perf/scripts/compare-model-baseline.sh "$BASE_REF" reports

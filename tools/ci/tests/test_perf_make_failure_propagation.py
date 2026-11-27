@@ -1,5 +1,6 @@
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -14,7 +15,7 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
     def test_failed_benchmark_stops_captured_targets(self) -> None:
         for target, suite, calls, report in (
             ("perf-check", "perf", 1, "bench-output.txt"),
-            ("perf-check", "src/semantic-router", 2, "bench-output.txt"),
+            ("perf-check", "src/semantic-router", 5, "bench-output.txt"),
             ("perf-bench-looper", "src/semantic-router", 1, "bench-results-looper.txt"),
             ("perf-baseline-update", "perf", 1, "bench-results.txt"),
             ("perf-baseline-update", "src/semantic-router", 2, "bench-results.txt"),
@@ -33,7 +34,7 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
 
     def test_successful_benchmarks_continue_to_consumers(self) -> None:
         for target, expected, report in (
-            ("perf-check", ["test", "test", "run", "run"], "bench-output.txt"),
+            ("perf-check", ["test"] * 5 + ["run", "run"], "bench-output.txt"),
             ("perf-bench-looper", ["test"], "bench-results-looper.txt"),
             ("perf-baseline-update", ["test", "test", "baseline"], "bench-results.txt"),
         ):
@@ -45,6 +46,30 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
                 self.assertEqual(
                     output.count("BenchmarkCaptured"), expected.count("test")
                 )
+
+    def test_quick_benchmarks_run_each_group_in_a_separate_process(self) -> None:
+        result, invocations, output = self._run_target("perf-bench-quick", "", "")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            [shlex.split(invocation)[3:7] for invocation in invocations],
+            [
+                ["-bench", "^BenchmarkCache", "-benchmem", "-benchtime=3s"],
+                [
+                    "-bench",
+                    "^BenchmarkClassify",
+                    "-skip",
+                    "^BenchmarkClassifyInputLength$",
+                ],
+                [
+                    "-bench",
+                    "^BenchmarkClassifyInputLength$",
+                    "-benchmem",
+                    "-benchtime=3s",
+                ],
+                ["-bench", ".", "-skip", "^(BenchmarkCache|BenchmarkClassify)"],
+            ],
+        )
+        self.assertEqual(output.count("BenchmarkCaptured"), 4)
 
     def test_fixture_ignores_parent_make_execution_flags(self) -> None:
         with mock.patch.dict(
@@ -68,6 +93,10 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
             root = Path(directory)
             for name in ("bin", "perf/scripts", "src/semantic-router"):
                 (root / name).mkdir(parents=True)
+            shutil.copyfile(
+                REPO_ROOT / "perf/scripts/run-component-benchmarks.sh",
+                root / "perf/scripts/run-component-benchmarks.sh",
+            )
             fixture = root / "fixture.mk"
             fixture.write_text("LOG_TARGET = :\nperf-model-baseline:\n\t@:\n")
             go = root / "bin/go"
@@ -119,7 +148,7 @@ class PerfMakeFailurePropagationTests(unittest.TestCase):
             return (
                 result,
                 calls.read_text().splitlines(),
-                (root / "reports" / report).read_text(),
+                (root / "reports" / report).read_text() if report else result.stdout,
             )
 
 
