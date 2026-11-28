@@ -8,10 +8,16 @@
 #   TRAINING_WORK_DIR  — working directory (default: this script's directory)
 #   MODEL_OUTPUT_DIR   — copy trained adapters here (default: $TRAINING_WORK_DIR/models)
 #   TRAINING_CLEAN=1   — remove prior lora_*mmbert* artifacts before training
+#   EPOCHS, BATCH_SIZE, MAX_SAMPLES — override defaults for a small-sample run
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! command -v uv >/dev/null 2>&1; then
+    echo "Error: uv is required. Install it: https://docs.astral.sh/uv/getting-started/installation/" >&2
+    exit 1
+fi
+
 TRAINING_WORK_DIR="${TRAINING_WORK_DIR:-$SCRIPT_DIR}"
 MODEL_OUTPUT_DIR="${MODEL_OUTPUT_DIR:-$TRAINING_WORK_DIR/models}"
 
@@ -28,11 +34,11 @@ echo -e "${BLUE}========================================${NC}"
 
 # OPTIMIZED Training configuration for high accuracy
 MODEL="mmbert-base"
-EPOCHS=10             # More epochs for better convergence
-BATCH_SIZE=64         # Balanced batch size (not too large)
+EPOCHS="${EPOCHS:-10}"             # More epochs for better convergence
+BATCH_SIZE="${BATCH_SIZE:-64}"     # Balanced batch size (not too large)
 LORA_RANK=32          # Higher rank for more capacity
 LORA_ALPHA=64         # 2x rank
-MAX_SAMPLES=10000     # Large dataset
+MAX_SAMPLES="${MAX_SAMPLES:-10000}" # Large dataset
 LEARNING_RATE=2e-5    # Lower LR for stability
 
 echo -e "${YELLOW}Optimized Configuration:${NC}"
@@ -55,18 +61,15 @@ if [ "${TRAINING_CLEAN:-0}" = "1" ]; then
 fi
 cd "$TRAINING_WORK_DIR"
 
-# Install dependencies
-echo -e "${YELLOW}Installing dependencies...${NC}"
-pip install -q peft accelerate datasets transformers scikit-learn tqdm requests
-
 # Verify GPU
 echo -e "${YELLOW}Checking GPU...${NC}"
-python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}'); print(f'VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.1f}GB' if torch.cuda.is_available() else '')"
+uv run --locked --project "$SCRIPT_DIR/classifier_model_fine_tuning_lora" python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"None\"}'); print(f'VRAM: {torch.cuda.get_device_properties(0).total_memory/1e9:.1f}GB' if torch.cuda.is_available() else '')"
 
 # Train each task
 train_task() {
     local task_name=$1
-    local script_path=$2
+    local script_path="$SCRIPT_DIR/$2"
+    local project_dir="${script_path%/*}"
     
     echo -e "${BLUE}========================================${NC}"
     echo -e "${GREEN}Training: $task_name${NC}"
@@ -74,7 +77,7 @@ train_task() {
     
     start_time=$(date +%s)
     
-    python "$script_path" \
+    uv run --locked --project "$project_dir" python "$script_path" \
         --mode train \
         --model "$MODEL" \
         --epochs "$EPOCHS" \
