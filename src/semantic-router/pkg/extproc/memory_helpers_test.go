@@ -80,6 +80,59 @@ func TestNeutralMemoryMessageAndCurrentUserExtraction(t *testing.T) {
 	}
 }
 
+// Tool arguments are payload, not prose: reasoning-tag cleanup strips the
+// text parts of the answer but keeps a literal <think> an argument carries,
+// so valid arguments such as {"path":"<think>.txt"} reach memory intact.
+func TestExtractSemanticAssistantResponseTextPreservesToolCallArguments(t *testing.T) {
+	arguments := `{"path":"<think>.txt","contents":"keep me"}`
+	response := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "Saving your notes. <think>plan the write</think>"},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Namespace: "fs", Name: "write", Arguments: arguments}},
+		},
+	}}}
+	want := "Saving your notes.\ntool fs.write\n" + arguments
+	if got := extractSemanticAssistantResponseText(response); got != want {
+		t.Fatalf("extract = %q, want %q", got, want)
+	}
+	if got := extractSemanticAssistantResponseText(hallucinationAssistantResponse("<think>reasoning only</think>")); got != "" {
+		t.Fatalf("a pure-reasoning text part still strips to empty, got %q", got)
+	}
+}
+
+func TestExtractSemanticAssistantResponseTextJoinsProseRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		content []llmprotocol.Content
+		want    string
+	}{
+		{"multipart spacing", []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "Hello "},
+			{Kind: llmprotocol.ContentText, Text: "world"},
+		}, "Hello world"},
+		{"split think block", []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "A <think>plan"},
+			{Kind: llmprotocol.ContentRefusal, Text: " more</think> B"},
+		}, "A B"},
+		{"mixed prose and tool calls", []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "Before <think>planning"},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Name: "read", Arguments: `{"file":"<think>.txt"}`}},
+			{Kind: llmprotocol.ContentRefusal, Text: "Between "},
+			{Kind: llmprotocol.ContentText, Text: "calls"},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Name: "list", Arguments: "{}"}},
+			{Kind: llmprotocol.ContentText, Text: "<think>done</think> After"},
+		}, "Before\ntool read\n" + `{"file":"<think>.txt"}` + "\nBetween calls\ntool list\n{}\nAfter"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := &llmprotocol.Response{Output: []llmprotocol.OutputItem{{Role: llmprotocol.RoleAssistant, Content: tc.content}}}
+			if got := extractSemanticAssistantResponseText(response); got != tc.want {
+				t.Fatalf("answer = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func neutralTextMessage(role llmprotocol.Role, text string) llmprotocol.Message {
 	return llmprotocol.Message{Role: role, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}}
 }

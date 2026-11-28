@@ -30,6 +30,9 @@ type responseConditions interface {
 type responseGuardRun struct {
 	conditions responseConditions
 	rules      []responseGuardRuleRun
+	// bodyNoteCodes are the warnings encoded in the response body available
+	// to the cache. A cache hit cannot replay header-only warnings.
+	bodyNoteCodes []string
 	// live marks an answer the client received as it streamed, under a guard
 	// that neither blocks nor writes notes: the guard read it once the stream
 	// ended, after the response headers had left.
@@ -227,8 +230,7 @@ func (run *responseGuardRun) warnings() []string {
 	return codes
 }
 
-// notedCodes are the codes of the annotating rules that write a note at the
-// head of the answer.
+// notedCodes lists the warnings for which the rules request a body note.
 func (run *responseGuardRun) notedCodes() []string {
 	var codes []string
 	if run == nil {
@@ -258,8 +260,7 @@ func (run *responseGuardRun) cacheSkipReason() string {
 	if run.blocking() != nil {
 		return "response_guard_blocked"
 	}
-	noted := run.notedCodes()
-	if slices.ContainsFunc(run.warnings(), func(code string) bool { return !slices.Contains(noted, code) }) {
+	if slices.ContainsFunc(run.warnings(), func(code string) bool { return !slices.Contains(run.bodyNoteCodes, code) }) {
 		return "response_guard_annotated"
 	}
 	return ""
@@ -333,18 +334,29 @@ func (run *responseGuardRun) responseGuardNote(code string) string {
 	return "[Response Warning] A response check flagged this response."
 }
 
-// applyResponseGuardNotes writes the notes of the annotating rules with
-// details at the head of the answer, and reports whether it changed.
-func (r *OpenAIRouter) applyResponseGuardNotes(run *responseGuardRun, response *llmprotocol.Response) bool {
+// prependNotes reports whether any choice changed and which warnings were
+// written to the primary answer that the guard inspected.
+func (run *responseGuardRun) prependNotes(response *llmprotocol.Response) (changed bool, primaryCodes []string) {
 	codes := run.notedCodes()
-	if len(codes) == 0 {
-		return false
+	if len(codes) == 0 || response == nil {
+		return false, nil
 	}
 	notes := make([]string, len(codes))
 	for i, code := range codes {
 		notes[i] = run.responseGuardNote(code)
 	}
-	return prependSemanticAssistantText(response, strings.Join(notes, "\n\n"))
+	prefix := strings.Join(notes, "\n\n")
+	changed = prependSemanticOutputText(response.Output, prefix)
+	if changed {
+		primaryCodes = codes
+	}
+	for _, alternative := range response.Alternatives {
+		changed = prependSemanticOutputText(alternative, prefix) || changed
+	}
+	if changed {
+		response.Generation++
+	}
+	return changed, primaryCodes
 }
 
 // traceResponseGuard records on the request span what became of the answer

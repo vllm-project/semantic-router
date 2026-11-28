@@ -53,6 +53,52 @@ func persistenceRegressionContext(decision string) *RequestContext {
 	}
 }
 
+func TestScheduleResponseMemoryStorePreservesToolArguments(t *testing.T) {
+	const currentArgs = `{"path":"<think>.txt","contents":"keep me"}`
+	backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
+	runner := memory.NewPersistenceRunner(5*time.Second, 1, 1)
+	router := &OpenAIRouter{
+		Config:            &config.RouterConfig{GlobalPlugins: []config.DecisionPlugin{memoryTestPlugin()}, Memory: config.MemoryConfig{InUse: true, AutoStore: true}},
+		MemoryExtractor:   memory.NewMemoryChunkStore(backend),
+		memoryPersistence: runner,
+	}
+	ctx := persistenceRegressionContext("tool-arguments")
+	ctx.SemanticRequest.Messages = []llmprotocol.Message{
+		neutralMemoryMessage("user", "Read the previous file."),
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "<think>private history</think>Reading."},
+			{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: "prior", Name: "read", Arguments: "previous.txt"}},
+		}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Kind: llmprotocol.ToolKindCustom, CallID: "prior", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "ok"}}},
+		}}},
+		neutralMemoryMessage("assistant", "<think>private reflection</think>The file is ready."),
+		neutralMemoryMessage("user", "Where was it saved?"),
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "lookup", Name: "locate", Arguments: "{}"},
+		}}},
+		neutralMemoryMessage("user", "Save my notes."),
+	}
+	response := memoryTestResponse("Saving. <think>private plan</think>")
+	response.Output[0].Content = append(response.Output[0].Content, llmprotocol.Content{
+		Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Name: "write", Arguments: currentArgs},
+	})
+	router.scheduleSemanticResponseMemoryStore(ctx, response)
+	require.NoError(t, runner.RetireAndWait(5*time.Second))
+
+	stored, err := backend.List(t.Context(), memory.ListOptions{UserID: "original-user"})
+	require.NoError(t, err)
+	require.Len(t, stored.Memories, 2)
+	current := "Q: Save my notes.\nA: Saving.\ntool write\n" + currentArgs
+	prior := "Q: Read the previous file.\nA: The file is ready.\n---\nQ: Where was it saved?"
+	chunks := make(map[string]string)
+	for _, mem := range stored.Memories {
+		chunks[mem.Source] = mem.Content
+	}
+	assert.Equal(t, current, chunks["conversation"])
+	assert.Equal(t, prior+"\n---\n"+current, chunks["session_window"])
+}
+
 func TestScheduleResponseMemoryStore_QueuedJobUsesSubmissionSnapshot(t *testing.T) {
 	backend := &persistenceRegressionStore{InMemoryStore: memory.NewInMemoryStore()}
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))

@@ -12,43 +12,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
-// semanticAssistantContent returns the ordered, client-visible assistant text
-// from the primary neutral output. Reasoning stays separate: guardrails and
-// memory must not mistake hidden chain-of-thought for the delivered answer.
+// semanticAssistantContent returns the ordered, client-visible assistant
+// output from the primary alternative: text, refusals, and each tool call's
+// name and arguments. Reasoning stays separate: guardrails and memory must
+// not mistake hidden chain-of-thought for the delivered answer.
 func semanticAssistantContent(response *llmprotocol.Response) string {
-	if response == nil {
-		return ""
-	}
-	var text strings.Builder
-	for _, item := range response.Output {
-		if item.Role != llmprotocol.RoleAssistant {
-			continue
-		}
-		for _, content := range item.Content {
-			switch content.Kind {
-			case llmprotocol.ContentText, llmprotocol.ContentRefusal:
-				text.WriteString(content.Text)
-			}
-		}
-	}
-	return text.String()
-}
-
-// prependSemanticAssistantText mutates every assistant alternative in place so
-// a response warning remains protocol-neutral until the inbound codec renders
-// it. It returns false when the response has no client-visible text block.
-func prependSemanticAssistantText(response *llmprotocol.Response, prefix string) bool {
-	if response == nil || prefix == "" {
-		return false
-	}
-	changed := prependSemanticOutputText(response.Output, prefix)
-	for index := range response.Alternatives {
-		changed = prependSemanticOutputText(response.Alternatives[index], prefix) || changed
-	}
-	if changed {
-		response.Generation++
-	}
-	return changed
+	return response.AssistantText(nil)
 }
 
 func prependSemanticOutputText(output []llmprotocol.OutputItem, prefix string) bool {

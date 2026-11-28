@@ -157,6 +157,9 @@ func (r *OpenAIRouter) releaseHeldStream(ctx *RequestContext, semanticResponse *
 	if !bytes.Equal(plan.finalBody, answer) {
 		if noted := r.encodeNotedStream(ctx); noted != nil {
 			frames, delivered = noted, plan.finalBody
+		} else {
+			// The warning travels in the headers with the original frames.
+			ctx.ResponseGuard.bodyNoteCodes = nil
 		}
 	}
 	if delivered != nil {

@@ -21,7 +21,9 @@ decision's rules do, and applies its action when its condition holds.
 Routing picks a model before it answers, so a decision cannot act on what the
 model said. `response_guard` is the step after the answer: it reads the
 response-stage signals over the answer and the request-stage ones over the
-request, and refuses, flags or passes the answer accordingly.
+request, and refuses, flags or passes the answer accordingly. From the primary
+answer it reads assistant text, refusals, and the name and arguments of each
+function or custom tool call sent to the client. Hidden reasoning stays separate.
 
 ## When to Use
 
@@ -159,6 +161,11 @@ verdict on it still holds. A semantic hit serves the answer the guard released
 for a similar earlier request, without evaluating the guard's conditions on the
 new request, such as a `keyword` or `fact_check` condition. Where that matters,
 use `mode: exact` for that decision's cache.
+
+A tool-call-only reply has no text block for an inline note. With `annotate`
+and `details: true`, the router delivers the warning in `x-vsr-warnings` and
+skips the cache write. Upgrading from a router that did not inspect tool-call
+arguments starts a new cache partition for decisions with a response guard.
 
 Changing the guard starts the decision's cache fresh. Changing a signal it
 reads, such as a jailbreak rule's `predicate`, does not: set a new

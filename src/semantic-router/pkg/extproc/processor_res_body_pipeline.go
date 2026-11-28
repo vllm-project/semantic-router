@@ -245,7 +245,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	originalBody []byte,
 ) (*ext_proc.ProcessingResponse, []byte) {
 	response := buildResponseBodyContinueResponse(nil, nil)
-	changed := r.applyResponseGuardNotes(ctx.ResponseGuard, semanticResponse)
+	changed, noteCodes := ctx.ResponseGuard.prependNotes(semanticResponse)
 	addResponseStageTrace(ctx, response)
 	if !changed {
 		return response, originalBody
@@ -265,6 +265,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 		ctx.ProtocolDiagnostics, 0, diagnosticsBeforeEncode,
 	)
 	setResponseBodyMutation(response, encoded)
+	ctx.ResponseGuard.bodyNoteCodes = noteCodes
 	return response, encoded
 }
 

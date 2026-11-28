@@ -130,9 +130,8 @@ func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceO
 		len(job.history),
 	)
 
-	storedCount, err := job.extractor.ProcessResponseWithHistoryCount(
+	storedCount, err := job.extractor.StoreAssistantTurn(
 		jobCtx,
-		job.sessionID,
 		job.userID,
 		job.userMessage,
 		job.assistantResponse,

@@ -6,6 +6,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -252,6 +255,60 @@ func TestResponseCachePartitionFollowsTheDecisionsGuard(t *testing.T) {
 	}
 }
 
+func TestResponseCacheMissesEntriesPredatingToolArgumentInspection(t *testing.T) {
+	guard := guardPlugin(jailbreakGuard(config.ResponseGuardBlock, ""))
+	ctx := &RequestContext{
+		VSRSelectedDecision:   &config.Decision{Name: "guarded", Plugins: []config.DecisionPlugin{guard}},
+		SourceFormat:          llmprotocol.OpenAIChatV1,
+		CacheExactFingerprint: "weather",
+	}
+	current := responseCacheIdentity(ctx, "guarded-model")
+	previous := current
+	guardConfig, err := cache.FingerprintValue(requestResponseGuard(ctx))
+	require.NoError(t, err)
+	// Earlier routers keyed the guard only by its configuration.
+	previous.Partition.Epoch = cache.CombineFingerprints("", guardConfig)
+
+	backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, MaxEntries: 1})
+	t.Cleanup(func() { _ = backend.Close() })
+	service, err := newResponseCacheService(nil, backend, "", nil)
+	require.NoError(t, err)
+	require.NoError(t, service.StoreExact(t.Context(), cache.CacheWrite{
+		Identity: previous, ResponseBody: []byte(chatWeatherReply), TTL: cache.DefaultTTL(),
+	}))
+	hit, err := service.LookupExact(t.Context(), cache.ExactLookup{Identity: previous})
+	require.NoError(t, err)
+	require.True(t, hit.Found, "the fixture must be readable under the old partition")
+	hit, err = service.LookupExact(t.Context(), cache.ExactLookup{Identity: current})
+	require.NoError(t, err)
+	require.False(t, hit.Found, "the current guard must miss the old entry")
+}
+
+func TestResponseCacheSkipsToolOnlyReplyWithHeaderWarning(t *testing.T) {
+	cfg, err := config.ParseYAMLBytes([]byte(guardCacheConfig))
+	require.NoError(t, err)
+	engine := routing.NewEngine(newParityRouter(t, cfg), routing.DefaultOptions)
+	request := guardCacheRequest(llmprotocol.OpenAIChatV1, "__guarded__ __note__ weather", false)
+
+	for attempt := range 2 {
+		t.Run(fmt.Sprintf("request_%d", attempt+1), func(t *testing.T) {
+			plan, err := engine.Plan(t.Context(), request())
+			require.NoError(t, err)
+			defer plan.Finish(nil)
+			if reply := plan.Immediate; reply != nil {
+				t.Fatalf("response path = %q, want a fresh response with its warning", reply.Header.Get(headers.VSRResponsePath))
+			}
+			out, err := engine.Respond(t.Context(), plan, &routing.UpstreamResponse{
+				Status: 200, Header: routing.Header{{Name: "content-type", Value: "application/json"}},
+				Body: strings.NewReader(chatWeatherReply),
+			})
+			require.NoError(t, err)
+			require.Equal(t, headers.WarningGuard, out.Header.Get(headers.VSRWarnings))
+			assertGuardDelivered(t, out, "call_weather")
+		})
+	}
+}
+
 // The cache keeps an answer the guard passed or noted in full, and never one
 // it blocked or flagged only in x-vsr-warnings, which a hit does not carry.
 func TestResponseGuardCacheSkipReason(t *testing.T) {
@@ -276,10 +333,24 @@ func TestResponseGuardCacheSkipReason(t *testing.T) {
 	t.Run("noted", func(t *testing.T) {
 		server, _ := newHallucinationDecider([]string{"450 meters"}, false)
 		router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
-		guardResponse(t, router, ctx, hallucinationAssistantResponse(hallucinationAnswer))
+		ctx.SourceFormat, ctx.TargetFormat = llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1
+		body := []byte(strings.ReplaceAll(string(extProcResponseFixture(ctx.SourceFormat)), "hello", hallucinationAnswer))
+		response, err := router.decodeClientResponse(body, ctx)
+		require.NoError(t, err)
+		plan := router.prepareResponsePolicy(ctx, response, body)
+		require.Contains(t, string(plan.finalBody), "[Hallucination Warning]")
 		if got := ctx.ResponseGuard.cacheSkipReason(); got != "" {
 			t.Fatalf("cacheSkipReason() = %q for an answer whose warning is its note", got)
 		}
+	})
+	t.Run("the noted answer could not be encoded", func(t *testing.T) {
+		server, _ := newHallucinationDecider([]string{"450 meters"}, false)
+		router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))
+		// This response has text for a note but lacks the ID required by the codec.
+		plan := guardResponse(t, router, ctx, hallucinationAssistantResponse(hallucinationAnswer))
+		assertDelivered(t, ctx, plan, headers.WarningHallucination)
+		require.NotContains(t, string(plan.finalBody), "[Hallucination Warning]")
+		require.Equal(t, "response_guard_annotated", ctx.ResponseGuard.cacheSkipReason())
 	})
 	if got := (*responseGuardRun)(nil).cacheSkipReason(); got != "" {
 		t.Fatalf("cacheSkipReason() = %q without a guard", got)

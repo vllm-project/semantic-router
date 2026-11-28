@@ -204,6 +204,8 @@ func (e *MemoryExtractor) ProcessResponseWithHistory(
 // ProcessResponseWithHistoryCount stores the current conversation turn directly in
 // the vector store (Q: ... / A: ...) and, every N turns, a session-level
 // rolling window chunk that concatenates recent turns for multi-hop retrieval.
+// assistantResponse is raw prose. Use StoreAssistantTurn for a structured answer
+// whose prose has already been cleaned separately from its tool arguments.
 //
 // The session chunk is built from the conversation history (obtained from the
 // Response API's previous_response_id chain) plus the current turn. This gives
@@ -222,6 +224,26 @@ func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 	assistantResponse string,
 	history []openai.ChatCompletionMessageParamUnion,
 ) (int, error) {
+	return e.storeAssistantTurn(ctx, userID, userMessage, history, func() string {
+		return StripThinkTags(assistantResponse)
+	})
+}
+
+// StoreAssistantTurn stores a rendered current answer, including literal tool
+// arguments. The caller has already stripped inline reasoning from its prose.
+func (e *MemoryExtractor) StoreAssistantTurn(
+	ctx context.Context, userID, userMessage, assistantResponse string,
+	history []openai.ChatCompletionMessageParamUnion,
+) (int, error) {
+	return e.storeAssistantTurn(ctx, userID, userMessage, history, func() string {
+		return assistantResponse
+	})
+}
+
+func (e *MemoryExtractor) storeAssistantTurn(
+	ctx context.Context, userID, userMessage string,
+	history []openai.ChatCompletionMessageParamUnion, prepareAnswer func() string,
+) (int, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
@@ -230,8 +252,7 @@ func (e *MemoryExtractor) ProcessResponseWithHistoryCount(
 		return 0, nil
 	}
 
-	assistantResponse = StripThinkTags(assistantResponse)
-
+	assistantResponse := prepareAnswer()
 	if userMessage == "" && assistantResponse == "" {
 		logging.Debugf("Memory chunk store: SKIPPED - empty turn")
 		return 0, nil

@@ -320,6 +320,8 @@ func semanticText(contents []llmprotocol.Content) string {
 	return strings.Join(parts, " ")
 }
 
+// extractSemanticAssistantResponseText cleans reasoning tags from the prose
+// parts of the answer while tool calls keep their arguments verbatim.
 func extractSemanticAssistantResponseText(response *llmprotocol.Response) string {
-	return memory.StripThinkTags(semanticAssistantContent(response))
+	return response.AssistantText(memory.StripThinkTags)
 }
