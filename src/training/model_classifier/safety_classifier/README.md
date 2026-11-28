@@ -23,6 +23,35 @@ tokens, retain rejected rows, and evaluate short retention, long inputs and
 safe quotations separately. Freeze checkpoint selection, thresholds and input
 policy before scoring independent evaluation data.
 
+## Setup
+
+Create the locked environment with uv. `pyproject.toml` bounds the
+dependencies and `uv.lock` pins them:
+
+```bash
+uv sync --project src/training/model_classifier/safety_classifier --locked
+```
+
+Run the area's commands from the repository root through
+`uv run --project src/training/model_classifier/safety_classifier`, for
+example the module entrypoints documented in the recipes:
+
+```bash
+uv run --project src/training/model_classifier/safety_classifier \
+  python -m src.training.model_classifier.safety_classifier.train --help
+```
+
+The unit tests run the same way:
+
+```bash
+uv run --project src/training/model_classifier/safety_classifier \
+  python -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+```
+
+`requirements.txt` stays for pip users and the ROCm image
+(`Dockerfile.rocm` installs it); the uv environment is the recommended
+setup path for contributors.
+
 ## Vela independent Hazard thresholds
 
 The Vela `train_vela_hazard` entrypoint trains independent sigmoid labels with
