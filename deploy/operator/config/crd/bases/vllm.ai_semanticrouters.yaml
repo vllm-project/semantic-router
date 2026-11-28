@@ -3439,8 +3439,9 @@ spec:
                     description: Size is the storage size
                     type: string
                   storageClassName:
-                    default: standard
-                    description: StorageClassName is the storage class name
+                    description: |-
+                      StorageClassName is the storage class name. Leave it empty to use the
+                      cluster's default StorageClass.
                     type: string
                 type: object
               podAnnotations:

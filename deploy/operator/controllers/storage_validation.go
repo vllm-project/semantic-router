@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -30,9 +31,23 @@ import (
 const (
 	// StorageClassDefaultAnnotation is the annotation used to mark a StorageClass as default
 	StorageClassDefaultAnnotation = "storageclass.kubernetes.io/is-default-class"
+	// StorageClassBetaDefaultAnnotation is the older beta annotation that
+	// Kubernetes still honors when choosing the default StorageClass.
+	StorageClassBetaDefaultAnnotation = "storageclass.beta.kubernetes.io/is-default-class"
 )
 
-// detectDefaultStorageClass finds the default StorageClass in the cluster
+// isDefaultStorageClass reports whether a StorageClass is marked as default
+// with either the GA or the beta annotation, as Kubernetes does.
+func isDefaultStorageClass(sc *storagev1.StorageClass) bool {
+	return sc.Annotations[StorageClassDefaultAnnotation] == "true" ||
+		sc.Annotations[StorageClassBetaDefaultAnnotation] == "true"
+}
+
+// detectDefaultStorageClass finds the default StorageClass in the cluster.
+// When more than one StorageClass is marked as default (for example while
+// migrating from one default to another), it follows the same rule as the
+// Kubernetes DefaultStorageClass admission plugin: the most recently created
+// class wins, and ties are broken by name in ascending order.
 func detectDefaultStorageClass(ctx context.Context, c client.Client) (string, error) {
 	logger := log.FromContext(ctx)
 
@@ -41,16 +56,30 @@ func detectDefaultStorageClass(ctx context.Context, c client.Client) (string, er
 		return "", fmt.Errorf("failed to list StorageClasses: %w", err)
 	}
 
-	for _, sc := range storageClasses.Items {
-		if sc.Annotations != nil {
-			if val, ok := sc.Annotations[StorageClassDefaultAnnotation]; ok && val == "true" {
-				logger.Info("Found default StorageClass", "name", sc.Name)
-				return sc.Name, nil
-			}
+	var defaults []storagev1.StorageClass
+	for i := range storageClasses.Items {
+		if isDefaultStorageClass(&storageClasses.Items[i]) {
+			defaults = append(defaults, storageClasses.Items[i])
 		}
 	}
+	if len(defaults) == 0 {
+		return "", fmt.Errorf("no default StorageClass found in the cluster")
+	}
 
-	return "", fmt.Errorf("no default StorageClass found in the cluster")
+	sort.Slice(defaults, func(i, j int) bool {
+		ti, tj := defaults[i].CreationTimestamp.UnixNano(), defaults[j].CreationTimestamp.UnixNano()
+		if ti == tj {
+			return defaults[i].Name < defaults[j].Name
+		}
+		return ti > tj
+	})
+
+	if len(defaults) > 1 {
+		logger.Info("Multiple default StorageClasses found, using the most recently created", "count", len(defaults), "name", defaults[0].Name)
+	} else {
+		logger.Info("Found default StorageClass", "name", defaults[0].Name)
+	}
+	return defaults[0].Name, nil
 }
 
 // validateStorageClass validates that a StorageClass is available
