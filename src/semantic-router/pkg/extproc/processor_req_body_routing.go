@@ -135,6 +135,8 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	if err == nil {
 		// Runs after request plugins, so a request_params cap on n still applies.
 		err = protocolcodec.RequireStreamableCandidates(dispatch.targetFormat, projected)
+		// A Looper run whose every hop this refuses answers the client with it.
+		noteLooperHopRefusal(ctx, err)
 	}
 	if err != nil {
 		var protocolError *llmprotocol.ProtocolError

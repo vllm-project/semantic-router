@@ -88,6 +88,7 @@ func (r *OpenAIRouter) executeLooperGraph(
 		ctx = masking.WithRequestScope(ctx, scope)
 	}
 	ctx = r.withReplayRunParent(ctx, reqCtx)
+	ctx, refusals := withLooperHopRefusals(ctx)
 	outcome, err := graph.Run(ctx, program, in, graph.Options{
 		Caller: hops,
 		Hop:    routing.Hop{Decision: decision.Name, Recipe: string(req.RecipeName)},
@@ -99,7 +100,8 @@ func (r *OpenAIRouter) executeLooperGraph(
 	}
 	if err != nil {
 		logLooperCallBudgetExhaustion(err, outcome, decision, reqCtx)
-		return nil, r.looperExecutionErrorResponse(looperStepError(err), originalModel, decision, reqCtx)
+		err = explainLooperRunError(looperStepError(err), refusals, outcome)
+		return nil, r.looperExecutionErrorResponse(err, originalModel, decision, reqCtx)
 	}
 	resp, ok := looper.ResponseValue.In(outcome.Values)
 	if !ok {
