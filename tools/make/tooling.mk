@@ -43,7 +43,7 @@ start-provider-mocker: provider-mocker-install ## Run the deterministic test bac
 bench-test-deps: $(HARNESS_VENV_DEPS) ## Install the bench package dependencies its reasoning and agent crew tests import
 	@"$(AGENT_PYTHON)" -m pip install --quiet -r bench/requirements.txt
 
-test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
+test-grounded-fusion-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test the grounded fusion DRACO loader, rubric judge and arm comparison offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/grounded_fusion
 
 # The real-tokenizer case downloads a Hugging Face tokenizer, so it stays a manual run.
@@ -59,12 +59,15 @@ test-router-flow-bench: $(HARNESS_VENV_DEPS) ## Test the Router Flow EvalScope h
 test-agent-crew: bench-test-deps ## Test the agent crew harness against its stub router
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_crew
 
+test-agent-task-bench: $(HARNESS_VENV_DEPS) vllm-sr-install-cli ## Test native agent tasks and their sr-bench CLI against local HTTP
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_agent_task_live_benchmark.py src/vllm-sr/tests/test_sr_bench_agent_task.py
+
 test-looper-tts: $(HARNESS_VENV_DEPS) ## Test the offline Looper experiment and evidence contracts
 	@"$(AGENT_PYTHON)" -m unittest discover -s bench/looper_tts -t . -p 'test_*.py'
 
 test-agent-kv-tier-bench: $(HARNESS_VENV_DEPS) ## Test the agent KV tier placement rules and report arithmetic offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_kv_tier
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench ## Test every registered bench/ research tool
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-agent-task-bench ## Test every registered bench/ research tool
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-bench-tools
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-agent-task-bench test-bench-tools

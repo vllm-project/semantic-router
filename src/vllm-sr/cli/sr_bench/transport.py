@@ -187,12 +187,25 @@ def mom_usage(
         except ValueError as exc:
             raise CallFailure("Invalid MoM usage receipt") from exc
         if (
-            receipt.get("version") != 1
+            not isinstance(receipt, dict)
+            or type(receipt.get("version")) is not int
+            or receipt["version"] != 1
             or not isinstance(receipt.get("complete"), bool)
             or not isinstance(receipt.get("calls"), list)
         ):
             raise CallFailure("Invalid MoM usage receipt contract")
         calls = receipt["calls"]
+        if not calls and not receipt["complete"]:
+            # The Router emits this sentinel when no complete call trace is available.
+            return {
+                "usage": None,
+                "cost_usd": None,
+                "model_usage": [],
+                "inference_call_count": None,
+                "usage_complete": False,
+                "cache_read_reported": None,
+                "cache_write_reported": None,
+            }
         if not 1 <= len(calls) <= MAX_RECEIPT_CALLS:
             raise CallFailure("Invalid MoM inference call count")
         breakdown = []
@@ -455,9 +468,11 @@ def chat(
             obj = json.loads(data)
             if obj.get("error"):
                 raise CallFailure("Target returned an error event")
-            if native_evidence is not None and obj.get("model") is not None:
-                native_output.validate_response(native_evidence, obj["model"], None)
-                provider_model_observed = True
+            if obj.get("model") is not None:
+                if native_evidence is not None:
+                    native_output.validate_response(native_evidence, obj["model"], None)
+                if isinstance(obj["model"], str) and obj["model"]:
+                    provider_model_observed = True
             model = obj.get("model") or model
             if obj.get("usage"):
                 raw_usage = obj["usage"]
@@ -590,7 +605,10 @@ def chat(
             result["inference_call_count"] = 1
         result["cost_complete"] = result["cost_usd"] is not None
         result["config_hash"] = router_receipts(response.headers).get("config_hash")
-        result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
+        result["provider_model_observed"] = provider_model_observed
+        result["selected_model"] = response.headers.get("x-vsr-selected-model") or (
+            model if provider_model_observed else None
+        )
         result["decision"] = response.headers.get("x-vsr-selected-decision")
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
             raise CallFailure(

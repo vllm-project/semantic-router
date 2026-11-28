@@ -1,6 +1,9 @@
+import hashlib
 import importlib.util
 import json
 import sys
+from dataclasses import asdict
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
@@ -10,6 +13,90 @@ MEAN_SCORE = 0.75
 MISSING_HEADER_COUNT = 2
 MIN_LONG_HORIZON_TASKS = 28
 MIN_LONG_HORIZON_TURNS = 163
+
+
+@pytest.mark.parametrize(
+    ("suite", "task_count", "turn_count", "fingerprint"),
+    [
+        (
+            "smoke",
+            4,
+            12,
+            "d146d1d1e4da82451e81f6f23047e3a829c2e0e54db3d190300c871084fdcb18",
+        ),
+        (
+            "long-horizon",
+            28,
+            163,
+            "8e484ba43ad72d8417b3991170b9edc6b7e6febc5d9faa7f1021096f99ef14d4",
+        ),
+        (
+            "all",
+            32,
+            175,
+            "e21241f01dda73b7796b5e33e31a7e1119bcbd6fab977d1e7d9f045a75954904",
+        ),
+    ],
+)
+def test_native_task_and_protocol_snapshots(
+    suite: str, task_count: int, turn_count: int, fingerprint: str
+) -> None:
+    bench = load_benchmark_module()
+    tasks = bench.task_specs(suite=suite)
+    assert len(tasks) == task_count
+    assert sum(len(task.turns) for task in tasks) == turn_count
+    assert all(
+        sum(bool(turn.expected_terms) for turn in task.turns) == 1 for task in tasks
+    )
+    snapshot = [
+        {
+            "task": asdict(task),
+            "messages": [
+                bench.build_messages(task=task, turn_index=index)
+                for index in range(len(task.turns))
+            ],
+            "chat_bodies": [
+                bench.build_body(
+                    args=bench.parse_args(["--suite", suite]),
+                    task=task,
+                    turn_index=index,
+                    previous_response_id="",
+                )
+                for index in range(len(task.turns))
+            ],
+            "responses": [
+                bench.responses_turn_items(
+                    task=task, turn_index=index, include_history=True
+                )
+                for index in range(len(task.turns))
+            ],
+        }
+        for task in tasks
+    ]
+    payload = json.dumps(
+        snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    assert hashlib.sha256(payload.encode()).hexdigest() == fingerprint
+
+
+@pytest.mark.parametrize(
+    ("content", "terms", "score", "missing"),
+    [
+        ("anything", (), None, []),
+        ("", ("one", "two"), 0.0, ["one", "two"]),
+        ("PREFIX-ONE-suffix", ("one", "two"), 0.5, ["two"]),
+        ("oNe TWO", ("one", "two"), 1.0, []),
+        ("A B C", ("a", "b", "c", "d", "e", "f", "g"), 0.4286, ["d", "e", "f", "g"]),
+    ],
+)
+def test_native_grading_keeps_substrings_and_four_decimal_credit(
+    content: str,
+    terms: tuple[str, ...],
+    score: float | None,
+    missing: list[str],
+) -> None:
+    bench = load_benchmark_module()
+    assert bench.score_answer(content=content, expected_terms=terms) == (score, missing)
 
 
 def load_benchmark_module():
@@ -462,6 +549,42 @@ def test_summary_reports_cost_routing_latency_and_truncation():
     assert summary["routing_latency_ms"]["p50"] == 0.5
     assert summary["truncated_requests"] == 1
     assert summary["reasoning_tokens"] == 120
+
+
+@pytest.mark.parametrize(
+    ("trace", "latency"),
+    [
+        ("", None),
+        ('session_phase="user_turn"', None),
+        ("routing_latency_ms=0.25", 0.25),
+    ],
+)
+def test_trace_fields_preserve_normalized_optional_routing_latency(
+    trace: str, latency: float | None
+) -> None:
+    bench = load_benchmark_module()
+    task = bench.task_specs()[0]
+    result = bench.response_record(
+        status=HTTPStatus.OK,
+        headers={"x-vsr-trace": trace},
+        payload=json.dumps({"choices": [{"message": {"content": "ok"}}]}),
+        started=0,
+    )
+    row = bench.row_from_result(
+        args=bench.parse_args([]),
+        task=task,
+        task_index=0,
+        task_repetition=0,
+        turn_index=0,
+        turn=task.turns[0],
+        session_id="native-latency",
+        result=result,
+        previous_selected_model="",
+        previous_response_id="",
+    )
+    assert row["routing_latency_ms"] == latency
+    summary = bench.summarize(rows=[row], elapsed_seconds=1.0, label="native-latency")
+    assert summary["routing_latency_ms"]["p50"] == latency
 
 
 def test_cost_summary_counts_priced_requests_per_currency():
