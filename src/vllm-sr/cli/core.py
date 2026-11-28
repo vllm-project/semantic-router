@@ -9,7 +9,7 @@ from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
 from cli.commands.runtime_paths import _runtime_config_filename, resolve_state_root_dir
-from cli.consts import HEALTH_CHECK_TIMEOUT, IMAGE_PULL_POLICY_NEVER
+from cli.consts import HEALTH_CHECK_TIMEOUT
 from cli.container_cli import (
     container_logs,
     container_logs_output,
@@ -135,9 +135,16 @@ def ensure_runtime_images_for_pull_policy(
     dashboard_disabled=False,
     include_envoy=True,
 ):
+    """Resolve every runtime image this start needs, as the pull policy says.
+
+    This runs before the start stops a running stack, which is what keeps a
+    registry it cannot read from turning a working Router into an outage: the
+    command exits here, with the Router still up and its image already in the
+    local cache. The pull itself is remembered for the run, so the container
+    start that follows does not pull the same image twice.
+    """
+
     env_vars = env_vars or {}
-    if pull_policy != IMAGE_PULL_POLICY_NEVER:
-        return
     get_runtime_images(
         image=image,
         router_image=router_image,
@@ -270,9 +277,12 @@ def _start_vllm_sr_locked(
 
     log_startup_banner(source_config_file, listeners, stack_layout)
     log.info(f"Runtime topology: {runtime_topology}")
-    for container_name in stack_layout.runtime_container_names:
-        ensure_clean_runtime_container(container_name)
 
+    # Resolve and obtain the images this start needs before it stops the stack
+    # that is running. A registry it cannot read then leaves that stack serving,
+    # with its image still in the local cache, instead of removing the Router
+    # first and exiting with nothing to start. The requested pull policy still
+    # decides whether an image already present locally is used as is.
     dashboard_disabled = env_vars.get("DISABLE_DASHBOARD") == "true"
     shared_network_name, state_root_dir = _prepare_runtime_network(
         source_config_file,
@@ -286,6 +296,9 @@ def _start_vllm_sr_locked(
         dashboard_disabled,
         include_envoy=runs_envoy(gateway),
     )
+
+    for container_name in stack_layout.runtime_container_names:
+        ensure_clean_runtime_container(container_name)
 
     started_backends, runtime_network_name = _start_support_services(
         user_config,
