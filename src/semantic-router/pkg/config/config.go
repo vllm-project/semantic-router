@@ -298,6 +298,7 @@ type RouterOptions struct {
 	SkipProcessing              SkipProcessingConfig `yaml:"skip_processing,omitempty"`
 	AllowLossyTranslation       []string             `yaml:"allow_lossy_translation,omitempty"`
 	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	ProtocolLimits              ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
 	RoutingInput                RoutingInputConfig   `yaml:"routing_input,omitempty"`
 	Headers                     RouterHeadersConfig  `yaml:"headers,omitempty"`
 	ContextWindow               ContextWindowConfig  `yaml:"context_window,omitempty"`

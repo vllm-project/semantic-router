@@ -45,7 +45,8 @@ type CanonicalRouterGlobal struct {
 	// format does not declare that the Router captures at ingress and merges
 	// back on same-format dispatch. Every member not listed keeps failing
 	// closed, and captured members never influence routing decisions.
-	AllowRequestExtensionFields []string `yaml:"allow_request_extension_fields,omitempty"`
+	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	ProtocolLimits              ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
 	// RoutingInput chooses the user text that routing reads.
 	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
 	// Headers governs the optional response headers, such as who may turn on
@@ -247,6 +248,7 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.Fallback = router.Fallback.Clone()
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
 	cfg.AllowRequestExtensionFields = router.AllowRequestExtensionFields
+	cfg.ProtocolLimits = router.ProtocolLimits
 	cfg.RoutingInput = router.RoutingInput
 	cfg.Headers = router.Headers
 	cfg.ContextWindow = router.ContextWindow

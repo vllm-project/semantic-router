@@ -128,6 +128,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 
 			AllowLossyTranslation:       cfg.AllowLossyTranslation,
 			AllowRequestExtensionFields: cfg.AllowRequestExtensionFields,
+			ProtocolLimits:              cfg.ProtocolLimits,
 			RoutingInput:                cfg.RoutingInput,
 			Headers:                     cfg.Headers,
 			ContextWindow:               cfg.ContextWindow,

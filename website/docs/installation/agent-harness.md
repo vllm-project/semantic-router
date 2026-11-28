@@ -1704,6 +1704,10 @@ carries the matching result. For streaming, check complete tool arguments, the
 terminal event, and final answer. Protocol compatibility alone does not verify
 the model and harness together.
 
+If requests fail with `tool_text_limit`, check the reported field, size,
+and effective limit. Operators can tune both tool text limits with
+[the Router's protocol limits](./protocol-compatibility#validation-and-failure-behavior).
+
 When Router Learning protection is configured, it needs an explicit session
 identity. Send both headers on related calls:
 

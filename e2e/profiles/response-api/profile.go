@@ -131,6 +131,7 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-defer-loading-opt-in",
 		"protocol-codec-anthropic-system-messages-opt-in",
 		"protocol-codec-later-instructions-opt-in",
+		"protocol-codec-tool-description-limit",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",
 		"protocol-codec-anthropic-per-message-effort",

@@ -927,6 +927,26 @@ tools or error translation.
   `reasoning.signature` for signed thinking in a response or in a Messages
   request's history (see signed reasoning above), `store` (see stored
   completions above), and every other lossy translation still fails closed.
+- Tool names default to 256 UTF-8 bytes and tool descriptions to 262,144
+  UTF-8 bytes (256 KiB). A request over either limit fails with `tool_text_limit`.
+  The error gives the tool index, field, size, and limit. Operators can set
+  either limit under `global.router.protocol_limits`:
+
+  ```yaml
+  global:
+    router:
+      protocol_limits:
+        tool_name_bytes: 256            # 1 to 1024; 0 or omitted keeps 256
+        tool_description_bytes: 524288  # 1 to 1048576; 0 or omitted keeps 262144
+  ```
+
+  The limits apply wherever the Router decodes or re-encodes a request: the
+  standalone frontend, Envoy ExtProc, Looper stages, and plugin previews.
+  Clients cannot raise them per request. The request body limit and the
+  256-tool limit still apply, and descriptions are never truncated. Tool
+  definitions travel with every turn, so a higher limit means larger requests
+  through decoding, routing signals, and the backend prompt. It does not change
+  what the backend or provider accepts.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.

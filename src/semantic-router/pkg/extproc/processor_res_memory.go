@@ -89,7 +89,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 	reservation.Start(memoryPersistenceJob{
 		extractor:         r.MemoryExtractor,
 		codecs:            r.ProtocolCodecs,
-		allowedLossy:      r.Config.AllowLossyTranslation,
+		protocolPolicy:    r.Config.ProtocolPolicy(),
 		sessionID:         sessionID,
 		userID:            userID,
 		userMessage:       currentUserMessage,
@@ -103,7 +103,7 @@ func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
 type memoryPersistenceJob struct {
 	extractor         *memory.MemoryExtractor
 	codecs            *protocolcodec.Registry
-	allowedLossy      []string
+	protocolPolicy    llmprotocol.Policy
 	sessionID         string
 	userID            string
 	userMessage       string
@@ -112,7 +112,7 @@ type memoryPersistenceJob struct {
 }
 
 func (job memoryPersistenceJob) run(jobCtx context.Context) (memory.PersistenceOutcome, error) {
-	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.allowedLossy, job.history)
+	extractorHistory, historyErr := memoryHistoryForExtractor(job.codecs, job.protocolPolicy, job.history)
 	if historyErr != nil {
 		return memory.PersistenceOutcome{
 			Status:   "extraction_failed",
@@ -210,13 +210,13 @@ func (r *OpenAIRouter) responseMemoryAutoStoreEnabled(ctx *RequestContext) bool 
 
 func memoryHistoryForExtractor(
 	codecs *protocolcodec.Registry,
-	allowedLossy []string,
+	policy llmprotocol.Policy,
 	history []llmprotocol.Message,
 ) ([]openai.ChatCompletionMessageParamUnion, error) {
 	if len(history) == 0 {
 		return nil, nil
 	}
-	engine, err := protocolEngineFor(codecs, allowedLossy)
+	engine, err := protocolEngineFor(codecs, policy)
 	if err != nil {
 		return nil, err
 	}

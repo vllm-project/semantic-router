@@ -5,6 +5,7 @@
 # forwards in place for protocol-codec-anthropic-per-message-effort. Its chat
 # model declares no file input, and files reach it as a note. It also sends
 # tools marked for deferred loading in full.
+# It also raises the limit for protocol-codec-tool-description-limit.
 configOverride:
   version: v0.5
   listeners:
@@ -47,6 +48,8 @@ configOverride:
         - messages[].role
         - content.file
         - tools.defer_loading
+      protocol_limits:
+        tool_description_bytes: 524288
 resources:
   limits:
     cpu: "1"

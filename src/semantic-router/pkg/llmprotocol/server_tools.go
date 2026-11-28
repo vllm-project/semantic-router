@@ -18,13 +18,13 @@ func IsServerToolContent(content Content) bool {
 	return serverToolContentCapability(content) != 0
 }
 
-func validateServerTool(tool Tool, limits Limits) error {
+func validateServerTool(index int, tool Tool, limits Limits) error {
 	if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) != 0 || tool.Strict != nil ||
 		tool.CustomFormat != nil || tool.Description != "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "a server tool needs a name and keeps the rest of its definition as sent", nil)
 	}
 	if exceeds(tool.Name, limits.ToolNameBytes) {
-		return NewError(ErrorInvalidRequest, "tool_text_limit", "tool name exceeds the configured limit", nil)
+		return toolTextLimitError(index, "name", len(tool.Name), limits.ToolNameBytes)
 	}
 	if ValidateJSONObject(tool.Raw, limits.JSONDepth) != nil {
 		return NewError(ErrorInvalidRequest, "invalid_tool", "a server tool definition must be a JSON object", nil)

@@ -91,10 +91,12 @@ func TestMemoryHistoryForExtractorHonorsAcceptedLosses(t *testing.T) {
 		}}},
 	}
 
-	_, err := memoryHistoryForExtractor(nil, nil, history)
+	_, err := memoryHistoryForExtractor(nil, llmprotocol.DefaultPolicy(), history)
 	require.ErrorContains(t, err, "translation would lose tool_result.is_error")
 
-	messages, err := memoryHistoryForExtractor(nil, llmprotocol.OptInLossyFields(), history)
+	policy := llmprotocol.DefaultPolicy()
+	policy.AllowedLossyFields = llmprotocol.OptInLossyFields()
+	messages, err := memoryHistoryForExtractor(nil, policy, history)
 	require.NoError(t, err)
 	require.Len(t, messages, 3)
 	encoded, err := json.Marshal(messages[2])

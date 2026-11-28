@@ -19,6 +19,8 @@ package looper
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Streaming responses carry token counts in a final SSE chunk (emitted only
@@ -81,7 +83,7 @@ func TestParseStreamingResponse_PopulatesUsage(t *testing.T) {
 		"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
 		"data: [DONE]\n\n")
 
-	resp, err := c.parseStreamingResponse(body, "model-a")
+	resp, err := c.parseStreamingResponse(body, "model-a", llmprotocol.DefaultPolicy())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
