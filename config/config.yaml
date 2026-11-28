@@ -1275,6 +1275,9 @@ recipes:
                   action: annotate
                   details: true
               on_unknown: annotate
+              # Opt in to holding annotated streams so the rule's codes reach
+              # x-vsr-warnings at the cost of time to first token.
+              hold_stream: true
           # Disabled sample: field coverage only (reference config union coverage
           # for PromptCachePluginConfig). qwen3-32b speaks the Anthropic Messages
           # wire format this plugin targets; see tutorials/plugin/prompt-cache.

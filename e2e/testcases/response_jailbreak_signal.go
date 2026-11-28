@@ -23,6 +23,11 @@ func init() {
 		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak", "streaming"},
 		Fn:          testResponseJailbreakStreamingPassthrough,
 	})
+	pkgtestcases.Register("response-jailbreak-streaming-hold-warnings", pkgtestcases.TestCase{
+		Description: "Verify an annotate-only response_guard with hold_stream delivers a streamed answer with its warning code in x-vsr-warnings and counts the hold",
+		Tags:        []string{"kubernetes", "security", "jailbreak", "response-jailbreak", "streaming"},
+		Fn:          testResponseJailbreakStreamingHoldWarnings,
+	})
 	pkgtestcases.Register("response-jailbreak-streaming-block", pkgtestcases.TestCase{
 		Priority:    pkgtestcases.P0,
 		Description: "Verify a response_guard block rule holds a streamed answer until it has read the whole answer, then refuses it with the stream's error event",
@@ -179,6 +184,35 @@ func testResponseJailbreakStreamingPassthrough(ctx context.Context, client *kube
 	if strings.Contains(stream.header.Get(warningsHeader), responseJailbreakWarningCode) {
 		return fmt.Errorf("a live stream carried %s = %q; its headers left before the guard read the answer",
 			warningsHeader, stream.header.Get(warningsHeader))
+	}
+	return nil
+}
+
+// testResponseJailbreakStreamingHoldWarnings pins the opt-in: an annotate-only
+// guard with hold_stream holds the stream, so its warning code reaches the
+// client in x-vsr-warnings and the hold is counted, with the whole answer
+// delivered. The default passthrough case above pins the opposite behavior.
+func testResponseJailbreakStreamingHoldWarnings(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if opts.Verbose {
+		fmt.Println("[Test] Testing that hold_stream puts an annotate-only guard's warning on a stream")
+	}
+	stream, err := streamResponseJailbreak(ctx, client, opts,
+		responseJailbreakPrompt(responseJailbreakWarnHoldProbe, responseJailbreakPhrase), "response_jailbreak_warn_hold", "annotated")
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(stream.content, responseJailbreakPhrase) {
+		return fmt.Errorf("the held stream did not deliver the answer in full (%d frames, %d bytes)", stream.frames, len(stream.content))
+	}
+	if stream.scored < 1 {
+		return fmt.Errorf("the held stream was not scored by rule %q: %s did not grow", responseJailbreakSignalRule, signalExtractionMetric)
+	}
+	if !strings.Contains(stream.header.Get(warningsHeader), responseJailbreakWarningCode) {
+		return fmt.Errorf("a held stream did not carry %s = %q, want %q",
+			warningsHeader, stream.header.Get(warningsHeader), responseJailbreakWarningCode)
+	}
+	if stream.buffered < 1 || traceParam(stream.header, "response_guard", "buffered") == "" {
+		return fmt.Errorf("the annotated stream was not held (%s grew by %v), want a buffered stream", responseGuardBufferedMetric, stream.buffered)
 	}
 	return nil
 }

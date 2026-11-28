@@ -34,6 +34,11 @@ type ResponseGuardPluginConfig struct {
 	// signal it reads failed, timed out or, for a hallucination rule, had no
 	// grounding context to check the answer against. Default annotate.
 	OnUnknown string `json:"on_unknown,omitempty" yaml:"on_unknown,omitempty" jsonschema:"enum=block,enum=annotate,enum=none"`
+	// HoldStream holds a streamed answer until the guard has read all of it,
+	// so annotate-only rules' codes reach x-vsr-warnings. It costs
+	// time-to-first-token. Without it, annotate-only guards keep true
+	// streaming, as before.
+	HoldStream bool `json:"hold_stream,omitempty" yaml:"hold_stream,omitempty"`
 }
 
 // ResponseGuardRule is one condition on an answer and what happens to an
@@ -91,13 +96,17 @@ func (c *ResponseGuardPluginConfig) EffectiveOnUnknown() string {
 }
 
 // Enforces reports whether the guard can refuse or rewrite an answer: a rule
-// that blocks or writes a note, or on_unknown: block. The Router holds a
-// streamed answer of such a guard until the guard has read all of it.
+// that blocks or writes a note, on_unknown: block, or a guard that opted into
+// holding annotated streams (HoldStream). The Router holds a streamed answer
+// of such a guard until the guard has read all of it.
 func (c *ResponseGuardPluginConfig) Enforces() bool {
 	if c == nil {
 		return false
 	}
 	if c.EffectiveOnUnknown() == ResponseGuardBlock {
+		return true
+	}
+	if c.HoldStream {
 		return true
 	}
 	for _, rule := range c.Rules {

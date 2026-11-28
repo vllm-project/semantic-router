@@ -118,6 +118,27 @@ config:
                       name: unsafe_completion
                     action: annotate
                 on_unknown: annotate
+        - name: response_jailbreak_warn_hold
+          description: Warns on a held stream so x-vsr-warnings reaches a streaming client
+          priority: 200
+          rules:
+            operator: OR
+            conditions:
+              - type: keyword
+                name: response_warn_hold_probe
+          modelRefs:
+            - model: openai/mock-model
+              use_reasoning: false
+          plugins:
+            - type: response_guard
+              configuration:
+                hold_stream: true
+                rules:
+                  - when:
+                      type: jailbreak
+                      name: unsafe_completion
+                    action: annotate
+                on_unknown: annotate
         - name: default_decision
           description: Catch-all decision with response jailbreak detection disabled
           priority: 1
@@ -137,6 +158,10 @@ config:
             operator: OR
             keywords:
               - __response_warn_probe__
+          - name: response_warn_hold_probe
+            operator: OR
+            keywords:
+              - __response_warn_hold_probe__
         # Scored from the model's output, not the request. The block and warn
         # decisions above act on this observation through their
         # response_guard rules; the threshold that decides lives here.
