@@ -243,6 +243,55 @@ func restoreLooperFieldSSE(body []byte, flow json.RawMessage, field string) []by
 	return out
 }
 
+// prependChoiceStreamText writes prefix at the head of each choice's text in
+// a multi-choice Chat stream, as the buffered answer has it. It is nil when
+// no choice has text.
+func prependChoiceStreamText(body []byte, prefix string) []byte {
+	if prefix == "" {
+		return nil
+	}
+	lines := bytes.Split(body, []byte("\n"))
+	noted := map[int]bool{}
+	for i, line := range lines {
+		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok {
+			if payload := prependChunkChoiceText(bytes.TrimSpace(rest), prefix, noted); payload != nil {
+				lines[i] = append([]byte("data: "), payload...)
+			}
+		}
+	}
+	if len(noted) == 0 {
+		return nil
+	}
+	return bytes.Join(lines, []byte("\n"))
+}
+
+func prependChunkChoiceText(payload []byte, prefix string, noted map[int]bool) []byte {
+	var chunk map[string]json.RawMessage
+	var choices []map[string]json.RawMessage
+	if json.Unmarshal(payload, &chunk) != nil || json.Unmarshal(chunk["choices"], &choices) != nil {
+		return nil
+	}
+	changed := false
+	for _, choice := range choices {
+		var index int
+		var delta map[string]json.RawMessage
+		var content string
+		if json.Unmarshal(choice["index"], &index) != nil || json.Unmarshal(choice["delta"], &delta) != nil ||
+			json.Unmarshal(delta["content"], &content) != nil || content == "" || noted[index] {
+			continue
+		}
+		delta["content"], _ = json.Marshal(prefix + "\n\n" + content)
+		choice["delta"], _ = json.Marshal(delta)
+		noted[index], changed = true, true
+	}
+	if !changed {
+		return nil
+	}
+	chunk["choices"], _ = json.Marshal(choices)
+	payload, _ = json.Marshal(chunk)
+	return payload
+}
+
 func restoreLooperFieldJSON(body []byte, flow json.RawMessage, field string) []byte {
 	if len(flow) == 0 {
 		return body

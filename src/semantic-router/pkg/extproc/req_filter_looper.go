@@ -636,7 +636,13 @@ func (r *OpenAIRouter) releaseLooperAnswer(
 		return response
 	}
 	if streaming {
-		if noted = r.encodeNotedStream(reqCtx); noted == nil {
+		// The stream encoder writes one choice; Ratings streams one per model.
+		if len(reqCtx.SemanticResponse.Alternatives) > 0 {
+			noted = prependChoiceStreamText(clientBody, reqCtx.ResponseGuard.notePrefix())
+		} else {
+			noted = r.encodeNotedStream(reqCtx)
+		}
+		if noted == nil {
 			return response
 		}
 	}

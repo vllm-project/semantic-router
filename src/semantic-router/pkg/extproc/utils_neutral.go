@@ -19,8 +19,26 @@ func semanticAssistantContent(response *llmprotocol.Response) string {
 	if response == nil {
 		return ""
 	}
+	return semanticOutputContent(response.Output)
+}
+
+// semanticAlternativeContents returns the client-visible assistant text of
+// each alternative, in order: the choices after the first that a Chat client
+// receives.
+func semanticAlternativeContents(response *llmprotocol.Response) []string {
+	if response == nil {
+		return nil
+	}
+	contents := make([]string, 0, len(response.Alternatives))
+	for _, alternative := range response.Alternatives {
+		contents = append(contents, semanticOutputContent(alternative))
+	}
+	return contents
+}
+
+func semanticOutputContent(items []llmprotocol.OutputItem) string {
 	var text strings.Builder
-	for _, item := range response.Output {
+	for _, item := range items {
 		if item.Role != llmprotocol.RoleAssistant {
 			continue
 		}

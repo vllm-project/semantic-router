@@ -173,6 +173,10 @@ func semanticCachePartition(ctx *RequestContext, model string) string {
 	return responseCacheIdentity(ctx, model).Partition.Key()
 }
 
+// responseGuardCacheRevision changes when the same guard would judge a stored
+// answer differently. "2": it reads every choice.
+const responseGuardCacheRevision = "2"
+
 func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
 	protocol := strings.TrimSpace(string(ctx.SourceFormat))
 	if protocol == "" {
@@ -198,7 +202,7 @@ func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentit
 	// adding or changing the request's guard starts a new partition.
 	if guard != nil {
 		if value, err := cache.FingerprintValue(guard); err == nil {
-			epoch = cache.CombineFingerprints(epoch, value)
+			epoch = cache.CombineFingerprints(epoch, responseGuardCacheRevision, value)
 		}
 	}
 	scope := responseCacheScope(ctx)
