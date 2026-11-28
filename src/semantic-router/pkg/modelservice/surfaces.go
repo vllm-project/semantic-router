@@ -573,7 +573,7 @@ func statusError(status int, body *api.ErrorBody) error {
 	case http.StatusBadRequest, http.StatusNotFound, http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity:
 		return fmt.Errorf("%w: %s", ErrRejected, message)
 	default:
-		return fmt.Errorf("%w: %s", ErrFailed, message)
+		return decisionHTTPError(status, fmt.Errorf("%w: %s", ErrFailed, message))
 	}
 }
 
@@ -581,5 +581,5 @@ func transportError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	return fmt.Errorf("%w: %w", ErrFailed, err)
+	return decisionTransportError(fmt.Errorf("%w: %w", ErrFailed, err))
 }

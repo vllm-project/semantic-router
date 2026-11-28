@@ -5,6 +5,11 @@ listeners:
     port: 8899
     timeout: 1200s
 global:
+  router:
+    # Qwen3.5 and Qwen3.6 chat templates take a system message only first, so
+    # later system and developer messages reach them as user text in place.
+    allow_lossy_translation:
+      - messages[].role
   stores:
     response_cache:
       backend_type: memory

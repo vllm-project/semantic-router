@@ -18,6 +18,10 @@ Subcommands:
                           carry measurements only; --insight-refs (G2); economic
                           constraints from objective.constraints (E); frozen_test
                           only with --final)
+  verify                  drive sr-bench end to end for one candidate (I):
+                          preview routing + repetitions of AB/BA pairs (fresh
+                          baseline manifest run vs fresh candidate-plan) -> per-pair
+                          compare -> medians/ranges -> PASS/FAIL/INCONCLUSIVE
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -50,21 +55,26 @@ from .bank import apply_bank, build_bank, load_bank, write_bank
 from .contract import (
     ContractError,
     ExperimentSpec,
+    Workload,
     check_runnable_split,
     dataset_content_hash,
 )
 from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_refs
 from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
+from .live import live_verdict_from_runs, measurements_from_rows, verify_live
 from .proposers import rule_threshold, threshold_search
 from .runner import (
+    COST_PROXY_METRIC,
     HotReloadSession,
     RunnerEnv,
     RunnerError,
     RunnerTimeoutError,
     attribution_delta,
     evaluate_candidate,
+    replay_constraint_evidence,
     replay_metric_value,
+    routed_cost_index,
 )
 from .splitting import (
     default_split_rule,
@@ -73,6 +83,8 @@ from .splitting import (
     split_cases,
     write_splits,
 )
+from .srbench import SrbenchCli, cases_to_srbench_rows
+from .srbench import evaluate as srbench_evaluate
 
 
 def _print_json(value: object) -> None:
@@ -109,15 +121,19 @@ def _load_spec(path: str) -> ExperimentSpec:
         _fail(f"cannot read spec: {exc}")
 
 
-def _select_split(spec: ExperimentSpec, split_name: str) -> str:
+def _select_split(
+    spec: ExperimentSpec, split_name: str, workload: Workload | None = None
+) -> str:
     """B: resolve --split against the workload; frozen_test is quarantined and
-    legacy single-dataset workloads only accept 'dev'."""
+    legacy single-dataset workloads only accept 'dev'. M5: `workload` is the
+    selected Workload (default: the spec's first)."""
+    workload = workload if workload is not None else spec.workload
     try:
         check_runnable_split(split_name)
-        spec.workload.split_hash(split_name)
+        workload.split_hash(split_name)
     except ContractError as exc:
         raise ContractError(str(exc)) from exc
-    if spec.workload.legacy:
+    if workload.legacy:
         print(
             "warning: workload uses the legacy single-dataset form; treated as split 'dev' only; "
             "migrate to workload.splits for calib/dev/frozen_test separation",
@@ -158,12 +174,42 @@ def cmd_split(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cases_to_srbench(args: argparse.Namespace) -> int:
+    """X3: render the recipe-lab cases as the split's sr-bench dataset.
+
+    Deterministic (same cases => byte-identical output), so the printed
+    srbench_sha256 can be frozen into the contract's split declaration and
+    the same file re-hashes to it for as long as the campaign runs.
+    """
+    try:
+        cases = load_cases(args.cases)
+    except OSError as exc:
+        raise ContractError(f"cannot read cases: {exc}") from exc
+    rows = cases_to_srbench_rows(cases, benchmark=args.benchmark)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    _print_json(
+        {
+            "cases": str(args.cases),
+            "output": str(output),
+            "cases_count": len(rows),
+            "srbench_sha256": dataset_content_hash(output),
+        }
+    )
+    return 0
+
+
 def cmd_attribute(args: argparse.Namespace) -> int:
     spec = _load_spec(args.spec)
-    split_name = _select_split(spec, args.split)
+    # M5: transfer workloads are quarantined from attribution like frozen_test.
+    workload = spec.require_tunable_workload(getattr(args, "workload", None))
+    split_name = _select_split(spec, args.split, workload)
     # A4 contract gates: re-hash the selected split, then any --cases input.
     # ContractError propagates to main() -> exit 2.
-    split_hash = spec.verify_workload(split=split_name)
+    split_hash = spec.verify_workload(split=split_name, workload=workload.name)
     if args.cases:
         spec.require_dataset_file(args.cases, "cases", expected_hash=split_hash)
     try:
@@ -296,8 +342,10 @@ def cmd_propose(args: argparse.Namespace) -> int:
     if args.spec:
         spec = _load_spec(args.spec)
         # A4/B contract gate: optional spec; verifies the selected split hash.
-        split_name = _select_split(spec, args.split)
-        spec.verify_workload(split=split_name)
+        # M5: transfer workloads are quarantined from proposals.
+        workload = spec.require_tunable_workload(getattr(args, "workload", None))
+        split_name = _select_split(spec, args.split, workload)
+        spec.verify_workload(split=split_name, workload=workload.name)
     try:
         with Path(args.base_config).open("r", encoding="utf-8") as fh:
             base = yaml.safe_load(fh)
@@ -501,11 +549,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             f"budget exhausted: round {args.round} > budget.rounds {spec.budget.rounds}"
         )
     # B: resolve the split; frozen_test is quarantined, legacy is dev-only.
-    split_name = _select_split(spec, args.split)
-    split_hash = spec.workload.split_hash(split_name)
+    # M5: transfer workloads are quarantined from replay like frozen_test.
+    workload = spec.require_tunable_workload(getattr(args, "workload", None))
+    split_name = _select_split(spec, args.split, workload)
+    split_hash = workload.split_hash(split_name)
     # A4 contract gates: re-hash the selected split, then the --cases input
     # must be byte-identical to it (cross-round comparability).
-    spec.verify_workload(split=split_name)
+    spec.verify_workload(split=split_name, workload=workload.name)
     spec.require_dataset_file(args.cases, "cases", expected_hash=split_hash)
     try:
         bank = load_bank(args.bank)
@@ -582,6 +632,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
 
     baseline_summary: dict | None = None
+    # E2: baseline arm's routed_cost_index (None when no baseline was evaluated)
+    baseline_cost_index: float | None = None
     if args.baseline_config:
         print(
             f"[run] evaluating baseline config: {args.baseline_config}", file=sys.stderr
@@ -637,6 +689,17 @@ def cmd_run(args: argparse.Namespace) -> int:
                 "timings": result.get("timings"),
             }
         )
+        # E2: the baseline arm's cost proxy anchors `bound: baseline` constraints.
+        if spec.cost_model is not None:
+            baseline_cost_index, baseline_unknown = routed_cost_index(
+                result["rows"], spec.cost_model
+            )
+            if baseline_cost_index is None and baseline_unknown:
+                print(
+                    "[run] baseline cost proxy incomplete: routed model(s) not in cost_model: "
+                    + ", ".join(baseline_unknown),
+                    file=sys.stderr,
+                )
 
     appended = []
     timeouts = []
@@ -733,6 +796,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 verdict="RANKED",
                 dataset_hash=split_hash,
                 split=split_name,
+                workload=workload.name,
                 reasons=[f"incomplete replay capture: {result['incomplete_reason']}"],
                 gates=None,
                 bench_refs=[],
@@ -764,17 +828,50 @@ def cmd_run(args: argparse.Namespace) -> int:
         coverage_warning = (
             result["bank_stats"].get("no_bank_entry", 0) > 0 or metric_value is None
         )
+        # E2: replay cost proxy - a secondary metric plus constraint warnings.
+        # Without cost_model the replay tier does no constraint work at all:
+        # cost is adjudicated only in the live tier (the next-context export
+        # carries that hint).
+        reasons: list[str] = []
+        metrics: dict = (
+            {replay_metric: metric_value} if metric_value is not None else {}
+        )
+        constraint_evidence: dict | None = None
+        constraint_warning = False
+        cost_text = ""
+        if spec.cost_model is not None:
+            cost_index, unknown_models = routed_cost_index(
+                result["rows"], spec.cost_model
+            )
+            if cost_index is not None:
+                metrics[COST_PROXY_METRIC] = cost_index
+                cost_text = f" {COST_PROXY_METRIC}={cost_index}"
+            elif unknown_models:
+                reasons.append(
+                    "cost proxy incomplete: routed model(s) not in cost_model: "
+                    + ", ".join(unknown_models)
+                    + " (unknown cost is never counted as zero)"
+                )
+            if spec.objective.constraints:
+                evidence, constraint_warning = replay_constraint_evidence(
+                    spec.objective.constraints, cost_index, baseline_cost_index
+                )
+                constraint_evidence = {c["name"]: c for c in evidence}
+                reasons.extend(
+                    c["reason"] for c in evidence if c["status"] == "violated"
+                )
         record = LedgerRecord(
             round=args.round,
             ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             candidate=entry,
             tier="replay",
             baseline_ref=spec.stack.baseline_ref if spec.stack else "unknown",
-            metrics={replay_metric: metric_value} if metric_value is not None else {},
+            metrics=metrics,
             verdict="RANKED",
             dataset_hash=split_hash,
             split=split_name,
-            reasons=[],
+            workload=workload.name,
+            reasons=reasons,
             # A3: replay never evaluates guards; the declared gates are
             # recorded as explicitly not evaluated.
             gates={gate.name: "not_evaluated" for gate in spec.gates},
@@ -787,6 +884,8 @@ def cmd_run(args: argparse.Namespace) -> int:
             attribution_ref=args.attribution_ref,
             coverage_warning=coverage_warning,
             notes=notes,
+            constraint_warning=constraint_warning,
+            constraints=constraint_evidence,
         )
         stored = ledger.append(record)
         appended.append(stored)
@@ -799,8 +898,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             }
         )
         accuracy_text = "n/a" if metric_value is None else f"{metric_value * 100:.2f}%"
+        warning_text = " CONSTRAINT_WARNING" if constraint_warning else ""
         print(
-            f"[run] {candidate_path.name}: {replay_metric}={accuracy_text} -> ledger",
+            f"[run] {candidate_path.name}: {replay_metric}={accuracy_text}{cost_text} -> ledger{warning_text}",
             file=sys.stderr,
         )
 
@@ -879,6 +979,265 @@ def cmd_ledger(args: argparse.Namespace) -> int:
     _fail(f"unknown ledger action: {args.ledger_action}")  # pragma: no cover
 
 
+def verdict_exit_code(verdict: str) -> int:
+    """0 = PASS, 1 = FAIL, 2 = INCONCLUSIVE (or tool/usage error elsewhere)."""
+    return {"PASS": 0, "FAIL": 1}.get(verdict, 2)
+
+
+def cmd_live_verdict(args: argparse.Namespace) -> int:
+    """Compare two sr-bench runs and record the live-tier verdict."""
+    spec = _load_spec(args.spec)
+    # B: frozen_test is quarantined; only the --final promotion verdict may
+    # cite it. Every other split goes through the normal A4 re-hash gate.
+    if args.split == "frozen_test" and not args.final:
+        raise ContractError(
+            "frozen_test is quarantined; pass --final for the promotion verdict"
+        )
+    # M5: a transfer workload is final-verify only (the frozen_test rule
+    # applies to the whole workload).
+    workload = spec.select_workload(getattr(args, "workload", None))
+    if workload.role == "transfer" and not args.final:
+        raise ContractError(
+            f"workload {workload.name!r} has role 'transfer' (the frozen_test rule "
+            "applies to the whole workload): pass --final for the promotion verdict"
+        )
+    dataset_hash = spec.verify_workload(split=args.split, workload=workload.name)
+    try:
+        raw_measurements = (
+            [
+                json.loads(line)
+                for line in Path(args.guard_measurements)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            if args.guard_measurements
+            else []
+        )
+        candidate_row = (
+            json.loads(Path(args.candidate).read_text(encoding="utf-8"))
+            if args.candidate
+            else None
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        _fail(f"cannot load guard measurements or candidate: {exc}")
+    # A3: measurement schema violations are contract errors (exit 2); a
+    # `floor` key in the file must never silently override spec.gates.
+    measurements = measurements_from_rows(raw_measurements)
+    # G2: fail fast on unverifiable insight references (ContractError -> exit
+    # 2); a rec- reference needs the ledger it is resolved against.
+    ledger = Ledger(args.ledger) if args.ledger else None
+    insight_refs = resolve_insight_refs(parse_insight_refs(args.insight_refs), ledger)
+    candidate_row = candidate_row or {
+        "kind": "config",
+        "ref": args.candidate_run_id,
+        "change_summary": "",
+        "provenance": {"proposer": "external", "insight_refs": []},
+    }
+    merge_insight_refs(candidate_row.setdefault("provenance", {}), insight_refs)
+
+    cli = SrbenchCli(
+        bin=args.srbench_bin,
+        url=args.srbench_url,
+        store=args.srbench_store,
+        timeout_s=args.timeout,
+    )
+    try:
+        result = live_verdict_from_runs(
+            spec=spec,
+            cli=cli,
+            baseline_run_id=args.baseline_run_id,
+            candidate_run_id=args.candidate_run_id,
+            measurements=measurements,
+            workload_split=args.split,
+        )
+    except (ContractError, RuntimeError) as exc:
+        _fail(f"live verdict error: {exc}")
+
+    if args.ledger:
+        record = LedgerRecord(
+            round=args.round,
+            ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            candidate=candidate_row,
+            tier="live",
+            baseline_ref=args.baseline_run_id,
+            metrics={spec.objective.metric_key: result["metrics"]["candidate"]},
+            verdict=result["verdict"],
+            dataset_hash=dataset_hash,
+            # M1: the legacy single-dataset form has no real split.
+            split=None if workload.legacy else args.split,
+            legacy_workload=workload.legacy,
+            workload=workload.name,
+            reasons=result["reasons"],
+            gates=result["gates"],
+            # E: the declared constraints' measured evidence, for report replay.
+            constraints={c["name"]: c for c in result["constraints"]},
+            bench_refs=result["bench_refs"],
+            # M2: paired statistics from the compare payload, verbatim.
+            paired=result.get("paired"),
+            attribution_delta=None,
+            attribution_ref=args.attribution_ref,
+            coverage_warning=False,
+            notes=f"baseline={result['metrics']['baseline']}",
+        )
+        ledger.append(record)
+    _print_json(result)
+    return verdict_exit_code(result["verdict"])
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Drive sr-bench end to end for one candidate (I).
+
+    Preview routing first, then `--repetitions` AB/BA pairs (each pair
+    re-runs the baseline's frozen manifest AND submits a fresh
+    candidate-plan), per-pair compare, descriptive medians/ranges, and the
+    shared three-state verdict. Any incomplete pair -> INCONCLUSIVE.
+    """
+    spec = _load_spec(args.spec)
+    # B: frozen_test is quarantined; only the --final promotion verdict may
+    # cite it. Every other split goes through the normal A4 re-hash gate.
+    if args.split == "frozen_test" and not args.final:
+        raise ContractError(
+            "frozen_test is quarantined; pass --final for the promotion verdict"
+        )
+    # M5: a transfer workload is final-verify only (the frozen_test rule
+    # applies to the whole workload).
+    workload = spec.select_workload(getattr(args, "workload", None))
+    if workload.role == "transfer" and not args.final:
+        raise ContractError(
+            f"workload {workload.name!r} has role 'transfer' (the frozen_test rule "
+            "applies to the whole workload): pass --final for the promotion verdict"
+        )
+    dataset_hash = spec.verify_workload(split=args.split, workload=workload.name)
+    try:
+        raw_measurements = (
+            [
+                json.loads(line)
+                for line in Path(args.guard_measurements)
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            if args.guard_measurements
+            else []
+        )
+        candidate_row = json.loads(Path(args.candidate).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"cannot load guard measurements or candidate: {exc}") from exc
+    # A3: measurement schema violations are contract errors (exit 2); a
+    # `floor` key in the file must never silently override spec.gates.
+    measurements = measurements_from_rows(raw_measurements)
+    # G2: fail fast on unverifiable insight references (ContractError -> exit
+    # 2); a rec- reference needs the ledger it is resolved against.
+    ledger = Ledger(args.ledger) if args.ledger else None
+    insight_refs = resolve_insight_refs(parse_insight_refs(args.insight_refs), ledger)
+    merge_insight_refs(candidate_row.setdefault("provenance", {}), insight_refs)
+    # sr-bench MoM target ids the router is serving the candidate on: the
+    # CLI flag wins; otherwise the candidate file must carry srbench_targets.
+    if args.candidate_targets:
+        targets = [t.strip() for t in args.candidate_targets.split(",") if t.strip()]
+    else:
+        targets = candidate_row.get("srbench_targets")
+    if (
+        not isinstance(targets, list)
+        or not targets
+        or not all(isinstance(t, str) and t.strip() for t in targets)
+    ):
+        raise ContractError(
+            "verify needs sr-bench MoM target ids: pass --candidate-targets "
+            "(comma-separated) or add a non-empty srbench_targets list to the candidate JSON"
+        )
+    work_dir = (
+        Path(args.work_dir)
+        if args.work_dir
+        else Path(tempfile.mkdtemp(prefix="rl-verify-"))
+    )
+    cli = SrbenchCli(
+        bin=args.srbench_bin,
+        url=args.srbench_url,
+        store=args.srbench_store,
+        timeout_s=args.timeout,
+    )
+    try:
+        # M4: reference-arm run IDs are cached so repeated verify invocations
+        # do not re-run the (expensive) reference arms; default location
+        # follows the ledger when present, else the work dir.
+        run_cache = args.run_cache or (
+            Path(args.ledger).parent / "run-id-cache.json" if args.ledger else None
+        )
+        result = verify_live(
+            spec=spec,
+            cli=cli,
+            baseline_run_id=args.baseline_run_id,
+            baseline_manifest=args.baseline_manifest,
+            targets=targets,
+            repetitions=args.repetitions,
+            measurements=measurements,
+            work_dir=work_dir,
+            workload_split=args.split,
+            run_cache=run_cache,
+        )
+    except (ContractError, RuntimeError) as exc:
+        raise SystemExit(f"verify error: {exc}") from exc
+
+    if args.ledger:
+        preview = result.get("preview") or {}
+        notes_parts = [
+            f"baseline={result['metrics']['baseline']}",
+            f"repetitions={args.repetitions}",
+        ]
+        if preview.get("run_id"):
+            notes_parts.append(f"preview_run={preview['run_id']}")
+        distribution = preview.get("distribution")
+        if distribution:
+            notes_parts.append(
+                "routing_distribution="
+                + json.dumps(distribution, sort_keys=True, ensure_ascii=False)
+            )
+        record = LedgerRecord(
+            round=args.round,
+            ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            candidate=candidate_row,
+            tier="live",
+            # R2: when the baseline came from --baseline-manifest the run id
+            # is resolved inside verify_live and echoed in the result.
+            baseline_ref=args.baseline_run_id or result.get("baseline_run_id"),
+            metrics={spec.objective.metric_key: result["metrics"]["candidate"]},
+            verdict=result["verdict"],
+            dataset_hash=dataset_hash,
+            # M1: the legacy single-dataset form has no real split.
+            split=None if workload.legacy else args.split,
+            legacy_workload=workload.legacy,
+            workload=workload.name,
+            reasons=result["reasons"],
+            gates=result["gates"],
+            # E: the declared constraints' measured evidence, for report replay.
+            constraints={c["name"]: c for c in result["constraints"]},
+            bench_refs=result["bench_refs"],
+            # M2: the pairs' merged paired statistics, verbatim.
+            paired=result.get("paired"),
+            attribution_delta=None,
+            attribution_ref=args.attribution_ref,
+            coverage_warning=False,
+            notes="; ".join(notes_parts),
+        )
+        ledger.append(record)
+    _print_json(result)
+    return verdict_exit_code(result["verdict"])
+
+
+def cmd_score_candidate(args: argparse.Namespace) -> int:
+    """Score one deployed candidate against a saved sr-bench baseline.
+
+    The channel a coding agent uses to submit its own proposal: the receipt
+    (schema ``recipe-lab-sr-bench-run-v1``) is printed as one JSON line and
+    saved under ``<workspace>/sr-bench``. The exit code follows the verdict.
+    """
+    receipt = srbench_evaluate(args)
+    print(json.dumps(receipt, ensure_ascii=False, sort_keys=True, allow_nan=False))
+    return verdict_exit_code(receipt["verdict"])
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="recipe-lab",
@@ -937,6 +1296,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_split.set_defaults(func=cmd_split)
 
+    p_cases = sub.add_parser(
+        "cases", help="case-file utilities (X3: one contract, two dataset formats)"
+    )
+    cases_sub = p_cases.add_subparsers(dest="cases_command", required=True)
+    p_tosr = cases_sub.add_parser(
+        "to-srbench",
+        help="deterministically render a cases JSONL as an sr-bench dataset "
+        "(case_id->id, prompt->messages, truth->answer)",
+    )
+    p_tosr.add_argument(
+        "--cases", required=True, help="cases JSONL (case_id/prompt/truth)"
+    )
+    p_tosr.add_argument(
+        "--output", required=True, help="output sr-bench dataset JSONL path"
+    )
+    p_tosr.add_argument(
+        "--benchmark",
+        default="recipe-lab",
+        help="benchmark label recorded on every row (default: recipe-lab)",
+    )
+    p_tosr.set_defaults(func=cmd_cases_to_srbench)
+
     p_attr = sub.add_parser(
         "attribute", help="run E1/E2/E3 misroute attribution over labeled records"
     )
@@ -953,6 +1334,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="dev",
         choices=["calib", "dev", "frozen_test"],
         help="workload split the records were produced on (frozen_test is quarantined; B)",
+    )
+    p_attr.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads the records belong to (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
     )
     p_attr.add_argument(
         "--cases",
@@ -1058,6 +1445,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="workload split to verify against (frozen_test is quarantined; B)",
     )
     p_prop.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads to calibrate on (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
+    )
+    p_prop.add_argument(
         "--signal", required=True, help="decision signal name whose gte to perturb"
     )
     p_prop.add_argument(
@@ -1157,6 +1550,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["calib", "dev", "frozen_test"],
         help="workload split to evaluate on (frozen_test is quarantined; B)",
     )
+    p_run.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads to replay on (default: the first workload; "
+        "transfer workloads are quarantined; M5)",
+    )
     p_run.add_argument("--bank", required=True, help="answer bank JSONL")
     p_run.add_argument(
         "--candidates",
@@ -1245,6 +1644,205 @@ def build_parser() -> argparse.ArgumentParser:
         help="validator invoked as '<bin> config validate --config <path>' (C)",
     )
     p_run.set_defaults(func=cmd_run)
+
+    p_live = sub.add_parser(
+        "live-verdict",
+        help="compare two sr-bench runs and record the live-tier three-state verdict",
+    )
+    p_live.add_argument("--spec", required=True, help="experiment spec YAML")
+    p_live.add_argument(
+        "--split",
+        default="dev",
+        choices=["calib", "dev", "frozen_test"],
+        help="workload split the sr-bench runs were produced on (B)",
+    )
+    p_live.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads the runs belong to (default: the first workload; "
+        "transfer workloads need --final; M5)",
+    )
+    p_live.add_argument(
+        "--final",
+        action="store_true",
+        help="promotion verdict; the only consumer allowed to cite the frozen_test split (B)",
+    )
+    p_live.add_argument(
+        "--baseline-run-id", required=True, help="sr-bench baseline run ID"
+    )
+    p_live.add_argument(
+        "--candidate-run-id", required=True, help="sr-bench candidate run ID"
+    )
+    p_live.add_argument(
+        "--guard-measurements",
+        default=None,
+        help="guard measurements JSONL (name/candidate/baseline only; floors come from spec.gates, A3)",
+    )
+    p_live.add_argument(
+        "--candidate", default=None, help="candidate JSON file for the ledger record"
+    )
+    p_live.add_argument(
+        "--insight-refs",
+        default=None,
+        help="comma-separated provenance refs merged into the candidate: rec-<id>, bench:<run_id>, attr:<path>@sha256:<hex>, diag:<path>@sha256:<hex>#<anchor> (G2)",
+    )
+    p_live.add_argument(
+        "--attribution-ref",
+        default=None,
+        help="attribution artifact this round is based on (path@hash); recorded in the ledger",
+    )
+    p_live.add_argument(
+        "--ledger", default=None, help="ledger JSONL to append the live record to"
+    )
+    p_live.add_argument("--srbench-bin", default="vllm-sr")
+    p_live.add_argument("--srbench-url", default=None)
+    p_live.add_argument("--srbench-store", default=None)
+    p_live.add_argument("--timeout", type=float, default=3600.0)
+    p_live.add_argument("--round", type=int, default=1)
+    p_live.set_defaults(func=cmd_live_verdict)
+
+    p_verify = sub.add_parser(
+        "verify",
+        help="drive sr-bench end to end: preview + AB/BA repetitions -> live verdict (I)",
+    )
+    p_verify.add_argument("--spec", required=True, help="experiment spec YAML")
+    p_verify.add_argument(
+        "--split",
+        default="dev",
+        choices=["calib", "dev", "frozen_test"],
+        help="workload split the sr-bench baseline run was produced on (B)",
+    )
+    p_verify.add_argument(
+        "--workload",
+        default=None,
+        help="workload from spec.workloads to verify (default: the first workload; "
+        "transfer workloads need --final; M5)",
+    )
+    p_verify.add_argument(
+        "--final",
+        action="store_true",
+        help="promotion verdict; the only consumer allowed to cite the frozen_test split (B)",
+    )
+    p_verify.add_argument(
+        "--baseline-run-id",
+        required=False,
+        default=None,
+        help="terminal completed sr-bench baseline run ID (exactly one of "
+        "--baseline-run-id / --baseline-manifest)",
+    )
+    p_verify.add_argument(
+        "--baseline-manifest",
+        default=None,
+        help="sr-bench baseline manifest JSON to submit as the baseline run "
+        "instead of citing an existing one (exactly one of --baseline-run-id / "
+        "--baseline-manifest); a MoM-only manifest gets the spec's strong "
+        "reference target injected as a single segment",
+    )
+    p_verify.add_argument(
+        "--candidate", required=True, help="candidate JSON file for the ledger record"
+    )
+    p_verify.add_argument(
+        "--candidate-targets",
+        default=None,
+        help="comma-separated sr-bench MoM target ids serving the candidate; falls back to the candidate JSON's srbench_targets",
+    )
+    p_verify.add_argument(
+        "--repetitions",
+        type=int,
+        default=3,
+        help="number of AB/BA pairs (default 3); each pair re-runs the baseline manifest and a fresh candidate-plan",
+    )
+    p_verify.add_argument(
+        "--work-dir",
+        default=None,
+        help="scratch directory for the extracted baseline manifest and preview report (default: a temp dir)",
+    )
+    p_verify.add_argument(
+        "--guard-measurements",
+        default=None,
+        help="guard measurements JSONL (name/candidate/baseline only; floors come from spec.gates, A3)",
+    )
+    p_verify.add_argument(
+        "--insight-refs",
+        default=None,
+        help="comma-separated provenance refs merged into the candidate: rec-<id>, bench:<run_id>, attr:<path>@sha256:<hex>, diag:<path>@sha256:<hex>#<anchor> (G2)",
+    )
+    p_verify.add_argument(
+        "--attribution-ref",
+        default=None,
+        help="attribution artifact this round is based on (path@hash); recorded in the ledger",
+    )
+    p_verify.add_argument(
+        "--ledger", default=None, help="ledger JSONL to append the live record to"
+    )
+    p_verify.add_argument(
+        "--run-cache",
+        default=None,
+        help=(
+            "JSON file caching completed reference-arm run IDs (M4); default: "
+            "next to the ledger when --ledger is given, else no cache"
+        ),
+    )
+    p_verify.add_argument("--srbench-bin", default="vllm-sr")
+    p_verify.add_argument("--srbench-url", default=None)
+    p_verify.add_argument("--srbench-store", default=None)
+    p_verify.add_argument("--timeout", type=float, default=3600.0)
+    p_verify.add_argument("--round", type=int, default=1)
+    p_verify.set_defaults(func=cmd_verify)
+
+    # The agent's own proposal: one deployed candidate against a saved
+    # baseline, through the installed sr-bench worker (sub-issue 3).
+    p_score = sub.add_parser(
+        "score-candidate",
+        help="score one deployed candidate against a saved sr-bench baseline",
+    )
+    p_score.add_argument("--workspace", required=True, type=Path)
+    p_score.add_argument(
+        "--candidate", required=True, type=Path, help="authored v0.5 source YAML"
+    )
+    p_score.add_argument(
+        "--deployed-config",
+        type=Path,
+        help="CLI-owned runtime-config[.STACK].yaml and adjacent provenance",
+    )
+    p_score.add_argument(
+        "--proposer", required=True, help="agent:<id> identifying the proposer"
+    )
+    p_score.add_argument("--baseline-run", required=True)
+    p_score.add_argument(
+        "--baseline-target", required=True, help="explicit target in the baseline run"
+    )
+    p_score.add_argument(
+        "--candidate-target",
+        required=True,
+        help="registered MoM with capture_recipe enabled",
+    )
+    p_score.add_argument(
+        "--active-runtime-hash", required=True, help="expected active runtime SHA-256"
+    )
+    p_score.add_argument("--candidate-run", help="reuse a saved run without dispatch")
+    p_score.add_argument(
+        "--guard-case",
+        action="append",
+        default=[],
+        help="protected case ID; default protects every case",
+    )
+    p_score.add_argument(
+        "--min-speedup-pct",
+        type=float,
+        default=0,
+        help="minimum reduction in summed common-success case time",
+    )
+    p_score.add_argument(
+        "--wait-seconds",
+        type=float,
+        default=3600,
+        help="time to wait for an active candidate",
+    )
+    p_score.add_argument(
+        "--vllm-sr", default="vllm-sr", help="installed vllm-sr executable"
+    )
+    p_score.set_defaults(func=cmd_score_candidate)
 
     p_ledger = sub.add_parser("ledger", help="inspect or append to the evidence ledger")
     ledger_sub = p_ledger.add_subparsers(dest="ledger_action", required=True)

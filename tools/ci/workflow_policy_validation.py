@@ -123,53 +123,63 @@ def validate_status_publisher(
         "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')"
     )
     community_filter = (
-        "(github.event.workflow_run.path != '.github/workflows/community.yml' "
-        "|| (github.event.action == 'completed' "
+        "github.event.workflow_run.path == '.github/workflows/community.yml' "
+        "&& github.event.action == 'completed' "
         "&& github.event.workflow_run.conclusion == 'success' "
         "&& (github.event.workflow_run.event == 'pull_request' "
-        "|| github.event.workflow_run.event == 'pull_request_review')))"
+        "|| github.event.workflow_run.event == 'pull_request_review')"
     )
     expected_conditions = {
+        "publish-pr": (
+            f"{workflow_run} && github.event.workflow_run.path == '.github/workflows/pr.yml' "
+            "&& github.event.workflow_run.event == 'pull_request'"
+        ),
         "resolve": f"({workflow_run} && {community_filter}) || {trusted_dispatch}",
         "publish": f"needs.resolve.outputs.run_id != '' && ({workflow_run} || {trusted_dispatch})",
     }
+    resolve_command = 'python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"'
+    publish_command = 'python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"'
     commands = {
-        "resolve": 'python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"',
-        "publish": 'python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"',
+        "publish-pr": [resolve_command, publish_command],
+        "resolve": [resolve_command],
+        "publish": [publish_command],
     }
-    permissions = {
-        "resolve": {"contents": "read", "actions": "read", "pull-requests": "read"},
-        "publish": {
-            "contents": "read",
-            "actions": "read",
-            "checks": "write",
-            "statuses": "write",
-            "issues": "write",
-            "pull-requests": "write",
-        },
+    resolver_permissions = {
+        "contents": "read",
+        "actions": "read",
+        "pull-requests": "read",
     }
-    for name in ("resolve", "publish"):
+    publisher_permissions = {
+        "contents": "read",
+        "actions": "read",
+        "checks": "write",
+        "statuses": "write",
+        "issues": "write",
+        "pull-requests": "write",
+    }
+    for name, condition in expected_conditions.items():
         job = publisher.jobs.get(name, {})
-        if " ".join(job.get("if", "").split()) != expected_conditions[name]:
+        if " ".join(job.get("if", "").split()) != condition:
             errors.append(
                 f"ci-status.yml {name} must enforce its event filter to execute only trusted main code"
             )
-        if job.get("permissions") != permissions[name]:
+        permissions = (
+            resolver_permissions if name == "resolve" else publisher_permissions
+        )
+        if job.get("permissions") != permissions:
             errors.append(
                 "ci-status.yml must limit resolver and publisher token permissions"
             )
         steps = job.get("steps", [])
-        checkouts = [
-            step
-            for step in steps
-            if step.get("uses", "").startswith("actions/checkout@")
-        ]
-        if len(checkouts) != 1 or checkouts[0].get("with") != {
+        checkout = steps[0] if steps else {}
+        if not checkout.get("uses", "").startswith("actions/checkout@") or checkout.get(
+            "with"
+        ) != {
             "ref": "${{ github.sha }}",
             "persist-credentials": False,
         }:
             errors.append("ci-status.yml must never check out or execute PR contents")
-        if [step.get("run") for step in steps if "run" in step] != [commands[name]]:
+        if [step.get("run") for step in steps[1:]] != commands[name]:
             errors.append(
                 "ci-status.yml must use only the trusted publisher entrypoint"
             )
@@ -185,9 +195,17 @@ def validate_status_publisher(
         step.get("id") == "qualification" for step in resolve.get("steps", [])
     ):
         errors.append("ci-status.yml resolver must expose typed qualification outputs")
+    direct = publisher.jobs.get("publish-pr", {})
     job = publisher.jobs.get("publish", {})
     if (
-        job.get("needs") != "resolve"
+        "needs" in direct
+        or job.get("needs") != "resolve"
+        or direct.get("concurrency")
+        != {
+            "group": "ci-status-${{ github.event.workflow_run.id }}",
+            "cancel-in-progress": False,
+            "queue": "max",
+        }
         or job.get("concurrency")
         != {
             "group": "ci-status-${{ needs.resolve.outputs.run_id }}",
@@ -200,6 +218,26 @@ def validate_status_publisher(
             "ci-status.yml must serialize observations and keep queued jobs "
             "for the same qualification run"
         )
+    direct_steps = direct.get("steps", [])
+    expected_direct_step_count = 3
+    if len(direct_steps) == expected_direct_step_count:
+        _, direct_resolve, direct_publish = direct_steps
+        direct_condition = (
+            "steps.qualification.outputs.mode == 'publish' "
+            "&& steps.qualification.outputs.run_id == format('{0}', github.event.workflow_run.id)"
+        )
+        direct_env = direct_publish.get("env", {})
+        if (
+            direct_resolve.get("id") != "qualification"
+            or " ".join(direct_publish.get("if", "").split()) != direct_condition
+            or direct_env.get("QUALIFICATION_RUN_ID")
+            != "${{ steps.qualification.outputs.run_id }}"
+            or direct_env.get("STATUS_MODE")
+            != "${{ steps.qualification.outputs.mode }}"
+        ):
+            errors.append(
+                "ci-status.yml Pull Request publisher must consume the qualification identity and mode for its lock"
+            )
     executions = [step for step in job.get("steps", []) if "run" in step]
     env = executions[0].get("env", {}) if len(executions) == 1 else {}
     if (

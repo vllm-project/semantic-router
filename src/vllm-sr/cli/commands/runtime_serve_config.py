@@ -42,8 +42,8 @@ from cli.commands.runtime_support import (
 )
 from cli.commands.validate import ask_router, router_refusal
 from cli.container_images import pulled_this_run
+from cli.container_listener_tls import _listener_tls_mounts
 from cli.container_services import container_status_strict
-from cli.container_start import _listener_tls_mounts
 from cli.decision_model import (
     decision_model_deployment,
     gpu_requirement_error,

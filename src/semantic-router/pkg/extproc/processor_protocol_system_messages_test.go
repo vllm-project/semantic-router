@@ -134,7 +134,7 @@ func TestChatSystemMessagesInsideTheConversationBecomeUserTextInPlace(t *testing
 						`{"role":"user","content":"And of Italy?"},`+
 						`{"role":"developer","content":"Answer in one word."}]}`, stream))
 				if !accepted {
-					require.ElementsMatch(t, []string{
+					require.Equal(t, []string{
 						"system: You are a helpful geography tutor.", "user: What is the capital of Spain?", "assistant: Madrid",
 						"system: Answer in French from now on.", "user: And of Italy?", "developer: Answer in one word.",
 					}, sent)
@@ -195,4 +195,17 @@ func TestSystemMessagesComposeWithAModelThatLacksTheDeveloperRole(t *testing.T) 
 	sent, warnings = sendSystemMessagesRequest(t, systemMessagesRouter(t, false, true), "/v1/chat/completions", body)
 	require.Equal(t, []string{"system: The secret word is PAPAYA.", "system: Answer in one word.", "user: What is the secret word?"}, sent)
 	require.Contains(t, warnings, llmprotocol.DeveloperRoleSentAsSystem)
+}
+
+func TestEmptyInstructionInToolSpanProducesNoProjectionWarning(t *testing.T) {
+	router := systemMessagesRouter(t, true, false)
+	messages, warnings := sendSystemMessagesRequest(t, router, "/v1/chat/completions", `{
+		"model":"chat-model","messages":[
+			{"role":"user","content":"lookup"},
+			{"role":"assistant","tool_calls":[{"id":"a","type":"function","function":{"name":"lookup","arguments":"{}"}}]},
+			{"role":"system","content":""},
+			{"role":"tool","tool_call_id":"a","content":"found"}
+		]}`)
+	require.Equal(t, []string{"user: lookup", "assistant: ", "tool: found"}, messages)
+	require.Empty(t, warnings)
 }

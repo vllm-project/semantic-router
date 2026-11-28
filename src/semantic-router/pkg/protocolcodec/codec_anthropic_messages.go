@@ -108,6 +108,10 @@ func (wire anthropicContentWire) MarshalJSON() ([]byte, error) {
 		if wire.signed {
 			object["signature"], _ = json.Marshal(wire.Signature)
 		}
+	case "redacted_thinking":
+		// data is required by Messages; omitempty alone would drop an empty
+		// payload and emit a block the API would reject.
+		object["data"], _ = json.Marshal(wire.Data)
 	}
 	return json.Marshal(object)
 }

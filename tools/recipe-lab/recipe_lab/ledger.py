@@ -59,6 +59,12 @@ class LedgerRecord:
     # B: which frozen split the record's data came from (calib/dev/frozen_test).
     # Legacy single-dataset records omit the field (equivalent to "dev").
     split: str | None = None
+    legacy_workload: bool = (
+        False  # M1: legacy single-dataset workloads record split: null
+    )
+    # M5: which declared workload (spec.workloads[].name) the record's data
+    # came from; single anonymous legacy workloads omit the field.
+    workload: str | None = None
     # A5: present only when the trial produced no usable metric (e.g.
     # "timeout" when the stack exceeded budget.max_minutes_per_trial).
     # best_replay / top_replay exclude records carrying a status.
@@ -73,6 +79,11 @@ class LedgerRecord:
     # violates a declared constraint. best_replay / top_replay exclude warned
     # candidates from the ranking hand-off.
     constraint_warning: bool = False
+    # M2: paired comparison statistics in the sr-bench compare
+    # `comparisons[]` shape (paired_cases / quality_delta / quality_delta_ci95
+    # / quality_delta_bootstrap_ci95 / wins / losses / ties), recorded
+    # verbatim for report replay; None when the payload carried none.
+    paired: dict | None = None
 
     def to_dict(self) -> dict:
         out: dict[str, Any] = {
@@ -100,12 +111,18 @@ class LedgerRecord:
             out["notes"] = self.notes
         if self.split:
             out["split"] = self.split
+        if self.legacy_workload:
+            out["legacy_workload"] = True
+        if self.workload:
+            out["workload"] = self.workload
         if self.status:
             out["status"] = self.status
         if self.constraints is not None:
             out["constraints"] = dict(self.constraints)
         if self.constraint_warning:
             out["constraint_warning"] = True
+        if self.paired is not None:
+            out["paired"] = dict(self.paired)
         return out
 
     @classmethod
@@ -137,6 +154,9 @@ class LedgerRecord:
                 dict(raw["constraints"]) if raw.get("constraints") is not None else None
             ),
             constraint_warning=bool(raw.get("constraint_warning", False)),
+            legacy_workload=bool(raw.get("legacy_workload", False)),
+            workload=raw.get("workload"),
+            paired=dict(raw["paired"]) if raw.get("paired") is not None else None,
         )
 
 
@@ -190,6 +210,8 @@ def validate_record(raw: dict) -> None:
         raise ContractError(
             f"split must be one of {sorted(SPLIT_NAMES)}, got {raw['split']!r}"
         )
+    if "workload" in raw and raw["workload"] is not None:
+        _require_nonempty_str(raw["workload"], "workload")
     if "status" in raw and raw["status"] is not None:
         _require_nonempty_str(raw["status"], "status")
         # A5: "timeout" - the trial exceeded its budget. H: "incomplete" - the
