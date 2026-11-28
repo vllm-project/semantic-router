@@ -27,6 +27,11 @@ import (
 func (d *systemOneDeployment) sendCodec(ctx context.Context, task *bundleTask) {
 	states := task.decision.states
 	batch := systemoneprotocol.Batch{Model: d.model, Items: make([]systemoneprotocol.NamedRequest, len(states))}
+	// The task's deadline goes as options.deadline_ms, as the native request
+	// sends it, so the runtime drops queued work it cannot start in time.
+	if deadline, ok := ctx.Deadline(); ok {
+		batch.Options.DeadlineMs = systemoneprotocol.Int(max(1, time.Until(deadline).Milliseconds()))
+	}
 	planErrs := make([]error, len(states))
 	for index, state := range states {
 		request, err := stateRequest(state)

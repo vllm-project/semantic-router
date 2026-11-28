@@ -304,10 +304,16 @@ func validateSystemOneQuestion(question SystemOneQuestion) error {
 		if len(question.Levels) < MinSystemOneLevels || len(question.Levels) > MaxSystemOneLevels {
 			return fmt.Errorf("a score question needs %d..%d levels", MinSystemOneLevels, MaxSystemOneLevels)
 		}
+		seen := make(map[string]struct{}, len(question.Levels))
 		for index, level := range question.Levels {
-			if strings.TrimSpace(level) == "" {
+			trimmed := strings.TrimSpace(level)
+			if trimmed == "" {
 				return fmt.Errorf("level %d needs a description", index)
 			}
+			if _, exists := seen[trimmed]; exists {
+				return fmt.Errorf("level %d repeats %q; a score question's levels must differ", index, trimmed)
+			}
+			seen[trimmed] = struct{}{}
 		}
 		return nil
 	default:
@@ -353,6 +359,11 @@ func validateSystemOneChoiceKeys(choices []SystemOneOption, allowed map[string]s
 	for _, choice := range choices {
 		if strings.TrimSpace(choice.Key) == "" || strings.TrimSpace(choice.Key) != choice.Key {
 			return fmt.Errorf("choice keys must be nonempty and trimmed")
+		}
+		// An empty description is left out, a blank one would be sent as
+		// written, and the runtime refuses it.
+		if choice.Description != "" && strings.TrimSpace(choice.Description) == "" {
+			return fmt.Errorf("choice %q has a blank description", choice.Key)
 		}
 		if allowed != nil {
 			if _, ok := allowed[choice.Key]; !ok {
