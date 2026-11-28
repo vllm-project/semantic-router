@@ -158,7 +158,7 @@ not become optional merely because their filenames contain `test`.
 
 | Entry | Qualification |
 | --- | --- |
-| PR | Automatic affected checks; required expensive checks wait for `/ci run`. PR Gate stays pending with **Waiting for committer approval** while authorization is the only missing requirement. |
+| PR | Affected checks run automatically. Required expensive checks wait for `/ci run`. While authorization is the only missing requirement, qualification shows **Waiting for committer approval**. |
 | PR with `/ci run full` | The complete versioned CPU inventory, including baseline stress cases. |
 | Main push | Automatic affected source, deterministic router and product checks, then the commit's complete development image/CLI set: six multi-arch images under the commit SHA, `latest`, the development CLI, and the `0.0.0-latest` chart when the chart changed. A newer push cancels this run while it is queued or qualifying, and checks this commit's changes itself; a publication that started always finishes. `latest` moves only forward: a run whose commit main has already published past keeps only its SHA tags. The CLI publishes only after its images succeed. Reviewed PRs and the merge queue own affected live qualification. |
 | Main dispatch with `publish=true` | Full CPU qualification, then the same publication, including the chart. |
@@ -166,14 +166,18 @@ not become optional merely because their filenames contain `test`.
 | Release tag | Artifact/version pipeline: build and publish images, Helm, and Python with aligned versions. It does not invoke another full CPU suite; the catalog retains a release qualification profile for explicit use. |
 
 The trusted publisher updates one bot comment per PR with the deferred
-contracts, image work, and authorization command. It publishes **PR Gate** as
-pending while required work awaits authorization, failure for actual test or
+contracts, image work, and authorization command. It publishes
+**PR Qualification** as pending while required work awaits authorization, failure for actual test or
 evidence failures, and success only for complete passing evidence. Waiting
 does not reserve a runner. A genuine failure takes precedence when other work
 also awaits authorization. Contributors without repository write permission
 do not need to authorize CI and cannot approve these runs.
-The short **CI Execution** job still summarizes the work that ran; its success
-alone does not satisfy the separately published PR Gate.
+On bases that support strict **CI Execution**, the job requires a Plan and
+Gate from the current run and attempt. Automatic checks can pass while
+**PR Qualification** waits for authorization. An attempt on a previously
+qualified head also requires a trusted pending status for that exact run and
+attempt before **CI Execution** can pass. A job-only rerun with an old Plan
+fails this check.
 
 A committer with current repository write, maintain, or admin permission can
 comment `/ci run` on a PR to authorize all affected work. `/ci run models`,
@@ -188,16 +192,23 @@ or invalid evidence runs again.
 Command feedback uses 👀 for receipt, 🚀 after the rerun API succeeds, and 😕
 with an actionable bot reply for rejected requests or a trigger that could not
 be confirmed. Feedback starts when the command-handler job gets a runner. A
-rocket confirms only that CI was triggered; **PR Gate** owns the test outcome.
+rocket confirms that CI was triggered. **PR Qualification** reports the outcome.
 Retries update the same request's bot reply instead of adding duplicate errors.
 
 The command handler runs trusted main code and freezes the PR head, base, merge
 revision, and original PR workflow run. It rechecks the comment and permissions
 before rerunning that original event. Edits, withdrawn permissions, and changed
 revisions invalidate approval. This preserves the required PR check context.
-A standalone workflow dispatch cannot replace the PR Gate. Verified Mergify
+A standalone workflow dispatch cannot qualify the PR. Verified Mergify
 queue PRs automatically qualify affected changes at the queue merge revision;
 a human-created branch with the same prefix gets no exemption.
+
+The Mergify queue requires both `PR Qualification` and `CI Execution` from
+GitHub Actions. The trusted publisher reports `PR Qualification` for the
+verified PR run and attempt. The native `CI Execution` check must also pass on
+the incoming PR and on the queue draft. Once GitHub requires the same checks
+from GitHub Actions on the base branch, and classic branch protection is
+disabled there, the publisher stops creating compatibility **PR Gate** checks.
 
 The publisher is installed on main. During its introduction, branches based on
 the old entrypoint retain the strict legacy PR Gate; missing qualification

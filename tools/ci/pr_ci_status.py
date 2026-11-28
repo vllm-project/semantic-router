@@ -33,6 +33,7 @@ from pr_ci_shared import (
     CAPABILITIES,
     CHECK,
     COMMENT_ITEM_LIMIT,
+    EXECUTION_CHECK,
     IDENTIFIER,
     MARKER,
     MAX_IDENTIFIERS,
@@ -47,6 +48,7 @@ from pr_ci_shared import (
     pages,
     presentation,
     publisher_ready,
+    qualification_only_rules,
     validate_plan,
     verdict,
 )
@@ -124,6 +126,13 @@ def publish_qualification_status(client, repo, pull, run, plan, result) -> dict:
         if all(previous.get(key) == value for key, value in fence.items()):
             result["qualification_status_ignored"] = "waiting for rerun"
             return result
+        if (
+            result.get("state") == "running"
+            and previous.get("target_url") == payload["target_url"]
+            and previous.get("state") in {"success", "failure", "error"}
+        ):
+            result["qualification_status_ignored"] = "current attempt already completed"
+            return result
         current = current_publication_pull(client, repo, pull, run)
         if current is None or (
             payload["state"] == "success"
@@ -171,26 +180,9 @@ def publish(
     }
     if payload["status"] == "completed":
         payload["conclusion"] = state
-    comments = list(pages(client, f"repos/{repo}/issues/{pull['number']}/comments"))
-    owned = [
-        item
-        for item in comments
-        if item.get("user", {}).get("login") == "github-actions[bot]"
-        and item.get("user", {}).get("type") == "Bot"
-        and item.get("body", "").startswith(MARKER)
-    ]
-    comment_body = f"{MARKER}\n{summary}\n"
     result = {
         "pr": pull["number"],
         "state": state,
-        "check": None if state == "legacy" else payload,
-        "comment": (
-            comment_body
-            if owned
-            or state in {"awaiting-approval", "legacy", "stale"}
-            or (plan and plan.get("deferred_verifications"))
-            else None
-        ),
     }
     if state != "legacy":
         result["qualification_status"] = {
@@ -199,12 +191,37 @@ def publish(
             "target_url": qualification_status_url(repo, run["id"], run["run_attempt"]),
             "description": title[:140],
         }
+        if not dry_run:
+            # Publish from the verified attempt before touching compatibility output.
+            publish_qualification_status(client, repo, pull, run, plan, result)
+            if result.get("qualification_status_ignored") == "superseded":
+                return {"ignored": "superseded while preparing status"}
+    legacy_gate = state != "legacy" and not qualification_only_rules(
+        client, repo, pull["base"]["ref"]
+    )
+    result["check"] = payload if legacy_gate else None
+    comments = pages(client, f"repos/{repo}/issues/{pull['number']}/comments")
+    owned = [
+        item
+        for item in comments
+        if item.get("user", {}).get("login") == "github-actions[bot]"
+        and item.get("user", {}).get("type") == "Bot"
+        and item.get("body", "").startswith(MARKER)
+    ]
+    comment_body = f"{MARKER}\n{summary}\n"
+    result["comment"] = (
+        comment_body
+        if owned
+        or state in {"awaiting-approval", "legacy", "stale"}
+        or (plan and plan.get("deferred_verifications"))
+        else None
+    )
     if reason == MERGE_EVIDENCE_UNAVAILABLE:
         result["reason_codes"] = [reason]
     if dry_run:
         return result
     visible_checks = (
-        owned_checks(client, repo, pull, latest=True) if state != "legacy" else []
+        owned_checks(client, repo, pull, latest=True) if legacy_gate else []
     )
     # Recheck after reading artifacts/comments; an old completion must never
     # overwrite the status of a newer run, attempt, or contributor commit.
@@ -213,7 +230,7 @@ def publish(
         return {"ignored": "superseded while preparing status"}
     if state == "success" and not qualifies_for_merge(repo, current, plan):
         return {"ignored": "PR became draft while preparing its Gate"}
-    if state != "legacy":
+    if legacy_gate:
         fresh_checks = owned_checks(client, repo, pull)
         current_checks = [c for c in fresh_checks if c.get("external_id") == external]
         if payload["status"] == "in_progress" and any(
@@ -244,9 +261,7 @@ def publish(
                 return {
                     "ignored": "pending publication evidence unavailable or changed"
                 }
-            return publish_qualification_status(
-                client, repo, pull, run, plan, {**result, **recovered}
-            )
+            return {**result, **recovered}
         # PATCH cannot move a check into a rerun's attempt. Only reuse a
         # visible check for this exact attempt, including when repairing an
         # external_id that the old publisher rewrote on a superseded check.
@@ -309,8 +324,6 @@ def publish(
             client.write(
                 f"repos/{repo}/issues/{pull['number']}/comments", {"body": comment_body}
             )
-    if state != "legacy":
-        return publish_qualification_status(client, repo, pull, run, plan, result)
     return result
 
 
@@ -329,9 +342,11 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         return {"ignored": "no matching current open pull request"}
     checks = owned_checks(client, repo, pull)
     if run.get("status") != "completed":
-        # On the first attempt, the required check is already Expected/pending.
-        # Do not invent the source identity before Plan has produced it.
-        if not checks:
+        # No earlier verdict needs fencing on a fresh head. Once legacy
+        # publishing is off, the commit status identifies earlier attempts.
+        if not checks and not latest_qualification_status(
+            client, repo, run["head_sha"]
+        ):
             return {"ignored": "first attempt is still preparing its plan"}
         return publish(
             client, repo, pull, run, "running", None, checks, dry_run=dry_run
@@ -370,7 +385,7 @@ def reconcile(client, repo: str, run_id: int, *, dry_run=False) -> dict:
         if state != "failure" and not main_contains(client, repo, plan["base_sha"]):
             state = "stale"
     except (ManualCIError, KeyError, ValueError, TypeError) as error:
-        if not checks and not any(job.get("name") == "CI Execution" for job in jobs):
+        if not checks and not any(job.get("name") == EXECUTION_CHECK for job in jobs):
             raise
         state = "failure"
         if (

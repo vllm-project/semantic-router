@@ -732,10 +732,20 @@ def validate_mergify_contract(errors: list[str]) -> None:
     queue_rules = data.get("queue_rules", [])
     default_rule = queue_rules[0] if queue_rules else {}
     for section in sections:
-        serialized = json.dumps(default_rule.get(section, []))
-        if "check-success = PR Gate" not in serialized:
-            errors.append(f".mergify.yml: {section} must require PR Gate")
+        conditions = default_rule.get(section, [])
+        for context in ("PR Qualification", "CI Execution"):
+            qualified_context = f"@github-actions/{context}"
+            if (
+                not isinstance(conditions, list)
+                or f"check-success = {qualified_context}" not in conditions
+            ):
+                errors.append(
+                    f".mergify.yml: {section} must require {qualified_context}"
+                )
+        serialized = json.dumps(conditions)
         obsolete = (
+            "PR Gate",
+            "@github-actions/PR Gate",
             "test-and-build",
             "Lint",
             "Unit Tests",

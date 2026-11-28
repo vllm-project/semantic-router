@@ -35,8 +35,12 @@ on:
     outputs:
       publisher_ready:
         value: ${{ jobs.plan.outputs.publisher_ready }}
+      strict_ci_execution:
+        value: ${{ jobs.plan.outputs.strict_ci_execution }}
       plan:
         value: ${{ jobs.plan.outputs.plan }}
+      reconciled_revision:
+        value: ${{ jobs.gate.outputs.reconciled_revision }}
       publish_images:
         value: ${{ jobs.plan.outputs.publish_images }}
       publish_helm:
@@ -375,6 +379,8 @@ jobs:
     if: ${{ !cancelled() }}
     needs: [plan, image-router, image-dashboard, image-operator, image-fixtures, image-distribution, quality, generated, security, core, storage, dashboard, operator-source, operator, local, recipes, platform, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
+    outputs:
+      reconciled_revision: ${{ steps.reconcile.outputs.reconciled_revision }}
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m pip install PyYAML==6.0.3
@@ -391,8 +397,11 @@ jobs:
           pattern: ci-build-*
           path: .agent-harness/ci/results
       - name: Reconcile source, dependencies, qualified combinations and cases
+        id: reconcile
         env:
           PUBLISHER_READY: ${{ needs.plan.outputs.publisher_ready }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CI_PLAN_RUN: ${{ needs.plan.outputs.plan_run }}
           # Job outputs include the full plan and dispatch copies. Keep them out of
           # the process environment; the complete plan is downloaded above.
           EXECUTOR_RESULTS: >-

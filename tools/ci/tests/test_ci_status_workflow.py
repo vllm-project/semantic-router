@@ -49,6 +49,64 @@ class CIStatusWorkflowTests(unittest.TestCase):
             identity_expression[job_name], str(run_id)
         )
 
+    def test_ci_execution_reads_only_the_current_reconciled_revision(self):
+        shared = self.workflows["ci.yml"]
+        gate = shared.jobs["gate"]
+        reconcile_step = next(
+            step for step in gate["steps"] if "check_ci_gate.py" in step.get("run", "")
+        )
+        execution_job = self.workflows["pr.yml"].jobs["pr-gate"]
+        execution, checkout, freshness = execution_job["steps"]
+        planner = self.workflows["ci-changes.yml"]
+        plan_job = planner.jobs["plan"]
+        self.assertEqual(
+            plan_job["outputs"]["plan_run"], "${{ steps.plan.outputs.plan_run }}"
+        )
+        for output in ("plan_run", "strict_ci_execution"):
+            self.assertEqual(
+                planner.events["workflow_call"]["outputs"][output]["value"],
+                "${{ jobs.plan.outputs." + output + " }}",
+            )
+        self.assertEqual(
+            reconcile_step["env"]["CI_PLAN_RUN"], "${{ needs.plan.outputs.plan_run }}"
+        )
+        self.assertEqual(
+            shared.events["workflow_call"]["outputs"]["strict_ci_execution"]["value"],
+            "${{ jobs.plan.outputs.strict_ci_execution }}",
+        )
+        self.assertEqual(
+            execution["env"]["STRICT_CI_EXECUTION"],
+            "${{ needs.ci.outputs.strict_ci_execution }}",
+        )
+        head = "${{ github.event.pull_request.head.sha }}"
+        self.assertEqual(reconcile_step["env"]["PR_HEAD_SHA"], head)
+        self.assertEqual(
+            gate["outputs"]["reconciled_revision"],
+            "${{ steps." + reconcile_step["id"] + ".outputs.reconciled_revision }}",
+        )
+        self.assertEqual(
+            shared.events["workflow_call"]["outputs"]["reconciled_revision"]["value"],
+            "${{ jobs.gate.outputs.reconciled_revision }}",
+        )
+        self.assertEqual(execution["env"]["PR_HEAD_SHA"], head)
+        self.assertEqual(
+            execution["env"]["RECONCILED_REVISION"],
+            "${{ needs.ci.outputs.reconciled_revision }}",
+        )
+        self.assertIn(
+            '"$PR_HEAD_SHA:$GITHUB_SHA:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT"',
+            execution["run"],
+        )
+        self.assertEqual(
+            execution_job["permissions"], {"contents": "read", "statuses": "read"}
+        )
+        self.assertEqual(
+            freshness["if"], "needs.ci.outputs.strict_ci_execution == 'true'"
+        )
+        self.assertEqual(checkout["if"], freshness["if"])
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertIn("qualification_attempt_ready(", freshness["run"])
+
     def test_pull_request_publication_has_no_separate_resolver_job(self):
         job = self.publisher.jobs.get("publish-pr")
         self.assertIsNotNone(
@@ -294,6 +352,50 @@ class CIStatusWorkflowTests(unittest.TestCase):
             with mock.patch.object(workflow_policy_validation, "REPO_ROOT", Path(root)):
                 validate_mergify_contract(errors)
         self.assertTrue(any("max_checks_retries" in error for error in errors), errors)
+
+    def test_queue_requires_both_checks_from_github_actions(self) -> None:
+        config = yaml.safe_load((ROOT / ".mergify.yml").read_text(encoding="utf-8"))
+        for section in ("queue_conditions", "merge_conditions"):
+            for context in ("PR Qualification", "CI Execution"):
+                qualified = f"check-success = @github-actions/{context}"
+                replacements = (
+                    f"check-success = {context}",
+                    {"or": [qualified, "check-success = PR Gate"]},
+                )
+                for replacement in replacements:
+                    with self.subTest(section=section, replacement=replacement):
+                        modified = copy.deepcopy(config)
+                        conditions = modified["queue_rules"][0][section]
+                        conditions[conditions.index(qualified)] = replacement
+                        with tempfile.TemporaryDirectory() as root:
+                            (Path(root) / ".mergify.yml").write_text(
+                                yaml.safe_dump(modified), encoding="utf-8"
+                            )
+                            errors: list[str] = []
+                            with mock.patch.object(
+                                workflow_policy_validation, "REPO_ROOT", Path(root)
+                            ):
+                                validate_mergify_contract(errors)
+                        self.assertIn(
+                            f".mergify.yml: {section} must require @github-actions/{context}",
+                            errors,
+                        )
+
+    def test_queue_rejects_a_required_legacy_gate(self) -> None:
+        config = yaml.safe_load((ROOT / ".mergify.yml").read_text(encoding="utf-8"))
+        config["queue_rules"][0]["merge_conditions"].append(
+            "check-success = @github-actions/PR Gate"
+        )
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / ".mergify.yml").write_text(
+                yaml.safe_dump(config), encoding="utf-8"
+            )
+            errors: list[str] = []
+            with mock.patch.object(workflow_policy_validation, "REPO_ROOT", Path(root)):
+                validate_mergify_contract(errors)
+        self.assertEqual(
+            errors, [".mergify.yml: merge_conditions retains compatibility contexts"]
+        )
 
     def test_publisher_checkout_cannot_use_the_observed_pr_head(self) -> None:
         for name in ("publish-pr", "publish"):

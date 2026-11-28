@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from urllib.parse import urlencode
+import subprocess
+from urllib.parse import quote, urlencode
 
 import manual_ci as _manual_ci
 from manual_ci import (
@@ -22,6 +23,7 @@ pages = _manual_ci.pages
 publisher_ready = _manual_ci.status_publisher_available
 
 CHECK = "PR Gate"
+EXECUTION_CHECK = "CI Execution"
 MARKER = "<!-- semantic-router-ci-status:v1 -->"
 PREFIX = "semantic-router-ci:"
 APP_ID = 15368  # GitHub Actions; also the branch-protection check owner.
@@ -29,6 +31,35 @@ SHA = re.compile(r"[0-9a-f]{40}")
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_.-]{1,160}")
 MAX_IDENTIFIERS = 1000
 COMMENT_ITEM_LIMIT = 30
+
+
+def qualification_only_rules(client, repo: str, branch: str) -> bool:
+    """Keep the compatibility publisher until both replacement checks are required."""
+    base = quote(branch, safe="")
+    try:
+        required = [
+            (check["context"], check.get("integration_id"))
+            for rule in pages(client, f"repos/{repo}/rules/branches/{base}")
+            if rule["type"] == "required_status_checks"
+            for check in rule["parameters"]["required_status_checks"]
+        ]
+        if any(name == CHECK for name, _ in required) or not {
+            (_manual_ci.PR_QUALIFICATION_CONTEXT, APP_ID),
+            (EXECUTION_CHECK, APP_ID),
+        }.issubset(required):
+            return False
+        # Classic branch protection applies independently of rulesets.
+        protection = client.request(f"repos/{repo}/branches/{base}")["protection"]
+        return protection["enabled"] is False
+    except (
+        ManualCIError,
+        KeyError,
+        TypeError,
+        OSError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ):
+        return False
 
 
 def current_pull(client, repo: str, run: dict) -> dict | None:
@@ -124,16 +155,28 @@ def validate_plan(client, repo: str, run: dict, plan: dict) -> None:
         raise ManualCIError("Qualification inventories do not partition the plan.")
 
 
+# Supports strict CI Execution qualification.
+# The CI Plan workflow reads this capability from the tested base.
 def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
     """A successful automatic workflow is not necessarily full qualification."""
-    if run.get("conclusion") != "success" or any(
-        job.get("conclusion") not in {"success", "skipped"} for job in jobs
+    by_name = {job.get("name"): job for job in jobs}
+    execution = by_name.get("CI Execution", {})
+    waiting = bool(plan["deferred_verifications"] or plan["deferred_images"])
+    # The native check rejects incomplete qualification even when every
+    # dispatched check passed. The receipt still determines the published state.
+    execution_blocked = (waiting or plan.get("draft") is True) and execution.get(
+        "conclusion"
+    ) == "failure"
+    expected_conclusion = "failure" if execution_blocked else "success"
+    if run.get("conclusion") != expected_conclusion or any(
+        job.get("conclusion") not in {"success", "skipped"}
+        for job in jobs
+        if not (execution_blocked and job is execution)
     ):
         return "failure"
-    by_name = {job.get("name"): job for job in jobs}
-    if any(
-        by_name.get(name, {}).get("conclusion") != "success"
-        for name in ("CI / Gate", "CI Execution")
+    if (
+        by_name.get("CI / Gate", {}).get("conclusion") != "success"
+        or execution.get("conclusion") != expected_conclusion
     ):
         raise ManualCIError("Required CI reconciliation jobs did not succeed.")
     expected = {
@@ -154,7 +197,6 @@ def verdict(run: dict, plan: dict, report: dict, jobs: list[dict]) -> str:
         raise ManualCIError(
             "CI reconciliation receipt is missing, stale or inconsistent."
         )
-    waiting = bool(plan["deferred_verifications"] or plan["deferred_images"])
     expected_status = "awaiting-approval" if waiting else "success"
     if report.get("status") != expected_status:
         raise ManualCIError("CI receipt does not match the remaining qualification.")

@@ -41,15 +41,54 @@ jobs:
     if: ${{ !cancelled() }}
     needs: ci
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      statuses: read
     steps:
       - name: Require successful reconciliation of executed contracts
         env:
           RESULT: ${{ needs.ci.result }}
           PUBLISHER_READY: ${{ needs.ci.outputs.publisher_ready }}
+          STRICT_CI_EXECUTION: ${{ needs.ci.outputs.strict_ci_execution }}
           DRAFT_PLAN: ${{ toJSON(fromJSON(needs.ci.outputs.plan || '{}').draft) }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RECONCILED_REVISION: ${{ needs.ci.outputs.reconciled_revision }}
         run: |
-          if [[ "$PUBLISHER_READY" != true && "$DRAFT_PLAN" != false ]]; then
+          if [[ "$STRICT_CI_EXECUTION" == true ]]; then
+            if [[ "$RECONCILED_REVISION" != "$PR_HEAD_SHA:$GITHUB_SHA:$GITHUB_RUN_ID:$GITHUB_RUN_ATTEMPT" ]]; then
+              echo "This revision and attempt have not completed CI reconciliation. See CI / Gate."
+              exit 1
+            fi
+          elif [[ "$PUBLISHER_READY" != true && "$DRAFT_PLAN" != false ]]; then
             echo "Draft CI does not qualify this revision for merge."
             exit 1
           fi
           test "$RESULT" = success
+      - uses: actions/checkout@v4
+        if: needs.ci.outputs.strict_ci_execution == 'true'
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            tools/ci/manual_ci.py
+            tools/ci/manual_ci_feedback.py
+      - name: Verify qualification belongs to this attempt
+        if: needs.ci.outputs.strict_ci_execution == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          PYTHONPATH=tools/ci python3 - <<'PY'
+          from os import environ
+
+          from manual_ci import GitHubClient, qualification_attempt_ready
+
+          if not qualification_attempt_ready(
+              GitHubClient(),
+              environ["GITHUB_REPOSITORY"],
+              environ["PR_HEAD_SHA"],
+              int(environ["GITHUB_RUN_ID"]),
+              int(environ["GITHUB_RUN_ATTEMPT"]),
+          ):
+              raise SystemExit("PR Qualification has not started for this CI attempt.")
+          PY

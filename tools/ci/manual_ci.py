@@ -766,6 +766,18 @@ def latest_qualification_status(client, repo: str, head: str) -> dict:
     )
 
 
+def qualification_attempt_ready(
+    client, repo: str, head: str, run_id: int, attempt: int
+) -> bool:
+    status = latest_qualification_status(client, repo, head)
+    if not status:
+        # A new head cannot satisfy qualification until its publisher runs.
+        return attempt == 1
+    return status.get("state") == "pending" and status.get(
+        "target_url"
+    ) == qualification_status_url(repo, run_id, attempt)
+
+
 def write_qualification_status(client, repo: str, head: str, payload: dict) -> None:
     posted = client.write(f"repos/{repo}/statuses/{head}", payload)
     if posted and type(posted.get("id")) is int:

@@ -75,6 +75,8 @@ class Client:
         self.checks, self.comments, self.writes = [], [], []
         self.commit_statuses = []
         self.status_writes = []
+        self.rules = []
+        self.classic_protection = False
         self.ready, self.missing_report, self.newer_run = True, False, False
         self.parents = [BASE, HEAD]
         self.main_sha, self.base_ancestor = BASE, BASE
@@ -146,6 +148,10 @@ class Client:
             return copy.deepcopy(self.pull)
         if path.startswith(f"commits/{HEAD}/statuses?"):
             return copy.deepcopy(self.commit_statuses)
+        if path.startswith("rules/branches/main"):
+            return copy.deepcopy(self.rules)
+        if path == "branches/main":
+            return {"protection": {"enabled": self.classic_protection}}
         if path.startswith("check-runs/"):
             identity = int(path.rsplit("/", 1)[1])
             return copy.deepcopy(next(c for c in self.checks if c["id"] == identity))
@@ -248,6 +254,191 @@ class Client:
 
 
 class PRStatusTests(unittest.TestCase):
+    def test_after_cutover_automatic_ci_reports_only_one_pending_gate(self):
+        client = Client()
+        new_checks = [
+            {"context": name, "integration_id": APP_ID}
+            for name in ("PR Qualification", "CI Execution")
+        ]
+        client.rules = [
+            {
+                "type": "required_status_checks",
+                "parameters": {"required_status_checks": new_checks},
+            }
+        ]
+        result = reconcile(client, REPO, 101)
+        self.assertEqual(result["state"], "awaiting-approval")
+        self.assertIsNone(result["check"])
+        self.assertFalse(client.checks)
+        self.assertEqual([s["state"] for s in client.status_writes], ["pending"])
+        self.assertTrue(
+            any("/ci run" in payload.get("body", "") for _, payload, _ in client.writes)
+        )
+
+    def test_native_rerun_without_legacy_gate_fences_the_current_attempt(self):
+        client = Client()
+        client.commit_statuses = [
+            {
+                "context": "PR Qualification",
+                "state": "success",
+                "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/1",
+                "creator": {"id": 41898282, "login": "github-actions[bot]"},
+            }
+        ]
+        client.run.update(run_attempt=2, status="in_progress", conclusion=None)
+        client.rules = [
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [
+                        {"context": name, "integration_id": APP_ID}
+                        for name in ("PR Qualification", "CI Execution")
+                    ]
+                },
+            }
+        ]
+        reconcile(client, REPO, 101)
+        self.assertFalse(client.checks)
+        self.assertEqual([s["state"] for s in client.status_writes], ["pending"])
+        self.assertTrue(client.status_writes[0]["target_url"].endswith("/attempts/2"))
+
+    def test_incomplete_cutover_preserves_the_legacy_gate(self):
+        for classic, contexts in (
+            (False, ["PR Qualification", "CI Execution", "PR Gate"]),
+            (False, ["PR Qualification"]),
+            (True, ["PR Qualification", "CI Execution"]),
+        ):
+            with self.subTest(classic=classic, contexts=contexts):
+                client = Client()
+                client.classic_protection = classic
+                client.rules = [
+                    {
+                        "type": "required_status_checks",
+                        "parameters": {
+                            "required_status_checks": [
+                                {"context": name, "integration_id": APP_ID}
+                                for name in contexts
+                            ]
+                        },
+                    }
+                ]
+                reconcile(client, REPO, 101)
+                self.assertEqual(
+                    [check["name"] for check in client.checks], ["PR Gate"]
+                )
+                self.assertEqual(
+                    [s["state"] for s in client.status_writes], ["pending"]
+                )
+
+    def test_qualification_survives_compatibility_write_failure(self):
+        for operation, state in (("check-runs", "success"), ("comments", "pending")):
+            with self.subTest(operation=operation):
+                client = Client()
+                if state == "success":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                    client.refresh_report()
+
+                def fail_compatibility_write(
+                    endpoint,
+                    payload,
+                    *,
+                    suffix=f"/{operation}",
+                    write=client.write,
+                    **kwargs,
+                ):
+                    if endpoint.endswith(suffix):
+                        raise ManualCIError("Compatibility write failed.")
+                    return write(endpoint, payload, **kwargs)
+
+                with (
+                    patch.object(client, "write", side_effect=fail_compatibility_write),
+                    self.assertRaisesRegex(ManualCIError, "Compatibility write failed"),
+                ):
+                    reconcile(client, REPO, 101)
+                self.assertEqual(len(client.status_writes), 1)
+                self.assertEqual(client.status_writes[0]["state"], state)
+
+    def test_qualification_survives_guidance_lookup_failure(self):
+        class CommentsUnavailable(Client):
+            def request(self, endpoint, **kwargs):
+                if endpoint.startswith(f"repos/{REPO}/issues/3/comments?"):
+                    raise ManualCIError("Comments are unavailable.")
+                return super().request(endpoint, **kwargs)
+
+        client = CommentsUnavailable()
+        with self.assertRaisesRegex(ManualCIError, "Comments are unavailable"):
+            reconcile(client, REPO, 101)
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.status_writes[0]["state"], "pending")
+
+    def test_running_event_cannot_replace_a_terminal_qualification(self):
+        client = Client()
+        client.plan.update(
+            required_verification_ids=["quality"],
+            deferred_verifications=[],
+            deferred_images=[],
+        )
+        client.refresh_report()
+        reconcile(client, REPO, 101)
+        self.assertEqual(client.status_writes[0]["state"], "success")
+        client.run.update(status="in_progress", conclusion=None)
+        reconcile(client, REPO, 101)
+        self.assertEqual(len(client.status_writes), 1)
+        self.assertEqual(client.commit_statuses[0]["state"], "success")
+
+    def test_execution_guard_preserves_pending_for_the_current_deferred_receipt(self):
+        for case, expected in (
+            ("waiting", "pending"),
+            ("partial", "pending"),
+            ("other-job-failure", "failure"),
+            ("stale-receipt", "failure"),
+            ("cancelled", "failure"),
+            ("complete-receipt", "failure"),
+        ):
+            with self.subTest(case=case):
+                client = Client()
+                client.run.update(run_attempt=2, conclusion="failure")
+                client.commit_statuses = [
+                    {
+                        "context": "PR Qualification",
+                        "state": "success",
+                        "target_url": f"https://github.com/{REPO}/actions/runs/101/attempts/1",
+                        "creator": {"id": 41898282, "login": "github-actions[bot]"},
+                    }
+                ]
+                next(job for job in client.jobs if job["name"] == "CI Execution")[
+                    "conclusion"
+                ] = "failure"
+                if case == "partial":
+                    client.plan["expected_verification_ids"].append("local.cli")
+                    client.plan["required_verification_ids"].append("local.cli")
+                elif case == "other-job-failure":
+                    next(job for job in client.jobs if job["name"] == "Quality")[
+                        "conclusion"
+                    ] = "failure"
+                elif case == "cancelled":
+                    client.run["conclusion"] = "cancelled"
+                elif case == "complete-receipt":
+                    client.plan.update(
+                        required_verification_ids=["quality"],
+                        deferred_verifications=[],
+                        deferred_images=[],
+                    )
+                client.refresh_report()
+                if case == "stale-receipt":
+                    client.report["run_attempt"] = 1
+                result = reconcile(client, REPO, 101)
+                status = client.status_writes[-1]
+                self.assertEqual(status["state"], expected)
+                self.assertTrue(status["target_url"].endswith("/attempts/2"))
+                if expected == "pending":
+                    self.assertEqual(result["state"], "awaiting-approval")
+                    self.assertIn("/ci run", result["comment"])
+
     def test_commit_status_uses_the_current_qualification_verdict(self):
         for case, expected in (
             ("waiting", "pending"),
@@ -360,8 +551,14 @@ class PRStatusTests(unittest.TestCase):
             deferred_images=[],
         )
         client.refresh_report()
-        for draft in (True, False):
-            with self.subTest(draft=draft):
+        execution = next(job for job in client.jobs if job["name"] == "CI Execution")
+        for draft, conclusion in (
+            (True, "success"),
+            (True, "failure"),
+            (False, "failure"),
+        ):
+            with self.subTest(draft=draft, conclusion=conclusion):
+                client.run["conclusion"] = execution["conclusion"] = conclusion
                 client.pull["draft"] = draft
                 self.assertIsNone(reconcile(client, REPO, 101).get("check"))
                 self.assertEqual(client.writes, [])
@@ -375,6 +572,7 @@ class PRStatusTests(unittest.TestCase):
         self.assertIn("/ci run", waiting["comment"])
 
         client.run["run_attempt"] = 2  # Completed attempt after authorized /ci run.
+        client.run["conclusion"] = execution["conclusion"] = "success"
         client.plan.update(
             expected_verification_ids=client.plan["required_verification_ids"],
             deferred_verifications=[],

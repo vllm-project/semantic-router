@@ -3,10 +3,12 @@ queue_rules:
   - name: default
     queue_conditions:
       - base = main
-      - check-success = PR Gate
+      - 'check-success = @github-actions/PR Qualification'
+      - 'check-success = @github-actions/CI Execution'
     merge_conditions:
       - base = main
-      - check-success = PR Gate
+      - 'check-success = @github-actions/PR Qualification'
+      - 'check-success = @github-actions/CI Execution'
     merge_method: squash
     update_method: merge
     batch_size: 1

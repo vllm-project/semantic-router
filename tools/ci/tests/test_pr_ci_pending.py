@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import pr_ci_status
 from pr_ci_pending_fixtures import PendingClient
-from test_pr_ci_status import BASE, HEAD, MERGE, REPO
+from test_pr_ci_status import APP_ID, BASE, HEAD, MERGE, REPO
 
 
 def invoke(client, event=None, *, resolve=False, arguments=()):
@@ -51,6 +51,39 @@ def invoke(client, event=None, *, resolve=False, arguments=()):
 
 
 class PendingRecoveryTests(unittest.TestCase):
+    def test_community_does_not_restore_legacy_gate_after_cutover(self):
+        client = PendingClient()
+        client.rules = [
+            {
+                "type": "required_status_checks",
+                "parameters": {
+                    "required_status_checks": [
+                        {"context": name, "integration_id": APP_ID}
+                        for name in ("PR Qualification", "CI Execution")
+                    ]
+                },
+            }
+        ]
+        result = invoke(client)
+        self.assertIn("ignored", result)
+        self.assertEqual(client.writes, [])
+
+    def test_pending_recovery_accepts_only_the_expected_execution_guard_failure(self):
+        for reconciliation in ("success", "failure"):
+            with self.subTest(reconciliation=reconciliation):
+                client = PendingClient()
+                client.run["conclusion"] = "failure"
+                for job in client.jobs:
+                    if job["name"] == "CI Execution":
+                        job["conclusion"] = "failure"
+                    elif job["name"] == "CI / Gate":
+                        job["conclusion"] = reconciliation
+                result = invoke(client)
+                if reconciliation == "success":
+                    self.assertEqual(result.get("recovery"), "restored")
+                else:
+                    self.assertEqual(client.writes, [])
+
     def test_nullable_output_text_is_not_recovery_provenance(self):
         for visible in (False, True):
             with self.subTest(visible=visible):
