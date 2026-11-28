@@ -31,30 +31,6 @@ vllm-sr serve vllm-sr/d3-edge -e --platform rocm
 
 <!-- END GENERATED MODEL TABLE -->
 
-## Language evaluation
-
-The project's D3 parity tests check that the runtime reproduces each package;
-they are not language-quality benchmarks. The language-evaluation evidence
-reported here compares English and Thai for the 27B `vllm-sr/d3` package at
-revision `20f37b9a` (2026-10-22), using paired items. It was reported by a
-community contributor:
-
-| Evaluation | Items | English (%) | Thai (%) | Reported comparison |
-| --- | ---: | ---: | ---: | --- |
-| OpenDecisions 1.0.1, capability from raw probabilities | 1,680 | 87.0 | 83.6 | Thai −3.4 points; paired bootstrap 95% CI [−5.6, −1.7] |
-| Decision Index kit sample, contributor's accuracy scorer | 1,200 | 84.8 | 79.3 | Thai −5.5 points; 98 English-only vs. 33 Thai-only correct, exact McNemar p = 1e-8 |
-
-These are unofficial results, not scores produced or independently verified
-by the project
-([issue #6446](https://github.com/vllm-project/semantic-router/issues/6446)).
-The Thai items were machine-translated from English and have not had
-native-speaker review. The Decision Index sample was rebuilt and scored by the
-contributor; it is not an official Decision Index score. This evidence covers
-only the 27B `d3` package; it does not establish language coverage for other D3
-sizes or for languages not listed here. Treat it as a data point, not a
-guarantee of quality in Thai or any other language, and validate on
-representative inputs for your language and use case.
-
 - **d3-edge to d3** are the plain sizes. Their answers match the packages' own
   runtime bit for bit
   ([parity record](https://github.com/vllm-project/semantic-router/blob/main/src/model-runtime/docs/records/decision3-parity.md)).
@@ -67,6 +43,55 @@ d3 answers no span questions. When a d3 size is the decision model, bind `pii`
 and `hallucination` to a span-capable deployment, such as vela3-fast; each
 model page shows the configuration.
 :::
+
+## Language evaluation
+
+The project's D3 parity tests check that the runtime reproduces each package;
+they are not language-quality benchmarks. The language-evaluation evidence
+below is listed per model and compares English with one other language on
+paired items. Each result was reported by a contributor and is unofficial,
+not a score produced or independently verified by the project. A result
+covers only the model and language it names; it does not establish coverage
+for other D3 sizes or for languages not listed here. Treat it as a
+data point, not a guarantee of quality, and validate on representative inputs
+for your language and use case.
+
+### d3: Thai
+
+English and Thai for the 27B `vllm-sr/d3` package at revision `20f37b9a`
+(2026-10-22)
+([issue #6446](https://github.com/vllm-project/semantic-router/issues/6446)):
+
+| Evaluation | Items | English (%) | Thai (%) | Reported comparison |
+| --- | ---: | ---: | ---: | --- |
+| OpenDecisions 1.0.1, capability from raw probabilities | 1,680 | 87.0 | 83.6 | Thai −3.4 points; paired bootstrap 95% CI [−5.6, −1.7] |
+| Decision Index kit sample, contributor's accuracy scorer | 1,200 | 84.8 | 79.3 | Thai −5.5 points; 98 English-only vs. 33 Thai-only correct, exact McNemar p = 1e-8 |
+
+The Thai items were machine-translated from English and have not had
+native-speaker review. The Decision Index sample was rebuilt and scored by the
+contributor; it is not an official Decision Index score.
+
+### d3-ultra: Traditional Chinese
+
+English and Traditional Chinese (zh-TW) for `vllm-sr/d3-ultra` at revision
+`52ba9e7a` (2026-10-26), served by the project's model runtime on an AMD
+Instinct MI300X whose golden check matched the `rocm:gfx942` references
+([issue #7178](https://github.com/vllm-project/semantic-router/issues/7178)):
+
+| Evaluation | Items | English (%) | zh-TW (%) | Reported comparison |
+| --- | ---: | ---: | ---: | --- |
+| OpenDecisions 1.0.1, capability from raw probabilities | 1,680 | 88.2 | 87.2 | zh-TW −1.0 points; paired bootstrap 95% CI [−3.0, 0.6]; 34 English-only vs. 34 zh-TW-only correct, exact McNemar p = 1.0 |
+| Typed Decisions test split, accuracy against gold | 2,000 decisions in 400 cases | 74.2 | 72.8 | zh-TW −1.4 points; paired bootstrap 95% CI [−2.8, 0.1]; 119 English-only vs. 92 zh-TW-only correct, exact McNemar p = 0.07 |
+
+The zh-TW items were machine-translated from English, with each request's
+state, question instructions and criteria translated and its ids, option keys
+and gold copied unchanged; a native speaker reviewed the Typed Decisions
+question wording only. The OpenDecisions items are the same 1,680 as the Thai
+row. Typed Decisions gold is the mean of three samples from a smaller teacher
+model, not human labels, so its accuracy measures agreement with that teacher.
+The d3 and d3-ultra rows differ in model and language and are not a direct
+comparison. The translated items, scripts and per-item results are published
+as [Kun-Tai/d3-ultra-zhtw-eval](https://huggingface.co/datasets/Kun-Tai/d3-ultra-zhtw-eval).
 
 ## State-once models: d3-turbo and d3-ultra
 
