@@ -17,7 +17,8 @@ import (
 // current with it: the earlier results of a long cycle are history, so a task
 // with one instruction and a hundred tool calls does not rescan every output
 // on each request. History keeps those earlier results in conversation order,
-// and a user message still separates one cycle from the next.
+// though the jailbreak reading takes only the user text from it, and a
+// completed assistant answer still separates one cycle from the next.
 func extractJailbreakInput(request *llmprotocol.Request) *classification.JailbreakInput {
 	input := &classification.JailbreakInput{}
 	currentStart := currentTurnStart(request.Messages)
