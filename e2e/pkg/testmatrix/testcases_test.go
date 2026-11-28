@@ -14,4 +14,7 @@ func TestBaselineInventoryHasNoDuplicates(t *testing.T) {
 		}
 		seen[name] = true
 	}
+	if !seen["router-config-version-gate"] {
+		t.Fatal("router-config-version-gate must run in the CI baseline")
+	}
 }
