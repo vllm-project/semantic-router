@@ -84,6 +84,27 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 		return nil
 	}
 
+	// Resolve the managed claim before validating storage. A claim this
+	// reconcile already owns needs no StorageClass to keep serving it, so
+	// looking the class up first used to abort the whole reconcile -- and with
+	// it the Deployment update -- once the class was retired.
+	pvc, err := r.generatePVC(sr)
+	if err != nil {
+		return fmt.Errorf("failed to generate PVC: %w", err)
+	}
+
+	found := &corev1.PersistentVolumeClaim{}
+	err = r.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
+	if err == nil {
+		// Nothing here creates another claim, so the class this one was bound
+		// with is no longer needed to reconcile the Deployment.
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	// Only a claim this reconcile has to create needs a StorageClass to exist.
 	validatedStorageClass, err := validateStorageClass(ctx, r.Client, sr.Spec.Persistence.StorageClassName)
 	if err != nil {
 		return fmt.Errorf("StorageClass validation failed: %w", err)
@@ -91,7 +112,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 
 	sr.Spec.Persistence.StorageClassName = validatedStorageClass
 
-	pvc, err := r.generatePVC(sr)
+	pvc, err = r.generatePVC(sr)
 	if err != nil {
 		return fmt.Errorf("failed to generate PVC: %w", err)
 	}
@@ -99,13 +120,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 		return err
 	}
 
-	found := &corev1.PersistentVolumeClaim{}
-	err = r.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		return r.Create(ctx, pvc)
-	}
-
-	return err
+	return r.Create(ctx, pvc)
 }
 
 func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
