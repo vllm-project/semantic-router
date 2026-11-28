@@ -51,6 +51,7 @@ _VIDEO_MIMES = {
     "webm": "video/webm",
     "mov": "video/quicktime",
     "mkv": "video/x-matroska",
+    "ts": "video/mp2t",
 }
 _IMAGE_MIMES = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
 
@@ -290,7 +291,7 @@ def _data_url(kind: str, asset: dict[str, Any], where: str) -> str:
     if kind == "video":
         if fmt not in _VIDEO_MIMES:
             raise ReadError(
-                f"{where}: a video asset needs its format: mp4, webm, mov or mkv"
+                f"{where}: a video asset needs its format: mp4, webm, mov, mkv or ts"
             )
         return f"data:{_VIDEO_MIMES[fmt]};base64,{data}"
     if fmt in _IMAGE_MIMES:

@@ -15,6 +15,10 @@ CI_STATIC_ONLY ?= false
 
 AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/tools/linter/go/golangci-lint.version)
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
+# The Claude Code release whose plugin test engine runs the vSR plugin's tests.
+AGENT_CLAUDE_CODE_VERSION ?= 2.1.325
+# Where agent-plugins-test also writes the engine report, for CI evidence.
+AGENT_PLUGINS_TEST_REPORT ?=
 AGENT_NODE_VERSION ?= 22.17.0
 
 # Share the tooling environment across linked worktrees. The worktree symlink
@@ -32,6 +36,7 @@ AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
+AGENT_CLAUDE ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/claude
 
 ifeq ($(HARNESS_BOOTSTRAP_DONE),1)
 HARNESS_BOOTSTRAP_DEPS :=
@@ -61,6 +66,7 @@ ci-full: ## Reproduce the complete baseline PR checks locally
 harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain registry, workflows, and harness tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
+	@"$(AGENT_PYTHON)" tools/agent/scripts/check_skill_catalog.py
 	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check
 	@"$(AGENT_PYTHON)" tools/ci/validate_workflows.py
 	@"$(AGENT_PYTHON)" -m unittest discover -s tools/ci/tests -p "test_*.py"
@@ -118,6 +124,34 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
+agent-vscode-test: harness-node-bootstrap ## Run the VS Code extension's tests against a fake gateway
+	@$(LOG_TARGET)
+	@NODE_PATH="$$PATH"; \
+	if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
+	cd src/agent-harness/vscode && \
+		PATH="$$NODE_PATH" npm ci --no-audit --no-fund --loglevel=error && \
+		PATH="$$NODE_PATH" npm test
+
+agent-plugins-test: harness-node-bootstrap agent-vscode-test ## Run the agent plugins' tests: Claude Code's engine tests, both vSR plugins' Python tests and the VS Code extension's tests
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/setup/scripts
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/claude-code/skills/calibrate/scripts
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/agent-harness/codex/hooks
+	@NODE_PATH="$$PATH"; \
+	if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
+	pinned() { [ "$$(PATH="$$NODE_PATH" "$(AGENT_CLAUDE)" --version 2>/dev/null | cut -d' ' -f1)" = "$(AGENT_CLAUDE_CODE_VERSION)" ]; }; \
+	if ! pinned; then \
+		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error @anthropic-ai/claude-code@$(AGENT_CLAUDE_CODE_VERSION) || exit 1; \
+		pinned || { echo "Claude Code $(AGENT_CLAUDE_CODE_VERSION) is not what $(AGENT_CLAUDE) runs"; exit 1; }; \
+	fi; \
+	cd src/agent-harness/claude-code && \
+		PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin validate . || exit 1; \
+	if [ -n "$(AGENT_PLUGINS_TEST_REPORT)" ]; then \
+		PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin test . > "$(AGENT_PLUGINS_TEST_REPORT)" 2>&1; status=$$?; \
+		cat "$(AGENT_PLUGINS_TEST_REPORT)"; exit $$status; \
+	fi; \
+	PATH="$$NODE_PATH" DISABLE_AUTOUPDATER=1 "$(AGENT_CLAUDE)" plugin test .
+
 # golangci-lint cannot type-check a standard library newer than the Go that
 # built it, so rebuild it after a Go release upgrade such as 1.26 to 1.27.
 harness-go-bootstrap: ## Install Go lint tooling only when Go changed
@@ -150,7 +184,8 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 agent-skill-sync: ## Regenerate the public install skill from its repository source
 	@python3 tools/agent/scripts/sync_public_skill.py
 
-agent-skill-check: ## Check the generated public skill without writing
+agent-skill-check: ## Check the skill catalog and generated public skill without writing
+	@python3 tools/agent/scripts/check_skill_catalog.py
 	@python3 tools/agent/scripts/sync_public_skill.py --check
 
 .PHONY: agent-skill-sync agent-skill-check

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net"
 	"net/http"
 	"sync"
@@ -14,8 +15,11 @@ const (
 	// maxIdleConnsPerHost bounds the idle pool at Envoy's default
 	// max_connections circuit breaker.
 	maxIdleConnsPerHost = 1024
-	// idleConnTimeout is Envoy's default upstream connection idle timeout.
-	idleConnTimeout = time.Hour
+	// idleConnTimeout closes an idle connection before the backend does.
+	// uvicorn (vLLM's server) and Node close theirs after 5s, and a call sent
+	// while that close is still on its way gets no response. Envoy's default
+	// is an hour.
+	idleConnTimeout = 4 * time.Second
 	// tlsSessionCacheSize bounds resumable TLS sessions per security domain.
 	tlsSessionCacheSize = 64
 )
@@ -26,17 +30,25 @@ type DialFunc func(ctx context.Context, network, address string) (net.Conn, erro
 // poolKey identifies a security domain: endpoints with equal keys share one
 // connection pool, across clusters and across Sets.
 type poolKey struct {
-	tls        bool
-	serverName string
-	caFile     string
-	certFile   string
-	keyFile    string
-	connect    time.Duration
-	ipv4Only   bool
+	tls          bool
+	serverName   string
+	caFile       string
+	certFile     string
+	keyFile      string
+	connect      time.Duration
+	network      string
+	ipv6Fallback bool
 }
 
 func poolKeyFor(spec *ClusterSpec, connect time.Duration) poolKey {
-	key := poolKey{connect: connect, ipv4Only: len(spec.Endpoints) == 1 && spec.Endpoints[0].IPv4Only}
+	key := poolKey{connect: connect, network: "tcp"}
+	switch {
+	case len(spec.Endpoints) == 1 && spec.Endpoints[0].IPv4Only:
+		key.network = "tcp4"
+	case spec.preferIPv4:
+		key.network = "tcp4"
+		key.ipv6Fallback = true
+	}
 	if spec.TLS != nil {
 		key.tls = true
 		key.serverName = spec.TLS.ServerName
@@ -95,10 +107,6 @@ func (r *poolRegistry) release(p *pool) {
 // compression, and bounds TCP connect plus TLS handshake by one connect
 // timeout, as Envoy's connect_timeout does.
 func (r *poolRegistry) newTransport(key poolKey) *http.Transport {
-	network := "tcp"
-	if key.ipv4Only {
-		network = "tcp4"
-	}
 	var tlsConfig *tls.Config
 	var tlsErr error
 	if key.tls {
@@ -113,7 +121,10 @@ func (r *poolRegistry) newTransport(key poolKey) *http.Transport {
 			ctx, cancel = context.WithTimeout(ctx, key.connect)
 			defer cancel()
 		}
-		conn, err := r.dial(ctx, network, address)
+		conn, err := r.dial(ctx, key.network, address)
+		if err != nil && key.ipv6Fallback && missingIPv4Address(err) {
+			conn, err = r.dial(ctx, "tcp6", address)
+		}
 		if err != nil {
 			return nil, &connectError{err: err}
 		}
@@ -145,6 +156,19 @@ func (r *poolRegistry) newTransport(key poolKey) *http.Transport {
 		}
 	}
 	return transport
+}
+
+func missingIPv4Address(err error) bool {
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsNotFound
+	}
+	// Go can also resolve a hostname (for example, from the hosts file)
+	// and find that none of its addresses match tcp4. That returns an
+	// AddrError before the dial has a remote address.
+	var opErr *net.OpError
+	var addrErr *net.AddrError
+	return errors.As(err, &opErr) && opErr.Addr == nil && errors.As(opErr.Err, &addrErr)
 }
 
 // tlsConfig is the client configuration of a security domain. Its CA file

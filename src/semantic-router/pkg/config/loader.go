@@ -123,7 +123,6 @@ func ParseGlobalYAMLBytesWithoutEnvExpansion(data []byte) (*RouterConfig, error)
 	if err != nil {
 		return nil, err
 	}
-	cfg.SkipExternalAssetValidation = true
 	applyParsedConfigDefaults(cfg)
 	if err := validateConfigContractsAtStage(cfg, staticConfigValidation); err != nil {
 		return nil, err
@@ -209,7 +208,6 @@ func parseYAMLBytesWithOptions(
 		return nil, err
 	}
 	cfg.ConfigBaseDir = baseDir
-	cfg.SkipExternalAssetValidation = env == nil
 	if err := finalizeParsedConfig(cfg); err != nil {
 		return nil, err
 	}
@@ -222,7 +220,8 @@ func parseYAMLBytesWithOptions(
 }
 
 // decodeYAMLBytes builds a config without the checks of finalizeParsedConfig.
-// A non-nil expand rewrites the raw document before it is decoded.
+// A non-nil expand rewrites the raw document before it is decoded; a nil one
+// keeps references as written and reads no external asset, such as a key file.
 func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterConfig, error) {
 	written := data
 	data, formWarnings, err := applyConfigForms(data, configForms)
@@ -251,7 +250,7 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
 		return nil, validationErr
 	}
-	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw, expand == nil)
 	if err != nil {
 		return nil, err
 	}
@@ -261,9 +260,48 @@ func decodeYAMLBytes(data []byte, expand func(map[string]interface{})) (*RouterC
 	return cfg, nil
 }
 
+// ValidateRawFields runs the checks the loader applies to a document before it
+// decodes it: the removed forms fail and renamed forms are rewritten, then the
+// fields the Router rejects by their presence, such as entrypoints[].client_auth,
+// even when they are null. Decoding into the canonical types drops a null field,
+// so a component that decodes a document itself and writes it back runs this
+// check on the original bytes.
+func ValidateRawFields(data []byte) error {
+	_, err := parseValidatedRawFields(data)
+	return err
+}
+
+// ValidateRawCanonicalFields checks field names and presence constraints before
+// a caller decodes a canonical Router document into typed structs. It uses the
+// Router loader's unknown-field diagnostics without resolving runtime settings.
+func ValidateRawCanonicalFields(data []byte) error {
+	raw, err := parseValidatedRawFields(data)
+	if err != nil {
+		return err
+	}
+	return validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+}
+
+func parseValidatedRawFields(data []byte) (map[string]interface{}, error) {
+	data, err := CanonicalConfigBytes(data)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := parseRawConfigMap(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateAndNormalizeRawConfig(raw); err != nil {
+		return nil, err
+	}
+	return raw, nil
+}
+
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
 		rejectDeprecatedUserConfigFields,
+		checkRawClientAuth,
+		checkRawGuardVerdictEnvNames,
 		rejectRemovedTaxonomyLegacyFields,
 		rejectRemovedDecisionToolFields,
 		rejectRemovedRouterLearningFields,
@@ -579,7 +617,15 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 			"switch_margin",
 			"stability_weight",
 			"progress_gate",
+			"cache_economics",
 		}); err != nil {
+			return err
+		}
+		if err := rejectUnknownMapFields(
+			prefix+".tuning.cache_economics",
+			nestedStringMap(tuningMap["cache_economics"]),
+			[]string{"enabled", "cache_ttl_seconds", "default_remaining_turns"},
+		); err != nil {
 			return err
 		}
 		if gate, ok := tuningMap["progress_gate"]; ok {
@@ -624,7 +670,7 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
 }
 
-func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
+func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}, skipExternalAssets bool) (*RouterConfig, error) {
 	canonical := &CanonicalConfig{}
 	if unmarshalErr := yaml.Unmarshal(data, canonical); unmarshalErr != nil {
 		logging.ComponentDebugEvent("config", "config_canonical_parse_failed", map[string]interface{}{
@@ -636,7 +682,7 @@ func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*Rout
 		return nil, err
 	}
 
-	cfg, err := normalizeCanonicalConfig(canonical)
+	cfg, err := normalizeCanonicalConfig(canonical, skipExternalAssets)
 	if err != nil {
 		logging.ComponentDebugEvent("config", "config_normalize_failed", map[string]interface{}{
 			"error": err.Error(),

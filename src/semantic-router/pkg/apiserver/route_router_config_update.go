@@ -473,37 +473,45 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	previousData []byte,
 	yamlBytes []byte,
 	origin configsnapshot.Origin,
-) bool {
+) (config.KeySave, bool) {
+	save, err := s.storeConfigKeys(paths.sourcePath, yamlBytes, true)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "KEY_STORE_ERROR", "Failed to store the configuration's keys: "+err.Error())
+		return config.KeySave{}, false
+	}
+	yamlBytes = save.Data
 	release := s.runtimeRegistry.LockConfigPublication()
 	defer release()
 	withdraw := func() {}
 	if !paths.usesRuntimeOverride() {
 		withdraw = s.attributeConfigWrite(configDocumentETagHash(yamlBytes), origin)
 	}
-	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
+	if err = writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
 		withdraw()
+		save.Discard()
 		if errors.Is(err, configwriter.ErrConfigMapChanged) {
 			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_CHANGED", "The ConfigMap changed during this request. Reload the configuration and retry.")
-			return false
+			return config.KeySave{}, false
 		}
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write source config: %v", err))
-		return false
+		return config.KeySave{}, false
 	}
 
 	if !paths.usesRuntimeOverride() {
-		return true
+		return save, true
 	}
 
-	if err := syncRuntimeConfigOrRestore(paths, previousData); err != nil {
+	if err = syncRuntimeConfigOrRestore(paths, previousData); err != nil {
+		save.Discard()
 		s.writeErrorResponse(w, http.StatusInternalServerError, "RUNTIME_SYNC_ERROR", err.Error())
-		return false
+		return config.KeySave{}, false
 	}
 	// The generated runtime document is known only now; the Router may
 	// already be loading it, so this attribution is best effort.
-	if runtimeHash, err := configFileHash(paths.runtimePath); err == nil {
+	if runtimeHash, hashErr := configFileHash(paths.runtimePath); hashErr == nil {
 		s.attributeConfigWrite(runtimeHash, origin)
 	}
-	return true
+	return save, true
 }
 
 func (s *ClassificationAPIServer) commitRouterConfigDocument(
@@ -522,9 +530,11 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		return false
 	}
 	afterAttempt := s.configActivationAttempt()
-	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI)) {
+	save, ok := s.writeRouterConfigFiles(w, paths, previousData, yamlBytes, managementOrigin(r, configsnapshot.SourceAPI))
+	if !ok {
 		return false
 	}
+	yamlBytes = save.Data
 
 	etag := configDocumentETag(yamlBytes)
 	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, yamlBytes, afterAttempt)
@@ -567,6 +577,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		ConfigVersion:        s.activatedConfigVersion(runtimeStatus, runtimeHash),
 		Message:              message,
 		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
+		Warnings:             save.Warnings(),
 	})
 	return true
 }
@@ -744,7 +755,11 @@ func writeConfigFileAtomically(configPath string, yamlBytes []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tmpFile.Write(yamlBytes); err != nil {
+	err = config.KeepReplacedFileMode(tmpFile, configPath)
+	if err == nil {
+		_, err = tmpFile.Write(yamlBytes)
+	}
+	if err != nil {
 		tmpFile.Close()
 		os.Remove(tmpConfigFile)
 		return err

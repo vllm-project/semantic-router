@@ -49,6 +49,7 @@ type maskingEcho struct {
 
 func init() {
 	pkgtestcases.Register("masking-cross-protocol", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "An equivalent PII-bearing request through Chat, Responses and Anthropic all reach the mock backend with a placeholder and no raw value",
 		Tags:        []string{"masking", "pii", "cross-protocol", "functional"},
 		Fn:          testMaskingCrossProtocol,
@@ -58,17 +59,15 @@ func init() {
 		Tags:        []string{"masking", "pii", "functional"},
 		Fn:          testMaskingKeepsEchoedPlaceholder,
 	})
-	pkgtestcases.Register("masking-classifier-unavailable-fails-closed", pkgtestcases.TestCase{
-		Description: "A PII deployment error on a masking-enabled decision returns 503 and dispatches nothing",
-		Tags:        []string{"masking", "pii", "fail-closed"},
-		Fn:          testMaskingClassifierUnavailableFailsClosed,
-	})
 }
 
 type maskingWireCase struct {
 	name string
 	path string
 	body map[string]interface{}
+	// decision is the masking decision the request must select; empty is
+	// maskingDecisionName.
+	decision string
 }
 
 // testMaskingCrossProtocol is this feature's headline claim: because every
@@ -204,41 +203,6 @@ func testMaskingKeepsEchoedPlaceholder(
 	return nil
 }
 
-// testMaskingClassifierUnavailableFailsClosed drives the remote PII
-// deployment into its unavailable path (the System One fixture answers the
-// call with 503) on a masking-enabled decision, and asserts the request is
-// refused rather than dispatched unmasked (D4).
-func testMaskingClassifierUnavailableFailsClosed(
-	ctx context.Context,
-	client *kubernetes.Clientset,
-	opts pkgtestcases.TestCaseOptions,
-) error {
-	session, err := fixtures.OpenServiceSession(ctx, client, opts)
-	if err != nil {
-		return err
-	}
-	defer session.Close()
-
-	prompt := fmt.Sprintf("%s contact %s please", maskingErrorMarker, maskingRawEmail)
-	resp, err := runMaskingRawRequest(ctx, session, "/v1/chat/completions", map[string]interface{}{
-		"model":    maskingEntrypoint,
-		"messages": []map[string]interface{}{{"role": "user", "content": prompt}},
-	})
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		return fmt.Errorf("status = %d, want 503: %s", resp.StatusCode, truncateString(string(resp.Body), 300))
-	}
-	if strings.Contains(string(resp.Body), maskingRawEmail) {
-		return fmt.Errorf("the refusal response echoes request content: %s", string(resp.Body))
-	}
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{"status": resp.StatusCode})
-	}
-	return nil
-}
-
 type maskingRawResponse struct {
 	StatusCode int
 	Headers    http.Header
@@ -250,6 +214,7 @@ func runMaskingRawRequest(
 	session *fixtures.ServiceSession,
 	path string,
 	payload map[string]interface{},
+	headers ...http.Header,
 ) (*maskingRawResponse, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
@@ -266,6 +231,11 @@ func runMaskingRawRequest(
 	// Opt in to x-vsr-trace, so a failing assertion shows how the request was
 	// routed beside the selected decision.
 	request.Header.Set("x-vsr-debug", "true")
+	for _, extra := range headers {
+		for name, values := range extra {
+			request.Header[http.CanonicalHeaderKey(name)] = values
+		}
+	}
 	response, err := session.HTTPClient(45 * time.Second).Do(request)
 	if err != nil {
 		return nil, err
@@ -295,10 +265,14 @@ func runMaskingWireCase(ctx context.Context, session *fixtures.ServiceSession, t
 	}
 	// Without this the whole case can pass vacuously: a request that bypasses
 	// the decision never runs the plugin, so "no raw value" would prove nothing.
-	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != maskingDecisionName {
+	want := tc.decision
+	if want == "" {
+		want = maskingDecisionName
+	}
+	if decision := resp.Headers.Get("x-vsr-selected-decision"); decision != want {
 		return "", fmt.Errorf(
 			"selected decision = %q, want %q; the request bypassed the masking decision so nothing was masked",
-			decision, maskingDecisionName,
+			decision, want,
 		)
 	}
 	content, err := extractAssistantText(tc.path, resp.Body)

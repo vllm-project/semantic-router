@@ -40,13 +40,25 @@ type CanonicalRouterGlobal struct {
 	Fallback          *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 	// AllowLossyTranslation names protocol losses translated with a warning
 	// instead of rejected. Every other loss keeps failing closed.
-	AllowLossyTranslation []string             `yaml:"allow_lossy_translation,omitempty"`
-	ProtocolLimits        ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
+	AllowLossyTranslation []string `yaml:"allow_lossy_translation,omitempty"`
+	// AllowRequestExtensionFields names top-level request members a wire
+	// format does not declare that the Router captures at ingress and merges
+	// back on same-format dispatch. Every member not listed keeps failing
+	// closed, and captured members never influence routing decisions.
+	AllowRequestExtensionFields []string             `yaml:"allow_request_extension_fields,omitempty"`
+	ProtocolLimits              ProtocolLimitsConfig `yaml:"protocol_limits,omitempty"`
 	// RoutingInput chooses the user text that routing reads.
 	RoutingInput RoutingInputConfig `yaml:"routing_input,omitempty"`
 	// Headers governs the optional response headers, such as who may turn on
 	// the debug headers.
 	Headers RouterHeadersConfig `yaml:"headers,omitempty"`
+	// ContextWindow governs the check of a prompt against the context
+	// windows of the models that can serve it.
+	ContextWindow ContextWindowConfig `yaml:"context_window,omitempty"`
+	// DrainTimeoutSeconds bounds how long the standalone gateway lets the
+	// requests in flight finish once the Router begins to shut down. Nil
+	// keeps DefaultDrainTimeout, and 0 is no drain.
+	DrainTimeoutSeconds *int `yaml:"drain_timeout_seconds,omitempty" json:"drain_timeout_seconds,omitempty" jsonschema:"minimum=0,maximum=86400"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -58,14 +70,16 @@ type CanonicalStreamedBody struct {
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
 type CanonicalServiceGlobal struct {
-	API           APIConfig           `yaml:"api"`
-	ResponseAPI   ResponseAPIConfig   `yaml:"response_api"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Authz         AuthzConfig         `yaml:"authz"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
-	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
-	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus StartupStatusConfig `yaml:"startup_status"`
+	API             APIConfig             `yaml:"api"`
+	ResponseAPI     ResponseAPIConfig     `yaml:"response_api"`
+	Observability   ObservabilityConfig   `yaml:"observability"`
+	MaskingIdentity MaskingIdentityConfig `yaml:"masking_identity,omitempty"`
+	Authz           AuthzConfig           `yaml:"authz"`
+	RateLimit       RateLimitConfig       `yaml:"ratelimit"`
+	Budgets         BudgetsConfig         `yaml:"budgets,omitempty"`
+	ManagementAPI   ManagementAPIConfig   `yaml:"management_api"`
+	RouterReplay    RouterReplayConfig    `yaml:"router_replay"`
+	StartupStatus   StartupStatusConfig   `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
@@ -77,7 +91,8 @@ type CanonicalStoreGlobal struct {
 	// ToolSessions configures session-scoped sticky tool-set selection's
 	// shared store (issue #3347). Optional and pointer-shaped like
 	// VectorStore: most deployments won't enable sticky selection at all.
-	ToolSessions *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
+	ToolSessions  *ToolSessionStoreConfig  `yaml:"tool_sessions,omitempty"`
+	GuardVerdicts *GuardVerdictStoreConfig `yaml:"guard_verdicts,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -97,6 +112,9 @@ type CanonicalModelCatalog struct {
 	// SignalTimeoutMs is the deadline of a request's model-runtime signals,
 	// below the request's; 0 derives it from the request's deadline.
 	SignalTimeoutMs int `yaml:"signal_timeout_ms,omitempty"`
+	// OnSignalOverload is what a request gets when a rule that fails closed
+	// could not be read because the decision runtime was overloaded.
+	OnSignalOverload *SignalOverloadPolicy `yaml:"on_signal_overload,omitempty"`
 }
 
 // CanonicalEmbeddingModels names the embedding deployment recall uses, the
@@ -229,17 +247,22 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.RouterLearning = router.Learning
 	cfg.Fallback = router.Fallback.Clone()
 	cfg.AllowLossyTranslation = router.AllowLossyTranslation
+	cfg.AllowRequestExtensionFields = router.AllowRequestExtensionFields
 	cfg.ProtocolLimits = router.ProtocolLimits
 	cfg.RoutingInput = router.RoutingInput
 	cfg.Headers = router.Headers
+	cfg.ContextWindow = router.ContextWindow
+	cfg.DrainTimeoutSeconds = router.DrainTimeoutSeconds
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
 	cfg.API = services.API
-	cfg.ResponseAPI = services.ResponseAPI
+	cfg.ResponseAPI = services.ResponseAPI.withDefaultStoreBackend()
 	cfg.Observability = services.Observability
+	cfg.MaskingIdentity = services.MaskingIdentity
 	cfg.Authz = services.Authz
 	cfg.RateLimit = services.RateLimit
+	cfg.Budgets = services.Budgets
 	cfg.ManagementAPI = services.ManagementAPI
 	cfg.RouterReplay = services.RouterReplay
 	cfg.StartupStatus = services.StartupStatus
@@ -250,6 +273,7 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 	cfg.Memory = stores.Memory
 	cfg.VectorStore = stores.VectorStore
 	cfg.ToolSessions = stores.ToolSessions
+	cfg.GuardVerdicts = stores.GuardVerdicts
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
@@ -264,6 +288,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 	cfg.ModelSignalTimeoutMs = modelCatalog.SignalTimeoutMs
+	cfg.ModelSignalOverload = cloneSignalOverloadPolicy(modelCatalog.OnSignalOverload)
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {

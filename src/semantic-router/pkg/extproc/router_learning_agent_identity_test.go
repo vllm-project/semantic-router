@@ -10,8 +10,9 @@ import (
 )
 
 // Claude Code sends one session id for a run and its subagents, and an agent
-// id only on subagent requests. Without an agent header, session scope holds a
-// subagent on its parent's model; with one, each agent is held on its own.
+// id only on subagent requests. Protection reads that agent id by default or
+// when the agent header names it, and holds each agent on its own model; an
+// agent header that names another header holds a subagent on its parent's.
 func TestProtectionAgentIdentityHoldsEachAgentOnItsOwnModel(t *testing.T) {
 	const agentHeader = "x-claude-code-agent-id"
 	for _, tc := range []struct {
@@ -20,8 +21,9 @@ func TestProtectionAgentIdentityHoldsEachAgentOnItsOwnModel(t *testing.T) {
 		wantSubagent  string
 		wantAgentPart bool
 	}{
-		{name: "without_agent_header", wantSubagent: "frontier"},
+		{name: "default_agent_header", wantSubagent: "cheap", wantAgentPart: true},
 		{name: "with_agent_header", agentHeader: agentHeader, wantSubagent: "cheap", wantAgentPart: true},
+		{name: "with_another_agent_header", agentHeader: "x-agent-id", wantSubagent: "frontier", wantAgentPart: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sessiontelemetry.ResetRouterSessionMemoryForTesting()

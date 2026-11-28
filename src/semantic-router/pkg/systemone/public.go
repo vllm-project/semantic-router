@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiregistry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/clientauth"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice/api"
@@ -36,6 +37,24 @@ const publicWait = 30 * time.Second
 // Invoke is a retained inference call supplied by the serving owner.
 type Invoke func(context.Context, string, json.RawMessage) (int, []byte, error)
 
+// ClientAuth is the entrypoint client policy a handler admits requests with.
+// Served is the policy of the configuration that serves the requests; Active,
+// when set, returns the policy of the configuration active once a request's
+// model is known. The zero value admits every client, which only a caller
+// that authorizes requests itself may use.
+type ClientAuth struct {
+	Served *clientauth.Policy
+	Active func() *clientauth.Policy
+}
+
+func (c ClientAuth) admit(model, authorization string) clientauth.Decision {
+	active := c.Served
+	if c.Active != nil {
+		active = c.Active()
+	}
+	return clientauth.Admit(c.Served, active, routerconfig.SystemOneAPI, model, authorization)
+}
+
 type requestArrivalContextKey struct{}
 
 // WithRequestArrival records when native request handling began.
@@ -54,17 +73,28 @@ func RequestArrival(ctx context.Context) (time.Time, bool) {
 // The listener's schema codec reads each request into the IR and plans it,
 // the handler serves its internal form, and the codec writes every answer in
 // the client's schema.
-func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke) http.HandlerFunc {
+func Handler(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, clients ClientAuth) http.HandlerFunc {
+	return HandlerWithRules(config, listener, invoke, nil, clients)
+}
+
+// HandlerWithRules is Handler with the rules the listener binds for the vSR
+// plugins answered by rules (RulesPath); without them it answers that the
+// listener publishes none.
+func HandlerWithRules(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, rules ListenerRules, clients ClientAuth) http.HandlerFunc {
 	codec := listenerCodec(listener)
-	serve := handle(config, listener, invoke, codec)
+	serve := handle(config, listener, invoke, codec, clients)
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == RulesPath {
+			serveRules(w, r, config, listener, rules)
+			return
+		}
 		held := newCodecWriter()
 		serve(held, r)
 		held.flush(w, r, codec)
 	}
 }
 
-func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, codec systemonecodec.ListenerCodec) func(*codecWriter, *http.Request) {
+func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, invoke Invoke, codec systemonecodec.ListenerCodec, clients ClientAuth) func(*codecWriter, *http.Request) {
 	return func(w *codecWriter, r *http.Request) {
 		if _, ok := RequestArrival(r.Context()); !ok {
 			r = r.WithContext(WithRequestArrival(r.Context(), time.Now()))
@@ -82,7 +112,7 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 			return
 		}
 
-		if !systemOneAuthorized(r, listener.APIKeys) {
+		if !systemOneAuthorized(r, listener.ClientKeys()) {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="vllm-semantic-router"`)
 			publicSystemOneError(w, 401, "invalid_api_key")
 			return
@@ -97,6 +127,11 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 					listed = append(listed, map[string]string{"name": model["id"].(string), "description": "System One decision model", "release_date": ""})
 				}
 				list["models"] = listed
+			}
+			// The vSR plugins pointed at this listener read their profile
+			// here, with only the names and descriptions of its rules.
+			if api, _ := listener.API(apiregistry.SystemOne); api.VSR != nil {
+				list["vsr"] = config.VSRListingOf(api.VSR)
 			}
 			_ = json.NewEncoder(w).Encode(list)
 			return
@@ -169,6 +204,17 @@ func handle(config *routerconfig.RouterConfig, listener *routerconfig.Listener, 
 			wait = requestWait(options, limit)
 		}
 		_, routed := config.ResolveEntrypoint(routerconfig.SystemOneAPI, model)
+		// An entrypoint with client_auth admits the request before its
+		// recipe, signals or any model runs.
+		switch clients.admit(model, r.Header.Get("Authorization")) {
+		case clientauth.Unauthorized:
+			w.Header().Set("WWW-Authenticate", `Bearer realm="vllm-semantic-router"`)
+			publicSystemOneError(w, http.StatusUnauthorized, "invalid_api_key")
+			return
+		case clientauth.Superseded:
+			publicSystemOneErrorMessage(w, http.StatusConflict, "configuration_changed", "the Router's configuration changed while the request arrived; retry the request")
+			return
+		}
 		if routed && !config.RoutingEnabled() {
 			publicSystemOneError(w, http.StatusNotFound, "systemone_routing_disabled")
 			return

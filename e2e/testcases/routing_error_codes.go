@@ -15,11 +15,13 @@ import (
 
 func init() {
 	pkgtestcases.Register("routing-error-codes", pkgtestcases.TestCase{
-		Description: "A request the Router cannot route gets the Router's own 400 with the documented reason code in error.code (issue #4653)",
+		Priority:    pkgtestcases.P0,
+		Description: "A request the Router cannot route gets the Router's own error with the documented status and reason code in error.code (issue #4653)",
 		Tags:        []string{"routing", "errors", "gateway"},
 		Fn:          testRoutingErrorCodes,
 	})
 	pkgtestcases.Register("unknown-model-error-codes", pkgtestcases.TestCase{
+		Priority:    pkgtestcases.P0,
 		Description: "Unknown provider and entrypoint names receive the Router's own model_not_found error even when a default backend exists",
 		Tags:        []string{"routing", "errors", "gateway"},
 		Fn: func(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -34,18 +36,29 @@ func init() {
 type routingErrorProbe struct {
 	name    string
 	model   string
+	status  int
 	code    string
 	message string
 }
 
-var unknownModelErrorProbes = []routingErrorProbe{
-	{name: "unknown model", model: "e2e-no-such-model", code: "model_not_found", message: "the requested model is not available"},
-	{name: "undeclared legacy alias", model: "MoM", code: "model_not_found", message: "the requested model is not available"},
-	{name: "undeclared algorithm alias", model: "vllm-sr/flow", code: "model_not_found", message: "the requested model is not available"},
+// unknownModelProbe expects OpenAI's 404 for a model the Router does not serve.
+func unknownModelProbe(name, model string) routingErrorProbe {
+	return routingErrorProbe{
+		name: name, model: model, status: http.StatusNotFound, code: "model_not_found",
+		message: "The model `" + model + "` does not exist or you do not have access to it.",
+	}
 }
 
-var routingErrorProbes = append(append([]routingErrorProbe(nil), unknownModelErrorProbes...),
-	routingErrorProbe{name: "declared recipe without a route", model: "e2e-no-route", code: "no_route", message: "no route matched the request"})
+var unknownModelErrorProbes = []routingErrorProbe{
+	unknownModelProbe("unknown model", "e2e-no-such-model"),
+	unknownModelProbe("undeclared legacy alias", "MoM"),
+	unknownModelProbe("undeclared algorithm alias", "vllm-sr/flow"),
+}
+
+var routingErrorProbes = append(append([]routingErrorProbe(nil), unknownModelErrorProbes...), routingErrorProbe{
+	name: "declared recipe without a route", model: "e2e-no-route", status: http.StatusBadRequest,
+	code: "no_route", message: "no route matched the request",
+})
 
 func testRoutingErrorCodes(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	return runRoutingErrorProbes(ctx, client, opts, routingErrorProbes)
@@ -78,8 +91,8 @@ func checkRoutingErrorProbe(ctx context.Context, httpClient *http.Client, url st
 	if err != nil {
 		return err
 	}
-	if response.StatusCode != http.StatusBadRequest {
-		return fmt.Errorf("status %d, want 400: %s", response.StatusCode, truncateString(string(response.Body), 400))
+	if response.StatusCode != probe.status {
+		return fmt.Errorf("status %d, want %d: %s", response.StatusCode, probe.status, truncateString(string(response.Body), 400))
 	}
 	// A backend's 400 would not carry the Router's error response path.
 	if path := response.Headers.Get("x-vsr-response-path"); path != "error" {

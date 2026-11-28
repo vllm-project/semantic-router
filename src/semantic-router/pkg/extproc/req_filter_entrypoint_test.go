@@ -623,3 +623,28 @@ func TestConcreteModelBypassesSemanticCache(t *testing.T) {
 		t.Fatal("a concrete backend request must not enter recipe cache state")
 	}
 }
+
+func TestModelsListingGivesCodexAnEmptyCatalogOfItsOwn(t *testing.T) {
+	router := newEntrypointTestRouter(t)
+
+	for path, wantCatalog := range map[string]bool{
+		"/v1/models?client_version=0.166.0": true,
+		"/v1/models":                        false,
+	} {
+		response, err := router.handleModelsRequest(path, nil)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		var listed map[string]json.RawMessage
+		if err := json.Unmarshal(response.GetImmediateResponse().Body, &listed); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		models, ok := listed["models"]
+		if ok != wantCatalog || (wantCatalog && string(models) != "[]") {
+			t.Fatalf("%s: models = %s (present %v), want an empty catalog only for Codex", path, models, ok)
+		}
+		if len(listed["data"]) < 3 {
+			t.Fatalf("%s: data = %s, want the OpenAI list either way", path, listed["data"])
+		}
+	}
+}

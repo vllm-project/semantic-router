@@ -43,6 +43,16 @@ type catalogReasoningWireCase struct {
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
 		{
+			name: "Fireworks Muse Spark Open default effort", catalog: "meta/muse-spark-open", provider: "fireworks",
+			enabled: true, wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Fireworks Muse Spark Open low effort", catalog: "meta/muse-spark-open", provider: "fireworks",
+			enabled: true, effort: "low", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "low"},
+		},
+		{
 			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
 			providerModelID: "astra-prod",
 			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
@@ -391,6 +401,54 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			}},
 		},
 		{
+			name: "Nemotron 3.5 Super VL medium effort flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL full effort omits medium flag", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Super VL switch disabled", catalog: "nvidia/nemotron-3.5-super-vl", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt medium effort flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true, "medium_effort": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt full effort omits medium flag", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": true,
+			}},
+		},
+		{
+			name: "Nemotron 3.5 Bolt switch disabled", catalog: "nvidia/nemotron-3.5-bolt", provider: "vllm",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
+			wantControls: map[string]interface{}{"chat_template_kwargs": map[string]interface{}{
+				"enable_thinking": false,
+			}},
+		},
+		{
 			name: "Nemotron Cascade switch disabled", catalog: "nvidia/nemotron-cascade-2-30b-a3b", provider: "vllm",
 			enabled: false, mode: config.ReasoningModeDisabled,
 			wantTransport: modelcatalog.ReasoningTransportChatTemplate,
@@ -417,6 +475,30 @@ func TestBuiltInCatalogSpecializedReasoningWireContracts(t *testing.T) {
 			enabled: true, mode: config.ReasoningModeEnabled, effort: "medium",
 			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
 			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "medium"}},
+		},
+		{
+			name: "OpenRouter Hy4 high effort reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled, effort: "high",
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "high"}},
+		},
+		{
+			name: "OpenRouter Hy4 disabled reasoning object", catalog: "tencent/hy4", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
+		},
+		{
+			name: "OpenRouter Hy4 flash toggle-only reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: true, mode: config.ReasoningModeEnabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": true}},
+		},
+		{
+			name: "OpenRouter Hy4 flash disabled reasoning object", catalog: "tencent/hy4-flash", provider: "openrouter",
+			enabled: false, mode: config.ReasoningModeDisabled,
+			wantTransport: modelcatalog.ReasoningTransportReasoningObject,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"enabled": false}},
 		},
 		{
 			name: "OpenRouter GPT-6 Astra Chat reasoning object", catalog: "openai/gpt-6-astra", provider: "openrouter",

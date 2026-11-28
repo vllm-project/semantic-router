@@ -15,19 +15,21 @@ var officialAnthropicStreamEvents = fields(
 	"message_delta", "message_start", "message_stop", "ping",
 )
 
-var officialSupportedAnthropicStreamContentBlocks = fields("text", "thinking", "tool_use")
-
-var officialUnsupportedAnthropicStreamContentBlocks = fields(
-	"bash_code_execution_tool_result", "code_execution_tool_result", "container_upload",
-	"redacted_thinking", "server_tool_use", "text_editor_code_execution_tool_result",
-	"tool_search_tool_result", "web_fetch_tool_result", "web_search_tool_result",
+// Server tool blocks and citations are carried for an Anthropic client; see
+// TestAnthropicServerToolsSurviveStream.
+var officialSupportedAnthropicStreamContentBlocks = fields(
+	"bash_code_execution_tool_result", "code_execution_tool_result", "redacted_thinking", "server_tool_use",
+	"text", "text_editor_code_execution_tool_result", "thinking", "tool_search_tool_result",
+	"tool_use", "web_fetch_tool_result", "web_search_tool_result",
 )
+
+var officialUnsupportedAnthropicStreamContentBlocks = fields("container_upload")
 
 var officialSupportedAnthropicStreamDeltas = fields(
-	"input_json_delta", "signature_delta", "text_delta", "thinking_delta",
+	"citations_delta", "input_json_delta", "signature_delta", "text_delta", "thinking_delta",
 )
 
-var officialUnsupportedAnthropicStreamDeltas = fields("citations_delta")
+var officialUnsupportedAnthropicStreamDeltas []string
 
 func TestOfficialAnthropicStreamUnionFieldsAreExplicit(t *testing.T) {
 	assertClosedDiscriminatorInventory(t, "Anthropic stream event", 8, officialAnthropicStreamEvents, nil)
@@ -102,78 +104,6 @@ type unsupportedAnthropicStreamCase struct {
 
 func officialUnsupportedAnthropicStreamCases() []unsupportedAnthropicStreamCase {
 	return []unsupportedAnthropicStreamCase{
-		{
-			name: "citation delta",
-			event: map[string]any{
-				"type": "content_block_delta", "index": 0,
-				"delta": map[string]any{"type": "citations_delta", "citation": map[string]any{"type": "char_location"}},
-			},
-			code: "unknown_stream_delta",
-		},
-		{
-			name: "redacted thinking block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "redacted_thinking", "data": "opaque"},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "server tool use block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "server_tool_use", "id": "tool_1", "name": "web_search", "input": map[string]any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "web search result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "web_search_tool_result", "tool_use_id": "tool_1", "content": []any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "web fetch result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "web_fetch_tool_result", "tool_use_id": "tool_1", "content": map[string]any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "code execution result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "code_execution_tool_result", "tool_use_id": "tool_1", "content": map[string]any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "bash execution result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "bash_code_execution_tool_result", "tool_use_id": "tool_1", "content": []any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "text editor result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "text_editor_code_execution_tool_result", "tool_use_id": "tool_1", "content": map[string]any{}},
-			},
-			code: "unsupported_content",
-		},
-		{
-			name: "tool search result block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "tool_search_tool_result", "tool_use_id": "tool_1", "content": map[string]any{}},
-			},
-			code: "unsupported_content",
-		},
 		{
 			name: "container upload block",
 			event: map[string]any{

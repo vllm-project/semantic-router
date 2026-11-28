@@ -22,15 +22,22 @@ working directory, add this directory to `PYTHONPATH`, or install this package.
 | `POST /v1/responses` | Responses, buffered and SSE, including image-generation events |
 | `POST /v1/messages` | Messages, buffered and SSE, tools, stop sequences and cache counters |
 | `POST /v1/images/generations` | Buffered Images with deterministic valid 1×1 PNGs |
+| `POST /v1/audio/speech` | Buffered Speech API with a deterministic valid WAV |
 | `GET /health` | Readiness |
 | `GET /v1/models` | Configured model metadata |
 | `POST /v1/systemone` | System One decisions for the Router's `systemone` deployments |
 | `GET /v1/systemone/models` | The one System One model it lists, `e2e/fake-systemone` |
+| `POST /v1/embeddings` | Deterministic embeddings for the Router's `openai_embeddings` deployments |
 | `GET /debug/last-request` | Last native request per test session |
 
 Images accept `response_format: b64_json` and `n` from 1 to 4. Images streaming,
 URL results, image editing and unsupported fields fail explicitly. The fixed PNG
 exercises response framing and image decoding; it does not simulate image quality.
+
+Speech accepts the OpenAI Speech fields plus the vLLM-Omni TTS extensions, and
+returns 0.1 seconds of 16-bit mono silence at 24 kHz. Streaming, a non-WAV
+`response_format`, an empty `input` and unknown fields fail explicitly. The WAV
+exercises audio framing; it does not synthesize speech.
 
 `provider_mocker/schema_contract.json` keeps the pinned OpenAI/Anthropic field
 inventories and provider extensions. Unknown fields return the native protocol's
@@ -68,9 +75,13 @@ with `timeout`, `malformed` and `queue` scenarios. POST `/reset` accepts `health
 `hold` or `malformed`; POST `/release` frees held requests. A hold expires after
 60 seconds, increments an observable expiration counter and returns HTTP 504.
 
-Protocol marker inputs select tool calls (`__mock_tool_call__`), structured schema
+Protocol marker inputs select tool calls (`__mock_tool_call__`, which calls `lookup`
+unless `__mock_tool_name:<name>:__` names another tool), structured schema
 echo (`__mock_structured_output__`), HTTP 429 (`__mock_provider_error__`), incomplete
-SSE (`__mock_incomplete_stream__`) and partial-output errors
+SSE (`__mock_incomplete_stream__`), a Chat stream held after its first chunk until
+`POST /debug/held-stream/{session}/release` (`__mock_held_stream__`; `GET
+/debug/held-stream/{session}` reports `holding`, `released` or `cancelled`) and
+partial-output errors
 (`__mock_midstream_error__`). Messages also recognizes `__mock_protocol_matrix__`
 and `__mock_gateway_fields__`, which adds fields no Messages schema declares: a
 `usage.total_cost` in exponent form and a top-level `gateway_trace_id`.
@@ -107,6 +118,15 @@ question nothing. Choice, noul and span are the question types it lists; any
 other fails with `invalid_question`. A failed question carries its error in
 its answer, as a model runtime answers it, and the call's other questions are
 answered.
+
+`/v1/embeddings` serves an `openai_embeddings` deployment with
+`endpoint: http://<service>:8000/v1`, `model: e2e/fixture-embedding` and
+`dimensions: 256`. It runs no model. A text carrying `__EMBED_TOPIC__ <key>`
+embeds as that key alone, so every text of one topic has similarity 1 and a
+cache case pins its hits, and polarity flips that only the lexical guard can
+reject, without depending on a model's paraphrase quality. Any other text
+embeds as its words hashed into 256 buckets: a repeated text matches itself
+exactly and unrelated texts stay apart.
 
 ## Image inputs
 

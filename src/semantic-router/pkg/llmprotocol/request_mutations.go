@@ -96,6 +96,10 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 		changed := request.Sampling.MinP != nil
 		request.Sampling.MinP = nil
 		return changed, nil
+	case "logit_bias":
+		changed := len(request.Sampling.LogitBias) > 0
+		request.Sampling.LogitBias = nil
+		return changed, nil
 	case "repetition_penalty":
 		changed := request.Sampling.RepetitionPenalty != nil
 		request.Sampling.RepetitionPenalty = nil

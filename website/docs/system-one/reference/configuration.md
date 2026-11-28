@@ -19,12 +19,59 @@ when to use them; this page lists them.
 | `global.model_catalog.bindings.<type>` | The deployment of one application signal type's rules |
 | `recipes[].model_bindings.<type>` | The same, for one recipe |
 | `global.model_catalog.deployments.<name>` | A deployment: `provider: model_runtime` (local or attached) or `provider: systemone` (a remote API) |
+| `global.model_catalog.deployments.<name>.fallbacks` | Ordered backup deployments for questions from `recipes[].signals.systemone` |
 | `global.model_catalog.signal_timeout_ms` | The deadline of all of a request's signals |
+| `global.model_catalog.on_signal_overload` | `{action, wait_ms, retry_after_seconds}`: with `action: retry`, calls without deployment fallbacks that an overloaded decision model refuses are asked again for up to `wait_ms`. A request that rules it still could not read would refuse then gets an error the client retries. See [when the decision model is overloaded](../deploy/performance.md#when-the-decision-model-is-overloaded) |
 
 A `systemone` deployment takes `endpoint`, `model`, `auth` (`api_key_env` or
 `api_key_file`, or `credential: delegated`; `header`, `prefix`), `headers`,
 `timeout_ms`, `max_retries`, `tls` and `capabilities` (`question_types`,
 `presets`, `modalities`).
+
+### Back up a decision deployment {#decision-deployment-fallbacks}
+
+For example, let a local CPU model answer custom System One signals if the
+default remote decision deployment is unavailable:
+
+```yaml
+global:
+  model_catalog:
+    system:
+      decision_model: {deployment: hosted}
+    deployments:
+      hosted:
+        provider: systemone
+        schema: vllm-sr/5.0
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        timeout_ms: 250
+        fallbacks: [local-cpu]
+      local-cpu:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        device: cpu
+```
+
+Failover runs after a transport failure, an attempt timeout, HTTP 429 or 5xx,
+or an unavailable runtime. A rejection, a malformed response, or an answered
+call (including a non-match) does not trigger failover. Backups are tried in list
+order before any of their own backups, with no deployment visited twice.
+Every target must support the rule's question and input; invalid references and
+cycles prevent the configuration from loading.
+
+The rule's `timeout_ms`, when set, caps the whole chain (the shortest when
+rules share a call). The stage's deadline still applies. Each target has its
+own `timeout_ms` (1000 ms when unset), bounded by the time left. An opted-in
+signal tries the next target rather than waiting for capacity on a 429. If the
+chain cannot answer, the rule's normal error policy still applies.
+
+Each target receives the rule's input with that deployment's own schema,
+credentials and limits. Configure backups only where that input may be sent.
+The rule's thresholds do not change: check that the backup's scores work with
+the configured predicate. The list applies only during request- or
+response-stage evaluation of custom signals. Application signals, standalone
+plugin reads, selectors, judges, and public inference and generation backends
+keep their configured targets.
 
 ## Signals
 
@@ -39,7 +86,7 @@ A `systemone` rule, under `recipes[].signals.systemone`:
 | `predicate` | The bound the answer must meet: `gt`, `gte`, `lt`, `lte` |
 | `deployment` | The deployment that answers |
 | `stage` | `request` (default) or `response` |
-| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video` |
+| `input` | `history`, `previous_turns` (0 to 32), `tool_results`, `request` (`false` leaves the current user turn out), `answer`, `context`, `image`, `audio`, `video`; `max_state_bytes` caps each named part's bytes (0, the default, keeps every part whole) |
 | `coverage` | `truncate` (default) or `full` |
 | `on_unscanned` | With `coverage: full`: `match`, `no_match`, `unknown` (default) or `best_effort`; on `jailbreak` and `pii` rules, `best_effort` is the default |
 | `timeout_ms` | Up to 60,000 |

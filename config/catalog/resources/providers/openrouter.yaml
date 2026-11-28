@@ -72,6 +72,36 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://openrouter.ai/tencent/hy4-preview
+- catalog: tencent/hy4
+  relationship: gateway
+  id: tencent/hy4
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.834
+    cached_input_per_1m: 0.042
+    completion_per_1m: 2.501
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://openrouter.ai/tencent/hy4
+- catalog: tencent/hy4-flash
+  relationship: gateway
+  id: tencent/hy4-flash
+  protocols:
+  - openai/chat-completions@1
+  pricing:
+    currency: USD
+    prompt_per_1m: 0.07
+    cached_input_per_1m: 0.003
+    completion_per_1m: 0.281
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://openrouter.ai/tencent/hy4-flash
 - catalog: thinking-machines/inkling
   relationship: gateway
   id: thinkingmachines/inkling

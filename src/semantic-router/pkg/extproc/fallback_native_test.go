@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
 )
 
@@ -73,24 +75,28 @@ func TestNativeFallbackPreparesTheNextCandidate(t *testing.T) {
 	require.False(t, ctx.FallbackAuditRecorded)
 }
 
-func TestNativeFallbackSwitchesToTheCandidateOnItsSuccess(t *testing.T) {
+func TestNativeFallbackRecordsSuccessOnlyAfterAcceptingTheBody(t *testing.T) {
 	session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
 	ctx := session.ctx
 	step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusServiceUnavailable, "unavailable"))
 	require.NoError(t, err)
 	require.NotNil(t, step.Call)
 
-	session.fallback.succeeded(http.StatusOK)
+	session.fallback.beginResponse(http.StatusOK)
 	require.Equal(t, "model-fallback-1", ctx.VSRSelectedModel)
+	require.Len(t, ctx.FallbackRecord.Attempts, 1)
+	require.Empty(t, ctx.FallbackRecord.FinalStatus)
+	require.False(t, ctx.FallbackAuditRecorded)
+
+	session.router.finishNativeFallbackResponse(ctx, "")
 	require.Equal(t, "model-fallback-1", ctx.RequestModel)
 	require.Equal(t, headers.ResponsePathFallback, ctx.ResponsePath)
 	require.Equal(t, "succeeded", ctx.FallbackRecord.FinalStatus)
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 	require.True(t, ctx.FallbackAuditRecorded)
 
-	// A later success report, such as the response phases seeing the same
-	// response again, changes nothing.
-	session.fallback.succeeded(http.StatusOK)
+	// A later completion cannot record a second attempt.
+	session.router.finishNativeFallbackResponse(ctx, "")
 	require.Len(t, ctx.FallbackRecord.Attempts, 2)
 }
 
@@ -130,7 +136,8 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	step, err = chain.Next(context.Background(), failedWith(http.StatusBadGateway, "bad gateway"))
 	require.NoError(t, err)
 	require.Nil(t, step.Call, "every eligible candidate was tried")
-	require.Nil(t, step.Immediate)
+	require.NotNil(t, step.Immediate, "the client gets the last candidate's outcome")
+	require.Equal(t, http.StatusBadGateway, step.Immediate.Status)
 
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel)
 	require.Same(t, primaryRequest, ctx.SemanticRequest)
@@ -140,7 +147,8 @@ func TestNativeFallbackEndsWithThePrimaryContext(t *testing.T) {
 	require.Equal(t, "bad gateway", ctx.FallbackRecord.Attempts[1].ErrorMessage)
 	require.True(t, ctx.FallbackAuditRecorded)
 
-	session.fallback.succeeded(http.StatusOK)
+	session.fallback.beginResponse(http.StatusOK)
+	session.router.finishNativeFallbackResponse(session.ctx, "")
 	require.Equal(t, "model-primary", ctx.VSRSelectedModel, "no candidate is in flight once the chain ended")
 }
 
@@ -231,12 +239,54 @@ func TestNativeFallbackBoundsACandidateLikeTheResponsePhase(t *testing.T) {
 }
 
 func TestNativeFallbackStopsWhereThePolicyStops(t *testing.T) {
-	t.Run("non-retryable status", func(t *testing.T) {
-		session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
-		step, err := session.Fallback().Next(context.Background(), failedWith(http.StatusBadRequest, "bad request"))
+	t.Run("non-retryable primary response", func(t *testing.T) {
+		for _, status := range []int{
+			http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+			http.StatusNotFound, http.StatusUnprocessableEntity, http.StatusInternalServerError,
+		} {
+			t.Run(strconv.Itoa(status), func(t *testing.T) {
+				session := nativeFallbackSession(t, fallback.DefaultEnabledPolicy(), "model-primary", "model-fallback-1")
+				openReplay(t, session.router, session.ctx, "model-primary", "")
+				const body = `{"error":{"message":"primary error"}}`
+				step, err := session.Fallback().Next(t.Context(), failedWith(status, body))
+				require.NoError(t, err)
+				require.Nil(t, step.Call)
+				require.Nil(t, step.Immediate)
+				require.Len(t, session.ctx.FallbackRecord.Attempts, 1)
+
+				_, err = session.ResponseHeaders(routing.Header{
+					{Name: ":status", Value: strconv.Itoa(status)},
+					{Name: "content-type", Value: "application/json"},
+				}, false)
+				require.NoError(t, err)
+				_, err = session.ResponseBody([]byte(body), true)
+				require.NoError(t, err)
+				session.Close(nil)
+
+				requireReplayEnd(t, session.router, session.ctx, routerreplay.LifecycleFailed, "upstream_error_response", status)
+				record, _ := session.router.ReplayRecorder.GetRecord(session.ctx.RouterReplayID)
+				require.Empty(t, fallbackOutcomes(record))
+			})
+		}
+	})
+	t.Run("non-retryable local reply", func(t *testing.T) {
+		policy := fallback.DefaultEnabledPolicy()
+		policy.RetryableStatusCodes = []int{http.StatusBadGateway}
+		session := nativeFallbackSession(t, policy, "model-primary", "model-fallback-1")
+		openReplay(t, session.router, session.ctx, "model-primary", "")
+		local := &routing.LocalReply{Status: http.StatusServiceUnavailable, Failure: "connect_failure"}
+		step, err := session.Fallback().Next(t.Context(), routing.Outcome{
+			Route: "model-primary", Status: local.Status, Local: true, Failure: local.Failure,
+		})
 		require.NoError(t, err)
 		require.Nil(t, step.Call)
-		require.Len(t, session.ctx.FallbackRecord.Attempts, 1)
+		session.Close(local)
+
+		requireReplayEnd(t, session.router, session.ctx, routerreplay.LifecycleFailed, "upstream_connect_failure", local.Status)
+		record, _ := session.router.ReplayRecorder.GetRecord(session.ctx.RouterReplayID)
+		outcomes := fallbackOutcomes(record)
+		require.Len(t, outcomes, 1)
+		require.Equal(t, "non_retryable", outcomes[0].Reason)
 	})
 	t.Run("total timeout spent", func(t *testing.T) {
 		policy := fallback.DefaultEnabledPolicy()

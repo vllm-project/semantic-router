@@ -55,6 +55,49 @@ translation:
 迟到的答案会让其问题成为未知，由每条规则或功能的失败策略决定。截止时间结束 Router 的等待，但不会停止已经在运行的前向计算。
 :::
 
+## 决策模型过载时 {#when-the-decision-model-is-overloaded}
+
+决策模型没有余量时会拒绝调用：它的请求队列已满，回答 `overloaded`。这时，失败即关闭的规则会匹配。请求阶段的 `jailbreak` 或 `pii` 规则就是这样，除非其 `on_unknown` 为 `no_match`。随后，带 `fast_response` 的决策会像请求不安全一样拒绝它。负载高时，这会拒绝大多数请求，而编程代理会把这种拒绝当作最终结果。
+
+`global.model_catalog.on_signal_overload` 让这样的请求收到客户端会重试的错误。不配置时，行为不变：
+
+```yaml
+global:
+  model_catalog:
+    on_signal_overload:
+      action: retry          # refuse（默认）或 retry
+      wait_ms: 2000          # 0 到 60,000；0 表示不等待
+      retry_after_seconds: 0 # 最多 60；0 表示由 wait_ms 推导
+```
+
+`action: retry` 时：
+
+- **等待余量。** 请求阶段每个返回 `overloaded` 的调用，都会在请求等待余量期间重新询问，无论其规则的失败策略如何：失败即关闭的规则、像 `safety` 这样失败即放行的规则，以及路由问题都一样。如果模型给出回答，请求就按没有过载时那样读取。
+  - 等待从请求第一次收到过载回答起，最长 `wait_ms`，且不超过信号的截止时间。规则自己的 `timeout_ms` 限定的是其调用的每次尝试，而不是这段等待。
+  - 一个请求发往同一模型的调用会按轮次一起重新询问，因此原本在一次调用中的问题会再次放在一次调用中。
+- **限制负载。** 一个请求发往同一模型的调用最多分 3 轮重新询问，各轮之间至少相隔一个步长：在等待的四分之一处、一半处和结束时。它的某个调用刚占用一轮后，其他到达的调用会在同一轮中询问，因此一个只回答部分调用、拒绝其余调用的模型不会一下子耗尽请求的轮次。
+  - 模型以过载拒绝调用期间，无论有多少请求在等待，每一步只有一个等待中请求的轮次询问它。步长带抖动，从 100 ms 起倍增至 1 s。
+  - 在这样的一轮中，如果一个请求有超过 8 个调用在等待该模型（例如长输入的各个窗口），它只单独发送其中一个作为探测。探测不计入这 3 轮。
+  - 任何调用一旦得到回答，模型就重新开放，等待它的每个请求随即进行自己的一轮。
+- **不从等待中学习速度。** 等待过的防护扫描不会为其模型记录速度：这段时间不能说明模型读取得多快。它只从模型再次给出回答时起，根据此后读取的窗口判断自己是否落后于进度，因此一个已无法按配置大小的窗口读完的长输入，仍会改用更大的窗口读完。
+- **返回可重试的错误。** 如果模型仍未给出回答，Router 在以下两种情况下返回客户端会重试的错误：
+  - 拒绝请求的只有在过载的模型上失败即关闭的规则。这个错误代替拒绝。
+  - 某条因模型过载而未读取的规则，在匹配时会拒绝该请求。这个错误代替转发。像 `safety` 这样失败即放行的规则，在模型忙得读不了它时，不再让请求通过。
+
+  Anthropic Messages 客户端收到 `529 overloaded_error`。OpenAI Chat Completions 或 Responses 客户端收到 `429`，代码为 `overloaded`。它们的 SDK 和代理会在 `Retry-After` 之后重试 429，而有些会把 5xx 当作失败。两种错误都在流式响应的任何字节之前送达客户端，并带有：
+  - `Retry-After`：取 `retry_after_seconds`，否则取 `wait_ms` 向上取整到整秒，至少 1 秒。它最多为 60：有些客户端会忽略更长的值，有些则会完整地等待。
+  - `x-vsr-warnings: guard_overloaded`。
+- **绝不未经检查就转发。** 只要某条可能拒绝请求的规则因过载而未读取，请求就不会被转发。
+  - 匹配的规则仍会拒绝它，条件在出错时匹配的决策也一样。
+  - 其他失败（例如超时，或模型尚未就绪）结果不变。
+  - 超出所有上下文窗口的提示词仍会收到 `400 context_length_exceeded`。
+  - 未读取的路由问题不会阻止请求继续：它能选择路由，但不能拒绝请求。
+
+这些与拒绝以及 `signal_failed_closed` 日志分开统计：
+
+- `vsr_signal_overload_waits_total{deployment, outcome}` 统计重新询问的调用，按最后一次的结果分类：有余量时为 `ok`，等待耗尽时为 `overloaded`，或其他失败的原因。
+- `vsr_signal_overload_retryable_total{format}` 统计收到可重试错误的请求，按客户端的线路格式分类。
+
 ## 长输入 {#long-inputs}
 
 很长的用户消息（粘贴的文档、日志、很长的工具输出）由 Router 自己按以下两种方式读取，因此本地和远程决策模型的行为一致。
@@ -67,9 +110,15 @@ translation:
 **防护规则分窗口读取完整输入。** 指 `jailbreak`、`safety` 和 `pii`，包括请求阶段和响应阶段。
 
 - 超过一个 `scan_window` 的输入被切成相互重叠 `scan_window.overlap` 的窗口，跨越切点的文本总能被某个窗口完整读到。
-- 读取顺序是先结尾，再开头，然后按顺序读中间：本地模型一次批量读取，远程 API 同时最多 `max_concurrency` 个调用。
+- 读取顺序是先结尾，再开头，然后按二分读中间：先读中点处的窗口，再读四分点、八分点处的窗口，依此类推，起点每个请求都不同。任一时刻已读的窗口都分布在整个输入上，因此输入的任何部分都不会可预知地被漏读。每个窗口单独一次调用，每个部署同时最多 `scan_window.max_parallel` 个。读取同一输入的 `jailbreak`、`safety` 和 `pii` 规则共用每个窗口的调用，一个窗口读完，它的回答立即计入。
 - 任何一个窗口发现攻击、危害或个人数据，整个输入即被标记。`pii` 的 span 保持其在原输入中的位置，脱敏会替换每一处。
-- 一个输入最多读取 64 个窗口，其余窗口计为未读。
+- 使规则匹配的窗口即决定了该规则：未读的窗口不能撤销一次匹配。如果这一匹配本身就会拒绝请求（有一个带 `fast_response` 插件的决策仅凭这条规则即匹配，且没有其他决策排在它之前），该窗口会结束请求的全部防护扫描：尚未读取的窗口不再发送，请求立即被拒绝，而不必等到截止时间。
+- 一个输入最多读取 256 个窗口。需要更多窗口的输入在开头和结尾之间改用更大的窗口读取，最大到 `scan_window.max_tokens`（默认是模型能接受的最大大小：验证长度为 32,768 个 token 时为 31,744 字节），使 256 个窗口覆盖整个输入。只有超过 256 个最大窗口（约 7.5 MB）的输入才会留下未读窗口，这些窗口计为未读。
+- 窗口越大，其中内容被稀释得越厉害：同一段注入在 8,000 token 的窗口里得分低于在 2,000 token 的窗口里。开头和结尾，即输入的前后各 `scan_window.tokens`，始终按这一大小读取。较大窗口的回答若使某条规则的值低于其阈值，且在对数几率上相差不超过 `scan_window.reread_margin`，会在规则作出判断之前按 `scan_window.tokens` 大小的窗口重读。稀释使得分的对数几率在任何阈值附近都下降大致相同的幅度，因此默认值 3 对阈值为 0.995 的规则从约 0.91 起重读，对 0.88 的规则从约 0.27 起，对 0.5 的规则从约 0.05 起；窗口一旦匹配就不再重读。差距在一半边距以内的窗口（被稀释的匹配通常落在这里）会立即重读，排在所有尚未发送的窗口之前，仍可提前结束扫描；差距更大的窗口要等尚未读取的窗口读完后再重读，离阈值越近越先读，因此落后于进度的扫描会先读完各段合并窗口，再做这类重读。输入的窗口已经读过并得到回答的部分不会再读。
+- 结尾窗口装着模型在回答前最后读到的内容，注入放在这里最有效；而紧挨输入末尾的注入要与最多一整个窗口的前文共用这个窗口。结尾窗口的回答若使某条规则的值低于其阈值，且相差不超过 `scan_window.reread_margin`，输入最后半个窗口会立即重读：只多一个窗口，匹配时仍可提前结束扫描。
+- 读过一次的窗口在一段时间内不再重读。窗口的回答只取决于其调用发送的内容，因此 Router 保留请求阶段各窗口的回答（最多 16,384 个），直到最后一次读到它们的请求之后 30 分钟；输入在某个窗口结束处之前完全相同的请求直接取用该窗口的回答，不再调用模型。工具循环每次请求都会重新发送它所回答的用户轮次，读取先前轮次的规则（`input.history`）读到的对话只在末尾增长，因此一个会话的后续请求只读取新的窗口。输入的每个窗口仍然都被读取，每个只读一次；保留下来的、曾发现攻击的窗口仍会拒绝请求。窗口的键包含它之前的全部文本，因此一个对话的窗口回答永远不会用于另一个对话，也不会让另一个对话变快。
+- 保留的回答省下的是第二次读取，而不是第一次。把一段长输入第一次带到某个 Router 的请求仍要读完它的全部窗口：在一个部署中（窗口 2,048 个 token，每次 4 个并行），新的 80K token 轮次路由约需 5.5 秒，300K token 的轮次约需 20 秒，同一个 Router 再次读到这个轮次时约需 1 秒。默认情况下，每个 Router 只保留自己的回答，因此请求落到多个 Router 副本上的会话会在每个副本上各完整读取一次长轮次，重启后的 Router 不保留任何回答。启用下述共享存储后，副本可以复用已完成的检查结果。
+- 能在信号截止时间前读完全部窗口的输入按配置的大小读取，速度与读完这些窗口所需的时间相同。落后于进度的扫描，即按已读窗口的速度在截止时间前读不完剩余窗口的扫描，只有在部署实测的速度表明能按时读完时，才把剩余窗口按连续几段合并读取，取能按时读完的最短一段；否则保持原有窗口，能读多少读多少。决策模型在任何大小的窗口里读取每个 token 的开销大致相同，因此更大的窗口节省的时间很少，很少能按时读完。
 
 ```yaml
 global:
@@ -79,7 +128,7 @@ global:
         provider: model_runtime
         artifact: vllm-sr/vela3-fast
         routing_view: {max_tokens: 8192, head_share: 0.25}
-        scan_window: {tokens: 8192, overlap: 512}
+        scan_window: {tokens: 8192, overlap: 512, max_parallel: 4}
       hosted-decision:
         provider: systemone
         endpoint: https://decisions.example.com/v1/systemone
@@ -95,16 +144,30 @@ global:
 | `routing_view.head_share` | 0.25 | 0 到 1 |
 | `scan_window.tokens` | 8,192；`provider: systemone` 为 4,096 | 256 到 1,048,576 |
 | `scan_window.overlap` | 512；`provider: systemone` 为 256 | 0 到小于半个窗口 |
+| `scan_window.max_parallel` | 4 | 1 到 64 |
+| `scan_window.max_tokens` | 模型的验证长度减去 1,024 | `scan_window.tokens` 到 1,048,576 |
+| `scan_window.reread_margin` | 3（低于规则阈值的对数几率） | 0 到 20（为 0 时不重读任何窗口） |
 
 **视图和窗口按字节计算大小。** `max_tokens` 和 `scan_window.tokens` 中的一个 token 按四个字节计算，大约是一个散文 token 所占的字节数，因此默认的 8,192 对应 32 KB 的视图。模型的验证长度（模型卡的 `validated_input_tokens`，没有时为 `max_input_tokens`）减去留给问题的 1,024 个 token，按每个 token 一个字节限制两者，因为字节级分词器不会让一个字节产生多于一个 token。JSON、base64 这类密集文本每个 token 所占的字节远少于散文，同样大小的视图可能包含约三倍的 token，但任何设置都不会让视图或窗口超出模型长度：验证长度为 32,768 个 token 时，两者都不会超过 31,744 字节。
 
-**按截止时间设定大小。** 调用应在截止时间之前留有余量地完成：远程 API 的截止时间是规则或部署的 `timeout_ms`，本地模型的截止时间是信号的截止时间（对服务中的请求默认 45 秒，`global.model_catalog.signal_timeout_ms`）。如果一个 API 每秒读取 R 个 token，回答最小的调用需要 T 秒，那么不超过 `(timeout - T) × R` 个 token 的视图能按时得到回答：一个每秒读取 2,000 个 token、最小调用需要 2 秒的 API，在 6 秒超时内约能读取 8,000 个 token，对散文相当于 `max_tokens` 为 8,000；如果消息经常是 JSON 或 base64，则约为 2,700。一次扫描的各个窗口共用截止时间：本地模型在一个批次中读取它们，远程 API 每次最多读取 `max_concurrency` 个。未能按时回答的窗口记为未读，`best_effort` 下规则依据已读窗口做出判断。API 较慢时调低 `scan_window.tokens`；需要完整扫描的输入则调高 `max_concurrency` 或截止时间。
+**按截止时间设定大小。** 调用应在截止时间之前留有余量地完成：远程 API 的截止时间是规则或部署的 `timeout_ms`，本地模型的截止时间是信号的截止时间（对服务中的请求默认 45 秒，`global.model_catalog.signal_timeout_ms`）。如果一个 API 每秒读取 R 个 token，回答最小的调用需要 T 秒，那么不超过 `(timeout - T) × R` 个 token 的视图能按时得到回答：一个每秒读取 2,000 个 token、最小调用需要 2 秒的 API，在 6 秒超时内约能读取 8,000 个 token，对散文相当于 `max_tokens` 为 8,000；如果消息经常是 JSON 或 base64，则约为 2,700。一次扫描的各个窗口共用截止时间：部署每次读取 `scan_window.max_parallel` 个窗口，先读结尾和开头，因此截止时间到达时已读的窗口就是部分扫描据以判断的窗口。未能按时读到的窗口记为未读，`best_effort` 下规则依据已读窗口做出判断。落后于进度的扫描只有在部署实测的速度表明更大的窗口能按时读完时，才改用更大的窗口读取剩余部分；它们节省的只是每次调用在文本之外的固定开销，因此在单个决策模型上，约一百万 token 的输入可能只读到一部分，`scan_partial` 会如实说明。API 较慢时调低 `scan_window.tokens`；需要完整扫描的输入则调高截止时间；同时处理更多窗口只在模型还有余量合批时才有帮助。
 
-**覆盖率与失败。** 如果截止时间在所有窗口读完之前到达，由 `on_unscanned` 决定：`best_effort`（默认）根据已读窗口作出判断，`match` 直接匹配（严格模式），`no_match` 不匹配，`unknown` 交给 `on_unknown`。如果一个窗口都没有读到（模型不可用，或没有窗口按时作答），`jailbreak` 和 `pii` 规则按 `on_unknown` 处理，默认匹配（失败即拦截）；`safety` 规则则为未知，由其决策的 `rules.on_unknown` 决定。
+**覆盖率与失败。** 如果截止时间在所有窗口读完之前到达，且已读窗口都没有决定该规则，由 `on_unscanned` 决定：`best_effort`（默认）根据已读窗口作出判断，`match` 直接匹配（严格模式），`no_match` 不匹配，`unknown` 交给 `on_unknown`。规则的 `min_coverage` 是 0 到 1 之间的比例，默认关闭，它规定 `best_effort` 至少要读多少窗口：低于该比例时规则视为 `unknown`，因此 `jailbreak` 或 `pii` 规则默认匹配，防护会拒绝读得太少的输入。如果一个窗口都没有读到（模型不可用，或没有窗口按时作答），`jailbreak` 和 `pii` 规则按 `on_unknown` 处理，默认匹配（失败即拦截）；`safety` 规则则为未知，由其决策的 `rules.on_unknown` 决定。
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      jailbreak:
+        - name: prompt_attack
+          min_coverage: 0.5
+```
 
 每条分窗口读取输入的防护规则都会报告覆盖率：
 
-- `vsr_signal_scan_coverage_total{signal, result}` 按 `full`、`partial` 或 `none` 统计每条防护规则的读取；
+- 请求阶段的防护规则只读了部分输入、请求仍被路由时，`x-vsr-warnings` 对每个调用方都携带 `scan_partial`；
+- `vsr_signal_scan_coverage_total{signal, result}` 按 `full`、`partial` 或 `none` 统计每条防护规则的读取，`vsr_signal_scan_coverage_ratio{signal}` 给出已读窗口的比例，`vsr_signal_scan_decided_total{signal}` 统计在其余窗口读完之前就被某个窗口决定的规则；
+- `vsr_signal_scan_windows_total{deployment, source}` 统计由模型读取的窗口（`read`），以及回答来自先前请求对同一输入的读取的窗口（`kept`）；
 - 路由预览（`scan_coverage`）和 Router Replay 记录（`scan_coverage`）按规则给出 `full`、`partial n/m` 或 `none`；
 - 对允许查看调试头的调用方，`x-vsr-trace` 以 `scan_coverage` 成员携带该信息。
 
@@ -127,3 +190,41 @@ global:
 - **一个部署承担全部** 只加载一个模型。把各类型分散到多个部署，每个阶段每个部署各发出一次调用。
 
 [选择模型、规模和硬件](../../model-runtime/get-started/choose-a-model.md)给出了各规格的实测延迟，[模型运行时记录](https://github.com/vllm-project/semantic-router/tree/main/src/model-runtime/docs/records)包含完整的测量数据。
+
+### 跨副本共享 Guard 检查结果
+
+在各 Router 上配置 `global.stores.guard_verdicts`，即可复用其他副本已完成的请求阶段窗口检查。默认值为 `backend: local`。
+
+```yaml
+global:
+  stores:
+    guard_verdicts:
+      backend: redis
+      hmac_key_env: VLLM_SR_GUARD_HMAC_KEY
+      timeout_ms: 50
+      redis:
+        address: redis.example.com:6379
+        password_env: VLLM_SR_GUARD_REDIS_PASSWORD
+        database: 0
+        tls: false
+```
+
+此示例使用外部 Redis 服务，需要替换地址并自行提供 `VLLM_SR_GUARD_REDIS_PASSWORD`。`vllm-sr serve` 不会为 guard verdicts 创建托管 Redis 或改写其地址。托管栈保留的 `VLLM_SR_STACK_REDIS_PASSWORD` 不能作为 Recipe 包的环境绑定。
+
+Redis 必须位于 Router 专用网络并启用认证。ACL 必须允许在 `~vsr:guard-verdicts:v1:*` 上执行 `GETRANGE` 和 `SET`，只允许 `GET` 无法执行这里的有界读取。客户端还会使用连接初始化命令 `HELLO` 和 `CLIENT`；健康检查可使用 `PING`。使用 Redis ACL 用户时配置 `redis.username`；设置 `redis.tls: true` 可启用 TLS，并使用系统信任库验证证书。将 Redis 密码放入 `password_env` 指定的环境变量。所有副本的 `hmac_key_env` 环境变量必须包含同一个独立的 HMAC 密钥：用 `openssl rand -hex 32` 等方式生成 32 个随机字节，以 64 个十六进制字符表示，并通过密钥管理系统分发。变量名必须符合 `[A-Z_][A-Z0-9_]*`，不得包含空白或 `${...}` 插值。有请求阶段 guard 的 recipe 在密钥缺失或格式错误时初始化失败；Redis 暂时不可用不会阻止初始化。Redis 及其其他客户端不得持有 HMAC 密钥。
+
+使用 Recipe 包时，启动 `vllm-sr serve` 需通过 `--recipe-env` 显式授权两个变量名。CLI 只向 Router 传递启动配置中声明的 guard 凭据。Dashboard 激活时校验变量名授权，Router 校验变量值。需要新增 guard 凭据时，应使用相应配置重启栈，不要把 HMAC 密钥共享给 Dashboard。
+
+查询先查本地内存，再查 Redis。仅保留所有问题均有回答、无错误且输入覆盖完整的结果。共享 key 沿用现有窗口哈希，并按 recipe 隔离命名空间。`systemone` 部署还绑定远端地址、模型名、API schema 和 deviations；attached `model_runtime` 部署在已观测模型身份之外，还绑定每个实际地址及其 served model，包括混合 managed/attached 副本池中的 attached worker。两类部署都绑定静态 `headers` 和 `tls.server_name`；后者会作为 SNI 发送，可能选择不同的后端策略。修改这些输入后，新一代 classifier 会重新扫描；调整请求头或副本顺序不影响复用。缺少可识别模型或连接身份的部署不保留窗口结果。在同一地址替换 guard 时，应使用带版本的远端模型名；配置无法识别模型名不变时服务端模型的变化。存储中只有哈希和回答，不含提示词原文；PII 片段文本根据偏移从当前请求恢复。签名绑定 key、回答、格式版本及过期时间。篡改、过期、超大或其他无效记录均视为未命中。响应阶段的检查结果不会共享。
+
+`model_runtime` 的模型身份包含运行时报告的实际精度。配置 `dtype: auto` 时，即使模型权重相同，实际精度不同的 worker 池也使用不同的缓存键。同一池中，只要有一个可接收请求的 worker 没有报告实际精度，或其精度与其他 worker 不同，Router 就不读写本地和 Redis 窗口缓存；这些 worker 仍然可以执行扫描。升级后的 Router 不会复用旧版本写入的多 worker 窗口结果。
+
+配置了 `auth`（静态密钥或 delegated 认证）、TLS 客户端证书（`tls.cert_file` 和 `tls.key_file`）或 `forward_request_headers` 的 `systemone` 和 attached `model_runtime` 部署都会跳过本地和 Redis 两级窗口缓存。凭据、客户端证书和转发的请求头可能选择不同的 guard 策略。静态密钥在发送远端调用时读取，无需修改配置即可轮换；不同副本或不同代 classifier 的相同证书路径也可能对应不同身份，因此窗口 key 无法将其绑定到固定身份。仅验证服务端的 TLS 配置在 SNI 身份不变时仍允许复用；单独修改 `tls.ca_file` 不改变 guard 的策略身份。
+
+本地缓存保持最后使用后 30 分钟的滑动有效期。首次模型结果在请求返回前发布；本地命中不执行 Redis I/O。只有当本地或共享命中将已发布过期时间至少延长五分钟，或尚无成功发布记录时，才进入最多 1,024 个窗口的续期队列；刚发布的窗口不占用槽位。后台 worker 收到信号后处理所有就绪批次，不轮询空闲缓存。排队期间的命中会合并，签名过期时间为最后一次入队使用时间加 30 分钟，不按写入时间延长。如果命中在下次续期到期前停止，共享记录可能比本地记录提前至多五分钟过期。被淘汰的共享记录会在下一次符合条件的续期时重建。队列满、关闭或写入失败可能丢弃续期，后续未命中仍会重新扫描。所有 recipe 共用一个连接池及故障冷却状态；没有请求阶段 guard 的 recipe 不创建客户端。
+
+每次存储操作受 `timeout_ms` 限制（默认 50，范围 1–1,000）。请求查询和首次写入也受请求剩余期限约束，后台续期使用独立预算。传输失败后暂停一秒内的存储 I/O；等待连接容量超时只视为未命中，不触发故障冷却。本地缓存每个 classifier 最多保留 16,384 个窗口；共享 Redis 应配置内存上限及淘汰策略。超过 256 KiB 的记录仅保留在本地。
+
+`vsr_guard_verdict_store_ops_total{op,outcome}` 区分本地命中、Redis 命中和未命中、无效或过期条目、超大载荷、传输错误、冷却、容量等待以及续期队列溢出。可通过 `op="get",outcome="hit"` 确认跨副本复用。存储不可用和签名无效也会产生告警日志，每类每分钟最多一次；日志不含 key、载荷、地址或 Redis 原始错误。
+
+同一长轮次的后续请求交替落到两个副本时，`vsr_signal_scan_windows_total{source="read"}` 记录首次模型读取，后续复用记为 `source="kept"`。新输入的首次检查成本不变。两个副本同时首次收到输入时，可能在结果写入前各扫描一次；共享缓存不协调进行中的扫描。

@@ -6,7 +6,7 @@
         "message": {
           "container": null,
           "content": [],
-          "id": "chatcmpl_cancelled",
+          "id": "msg_f9ba7a75f90050565129f006",
           "model": "public-model",
           "role": "assistant",
           "stop_details": null,

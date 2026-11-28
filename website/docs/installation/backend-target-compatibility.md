@@ -104,7 +104,7 @@ An `endpoint` of `host[:port]` takes its scheme from `protocol`; a full URL
 carries its scheme and path, and its path is the complete API root. `auth`,
 `headers` and `tls` have the same shape as a deployment's
 [connection block](model-catalog.md#connection-block); a backend reads its key
-from `auth.api_key_env`, and is always verified (see
+from `auth.api_key_env` or `auth.api_key_file`, and is always verified (see
 [Trust a private CA](#trust-a-private-ca)).
 
 `api_format` belongs to the model, not to an individual backend ref. It selects
@@ -226,10 +226,14 @@ complete external-provider target in canonical configuration supplied through
 Helm or another canonical-config workflow. Broader CRD and Helm parity belongs
 to [#2355](https://github.com/vllm-project/semantic-router/issues/2355).
 
-KServe discovery currently assumes the conventional
-`<InferenceService>-predictor.<namespace>.svc.cluster.local:8443` HTTPS target.
-It does not resolve `status.url` or inspect the generated Service, so custom or
-named-predictor service layouts require an explicit Service backend instead.
+KServe discovery uses the conventional `<InferenceService>-predictor` Service
+in the same namespace as the `SemanticRouter`. The Operator reads the
+Service's port and protocol hints, preferring HTTPS when the Service exposes
+both HTTPS and HTTP. For a Standard predictor with the default HTTP port, it
+uses `<InferenceService>-predictor.<namespace>.svc.cluster.local:80`.
+Discovery uses the Service DNS name even when the `InferenceService` publishes
+a different `status.url`. Use an explicit Service backend for a custom or
+named-predictor Service layout.
 
 Unknown-field and supported-version parity across producers is tracked in
 [#2469](https://github.com/vllm-project/semantic-router/issues/2469). Until that

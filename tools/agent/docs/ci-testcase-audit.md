@@ -188,6 +188,21 @@ request can no longer pass on an unrelated non-streaming cache hit. Negative
 unit cases exercise wrong blockers, universal blocking, invalid bodies,
 truncated/duplicate terminals and altered replay text.
 
+### Retired after the 2026-11-11 cost review
+
+Cases whose oracle could not fail on a Router regression, or that repeated a
+case in the same deployment, were removed when CI cost was measured per case.
+
+| Case | Why it was removed | What still covers the boundary |
+| --- | --- | --- |
+| `chat-completions-stress-request` | 200 sequential requests at a 95% HTTP-200 floor, about 600 s per full run. | `chat-completions-progressive-stress` requires a Router answer for every request at 10, 20 and 50 concurrent. |
+| `domain-classify` | Measured the CPU decision model's accuracy (about 2 s per question, 261 questions) rather than routing. | `domain-routing` sends one marked question per domain to the System One fixture and requires every route exactly. Model quality belongs to the release benchmarks. |
+| `session-telemetry-metrics`, `session-pricing-response-api` | Metric-name presence only, a subset of `session-pricing-chat-completions`. | `session-pricing-chat-completions`. |
+| `performance-throughput` | Request success without any throughput or latency budget. | `load-balancing-verification` and `failover-during-traffic`. |
+| `resource-utilization-monitoring` | A namespace CPU query that passes without Router activity. | None needed. |
+| `chat-completions-request-authz` | A second HTTP-200 smoke in the same profile. | `chat-completions-request` and `authz-header-spoofing`. |
+| production-stack's `domain-classify`, `pii-detection`, `jailbreak-detection`, `semantic-cache` | Repeated the baseline cases with no replica-specific assertion. | The baseline profile. |
+
 ## Repaired integration cases
 
 | Case | Effective assertion and disposition |
@@ -234,6 +249,7 @@ when sharing execution setup.
 | [chat-completions-structured-output](../../../e2e/testcases/chat_completions_structured_output.go) | A json_schema request routes and returns Chat choices. This is routing smoke; exact schema forwarding is separately unit-tested. |
 | [plugin-short-circuit-no-dispatch](../../../e2e/testcases/plugin_short_circuit_dispatch.go) | Provider observation is absent for blocked requests and present for a positive control. Keep the actual dispatch boundary. |
 | [streaming-usage-settlement](../../../e2e/testcases/streaming_usage_settlement.go) | Provider receives forced include_usage; clients receive usage only when requested; SSE terminals and metrics settlement are checked. Keep. |
+| [protocol-translation-routing-parity](../../../e2e/testcases/protocol_translation_routing_parity.go) | One marker prompt through Chat, Messages and Responses must select one recipe, decision and backend; plugin effects are read from the provider's recorded dispatch and both guardrails must leave no dispatch, per protocol. Keep. |
 | [session-telemetry-metrics](../../../e2e/testcases/session_telemetry_e2e.go) | Only HTTP success and metric-name presence. Treat as exporter smoke; it does not prove a request-specific counter increment. |
 | [session-pricing-chat-completions](../../../e2e/testcases/session_pricing_e2e.go) | Token/cost metric names exist, without exact amount or request attribution. Retain as smoke; consider consolidating with telemetry. |
 | [session-pricing-response-api](../../../e2e/testcases/session_pricing_e2e.go) | The Responses entrypoint succeeds and exposes token/cost metric names. It does not establish price calculation correctness. |

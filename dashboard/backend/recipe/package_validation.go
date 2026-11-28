@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
@@ -47,6 +48,8 @@ var forbiddenRecipeEnvironmentNames = map[string]struct{}{
 	"VLLM_SR_SETUP_MODE":               {},
 	"VLLM_SR_SOURCE_CONFIG_PATH":       {},
 	"VLLM_SR_STACK_NAME":               {},
+	"VLLM_SR_STACK_REDIS_PASSWORD":     {},
+	"VLLM_SR_STACK_POSTGRES_PASSWORD":  {},
 	"VLLM_SR_STATE_ROOT_DIR":           {},
 	// The Dashboard always holds the management credential, and a Recipe
 	// could send a value it binds anywhere.
@@ -230,6 +233,19 @@ func detectEnvironmentBindingWarnings(configData []byte) []PackageWarning {
 	return warnings
 }
 
+// HasEnvironmentBindings reports whether config binds any environment
+// reference the Router expands and sends on, such as a provider key an
+// auth.api_key_env names or a ${NAME} in any value. A Dashboard caller who may
+// not read configuration secrets may not activate such a Recipe, as the value
+// a binding reads is one the caller never sees.
+func HasEnvironmentBindings(configData []byte) (bool, error) {
+	bindings, err := extractEnvironmentBindings(configData)
+	if err != nil {
+		return false, err
+	}
+	return len(bindings) > 0, nil
+}
+
 // ValidateEnvironmentBindings enforces the process-scoped allowlist populated
 // by `vllm-sr serve --recipe-env`. It never returns or logs secret values.
 func ValidateEnvironmentBindings(configData []byte) error {
@@ -243,7 +259,12 @@ func ValidateEnvironmentBindings(configData []byte) error {
 	}
 	for _, binding := range bindings {
 		value, present := os.LookupEnv(binding.name)
-		if _, allowed := allowlist[binding.name]; !allowed || !present || value == "" {
+		// Guard credentials are delivered only to the Router. The operator's
+		// allowlist still authorizes each name; runtime initialization validates
+		// its value without requiring the Dashboard to hold the signing key.
+		routerOnly := binding.path == "/global/stores/guard_verdicts/hmac_key_env" ||
+			binding.path == "/global/stores/guard_verdicts/redis/password_env"
+		if _, allowed := allowlist[binding.name]; !allowed || (!routerOnly && (!present || value == "")) {
 			return wrapPackageError(ErrorEnvironmentBinding, http.StatusConflict, "Required Recipe environment bindings are not authorized or unavailable.", fmt.Errorf("environment binding %s is unavailable", binding.name))
 		}
 	}
@@ -269,8 +290,14 @@ func parseRecipeEnvironmentAllowlist(raw string) (map[string]struct{}, error) {
 }
 
 func extractEnvironmentBindings(configData []byte) ([]environmentBinding, error) {
+	// Resolve aliases and merge keys like the Router's decoder before walking
+	// fields, so a named secret cannot hide behind an anchor or merged block.
+	resolved, err := sigsyaml.YAMLToJSON(configData)
+	if err != nil {
+		return nil, err
+	}
 	var document yaml.Node
-	if err := yaml.Unmarshal(configData, &document); err != nil || len(document.Content) == 0 {
+	if err := yaml.Unmarshal(resolved, &document); err != nil || len(document.Content) == 0 {
 		if err == nil {
 			err = errors.New("config.yaml is empty")
 		}
@@ -302,8 +329,8 @@ func walkEnvironmentBindingNodes(node *yaml.Node, pointer string, bindings map[s
 		for index := 0; index+1 < len(node.Content); index += 2 {
 			key, value := strings.TrimSpace(node.Content[index].Value), node.Content[index+1]
 			childPointer := pointer + "/" + escapeJSONPointer(key)
-			if key == "api_key_env" && value.Kind == yaml.ScalarNode && strings.TrimSpace(value.Value) != "" {
-				if err := addEnvironmentBinding(strings.TrimSpace(value.Value), childPointer, bindings); err != nil {
+			if routerconfig.IsSecretEnvReferenceField(key) && value.Kind == yaml.ScalarNode && value.Value != "" {
+				if err := addEnvironmentBinding(value.Value, childPointer, bindings); err != nil {
 					return err
 				}
 			}

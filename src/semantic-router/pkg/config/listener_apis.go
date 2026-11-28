@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -24,15 +25,130 @@ type ListenerAPI struct {
 	// speaks to its clients; omitted, the API's listener default. Naming one
 	// on an API without versions is a load error.
 	Schema string `yaml:"schema,omitempty" json:"schema,omitempty" jsonschema:"enum=vllm-sr/5.0,enum=vllm-sr/4.0"`
+	// Prefix, when set, mounts the API under that path root as well: a
+	// listener with prefix /anthropic on messages answers
+	// /anthropic/v1/messages as it answers /v1/messages, the way a gateway
+	// registers a provider's endpoints under a root. The upstream request
+	// never carries it. Omitted, the API is served at its own paths only.
+	Prefix string `yaml:"prefix,omitempty" json:"prefix,omitempty"`
 	// Models, when set, are the only request models the API accepts, by
-	// exact `model` value; others get 403 model_not_allowed. Omitted, the API
-	// accepts every model of its kind: the LLM models for the LLM APIs, the
-	// public System One models for systemone.
+	// exact `model` value; others get 403 model_not_allowed, or, on an LLM
+	// API, 404 model_not_found when the Router serves them on no listener.
+	// Omitted, the API accepts every model of its kind: the LLM models for
+	// the LLM APIs, the public System One models for systemone.
 	Models []string `yaml:"models,omitempty" json:"models,omitempty"`
 	// MaxDeadlineMs (systemone) bounds how long the listener waits for a
 	// model it calls directly, however long a request's options.deadline_ms
 	// asks for. Omitted, DefaultSystemOneMaxDeadlineMs.
 	MaxDeadlineMs *int `yaml:"max_deadline_ms,omitempty" json:"max_deadline_ms,omitempty" jsonschema:"minimum=1"`
+	// VSR (systemone) is what the vSR agent plugins pointed at the listener
+	// do: the listener's System One listing hands it to them, and each field
+	// set here wins over the plugin's own option of the same name.
+	VSR *VSRProfile `yaml:"vsr,omitempty" json:"vsr,omitempty"`
+	// UnservedModels (chat_completions, responses, messages) is what the API
+	// does with a request whose model it does not accept or the Router does
+	// not serve: refuse it, the default, or route it as if it named RouteTo.
+	UnservedModels *UnservedModels `yaml:"unserved_models,omitempty" json:"unserved_models,omitempty"`
+}
+
+// The policies an API's unserved_models may name.
+const (
+	UnservedModelsReject = "reject"
+	UnservedModelsRoute  = "route"
+)
+
+// UnservedModels routes the models a client names but the API does not
+// serve, for clients that send every model of a provider family to one base
+// URL. RouteTo is one of the API's models and names an entrypoint of it.
+type UnservedModels struct {
+	Policy  string `yaml:"policy,omitempty" json:"policy,omitempty" jsonschema:"enum=reject,enum=route"`
+	RouteTo string `yaml:"route_to,omitempty" json:"route_to,omitempty"`
+}
+
+// UnservedRoute is the model a request naming a model the API does not
+// serve is routed as, empty when the API refuses such requests.
+func (a ListenerAPI) UnservedRoute() string {
+	if a.UnservedModels == nil || a.UnservedModels.Policy != UnservedModelsRoute {
+		return ""
+	}
+	return a.UnservedModels.RouteTo
+}
+
+// VSRProfile turns the vSR plugins' applications on or off and sets the
+// router's goal. A field left out keeps the plugin's own option.
+type VSRProfile struct {
+	// Router picks the model and effort of subagents.
+	Router *bool `yaml:"router,omitempty" json:"router,omitempty"`
+	// RouterTurns also picks the model and effort of the person's own turns.
+	RouterTurns *bool `yaml:"router_turns,omitempty" json:"router_turns,omitempty"`
+	// RouterGoal is how far the router may go down: quality never below the
+	// session's model, balanced when the decision is sure, save whenever it
+	// answers clearly enough.
+	RouterGoal string `yaml:"router_goal,omitempty" json:"router_goal,omitempty" jsonschema:"enum=quality,enum=balanced,enum=save"`
+	// Escalate raises the next turn's model or effort after a pushback.
+	Escalate *bool `yaml:"escalate,omitempty" json:"escalate,omitempty"`
+	// Redact hides personal data in what a tool returns before the agent reads it.
+	Redact *bool `yaml:"redact,omitempty" json:"redact,omitempty"`
+	// Shield marks text in a tool's output that gives the agent orders.
+	Shield *bool `yaml:"shield,omitempty" json:"shield,omitempty"`
+	// Guard holds a destructive command for the person to approve.
+	Guard *bool `yaml:"guard,omitempty" json:"guard,omitempty"`
+	// Check compares the agent's answer with what it read.
+	Check *bool `yaml:"check,omitempty" json:"check,omitempty"`
+	// Rules are the recipe rules guard and redact enforce besides their own
+	// checks.
+	Rules *VSRRules `yaml:"rules,omitempty" json:"rules,omitempty"`
+}
+
+// VSRRouterGoals are the router goals a vsr profile can name.
+var VSRRouterGoals = []string{"quality", "balanced", "save"}
+
+// listenerAPIPrefix is what a prefix must look like: one or more path
+// segments, each of unreserved characters, with no trailing slash.
+var listenerAPIPrefix = regexp.MustCompile(`^(/[A-Za-z0-9._~-]+)+$`)
+
+// APIPath is the path a request to the listener asks for, as the API it
+// belongs to answers it: a path under one of the listener's API prefixes
+// without the prefix, any other path unchanged.
+func (l Listener) APIPath(path string) string {
+	for name, entry := range l.APIs {
+		api, ok := apiregistry.Lookup(name)
+		if !ok {
+			continue
+		}
+		if rest, ok := api.Unprefixed(entry.Prefix, path); ok {
+			return rest
+		}
+	}
+	return path
+}
+
+// APIPath is the path a request asks for, as the API it belongs to answers
+// it, under the API prefix of whichever listener mounts it.
+func (c *RouterConfig) APIPath(path string) string {
+	if c == nil {
+		return path
+	}
+	for _, listener := range c.Listeners {
+		if rest := listener.APIPath(path); rest != path {
+			return rest
+		}
+	}
+	return path
+}
+
+// APIRequestTarget is APIPath of a request target, a path with its query: the
+// query is kept as the client sent it.
+func (c *RouterConfig) APIRequestTarget(target string) string {
+	path, query, hasQuery := strings.Cut(target, "?")
+	canonical := c.APIPath(path)
+	if canonical == path {
+		return target
+	}
+	if hasQuery {
+		return canonical + "?" + query
+	}
+	return canonical
 }
 
 // settingValues are the settings an entry sets, by name, for the registry's
@@ -42,11 +158,17 @@ func (a ListenerAPI) settingValues() []string {
 	if a.MaxDeadlineMs != nil {
 		set = append(set, "max_deadline_ms")
 	}
+	if a.VSR != nil {
+		set = append(set, "vsr")
+	}
+	if a.UnservedModels != nil {
+		set = append(set, "unserved_models")
+	}
 	return set
 }
 
 // EffectiveAPIs are the APIs the listener serves: its apis, or without them
-// the APIs on by default (chat_completions, responses, messages and images),
+// the APIs on by default (chat_completions, responses, messages, images and speech),
 // each with no settings.
 func (l Listener) EffectiveAPIs() ListenerAPIs {
 	if l.APIs != nil {
@@ -239,7 +361,7 @@ func listenerPath(listener Listener, rest string) string {
 func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 	if listener.APIs != nil && len(listener.APIs) == 0 {
 		return CheckError(listenerPath(listener, "apis"), CodeInvalidValue,
-			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages and images")
+			"names no API; name the APIs the listener serves, or omit apis to serve chat_completions, responses, messages, images and speech")
 	}
 	names := make([]string, 0, len(listener.APIs))
 	for name := range listener.APIs {
@@ -262,11 +384,27 @@ func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 					fmt.Sprintf("the %s API takes no %s setting", api.Name, setting))
 			}
 		}
+		if entry.Prefix != "" && !listenerAPIPrefix.MatchString(entry.Prefix) {
+			return CheckError(path+".prefix", CodeInvalidValue,
+				fmt.Sprintf("%q is not a path prefix; write path segments with a leading slash and no trailing slash, as /anthropic", entry.Prefix))
+		}
 		if limit := entry.MaxDeadlineMs; limit != nil && *limit <= 0 {
 			return CheckError(path+".max_deadline_ms", CodeInvalidValue,
 				fmt.Sprintf("must be greater than zero, got %d", *limit))
 		}
+		if profile := entry.VSR; profile != nil && profile.RouterGoal != "" && !slices.Contains(VSRRouterGoals, profile.RouterGoal) {
+			return CheckError(path+".vsr.router_goal", CodeInvalidValue,
+				fmt.Sprintf("%q is not a router goal; use one of %s", profile.RouterGoal, strings.Join(VSRRouterGoals, ", ")))
+		}
+		if profile := entry.VSR; profile != nil && profile.Rules != nil {
+			if err := validateVSRRules(cfg, path+".vsr.rules", profile.Rules); err != nil {
+				return err
+			}
+		}
 		if err := validateListenerAPIModels(path, entry.Models); err != nil {
+			return err
+		}
+		if err := validateUnservedModels(cfg, path+".unserved_models", entry); err != nil {
 			return err
 		}
 		if api.Name == apiregistry.SystemOne {
@@ -274,6 +412,40 @@ func validateListenerAPIs(cfg *RouterConfig, listener Listener) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// validateUnservedModels checks that a route policy names the model it routes
+// to, that the API accepts that model and that it resolves to an entrypoint,
+// so the recipe a routed request takes is known when the config loads.
+func validateUnservedModels(cfg *RouterConfig, path string, entry ListenerAPI) error {
+	unserved := entry.UnservedModels
+	if unserved == nil {
+		return nil
+	}
+	switch unserved.Policy {
+	case "", UnservedModelsReject:
+		if unserved.RouteTo != "" {
+			return CheckError(path+".route_to", CodeInvalidValue, "goes with policy route only")
+		}
+		return nil
+	case UnservedModelsRoute:
+	default:
+		return CheckError(path+".policy", CodeInvalidValue,
+			fmt.Sprintf("%q is not a policy; use reject or route", unserved.Policy))
+	}
+	routeTo := unserved.RouteTo
+	if routeTo == "" {
+		return CheckError(path+".route_to", CodeInvalidValue, "is required with policy route")
+	}
+	if entry.Models != nil && !slices.Contains(entry.Models, routeTo) {
+		return CheckError(path+".route_to", CodeInvalidValue,
+			fmt.Sprintf("%q is not one of the API's models", routeTo))
+	}
+	if _, ok := cfg.ResolveEntrypoint(ChatAPI, routeTo); !ok {
+		return CheckError(path+".route_to", CodeInvalidValue,
+			fmt.Sprintf("%q names no entrypoint", routeTo))
 	}
 	return nil
 }

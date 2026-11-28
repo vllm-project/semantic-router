@@ -44,7 +44,7 @@ describe('inline task binding mutations', () => {
         }),
       )
       expect(html.match(/>primary</g)).toHaveLength(1)
-      if (model && model !== 'primary') expect(html).toContain(`<span>${model}</span>`)
+      if (model && model !== 'primary') expect(html).toContain(`>${model}<`)
       expect(html).toContain('coding · domain')
     },
   )
@@ -219,7 +219,11 @@ describe('inline task binding mutations', () => {
     expect(() =>
       withDecisionTaskBinding(
         {},
-        { ...binding, consumer: '__proto__', path: ['recipes', '0', 'model_bindings', '__proto__'] },
+        {
+          ...binding,
+          consumer: '__proto__',
+          path: ['recipes', '0', 'model_bindings', '__proto__'],
+        },
         'new',
       ),
     ).toThrow('editable')

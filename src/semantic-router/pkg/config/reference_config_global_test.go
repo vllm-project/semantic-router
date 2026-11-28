@@ -47,6 +47,7 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
 	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
+	assertReferenceConfigBudgetsCoverage(t, mustMapAt(t, services, "budgets"))
 	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
 }
@@ -147,6 +148,19 @@ func assertReferenceConfigAuthzCoverage(t testingT, authz map[string]interface{}
 	)
 }
 
+func assertReferenceConfigBudgetsCoverage(t testingT, budgets map[string]interface{}) {
+	users := mustSliceAt(t, budgets, "users")
+	assertMapCoversStructFields(t, budgets, reflect.TypeOf(BudgetsConfig{}), "global.services.budgets")
+	assertMapCoversStructFields(t, mustMapAt(t, budgets, "run"), reflect.TypeOf(RunBudget{}), "global.services.budgets.run")
+	assertSliceUnionCoversStructFields(t, users, reflect.TypeOf(UserBudget{}), "global.services.budgets.users")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, users, "match", "global.services.budgets.users"),
+		reflect.TypeOf(BudgetMatch{}),
+		"global.services.budgets.users[].match",
+	)
+}
+
 func assertReferenceConfigRateLimitCoverage(t testingT, ratelimit map[string]interface{}) {
 	providers := mustSliceAt(t, ratelimit, "providers")
 	rules := collectNestedSliceItems(t, providers, "rules", "global.services.ratelimit.providers")
@@ -176,6 +190,9 @@ func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]inte
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))
 	assertReferenceConfigToolSessionsCoverage(t, mustMapAt(t, stores, "tool_sessions"))
+	guard := mustMapAt(t, stores, "guard_verdicts")
+	assertMapCoversStructFields(t, guard, reflect.TypeOf(GuardVerdictStoreConfig{}), "global.stores.guard_verdicts")
+	assertMapCoversStructFields(t, mustMapAt(t, guard, "redis"), reflect.TypeOf(GuardVerdictRedisConfig{}), "global.stores.guard_verdicts.redis")
 }
 
 func assertReferenceConfigToolSessionsCoverage(t testingT, toolSessions map[string]interface{}) {
@@ -218,6 +235,7 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 func assertReferenceConfigIntegrationGlobalCoverage(t testingT, integrations map[string]interface{}) {
 	assertMapCoversStructFields(t, integrations, reflect.TypeOf(CanonicalIntegrationGlobal{}), "global.integrations")
 	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper"), reflect.TypeOf(LooperConfig{}), "global.integrations.looper", "endpoint")
+	assertMapCoversStructFields(t, mustMapAt(t, integrations, "looper", "streaming"), reflect.TypeOf(LooperStreamingConfig{}), "global.integrations.looper.streaming")
 	flow := mustMapAt(t, integrations, "looper", "flow")
 	assertMapCoversStructFields(t, flow, reflect.TypeOf(FlowRuntimeConfig{}), "global.integrations.looper.flow")
 	assertMapCoversStructFields(t, mustMapAt(t, flow, "state"), reflect.TypeOf(WorkflowStateRuntimeConfig{}), "global.integrations.looper.flow.state")
@@ -229,6 +247,7 @@ func assertReferenceConfigModelCatalogCoverage(t testingT, modelCatalog map[stri
 	// external[] is the deprecated way to declare a remote model: a
 	// deployment with a connection block replaces it.
 	assertMapCoversStructFields(t, modelCatalog, reflect.TypeOf(CanonicalModelCatalog{}), "global.model_catalog", "external")
+	assertMapCoversStructFields(t, mustMapAt(t, modelCatalog, "on_signal_overload"), reflect.TypeOf(SignalOverloadPolicy{}), "global.model_catalog.on_signal_overload")
 	assertReferenceConfigDeploymentCoverage(t, mustMapAt(t, modelCatalog, "deployments"))
 	assertReferenceConfigBindingsBySignalType(t, mustMapAt(t, modelCatalog, "bindings"), "global.model_catalog.bindings")
 	assertReferenceConfigEmbeddingCatalogCoverage(t, mustMapAt(t, modelCatalog, "embeddings"))
@@ -251,6 +270,7 @@ func assertReferenceConfigDeploymentCoverage(t testingT, deployments map[string]
 		typ reflect.Type
 	}{
 		{"input", reflect.TypeOf(ModelInputBudget{})},
+		{"pricing", reflect.TypeOf(ModelPricing{})},
 		{"auth", reflect.TypeOf(DeploymentAuth{})},
 		{"tls", reflect.TypeOf(DeploymentTLS{})},
 		{"limits", reflect.TypeOf(DeploymentLimits{})},

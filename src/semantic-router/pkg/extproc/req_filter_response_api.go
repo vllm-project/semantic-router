@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -78,8 +79,11 @@ type ResponseObjectState struct {
 	// retention. Later routing and plugin mutations must not alter stored input.
 	Input        []responseapi.InputItem
 	Instructions string
-	Metadata     map[string]string
-	ShouldStore  bool
+
+	// Presence distinguishes an empty top-level instruction from input items.
+	HasTopLevelInstructions bool
+	Metadata                map[string]string
+	ShouldStore             bool
 
 	// AutoStore preserves the client's memory-write opt-out after provider
 	// materialization removes Router-owned controls from the neutral request.
@@ -104,13 +108,21 @@ func (f *ResponseAPIFilter) PrepareObjectState(
 	request llmprotocol.Request,
 	sourceBody []byte,
 ) (*ResponseObjectState, error) {
+	// The Router keeps no Conversations objects: it could neither load a
+	// conversation's items nor add this response to it.
+	if request.ConversationID != "" {
+		protocolError := llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_conversation",
+			"conversation is not supported by the Router; continue a stored response with previous_response_id", nil)
+		protocolError.Parameter = "conversation"
+		return nil, protocolError
+	}
 	state := &ResponseObjectState{
 		GeneratedResponseID: responseapi.GenerateResponseID(),
 		PreviousResponseID:  request.PreviousResponseID,
 		Metadata:            cloneResponseMetadata(request.Metadata),
 		ShouldStore:         request.Store == nil || *request.Store,
 	}
-	state.Input, state.Instructions = snapshotResponseObjectRequest(sourceBody, request)
+	state.Input, state.Instructions, state.HasTopLevelInstructions = snapshotResponseObjectRequest(sourceBody, request)
 	if request.AutoStore != nil {
 		autoStore := *request.AutoStore
 		state.AutoStore = &autoStore
@@ -258,7 +270,7 @@ func responseObjectNotFound(responseID string) *ext_proc.ProcessingResponse {
 	return createResponseAPIError(404, "Response not found: "+responseID)
 }
 
-func snapshotResponseObjectRequest(sourceBody []byte, request llmprotocol.Request) ([]responseapi.InputItem, string) {
+func snapshotResponseObjectRequest(sourceBody []byte, request llmprotocol.Request) ([]responseapi.InputItem, string, bool) {
 	var wire struct {
 		Input        json.RawMessage `json:"input"`
 		Instructions json.RawMessage `json:"instructions"`
@@ -267,11 +279,11 @@ func snapshotResponseObjectRequest(sourceBody []byte, request llmprotocol.Reques
 		items := parseResponseAPIInputItems(wire.Input)
 		var instructions string
 		if json.Unmarshal(wire.Instructions, &instructions) == nil {
-			return items, instructions
+			return items, instructions, !bytes.Equal(bytes.TrimSpace(wire.Instructions), []byte("null"))
 		}
-		return items, responseObjectInstructionText(request.Instructions)
+		return items, responseObjectInstructionText(request.Instructions), false
 	}
-	return nil, responseObjectInstructionText(request.Instructions)
+	return nil, responseObjectInstructionText(request.Instructions), false
 }
 
 func parseResponseAPIInputItems(input json.RawMessage) []responseapi.InputItem {
@@ -364,6 +376,7 @@ func (f *ResponseAPIFilter) storedToResponseAPIResponse(stored *responseapi.Stor
 		CreatedAt:          stored.CreatedAt,
 		Model:              stored.Model,
 		Status:             stored.Status,
+		IncompleteDetails:  stored.IncompleteDetails,
 		Output:             stored.Output,
 		OutputText:         stored.OutputText,
 		PreviousResponseID: stored.PreviousResponseID,

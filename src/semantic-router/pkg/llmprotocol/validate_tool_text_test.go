@@ -3,6 +3,7 @@ package llmprotocol
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -38,7 +39,7 @@ func TestToolTextLimitsDefaultBoundaries(t *testing.T) {
 	}
 	over := "secret-" + strings.Repeat("d", limits.ToolDescriptionBytes-6)
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool("artifact", over)), limits),
-		"tools[1].description is 16385 bytes and exceeds the configured limit of 16384 bytes", "secret-")
+		fmt.Sprintf("tools[1].description is %d bytes and exceeds the configured limit of %d bytes", limits.ToolDescriptionBytes+1, limits.ToolDescriptionBytes), "secret-")
 
 	if err := ValidateRequest(toolTextRequest(functionTool(strings.Repeat("n", 256), "")), limits); err != nil {
 		t.Fatalf("name at the default limit was rejected: %v", err)
@@ -55,12 +56,12 @@ func TestToolTextLimitsCountUTF8Bytes(t *testing.T) {
 		t.Fatalf("multibyte description at the byte limit was rejected: %v", err)
 	}
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool("artifact", fits+"é")), limits),
-		"tools[1].description is 16386 bytes and exceeds the configured limit of 16384 bytes", "")
+		fmt.Sprintf("tools[1].description is %d bytes and exceeds the configured limit of %d bytes", limits.ToolDescriptionBytes+2, limits.ToolDescriptionBytes), "")
 
 	// A four-byte rune that straddles the limit counts whole.
 	straddle := strings.Repeat("d", limits.ToolDescriptionBytes-1) + "🧰"
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool("artifact", straddle)), limits),
-		"tools[1].description is 16387 bytes and exceeds the configured limit of 16384 bytes", "")
+		fmt.Sprintf("tools[1].description is %d bytes and exceeds the configured limit of %d bytes", limits.ToolDescriptionBytes+3, limits.ToolDescriptionBytes), "")
 
 	name := strings.Repeat("工", 86) // 258 bytes, 86 runes
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool(name, "")), limits),
@@ -70,19 +71,34 @@ func TestToolTextLimitsCountUTF8Bytes(t *testing.T) {
 func TestToolTextLimitsFollowConfiguredPolicy(t *testing.T) {
 	limits := DefaultPolicy().Limits
 	limits.ToolNameBytes = 512
-	limits.ToolDescriptionBytes = 64 << 10
+	limits.ToolDescriptionBytes = 512 << 10
 
-	// Claude Code's Artifact tool description is about 20 KiB.
-	artifact := functionTool(strings.Repeat("n", 300), strings.Repeat("d", 20_225))
+	artifact := functionTool(strings.Repeat("n", 300), strings.Repeat("d", DefaultPolicy().Limits.ToolDescriptionBytes+1))
 	if err := ValidateRequest(toolTextRequest(artifact), limits); err != nil {
 		t.Fatalf("raised limits rejected a tool within them: %v", err)
 	}
-	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool("artifact", strings.Repeat("d", 64<<10+1))), limits),
-		"tools[1].description is 65537 bytes and exceeds the configured limit of 65536 bytes", "")
+	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool("artifact", strings.Repeat("d", 512<<10+1))), limits),
+		"tools[1].description is 524289 bytes and exceeds the configured limit of 524288 bytes", "")
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(functionTool(strings.Repeat("n", 513), "")), limits),
 		"tools[1].name is 513 bytes and exceeds the configured limit of 512 bytes", "")
 
-	custom := Tool{Kind: ToolKindCustom, Name: "apply_patch", Description: strings.Repeat("d", 64<<10+1)}
+	custom := Tool{Kind: ToolKindCustom, Name: "apply_patch", Description: strings.Repeat("d", 512<<10+1)}
 	requireToolTextLimit(t, ValidateRequest(toolTextRequest(custom), limits),
-		"tools[1].description is 65537 bytes and exceeds the configured limit of 65536 bytes", "")
+		"tools[1].description is 524289 bytes and exceeds the configured limit of 524288 bytes", "")
+}
+
+func TestToolNameLimitReportsNamespacedAndServerTools(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	overLimit := strings.Repeat("n", limits.ToolNameBytes+1)
+	namespaced := functionTool("namespace__lookup", "")
+	namespaced.Namespace, namespaced.LocalName = overLimit, "lookup"
+	requireToolTextLimit(t, ValidateRequest(toolTextRequest(namespaced), limits),
+		"tools[1].namespace is 257 bytes and exceeds the configured limit of 256 bytes", overLimit)
+	namespaced.Namespace, namespaced.LocalName = "namespace", overLimit
+	requireToolTextLimit(t, ValidateRequest(toolTextRequest(namespaced), limits),
+		"tools[1].name is 257 bytes and exceeds the configured limit of 256 bytes", overLimit)
+
+	server := Tool{Kind: ToolKindServer, Name: overLimit, Raw: json.RawMessage(`{}`)}
+	requireToolTextLimit(t, ValidateRequest(toolTextRequest(server), limits),
+		"tools[1].name is 257 bytes and exceeds the configured limit of 256 bytes", overLimit)
 }

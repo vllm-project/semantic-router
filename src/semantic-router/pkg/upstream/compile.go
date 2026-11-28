@@ -126,11 +126,9 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		}
 		spec.Endpoints = append(spec.Endpoints, ep)
 	}
-	// One endpoint behind a DNS name is a LOGICAL_DNS cluster in the
-	// template, which resolves IPv4 addresses only.
-	if len(spec.Endpoints) == 1 && !isIPLiteral(spec.Endpoints[0].Host) {
-		spec.Endpoints[0].IPv4Only = true
-	}
+	// The Envoy template uses IPv4 for single-hostname LOGICAL_DNS clusters.
+	// Standalone keeps that preference and falls back when there is no IPv4 address.
+	spec.preferIPv4 = len(spec.Endpoints) == 1 && !isIPLiteral(spec.Endpoints[0].Host)
 	// Backend pools are homogeneous (the config loader rejects mixed
 	// schemes, base paths, TLS settings and headers), so the first endpoint
 	// speaks for the cluster, as it does in the template.
@@ -196,7 +194,7 @@ func compilePolicy(spec *ClusterSpec, r config.ProviderReliability) error {
 	}
 	// The Envoy template renders a route retry policy, even with no retries,
 	// when a per-try timeout is set; a decision's retry override merges into it.
-	if r.RetryCount == 0 && strings.TrimSpace(r.PerTryTimeout) == "" {
+	if r.Retries() == 0 && strings.TrimSpace(r.PerTryTimeout) == "" {
 		return nil
 	}
 	retryOn := r.RetryOn
@@ -204,7 +202,7 @@ func compilePolicy(spec *ClusterSpec, r config.ProviderReliability) error {
 		retryOn = config.DefaultProviderRetryOn
 	}
 	retry := &RetryPolicy{
-		NumRetries:           r.RetryCount,
+		NumRetries:           r.Retries(),
 		On:                   ParseRetryOn(retryOn),
 		RetriableStatusCodes: slices.Clone(r.RetriableStatusCodes),
 	}
@@ -245,7 +243,7 @@ const raisedMaxRequests = 4096
 // outlier block needs consecutive_5xx and more than one endpoint, and health
 // checks need a path.
 func compileHealth(spec *ClusterSpec, reliability config.ProviderReliability) error {
-	if reliability.RetryCount > 0 || reliability.Consecutive5xx > 0 {
+	if reliability.Retries() > 0 || reliability.Consecutive5xx > 0 {
 		spec.Breakers.MaxRequests = raisedMaxRequests
 	}
 	if reliability.Consecutive5xx > 0 && len(spec.Endpoints) > 1 {

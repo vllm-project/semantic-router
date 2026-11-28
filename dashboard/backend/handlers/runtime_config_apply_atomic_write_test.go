@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +31,34 @@ func TestWriteConfigAtomicallySucceeds(t *testing.T) {
 	}
 	if _, err := os.Stat(configPath + ".tmp"); !os.IsNotExist(err) {
 		t.Fatalf("expected .tmp file to be removed after a successful write, stat err = %v", err)
+	}
+}
+
+// A save keeps a private config private: the file written in place of the
+// config takes the config's mode, where it used to be 644 whatever the
+// config's mode was.
+func TestWriteConfigAtomicallyKeepsTheConfigMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes")
+	}
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	for _, mode := range []os.FileMode{0o600, 0o640, 0o644} {
+		if err := os.WriteFile(configPath, []byte("routing: {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(configPath, mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeConfigAtomically(configPath, []byte("routing: {new: true}\n")); err != nil {
+			t.Fatalf("writeConfigAtomically: %v", err)
+		}
+		info, err := os.Stat(configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != mode {
+			t.Fatalf("config mode = %o after a save, want %o", info.Mode().Perm(), mode)
+		}
 	}
 }
 
@@ -190,7 +219,9 @@ func TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget(t *testing.T)
 // return writer on its next call and restores the package's real singleton
 // state afterward. Needed because that init caches its result process-wide:
 // without a reset here, whichever test exercises the Kubernetes path first
-// would permanently pin every later test in this package to its writer.
+// would permanently pin every later test in this package to its writer. A
+// new writer serves another ConfigMap, so the persisted config read from the
+// last one is dropped too.
 func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWriter) func() {
 	t.Helper()
 	configMapWriterMu.Lock()
@@ -204,6 +235,7 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWr
 	configMapWriterErr = nil
 	configMapWriterResolved = false
 	configMapWriterMu.Unlock()
+	resetPersistedRouterConfigCache()
 
 	return func() {
 		configMapWriterMu.Lock()
@@ -212,5 +244,6 @@ func stubInClusterConfigMapWriter(t *testing.T, writer *configwriter.ConfigMapWr
 		configMapWriterErr = origErr
 		configMapWriterResolved = origResolved
 		configMapWriterMu.Unlock()
+		resetPersistedRouterConfigCache()
 	}
 }

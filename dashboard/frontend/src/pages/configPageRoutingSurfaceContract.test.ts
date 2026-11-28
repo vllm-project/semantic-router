@@ -16,7 +16,7 @@ import {
   pluginFieldsFromRouterSchema,
   signalFieldsFromRouterSchema,
 } from '../lib/routerConfigSchema'
-import { PROJECTION_INPUT_TYPES } from './configPageProjectionFormSupport'
+import { PROJECTION_INPUT_TYPES } from '../lib/projectionSchemas'
 import { SIGNAL_CATALOG } from './configPageSignalCatalog'
 
 function expectSameFieldInventory(rendered: FieldSchema[], generated: FieldSchema[]) {

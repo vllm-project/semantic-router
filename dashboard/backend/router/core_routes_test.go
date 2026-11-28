@@ -203,6 +203,26 @@ func TestRegisterConfigRoutesKeepsInferenceVerificationAvailableInReadonlyMode(t
 	}
 }
 
+func TestRegisterConfigRoutesServesModelHealthAsAReadInReadonlyMode(t *testing.T) {
+	t.Parallel()
+
+	mux := http.NewServeMux()
+	registerConfigRoutes(mux, &config.Config{
+		AbsConfigPath:         "active-config.yaml",
+		ReadonlyMode:          true,
+		RuntimeConfigWritable: false,
+	})
+
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/models/health", nil))
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST /api/models/health status=%d want=%d body=%s", response.Code, http.StatusMethodNotAllowed, response.Body.String())
+	}
+	if response.Header().Get("Allow") != http.MethodGet {
+		t.Fatalf("POST /api/models/health Allow=%q", response.Header().Get("Allow"))
+	}
+}
+
 func TestRecipeActivationStartupRecoveryHonorsRuntimeMutationCapabilities(t *testing.T) {
 	tests := []struct {
 		name      string

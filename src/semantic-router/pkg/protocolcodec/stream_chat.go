@@ -2,26 +2,30 @@ package protocolcodec
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"sort"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 type chatStreamDecoder struct {
 	streamState
-	framer               sseFramer
-	contentIndexes       map[chatContentKey]int
-	nextContentIndexes   map[int]int
-	lastWasReasoning     bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
-	heldChoice           *chatChunkChoiceWire // a first delta with an answer and reasoning, held until their order is chosen
-	answerFirst          bool                 // the delta after heldChoice had reasoning and no answer text
-	toolKinds            map[int]llmprotocol.ToolKind
-	providerReported     bool
-	nativeReasonReported bool
-	reportedOmissions    map[string]bool
-	stopSequence         string
-	reasoningDetails     *chatReasoningDetailState
+	framer                 sseFramer
+	contentIndexes         map[chatContentKey]int
+	nextContentIndexes     map[int]int
+	lastWasReasoning       bool                 // choice 0's last text was reasoning; decodeChoice rejects other choices
+	heldChoice             *chatChunkChoiceWire // a first delta with an answer and reasoning, held until their order is chosen
+	answerFirst            bool                 // the delta after heldChoice had reasoning and no answer text
+	toolKinds              map[int]llmprotocol.ToolKind
+	providerReported       bool
+	nativeReasonReported   bool
+	reportedOmissions      map[string]bool
+	stopSequence           string
+	deferredToolCompletion bool         // empty calls wait for trailing output-limit usage
+	nullToolArguments      map[int]bool // raw null placeholders, indexed by neutral item
+	reasoningDetails       *chatReasoningDetailState
 }
 
 type chatContentKey struct {
@@ -61,31 +65,37 @@ func (OpenAIChatCodec) NewEncoder(context llmprotocol.StreamContext, policy llmp
 }
 
 type chatChunkWire struct {
-	ID                string                    `json:"id"`
-	Object            string                    `json:"object,omitempty"`
-	Created           int64                     `json:"created,omitempty"`
-	Model             string                    `json:"model,omitempty"`
-	Provider          *string                   `json:"provider,omitempty"`
-	Choices           []chatChunkChoiceWire     `json:"choices,omitempty"`
-	Usage             *chatUsageWire            `json:"usage,omitempty"`
-	Moderation        json.RawMessage           `json:"moderation,omitempty"`
-	Obfuscation       string                    `json:"obfuscation,omitempty"`
-	Error             *chatErrorWire            `json:"error,omitempty"`
-	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
-	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
-	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
-	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
-	PromptText        *chatNullOnlyWire         `json:"prompt_text,omitempty"`
-	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
-	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
-	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
-	DoRemoteDecode    *bool                     `json:"do_remote_decode,omitempty"`
-	DoRemotePrefill   *bool                     `json:"do_remote_prefill,omitempty"`
-	RemoteBlockIDs    []int64                   `json:"remote_block_ids,omitempty"`
-	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
-	RemoteHost        *string                   `json:"remote_host,omitempty"`
-	RemotePort        *int64                    `json:"remote_port,omitempty"`
-	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	ID                string                `json:"id"`
+	Object            string                `json:"object,omitempty"`
+	Created           int64                 `json:"created,omitempty"`
+	Model             string                `json:"model,omitempty"`
+	Provider          *string               `json:"provider,omitempty"`
+	Choices           []chatChunkChoiceWire `json:"choices,omitempty"`
+	Usage             *chatUsageWire        `json:"usage,omitempty"`
+	Moderation        json.RawMessage       `json:"moderation,omitempty"`
+	Obfuscation       string                `json:"obfuscation,omitempty"`
+	Error             *chatErrorWire        `json:"error,omitempty"`
+	ServiceTier       *chatServiceTierWire  `json:"service_tier,omitempty"`
+	SystemFingerprint *string               `json:"system_fingerprint,omitempty"`
+	PromptTokenIDs    []int64               `json:"prompt_token_ids,omitempty"`
+	// vLLM's serving metadata, as in chatResponseWire. vLLM-Omni sends an
+	// empty metrics object on every chunk.
+	PromptLogprobs   json.RawMessage `json:"prompt_logprobs,omitempty"`
+	PromptText       json.RawMessage `json:"prompt_text,omitempty"`
+	KVTransferParams json.RawMessage `json:"kv_transfer_params,omitempty"`
+	ECTransferParams json.RawMessage `json:"ec_transfer_params,omitempty"`
+	Metrics          json.RawMessage `json:"metrics,omitempty"`
+	// vLLM-Omni names the output modality of every chunk. A text chunk
+	// carries answer text; any other modality is refused, because its
+	// delta.content holds encoded media, not text.
+	Modality        *string         `json:"modality,omitempty"`
+	DoRemoteDecode  *bool           `json:"do_remote_decode,omitempty"`
+	DoRemotePrefill *bool           `json:"do_remote_prefill,omitempty"`
+	RemoteBlockIDs  []int64         `json:"remote_block_ids,omitempty"`
+	RemoteEngineID  *string         `json:"remote_engine_id,omitempty"`
+	RemoteHost      *string         `json:"remote_host,omitempty"`
+	RemotePort      *int64          `json:"remote_port,omitempty"`
+	XGroq           json.RawMessage `json:"x_groq,omitempty"`
 	// Cerebras reports serving timing metadata on every response. It is
 	// provider timing metadata, not output content.
 	TimeInfo json.RawMessage `json:"time_info,omitempty"`
@@ -102,6 +112,37 @@ type chatChunkWire struct {
 	// dropped with a diagnostic instead of failing the strict decode.
 	Citations     json.RawMessage `json:"citations,omitempty"`
 	SearchResults json.RawMessage `json:"search_results,omitempty"`
+}
+
+// chatUsageChunkWire is the usage-only chunk that ends a stream whose client
+// asked for usage. OpenAI sends its choices as an empty list, and clients find
+// the chunk by that list, so it is never left out.
+type chatUsageChunkWire struct {
+	chatChunkWire
+	Choices []chatChunkChoiceWire `json:"choices"`
+}
+
+// chatNullUsageChunkWire is any other chunk of a stream whose client asked for
+// usage, which OpenAI sends with "usage": null.
+type chatNullUsageChunkWire struct {
+	chatChunkWire
+	Usage *chatUsageWire `json:"usage"`
+}
+
+// vllmServingMetadata is chatResponseWire.vllmServingMetadata for a chunk.
+func (wire chatChunkWire) vllmServingMetadata() map[string]bool {
+	fields := map[string]bool{
+		"stream.prompt_logprobs":    vllmMetadataPresent(wire.PromptLogprobs),
+		"stream.prompt_text":        vllmMetadataPresent(wire.PromptText),
+		"stream.kv_transfer_params": vllmMetadataPresent(wire.KVTransferParams),
+		"stream.ec_transfer_params": vllmMetadataPresent(wire.ECTransferParams),
+		"stream.metrics":            vllmMetadataPresent(wire.Metrics),
+	}
+	for _, choice := range wire.Choices {
+		fields["stream.choices.routed_experts"] = fields["stream.choices.routed_experts"] || vllmMetadataPresent(choice.RoutedExperts)
+		fields["stream.choices.weight_versions"] = fields["stream.choices.weight_versions"] || vllmMetadataPresent(choice.WeightVersions)
+	}
+	return fields
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -128,7 +169,10 @@ type chatChunkChoiceWire struct {
 	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
 	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
 	TokenIDs           []int64             `json:"token_ids,omitempty"`
-	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	// vLLM serving metadata, as in chatChoiceWire; weight_versions comes on
+	// the final chunk of a choice.
+	RoutedExperts  json.RawMessage `json:"routed_experts,omitempty"`
+	WeightVersions json.RawMessage `json:"weight_versions,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -200,8 +244,19 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		if decoder.terminal {
 			return nil, nil, nil
 		}
+		var completed []llmprotocol.Event
+		if decoder.deferredToolCompletion {
+			if llmprotocol.ToolCallStopAtOutputLimit(decoder.stop, decoder.usage, decoder.policy.RequestOutputLimit) {
+				decoder.stop = llmprotocol.StopMaxTokens
+			}
+			completed, err = decoder.completeActiveChatItems()
+			if err != nil {
+				return completed, nil, err
+			}
+			decoder.deferredToolCompletion = false
+		}
 		events, doneErr := decoder.nextAfterHeld(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted, StopReason: decoder.stop, MatchedStopSequence: decoder.stopSequence, Usage: &decoder.usage})
-		return events, nil, doneErr
+		return append(completed, events...), nil, doneErr
 	}
 	if decoder.terminal {
 		return nil, nil, invalidProviderResponse("stream_event_after_terminal", "Chat stream emitted data after its terminal sentinel")
@@ -218,6 +273,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	decoder.appendStreamUnknownFields(&diagnostics, llmprotocol.OpenAIChatV1, unknownFields)
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
+	}
+	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && len(chunk.Choices) == 1 && len(chunk.Choices[0].Delta.ToolCalls) > 0 {
+		if nullErr := decoder.observeNullChatStreamArguments(parsed.Data); nullErr != nil {
+			return nil, diagnostics, nullErr
+		}
 	}
 	// Some gateways emit empty synthetic chunks while waiting for the first
 	// model token. Before a response has started, any such chunk is a
@@ -272,6 +332,12 @@ func (decoder *chatStreamDecoder) decodeOrHoldChunk(chunk chatChunkWire) ([]llmp
 	return append(events, chunkEvents...), diagnostics, err
 }
 
+// A held opening choice already carries answer text; only its event order
+// is pending. Partial frames and rejected chunks never become held choices.
+func (decoder *chatStreamDecoder) hasPendingContent() bool {
+	return decoder.heldChoice != nil
+}
+
 func (decoder *chatStreamDecoder) opensWithoutOrder(chunk chatChunkWire) bool {
 	// A Chat target carries reasoning and answer in separate fields, so there is
 	// no block order to choose.
@@ -314,7 +380,10 @@ func (decoder *chatStreamDecoder) nextAfterHeld(event llmprotocol.Event) ([]llmp
 		return events, err
 	}
 	terminal, err := decoder.next(event)
-	return append(events, terminal), err
+	if err != nil {
+		return events, err
+	}
+	return append(events, terminal), nil
 }
 
 // chatChunkIsQuiet reports a chunk whose choices decode to no events, such
@@ -392,6 +461,7 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"provider tokenization metadata is not model output",
 		)
 	}
+	decoder.appendStreamFieldOmissions(&diagnostics, chunk.vllmServingMetadata(), vllmServingMetadataReason)
 	if chunk.hasLegacyKVTransferMetadata() {
 		decoder.appendStreamOmission(
 			&diagnostics,
@@ -495,17 +565,38 @@ func isExactGatewayKeepalive(chunk chatChunkWire) bool {
 		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
+// RequireStreamableCandidates rejects a request for several choices that the
+// backend would stream over Chat. The Chat stream decoder reads choice index 0
+// only, so without this check the backend generates every choice and the
+// client gets the decoder's error only at the backend's end of stream.
+func RequireStreamableCandidates(format llmprotocol.WireFormat, request llmprotocol.Request) error {
+	if format != llmprotocol.OpenAIChatV1 || !request.Stream {
+		return nil
+	}
+	if request.CandidateCount == nil || *request.CandidateCount <= 1 {
+		return nil
+	}
+	return errStreamMultipleChoices()
+}
+
+func errStreamMultipleChoices() error {
+	return llmprotocol.NewError(
+		llmprotocol.ErrorUnsupportedFeature,
+		"stream_multiple_choices",
+		"streaming multiple choices is unsupported",
+		nil,
+	)
+}
+
 func validateChatStreamChunk(chunk chatChunkWire) error {
 	if err := validateChatStreamEnvelope(chunk); err != nil {
 		return err
 	}
+	if err := validateChatChunkModality(chunk.Modality); err != nil {
+		return err
+	}
 	if len(chunk.Choices) > 1 {
-		return llmprotocol.NewError(
-			llmprotocol.ErrorUnsupportedFeature,
-			"stream_multiple_choices",
-			"streaming multiple choices is unsupported",
-			nil,
-		)
+		return errStreamMultipleChoices()
 	}
 	for _, choice := range chunk.Choices {
 		if choice.FinishReason != nil && !validChatFinishReason(*choice.FinishReason) {
@@ -514,18 +605,70 @@ func validateChatStreamChunk(chunk chatChunkWire) error {
 		if err := validateChatChunkChoiceExtensions(choice); err != nil {
 			return err
 		}
-		seenToolIndexes := make(map[int]struct{}, len(choice.Delta.ToolCalls))
-		for _, call := range choice.Delta.ToolCalls {
-			if call.Index < 0 {
-				return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
-			}
-			if _, duplicate := seenToolIndexes[call.Index]; duplicate {
-				return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool indexes must be unique within a chunk")
-			}
-			seenToolIndexes[call.Index] = struct{}{}
+		if err := validateChatChunkToolIndexes(choice.Delta.ToolCalls); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+// validateChatChunkToolIndexes lets entries that share an index continue one
+// call, in order, as clients join them: vLLM's last chunk can carry a call's
+// latest fragment and its tool parser's flush of the rest as two entries. Two
+// entries with one index that name different calls fail.
+func validateChatChunkToolIndexes(calls []chatChunkToolCallWire) error {
+	type identity struct{ id, name string }
+	seen := make(map[int]identity, len(calls))
+	for _, call := range calls {
+		if call.Index < 0 {
+			return invalidProviderResponse("invalid_stream_tool_index", "Chat stream tool index must be non-negative")
+		}
+		current := identity{id: call.ID, name: call.Function.Name}
+		if call.Custom != nil {
+			current.name = call.Custom.Name
+		}
+		earlier, repeated := seen[call.Index]
+		if repeated && (conflictingIdentity(earlier.id, current.id) || conflictingIdentity(earlier.name, current.name)) {
+			return invalidProviderResponse("duplicate_stream_tool_index", "Chat stream tool entries with one index name different calls")
+		}
+		seen[call.Index] = identity{id: cmp.Or(earlier.id, current.id), name: cmp.Or(earlier.name, current.name)}
+	}
+	return nil
+}
+
+// Go decodes JSON null into a string's zero value. Record the placeholder per
+// call, but allow subsequent argument text before deciding at completion.
+func (decoder *chatStreamDecoder) observeNullChatStreamArguments(data []byte) error {
+	var chunk struct {
+		Choices []struct {
+			Delta struct {
+				ToolCalls []struct {
+					Index    int `json:"index"`
+					Function struct {
+						Arguments json.RawMessage `json:"arguments"`
+					} `json:"function"`
+				} `json:"tool_calls"`
+			} `json:"delta"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(data, &chunk); err != nil {
+		return err // the provider wire parser has already validated this JSON
+	}
+	for _, choice := range chunk.Choices {
+		for _, call := range choice.Delta.ToolCalls {
+			if bytes.Equal(bytes.TrimSpace(call.Function.Arguments), []byte("null")) {
+				if decoder.nullToolArguments == nil {
+					decoder.nullToolArguments = make(map[int]bool)
+				}
+				decoder.nullToolArguments[call.Index+1] = true
+			}
+		}
+	}
+	return nil
+}
+
+func conflictingIdentity(earlier, current string) bool {
+	return earlier != "" && current != "" && earlier != current
 }
 
 func validateChatStreamEnvelope(chunk chatChunkWire) error {
@@ -544,6 +687,7 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 		Error: &llmprotocol.ProtocolError{
 			Category: decodeProviderErrorCategory(wire.Type, string(wire.Code)),
 			Code:     string(wire.Code), Message: wire.Message, Parameter: wire.Param,
+			ProviderFramed: true,
 		},
 		StopReason: llmprotocol.StopError,
 		Failure:    llmprotocol.FailureTransport,
@@ -553,7 +697,11 @@ func chatStreamFailureEvent(wire *chatErrorWire) llmprotocol.Event {
 func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	events := make([]llmprotocol.Event, 0, 8)
 	if !decoder.started {
-		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model})
+		start := llmprotocol.Event{Type: llmprotocol.EventResponseStarted, ResponseID: chunk.ID, Model: chunk.Model}
+		if chunk.Created > 0 {
+			start.CreatedAt = time.Unix(chunk.Created, 0).UTC()
+		}
+		event, nextErr := decoder.next(start)
 		if nextErr != nil {
 			return nil, nil, nextErr
 		}
@@ -582,7 +730,10 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 
 func (decoder *chatStreamDecoder) decodeChoice(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
 	if choice.Index != 0 {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "stream_multiple_choices", "streaming multiple choices is unsupported", nil)
+		return nil, errStreamMultipleChoices()
+	}
+	if decoder.deferredToolCompletion && (chatChoiceNeedsItem(choice) || len(choice.Delta.ToolCalls) > 0) {
+		return nil, invalidProviderResponse("invalid_item_lifecycle", "Chat stream emitted output after its finish reason")
 	}
 	events, err := decoder.decodeChoiceTextEvents(choice)
 	if err != nil {
@@ -816,10 +967,40 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string, detail *chatSto
 		}
 		return nil, nil
 	}
+	if decoder.deferredToolCompletion && (decoder.stop != stop || decoder.stopSequence != matched) {
+		return nil, invalidProviderResponse("stream_finish_reason_changed", "Chat stream changed its finish reason")
+	}
 	decoder.stop, decoder.stopSequence = stop, matched
+	if decoder.context.Target == llmprotocol.OpenAIResponsesV1 && stop == llmprotocol.StopToolCall && decoder.policy.RequestOutputLimit > 0 {
+		for _, index := range active {
+			if decoder.itemKinds[index] == llmprotocol.ContentToolCall && decoder.toolCalls[index].Kind == "" &&
+				len(bytes.TrimSpace(decoder.toolArguments[index])) == 0 {
+				// Usage can arrive after finish_reason; wait before deciding that
+				// omitted arguments belong to a normally finished call.
+				decoder.deferredToolCompletion = true
+				return nil, nil
+			}
+		}
+	}
+	return decoder.completeActiveChatItems()
+}
+
+func (decoder *chatStreamDecoder) completeActiveChatItems() ([]llmprotocol.Event, error) {
+	active := make([]int, 0, len(decoder.items))
+	for index := range decoder.items {
+		if !decoder.completedItems[index] {
+			active = append(active, index)
+		}
+	}
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {
+		if decoder.nullToolArguments[itemIndex] && len(bytes.TrimSpace(decoder.toolArguments[itemIndex])) == 0 &&
+			(decoder.stop == llmprotocol.StopToolCall || decoder.stop == llmprotocol.StopEndTurn || decoder.stop == llmprotocol.StopSequence) {
+			// A finished null placeholder is still not an object. Name it by
+			// length and shape, the same evidence other non-object rejections keep.
+			return nil, nonObjectToolArgumentsErrorWithShape(decoder.toolArguments[itemIndex])
+		}
 		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemCompleted, ItemIndex: itemIndex, StopReason: decoder.stop})
 		if err != nil {
 			return nil, err
@@ -840,12 +1021,26 @@ func (decoder *chatStreamDecoder) Finalize(reason error) ([]llmprotocol.Event, l
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	terminalEvents, err := decoder.finalize(reason)
+	if decoder.deferredToolCompletion && !decoder.terminal {
+		// A finish reason without the terminal sentinel is not confirmation
+		// that the response completed; do not repair a held empty call.
+		failure := streamFinalizationError(reason, "upstream stream ended before completion")
+		failed, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: failure, StopReason: llmprotocol.StopError})
+		return append(events, failed), diagnostics, err
+	}
+	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
+	diagnostics = appendDiagnostics(diagnostics, finalizeDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
 }
 
 func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmprotocol.Diagnostics, error) {
+	if event.Content != nil {
+		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, []llmprotocol.Content{*event.Content}); err != nil {
+			return nil, nil, err
+		}
+	}
+
 	if encoder.terminal {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already terminal", nil)
 	}
@@ -1062,11 +1257,10 @@ func (encoder *chatStreamEncoder) encodeCompletion(
 		return nil, nil, err
 	}
 	if streamUsageRequested(encoder.context) && event.Usage != nil && event.Usage.State == llmprotocol.UsageAvailable {
-		usageChunk := chatChunkWire{
+		usageFrame, err := encodeChatUsageFrame(encoder.context, chatChunkWire{
 			ID: event.ResponseID, Object: "chat.completion.chunk", Model: event.Model,
 			Usage: encodeChatUsage(*event.Usage),
-		}
-		usageFrame, err := encodeChatStreamFrame(encoder.context, usageChunk)
+		})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1081,7 +1275,19 @@ func encodeChatStreamFrame(context llmprotocol.StreamContext, chunk chatChunkWir
 		return nil, err
 	}
 	chunk.Obfuscation = obfuscation
+	if streamUsageRequested(context) {
+		return encodeSSE("", chatNullUsageChunkWire{chatChunkWire: chunk})
+	}
 	return encodeSSE("", chunk)
+}
+
+func encodeChatUsageFrame(context llmprotocol.StreamContext, chunk chatChunkWire) ([]byte, error) {
+	obfuscation, err := newStreamObfuscation(context)
+	if err != nil {
+		return nil, err
+	}
+	chunk.Obfuscation = obfuscation
+	return encodeSSE("", chatUsageChunkWire{chatChunkWire: chunk, Choices: []chatChunkChoiceWire{}})
 }
 
 func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.Diagnostics, error) {

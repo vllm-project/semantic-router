@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,10 +11,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
-// Claude Code's Artifact tool description is about 20 KiB, over the 16 KiB
-// default. A raised limit admits it at ingress and on the backend re-encode.
+// A raised description limit applies at ingress and on the backend re-encode.
 func TestProtocolLimitsAdmitConfiguredToolDescriptionAcrossFormats(t *testing.T) {
-	description := strings.Repeat("d", 20_225)
+	defaultLimit := llmprotocol.DefaultPolicy().Limits.ToolDescriptionBytes
+	description := strings.Repeat("d", defaultLimit+1)
 	bodies := map[llmprotocol.WireFormat]string{
 		llmprotocol.OpenAIChatV1: `{"model":"%s","messages":[{"role":"user","content":"hi"}],
 			"tools":[{"type":"function","function":{"name":"Artifact","description":"` + description + `","parameters":{"type":"object"}}}]}`,
@@ -24,7 +25,7 @@ func TestProtocolLimitsAdmitConfiguredToolDescriptionAcrossFormats(t *testing.T)
 		for _, raised := range []bool{false, true} {
 			router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 			if raised {
-				router.Config.ProtocolLimits = config.ProtocolLimitsConfig{ToolDescriptionBytes: 64 << 10}
+				router.Config.ProtocolLimits = config.ProtocolLimitsConfig{ToolDescriptionBytes: 512 << 10}
 			}
 			ctx := routingTestContext(format, nil)
 			request, rejection := router.prepareProtocolRequest([]byte(strings.Replace(template, "%s", model, 1)), ctx)
@@ -32,7 +33,7 @@ func TestProtocolLimitsAdmitConfiguredToolDescriptionAcrossFormats(t *testing.T)
 				if rejection == nil || ctx.ImmediateProtocolError == nil || ctx.ImmediateProtocolError.Code != "tool_text_limit" {
 					t.Fatalf("%s default ingress = %+v, want tool_text_limit", format, ctx.ImmediateProtocolError)
 				}
-				want := "tools[0].description is 20225 bytes and exceeds the configured limit of 16384 bytes"
+				want := fmt.Sprintf("tools[0].description is %d bytes and exceeds the configured limit of %d bytes", len(description), defaultLimit)
 				if ctx.ImmediateProtocolError.Message != want {
 					t.Fatalf("%s default message = %q, want %q", format, ctx.ImmediateProtocolError.Message, want)
 				}
@@ -54,14 +55,14 @@ func TestProtocolLimitsAdmitConfiguredToolDescriptionAcrossFormats(t *testing.T)
 
 func TestProtocolLimitsReachEveryRouterEngine(t *testing.T) {
 	router, _ := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
-	router.Config.ProtocolLimits = config.ProtocolLimitsConfig{ToolNameBytes: 512, ToolDescriptionBytes: 64 << 10}
+	router.Config.ProtocolLimits = config.ProtocolLimitsConfig{ToolNameBytes: 512, ToolDescriptionBytes: 512 << 10}
 
 	body := []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"function","function":{"name":"` +
-		strings.Repeat("n", 300) + `","description":"` + strings.Repeat("d", 20_225) + `","parameters":{"type":"object"}}}]}`)
+		strings.Repeat("n", 300) + `","description":"` + strings.Repeat("d", llmprotocol.DefaultPolicy().Limits.ToolDescriptionBytes+1) + `","parameters":{"type":"object"}}}]}`)
 	engines := map[string]func() (*protocolcodec.Engine, error){
 		"ingress": router.protocolEngine,
 		"backend": func() (*protocolcodec.Engine, error) {
-			return router.protocolEngineForVendor(llmprotocol.ResponseVendorCloudflare)
+			return router.protocolEngineForReply(llmprotocol.ResponseVendorCloudflare, nil)
 		},
 		"detached": func() (*protocolcodec.Engine, error) {
 			return protocolEngineFor(nil, router.Config.ProtocolPolicy())

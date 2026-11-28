@@ -61,7 +61,7 @@ curl -sS -i http://localhost:8899/v1/chat/completions \
 
 ### Harness 自行选择的模型名 {#model-names-the-harness-picks-itself}
 
-Harness 可能请求你没有配置的模型。例如，Claude Code 启动 Explore 子代理时，会请求它自己的 Haiku 模型 ID。Router 对未发布的模型回答“the requested model is not available”，于是该子代理失败。请把 harness 的每一个模型设置都指向某个入口（对 Claude Code 而言是 `ANTHROPIC_MODEL` 和 `ANTHROPIC_DEFAULT_*_MODEL` 变量），或者把它发送的 ID 列入入口的 `model_names`：
+Harness 可能请求你没有配置的模型。例如，Claude Code 启动 Explore 子代理时，会请求它自己的 Haiku 模型 ID。Router 对未发布的模型回答 404 `model_not_found`，即“The model ... does not exist or you do not have access to it.”，于是该子代理失败。请把 harness 的每一个模型设置都指向某个入口（对 Claude Code 而言是 `ANTHROPIC_MODEL` 和 `ANTHROPIC_DEFAULT_*_MODEL` 变量），或者把它发送的 ID 列入入口的 `model_names`：
 
 ```yaml
 entrypoints:
@@ -85,7 +85,7 @@ listener 的 `timeout`（默认 300 秒）限制整个调用，包括流式响�
 
 运行一个真实的工具循环：模型请求工具 → harness 执行它 → 下一次调用携带对应的结果。对于流式输出，请检查完整的工具参数、终止事件和最终回答。仅凭协议兼容并不能证明模型和 harness 能配合工作。
 
-配置了 Router Learning 防护时，它需要明确的身份标识。默认的 `scope: conversation` 要求相关调用同时携带两个请求头：
+配置了 Router Learning 防护时，它需要明确的 session 身份。请在相关调用上同时发送两个请求头：
 
 ```http
 x-session-id: harness-demo-session
@@ -95,8 +95,8 @@ x-conversation-id: harness-demo-conversation
 这些只是示例值：
 
 - **使用真实的标识。** 由 harness 或受信任的网关为你的 session 和 conversation 提供各自不同且稳定的标识。
-- **`scope: session`** 只要求配置的 session 请求头。
-- **缺少标识**时请求仍可路由，但防护不会保持任何模型。
+- **只有 session 请求头时**，`scope: session` 保持整个 session，默认的 `scope: conversation` 则按对话开头为每个对话命名并分别保持。
+- **没有 session 请求头时**请求仍可路由，但防护不会保持任何模型。
 - **Responses 历史**（包括 `previous_response_id`）不能替代这些请求头。
 
 身份的优先级和隐私边界见[会话标识](../api/session-identification)。

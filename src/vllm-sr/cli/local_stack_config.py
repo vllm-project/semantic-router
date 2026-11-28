@@ -17,13 +17,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import typing
 from dataclasses import dataclass
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_observability import runtime_tracing_disabled
 from cli.commands.runtime_paths import (
     _runtime_config_filename,
     materialize_runtime_config,
+    read_config_source,
     resolve_state_root_dir,
 )
 from cli.commands.runtime_support import (
@@ -43,6 +46,9 @@ from cli.pending_activation import (
 from cli.runtime_config_lock import acquire_runtime_config_lock
 from cli.runtime_service_status import _router_management_port
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
+
+if typing.TYPE_CHECKING:
+    from cli.commands.runtime_paths import ConfigSourceRevision
 
 CONTAINER_STATE_DIR = "/app/.vllm-sr"
 _INSPECT_TIMEOUT_SECONDS = 15
@@ -118,16 +124,27 @@ def local_stack() -> LocalStack | None:
 
 
 def stack_document(stack: LocalStack, config_path: Path) -> str:
-    """The source file as `vllm-sr serve` would hand it to this stack's Router."""
+    """The source file as `vllm-sr serve` would hand it to this stack's Router.
+
+    Tracing stays off where serve turned it off for a stack without the local
+    collector, so an unrelated change is not refused as a tracing change.
+    """
 
     return build_effective_config_bytes(
         config_path,
         stack.algorithm,
         is_setup_mode_config(config_path),
+        enable_observability=not runtime_tracing_disabled(stack.runtime_config()),
     ).decode("utf-8")
 
 
-def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> Path:
+def save_pending_restart(
+    stack: LocalStack,
+    config_path: Path,
+    detail: str,
+    *,
+    expected_source: ConfigSourceRevision | None = None,
+) -> Path:
     """Save a change that needs a restart for the next `vllm-sr serve`.
 
     The runtime config holds the document `serve` would materialize from
@@ -144,6 +161,8 @@ def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> P
         timeout_seconds=0,
     )
     try:
+        if expected_source is not None:
+            read_config_source(config_path, expected_source)
         document = build_effective_config_bytes(
             config_path,
             stack.algorithm,
@@ -155,6 +174,7 @@ def save_pending_restart(stack: LocalStack, config_path: Path, detail: str) -> P
             state_root_dir=state_root,
             stack_name=stack.layout.stack_name,
             replace_active=True,
+            expected_source=expected_source,
         )
         record_pending_activation(
             runtime_config, document, REASON_RESTART, detail, origin=ORIGIN_CLI

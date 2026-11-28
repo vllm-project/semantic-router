@@ -4,8 +4,8 @@ title: Connect the shared worker
 
 # Connect the shared worker
 
-sr-bench runs evaluations through one durable service that the CLI and
-**Dashboard → Evaluation** share. This page covers the worker that
+sr-bench runs evaluations through one durable service that the CLI and the
+Dashboard's **Observe → Evaluations** page share. This page covers the worker that
 `vllm-sr serve` manages, a dedicated worker for the code and agent benchmarks,
 and a standalone service for development.
 

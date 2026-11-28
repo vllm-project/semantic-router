@@ -7,33 +7,24 @@ import {
   modelHubBenchmarkValueLabel,
 } from './modelHubBenchmarkNormalization'
 import {
-  benchmarkName,
+  MODEL_HUB_DEFAULT_FILTERS,
   formatContextWindow,
-  formatIntelligence,
+  modelHubCapabilities,
+  modelHubContextLabel,
   modelHubCreators,
   modelHubEvaluationConditionLabel,
-  modelHubProviders,
-  modelHubContextLabel,
   modelHubMaxOutputLabel,
   modelHubParameterLabel,
-  modelHubPageForModel,
+  modelHubProviders,
   modelHubPublicEvaluations,
   modelHubRows,
   modelHubStats,
-  paginateModelHubRows,
-  resolveModelHubSelection,
   type ModelHubFilters,
 } from './modelHubSupport'
 
 const catalog = generatedCatalog as unknown as BuiltInModelCatalog
 const filters = (patch: Partial<ModelHubFilters> = {}): ModelHubFilters => ({
-  query: '',
-  kind: 'all',
-  distribution: 'all',
-  lifecycle: 'supported',
-  publisher: 'all',
-  provider: 'all',
-  capability: 'all',
+  ...MODEL_HUB_DEFAULT_FILTERS,
   sort: 'name',
   ...patch,
 })
@@ -56,14 +47,11 @@ describe('model hub inventory support', () => {
 
   it('projects the complete generated inventory without maintaining another list', () => {
     const stats = modelHubStats(catalog)
-    const physicalModels = catalog.models.filter((model) => model.kind === 'physical')
-    const virtualModels = catalog.models.filter((model) => model.kind === 'virtual')
-    const physicalCreators = new Set(physicalModels.map((model) => model.publisher))
+    const physicalCreators = new Set(
+      catalog.models.filter((model) => model.kind === 'physical').map((model) => model.publisher),
+    )
     expect(stats.models).toBe(catalog.models.length)
-    expect(stats.physicalModels).toBe(physicalModels.length)
-    expect(stats.virtualModels).toBe(virtualModels.length)
-    expect(stats.mappedProviders).toBe(modelHubProviders(catalog).length)
-    expect(stats.providerContracts).toBe(catalog.providers.length)
+    expect(stats.providers).toBe(catalog.providers.length)
     expect(stats.creators).toBe(physicalCreators.size)
     expect(physicalCreators.size).toBeGreaterThanOrEqual(20)
     expect(modelHubCreators(catalog)).toEqual(
@@ -75,15 +63,22 @@ describe('model hub inventory support', () => {
   it('searches and filters canonical model metadata', () => {
     const rows = modelHubRows(
       catalog,
-      filters({
-        query: 'glm-5.3',
-        kind: 'physical',
-        distribution: 'open_weights',
-        publisher: 'Z.ai / GLM',
-      }),
+      filters({ query: 'glm-5.3', distribution: 'open_weights', publishers: ['Z.ai / GLM'] }),
     )
     expect(rows.map((row) => row.model.id)).toEqual(['zai/glm-5.3', 'zai/glm-5.3-flash'])
     expect(rows.every((row) => row.providers.length > 0)).toBe(true)
+    const capability = modelHubCapabilities(catalog)[0]
+    expect(
+      modelHubRows(catalog, filters({ capabilities: [capability] })).every((row) =>
+        row.model.capabilities.includes(capability),
+      ),
+    ).toBe(true)
+    const provider = modelHubProviders(catalog)[0]
+    expect(
+      modelHubRows(catalog, filters({ providers: [provider.id] })).every((row) =>
+        row.providers.some((entry) => entry.provider.id === provider.id),
+      ),
+    ).toBe(true)
   })
 
   it('offers only serving providers that bind at least one Hub model', () => {
@@ -102,35 +97,38 @@ describe('model hub inventory support', () => {
 
 describe('model hub presentation support', () => {
   it('sorts catalog properties without turning the hub into a composite ranking', () => {
-    const byContext = modelHubRows(catalog, filters({ kind: 'physical', sort: 'context' }))
+    const byContext = modelHubRows(catalog, filters({ sort: 'context' }))
     expect(byContext[0].model.limits?.context_window_size ?? 0).toBeGreaterThanOrEqual(
       byContext[1].model.limits?.context_window_size ?? 0,
     )
-    const byProvider = modelHubRows(catalog, filters({ kind: 'physical', sort: 'providers' }))
+    const byProvider = modelHubRows(catalog, filters({ sort: 'providers' }))
     expect(byProvider[0].providers.length).toBeGreaterThanOrEqual(byProvider[1].providers.length)
+    const byRelease = modelHubRows(catalog, filters({ sort: 'released' }))
+    expect((byRelease[0].model.released_at ?? '') >= (byRelease[1].model.released_at ?? '')).toBe(
+      true,
+    )
   })
 
   it('treats active and experimental cards as the supported catalog surface', () => {
-    const supported = modelHubRows(catalog, filters({ kind: 'physical' }))
+    const supported = modelHubRows(catalog, filters())
     expect(supported.length).toBeGreaterThan(0)
     expect(
       supported.every(
         (row) => row.model.lifecycle === 'active' || row.model.lifecycle === 'experimental',
       ),
     ).toBe(true)
+    expect(modelHubRows(catalog, filters({ lifecycle: 'all' })).length).toBeGreaterThanOrEqual(
+      supported.length,
+    )
   })
 
-  it('formats context, missing scores, and benchmark labels explicitly', () => {
+  it('formats context windows explicitly', () => {
     expect(formatContextWindow(1_000_000)).toBe('1M')
     expect(formatContextWindow(1_048_576)).toBe('1M')
     expect(formatContextWindow(1_050_000)).toBe('1.05M')
     expect(formatContextWindow(131_072)).toBe('128K')
     expect(formatContextWindow(128_000)).toBe('128K')
     expect(formatContextWindow()).toBe('Not published')
-    expect(formatIntelligence(null)).toBe('Not yet measured')
-    expect(benchmarkName('idavidrein/gpqa-diamond@1.0.0', 'accuracy', catalog)).toBe(
-      'GPQA Diamond · accuracy',
-    )
   })
 
   it('distinguishes disclosed values from provider and runtime-owned metadata', () => {
@@ -142,20 +140,44 @@ describe('model hub presentation support', () => {
     expect(modelHubParameterLabel(gemini)).toBe('Undisclosed')
     expect(modelHubMaxOutputLabel(openModel)).toBe('Runtime-set')
   })
-
-  it('paginates large inventories with stable, bounded page metadata', () => {
-    const rows = modelHubRows(catalog, filters())
-    const first = paginateModelHubRows(rows, 1, 24)
-    const beyondEnd = paginateModelHubRows(rows, 100_000, 24)
-    expect(first.items).toHaveLength(6)
-    expect(first.start).toBe(1)
-    expect(first.end).toBe(6)
-    expect(beyondEnd.page).toBe(beyondEnd.totalPages)
-    expect(beyondEnd.end).toBe(rows.length)
-  })
 })
 
-describe('model hub benchmark presentation contract', () => {
+describe('model hub benchmark evidence', () => {
+  it('does not use August GameBench models to qualify November Astra and Sol scores', () => {
+    const gameBench = catalog.evaluations.filter(
+      (row) => row.benchmark === 'duellab/gamebench@2.0.0',
+    )
+    const august = gameBench.filter(
+      (row) => row.subject.benchmark_release === 'gb2-20260824-e05a1ff89a26',
+    )
+    const models = new Set(['openai/gpt-6.2-astra', 'openai/gpt-6.2-sol'])
+    const november = gameBench.filter(
+      (row) =>
+        models.has(row.model) && row.subject.benchmark_release === 'gb2-20261119-235af8c04037',
+    )
+    expect(new Set(november.map((row) => row.model))).toEqual(models)
+    expect(new Set(august.map((row) => row.model)).size).toBeGreaterThanOrEqual(10)
+
+    const visible = modelHubPublicEvaluations({ ...catalog, evaluations: [...august, ...november] })
+    expect(visible.map((row) => row.id)).toEqual(august.map((row) => row.id))
+  })
+
+  it.each([
+    ['gpt-6.2-astra', 'xhigh', 0.28],
+    ['gpt-6.2-sol', 'xhigh', 0.284],
+    ['gpt-6.1-terra', 'high', 0.28],
+  ] as const)('finds %s on OpenAI with its measured GDP.pdf effort', (id, effort, score) => {
+    const rows = modelHubRows(catalog, filters({ query: id, providers: ['openai'] }))
+    expect(rows.map((row) => row.model.id)).toEqual([`openai/${id}`])
+    const evidence = modelHubPublicEvaluations(catalog).filter(
+      (record) =>
+        record.model === rows[0].model.id && record.benchmark === 'artificial-analysis/gdp-pdf@1.0.0',
+    )
+    expect(evidence.map((record) => [record.reasoning_effort, record.metrics.all_pass])).toEqual([
+      [effort, score],
+    ])
+  })
+
   it('presents Elo as a normalized percentage without replacing the raw measurement', () => {
     const metric = catalog.benchmarks
       .find((benchmark) => benchmark.id === 'artificial-analysis/gdpval-aa@2.0.0')!
@@ -166,23 +188,6 @@ describe('model hub benchmark presentation contract', () => {
     expect(metric.unit).toBe('elo')
   })
 
-  it('defines the six Intelligence 1.0 core comparisons in catalog data', () => {
-    expect(
-      catalog.benchmarks
-        .filter((benchmark) => benchmark.tags?.includes('core'))
-        .map((benchmark) => benchmark.display_name),
-    ).toEqual([
-      'MMLU-Pro',
-      'GPQA Diamond',
-      "Humanity's Last Exam",
-      'Terminal-Bench 2.1',
-      'SciCode',
-      'LiveCodeBench v6',
-    ])
-  })
-})
-
-describe('model hub selection and benchmark support', () => {
   it('omits narrow benchmark evidence from every public Hub surface', () => {
     const broad = Array.from({ length: 10 }, (_, index) => ({
       id: `broad-${index}`,
@@ -213,32 +218,5 @@ describe('model hub selection and benchmark support', () => {
     expect(new Set(filtered.map((evaluation) => evaluation.benchmark))).toEqual(
       new Set(['broad@1']),
     )
-  })
-
-  it('keeps table and card selection on the visible page after pagination or filtering', () => {
-    const rows = modelHubRows(catalog, filters())
-    const firstPage = paginateModelHubRows(rows, 1, 24)
-    const secondPage = paginateModelHubRows(rows, 2, 24)
-    const selectedOnFirstPage = firstPage.items[3]
-
-    expect(resolveModelHubSelection(firstPage.items, selectedOnFirstPage.model.id)).toBe(
-      selectedOnFirstPage,
-    )
-    expect(resolveModelHubSelection(secondPage.items, selectedOnFirstPage.model.id)).toBe(
-      secondPage.items[0],
-    )
-
-    const filtered = modelHubRows(catalog, filters({ publisher: 'Z.ai / GLM' }))
-    expect(resolveModelHubSelection(filtered, selectedOnFirstPage.model.id)).toBe(filtered[0])
-  })
-})
-
-describe('model hub Arena navigation', () => {
-  it('routes an Arena row back to the model page that owns its card', () => {
-    const rows = modelHubRows(catalog, filters())
-    const target = rows[27]
-
-    expect(modelHubPageForModel(rows, target.model.id, 10)).toBe(5)
-    expect(modelHubPageForModel(rows, 'missing/model', 10)).toBe(1)
   })
 })

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -25,10 +26,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
-
-// nativeDrainTimeout bounds how long in-flight native requests and streams may
-// finish once shutdown starts.
-const nativeDrainTimeout = 25 * time.Second
 
 // startNativeGateway serves every configured listener through the routing core
 // in process, with no ext_proc listener, until ctx ends or a listener fails.
@@ -73,11 +70,7 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 	case err = <-served:
 	}
 	ready.Store(false)
-	drainCtx, cancel := context.WithTimeout(context.Background(), nativeDrainTimeout)
-	defer cancel()
-	for _, l := range listeners {
-		err = errors.Join(err, l.server.Shutdown(drainCtx))
-	}
+	err = errors.Join(err, drainNative(server.CurrentConfig().DrainTimeout(), listeners))
 	if err != nil {
 		return recordStartupError(writer, "serve the standalone listeners", err)
 	}
@@ -87,7 +80,60 @@ func startNativeGateway(ctx context.Context, server *extproc.Server, writer star
 type nativeListener struct {
 	name     string
 	server   *http.Server
+	handler  *gateway.Handler
 	listener net.Listener
+}
+
+// drainNative stops every listener accepting and lets the requests in flight
+// on them finish, for at most timeout; those still in flight then are cut
+// when the process exits.
+func drainNative(timeout time.Duration, listeners []*nativeListener) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	started, inFlight := time.Now(), 0
+	for _, l := range listeners {
+		inFlight += l.handler.InFlight()
+	}
+	logging.ComponentEvent("gateway", "standalone_drain_started", map[string]interface{}{
+		"drain_timeout_seconds": int(timeout / time.Second), "in_flight": inFlight,
+	})
+	type drained struct {
+		left int
+		err  error
+	}
+	results := make(chan drained, len(listeners))
+	for _, l := range listeners {
+		go func(l *nativeListener) {
+			// Shutdown waits for HTTP/1.1 and TLS requests only; Drain waits
+			// for those of every protocol.
+			err := l.server.Shutdown(ctx)
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = nil
+			} else if err != nil {
+				err = fmt.Errorf("listener %s: %w", l.name, err)
+			}
+			results <- drained{left: l.handler.Drain(ctx), err: err}
+		}(l)
+	}
+	var (
+		left int
+		err  error
+	)
+	for range listeners {
+		result := <-results
+		left += result.left
+		err = errors.Join(err, result.err)
+	}
+	if left > 0 {
+		logging.ComponentWarnEvent("gateway", "standalone_drain_incomplete", map[string]interface{}{
+			"drain_timeout_seconds": int(timeout / time.Second), "in_flight": left,
+		})
+	} else {
+		logging.ComponentEvent("gateway", "standalone_drain_completed", map[string]interface{}{
+			"duration_ms": time.Since(started).Milliseconds(),
+		})
+	}
+	return err
 }
 
 // listenNative binds every listener of cfg, on bindAddress when it is set; a
@@ -103,17 +149,18 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 		}
 	}
 	for _, spec := range cfg.Listeners {
-		opts := base
-		opts.Listener = spec.Name
-		handler, err := gateway.NewHandler(opts)
-		if err != nil {
-			closeBound()
-			return nil, err
-		}
 		serverOpts, err := listenerServerOptions(cfg, spec)
 		if err != nil {
 			closeBound()
 			return nil, fmt.Errorf("listener %s: %w", spec.Name, err)
+		}
+		opts := base
+		opts.Listener = spec.Name
+		opts.ReadTimeout = serverOpts.IdleTimeout
+		handler, err := gateway.NewHandler(opts)
+		if err != nil {
+			closeBound()
+			return nil, err
 		}
 		address := spec.Address
 		if bindAddress != "" {
@@ -124,9 +171,9 @@ func listenNative(cfg *config.RouterConfig, bindAddress string, base gateway.Opt
 			closeBound()
 			return nil, fmt.Errorf("listener %s: %w", spec.Name, err)
 		}
-		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), listener: ln})
+		bound = append(bound, &nativeListener{name: spec.Name, server: gateway.NewServer(handler, serverOpts), handler: handler, listener: ln})
 		logging.ComponentEvent("router", "standalone_listener_started", map[string]interface{}{
-			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.APIKeys) > 0,
+			"listener": spec.Name, "address": ln.Addr().String(), "api_keys": len(spec.ClientKeys()) > 0,
 			"apis": spec.ServedAPIs(), "tls": serverOpts.TLS != nil,
 		})
 	}
@@ -145,7 +192,10 @@ func listenerServerOptions(cfg *config.RouterConfig, spec config.Listener) (gate
 		opts.IdleTimeout = idle
 	}
 	if spec.TLS != nil {
-		certFile, keyFile := spec.TLS.Files(cfg.ConfigBaseDir)
+		certFile, keyFile, err := listenerTLSFiles(spec.TLS, cfg.ConfigBaseDir)
+		if err != nil {
+			return opts, err
+		}
 		tlsConfig, err := gateway.LoadTLS(certFile, keyFile, certificateReloadLogger(spec.Name))
 		if err != nil {
 			return opts, fmt.Errorf("tls: %w", err)
@@ -153,6 +203,26 @@ func listenerServerOptions(cfg *config.RouterConfig, spec config.Listener) (gate
 		opts.TLS = tlsConfig
 	}
 	return opts, nil
+}
+
+// The Docker launcher maps listener paths to read-only directory mounts.
+// Leave normal path resolution in place for files without a Docker mount.
+func listenerTLSFiles(spec *config.ListenerTLS, baseDir string) (string, string, error) {
+	certFile, keyFile := spec.Files(baseDir)
+	const env = "VLLM_SR_LISTENER_TLS_PATHS"
+	if encoded := os.Getenv(env); encoded != "" {
+		var paths map[string]string
+		if err := json.Unmarshal([]byte(encoded), &paths); err != nil {
+			return "", "", fmt.Errorf("invalid %s: %w", env, err)
+		}
+		if mounted := paths[strings.TrimSpace(spec.CertFile)]; mounted != "" {
+			certFile = mounted
+		}
+		if mounted := paths[strings.TrimSpace(spec.KeyFile)]; mounted != "" {
+			keyFile = mounted
+		}
+	}
+	return certFile, keyFile, nil
 }
 
 func certificateReloadLogger(listener string) func(error) {
@@ -212,11 +282,12 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 		return result.Status, result.Body, err
 	}
 	var nativeRouter systemone.Router
+	var rules systemone.ListenerRules
 	if lease.Router != nil {
-		nativeRouter = lease.Router
+		nativeRouter, rules = lease.Router, lease.Router
 	}
 	serving := gateway.Serving{
-		SystemOne:       systemone.ForClients(cfg, systemone.Handler(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models))),
+		SystemOne:       systemone.ForClients(cfg, systemone.HandlerWithRules(cfg, nativeListener, systemone.ServingInvoker(cfg, listener, nativeRouter, local, remote, models), rules, systemone.ClientAuth{Served: lease.Snapshot.ClientAuth(), Active: lease.ActiveClientAuth})),
 		RoutingDisabled: !cfg.RoutingEnabled(),
 		APIKeys:         listenerAPIKeys(cfg, listener),
 		IdentityHeaders: []string{
@@ -241,7 +312,7 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 	for _, listener := range cfg.Listeners {
 		if listener.Name == name {
-			return listener.APIKeys
+			return listener.ClientKeys()
 		}
 	}
 	return nil
@@ -259,7 +330,9 @@ func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name 
 		serving.Models, _ = listener.LLMModels()
 		serving.ListsLLM = servesAnyLLM(listener)
 		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+		serving.APIPath = listener.APIPath
 		serving.Gate = listenerGate(listener)
+		serving.UnservedRoute = listenerUnservedRoute(listener)
 		return
 	}
 }
@@ -298,6 +371,23 @@ func listenerGate(listener config.Listener) func(string) ([]string, string, bool
 			return refuse(path)
 		}
 		return entry.Models, "", true
+	}
+}
+
+// listenerUnservedRoute is the model a request on a path is routed as when
+// it names a model the path's API does not serve, from the API's
+// unserved_models; empty for a path whose API refuses such requests.
+func listenerUnservedRoute(listener config.Listener) func(string) string {
+	return func(path string) string {
+		api, isAPI := apiregistry.ForPath(path)
+		if !isAPI {
+			return ""
+		}
+		entry, served := listener.API(api.Name)
+		if !served {
+			return ""
+		}
+		return entry.UnservedRoute()
 	}
 }
 

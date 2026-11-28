@@ -431,8 +431,10 @@ test('requests go to the configured runtime URL, and its health check and model 
   await clock.advance(0)
   await check($, 'ls')
 
-  // the router's and the guard's checks of the model at session start, then the command's own question
+  // the listener's vsr profile, the router's and the guard's checks of the model at session start, then the
+  // command's own question
   expect(reply.urls).toEqual([
+    'https://sr.example.com/api/v1/systemone/models',
     'https://sr.example.com/api/health',
     'https://sr.example.com/api/v1/systemone/models',
     'https://sr.example.com/api/v1/models',

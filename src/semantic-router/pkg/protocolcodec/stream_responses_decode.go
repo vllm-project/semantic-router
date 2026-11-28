@@ -32,6 +32,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 		"response.reasoning_summary_part.added", "response.reasoning_summary_part.done",
 		"response.reasoning_summary_text.done", "response.reasoning_text.done":
 		return nil, nil, nil
+	case "response.metadata":
+		// ChatGPT's Codex backend reports moderation results mid-stream. The
+		// event carries no output, so it is reported and dropped.
+		var diagnostics llmprotocol.Diagnostics
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1,
+			"stream.response.metadata", "provider moderation metadata has no protocol-neutral representation")
+		return nil, diagnostics, nil
 	case "response.function_call_arguments.done", "response.custom_tool_call_input.done":
 		if err := decoder.validateResponsesToolDone(wire); err != nil {
 			return nil, nil, err
@@ -57,8 +64,14 @@ func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesE
 		complete = wire.Input
 	}
 	if len(arguments) == 0 {
-		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
-			return invalidProviderResponse("invalid_stream_tool_arguments", "Responses function-call done arguments must be a JSON object")
+		// A cut call's arguments stop inside an object; the stream state decides it at the terminal event.
+		if wire.Type == "response.function_call_arguments.done" && !isJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) &&
+			!isTruncatedJSONObject([]byte(complete), decoder.policy.Limits.JSONDepth) {
+			return invalidProviderResponseWithCause(
+				"invalid_stream_tool_arguments",
+				"Responses function-call done arguments must be a JSON object",
+				toolArgumentsEvidence([]byte(complete)),
+			)
 		}
 		decoder.toolArguments[index] = []byte(complete)
 		decoder.toolArgumentsDone[index] = true
@@ -75,6 +88,7 @@ func applyResponsesStart(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseStarted
 	if wire.Response != nil {
 		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+		event.CreatedAt = responsesCreatedTime(wire.Response.CreatedAt)
 	}
 }
 
@@ -101,7 +115,7 @@ func (decoder *responsesStreamDecoder) applyResponsesItemStart(event *llmprotoco
 	event.Role = llmprotocol.RoleAssistant
 	switch item.Type {
 	case "function_call", "custom_tool_call":
-		call := llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+		call := llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}
 		if item.Type == "custom_tool_call" {
 			call.Kind, call.Arguments = llmprotocol.ToolKindCustom, item.Input
 		}
@@ -275,15 +289,22 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 ) error {
 	switch item.Type {
 	case "function_call":
-		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}
+		event.ToolCall = &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}
 	case "custom_tool_call":
-		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}
+		event.ToolCall = &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input, Namespace: item.Namespace}
 	case "message":
 		if decoder.itemKinds[responsesWireOutputIndex(wire)] == llmprotocol.ContentToolCall {
 			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_item_kind_mismatch", "upstream completed a tool item as a message", nil)
 		}
 	case "reasoning":
 		event.Content = &llmprotocol.Content{Kind: llmprotocol.ContentReasoning}
+		encrypted, err := decodeResponsesEncryptedReasoning(item, decoder.policy, true)
+		if err != nil {
+			return err
+		}
+		if encrypted != nil {
+			event.Content = encrypted
+		}
 	case "image_generation_call":
 		event.Content = &llmprotocol.Content{
 			Kind:           llmprotocol.ContentGeneratedImage,
@@ -315,6 +336,7 @@ func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) err
 	if upstreamError != nil {
 		event.Error.Category = decodeProviderErrorCategory(upstreamError.Code)
 		event.Error.Code, event.Error.Message = upstreamError.Code, upstreamError.Message
+		event.Error.ProviderFramed = true
 	}
 	return nil
 }
@@ -329,12 +351,15 @@ func applyResponsesTransportFailure(event *llmprotocol.Event, wire responsesEven
 	if wire.Code != nil {
 		event.Error.Code = *wire.Code
 		event.Error.Category = decodeProviderErrorCategory(*wire.Code)
+		event.Error.ProviderFramed = true
 	}
 	if wire.Message != "" {
 		event.Error.Message = wire.Message
+		event.Error.ProviderFramed = true
 	}
 	if wire.Param != nil {
 		event.Error.Parameter = *wire.Param
+		event.Error.ProviderFramed = true
 	}
 }
 
@@ -343,7 +368,8 @@ func (decoder *responsesStreamDecoder) Finalize(reason error) ([]llmprotocol.Eve
 	if frameErr != nil {
 		return events, diagnostics, frameErr
 	}
-	terminalEvents, err := decoder.finalize(reason)
+	terminalEvents, finalizeDiagnostics, err := decoder.finalize(reason)
 	events = append(events, terminalEvents...)
+	diagnostics = appendDiagnostics(diagnostics, finalizeDiagnostics, decoder.policy.Limits.Diagnostics)
 	return events, diagnostics, err
 }

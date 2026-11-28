@@ -22,9 +22,40 @@ translation:
 | `global.model_catalog.bindings.<type>` | 某个应用信号类型规则的部署 |
 | `recipes[].model_bindings.<type>` | 同上，只针对一个配方 |
 | `global.model_catalog.deployments.<name>` | 一个部署：`provider: model_runtime`（本地或挂接）或 `provider: systemone`（远程 API） |
+| `global.model_catalog.deployments.<name>.fallbacks` | `recipes[].signals.systemone` 问题按顺序尝试的备用部署 |
 | `global.model_catalog.signal_timeout_ms` | 一个请求所有信号的截止时间 |
+| `global.model_catalog.on_signal_overload` | `{action, wait_ms, retry_after_seconds}`：`action: retry` 时，没有备用部署的调用若因决策模型过载被拒绝，会在最长 `wait_ms` 内重试。如果仍无法读取的规则会拒绝该请求，请求就收到客户端会重试的错误。见[决策模型过载时](../deploy/performance.md#when-the-decision-model-is-overloaded) |
 
 `systemone` 部署接受 `endpoint`、`model`、`auth`（`api_key_env` 或 `api_key_file`，或 `credential: delegated`；`header`、`prefix`）、`headers`、`timeout_ms`、`max_retries`、`tls` 和 `capabilities`（`question_types`、`presets`、`modalities`）。
+
+### 为决策部署配置备用模型 {#decision-deployment-fallbacks}
+
+例如，当默认的远程决策部署不可用时，让本地 CPU 模型回答自定义 System One 信号的问题：
+
+```yaml
+global:
+  model_catalog:
+    system:
+      decision_model: {deployment: hosted}
+    deployments:
+      hosted:
+        provider: systemone
+        schema: vllm-sr/5.0
+        endpoint: https://decisions.example.com/v1/systemone
+        model: vllm-sr/d3-ultra
+        timeout_ms: 250
+        fallbacks: [local-cpu]
+      local-cpu:
+        provider: model_runtime
+        artifact: vllm-sr/vela3-fast
+        device: cpu
+```
+
+网络传输失败、单次调用超时、HTTP 429 或 5xx、运行时不可用时才切换。请求被拒绝、响应格式无效，或部署已给出答案（包括不匹配）时，不切换。先按顺序尝试直接配置的备用部署，再尝试它们各自的备用部署，同一个部署不会调用两次。所有目标都必须支持规则的问题和输入；无效引用或循环会导致配置加载失败。
+
+规则的 `timeout_ms`（如设置）限制整个切换链；多条规则共享调用时取最短值，信号阶段的截止时间仍然有效。每个部署使用自己的 `timeout_ms`（未设置时为 1000 毫秒），且不能超过剩余时间。配置了备用部署的信号遇到 429 会尝试下一个目标，而不是等待容量。如果整条链都无法回答，规则仍按原有的错误策略处理。
+
+每个目标都使用自己的协议、凭据和限制接收规则输入，只应选择允许接收这些输入的部署。规则阈值不会随模型切换而变化，应验证备用模型的分数是否适用于当前判定条件。备用列表仅用于请求阶段或响应阶段的自定义信号求值；应用信号、插件单独读取规则、选择器、评审，以及对外推理和生成后端仍使用原有目标。
 
 ## 信号 {#signals}
 

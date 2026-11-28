@@ -1,11 +1,14 @@
 package extproc
 
 import (
+	"bytes"
+	"net/http"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -26,7 +29,24 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	}
 	response := r.handleDecodedResponseBody(responseBody, v.ResponseBody.GetEndOfStream(), completionLatency, ctx)
 	deliverUpstreamResponseBody(response, ctx, responseBody, decoded)
+	// A buffered body can precede trailers even when its entire payload arrived.
+	ctx.bufferedResponseComplete = !ctx.IsStreamingResponse
 	return response, nil
+}
+
+// answerInPlaceOfUpstream answers with status in place of the upstream
+// response. No later phase sees that answer, so the replay record ends here
+// with what the client got, for reason.
+func (r *OpenAIRouter) answerInPlaceOfUpstream(ctx *RequestContext, status int, message, reason string) *ext_proc.ProcessingResponse {
+	response := r.createErrorResponse(status, message)
+	r.failAnsweredRouterReplay(ctx, status, response.GetImmediateResponse().GetBody(), reason)
+	return response
+}
+
+// invalidUpstreamResponse answers with 502 for an upstream response the Router
+// cannot pass on.
+func (r *OpenAIRouter) invalidUpstreamResponse(ctx *RequestContext, message string) *ext_proc.ProcessingResponse {
+	return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, message, "upstream_invalid_response")
 }
 
 // handleDecodedResponseBody runs the response phases on the upstream body as
@@ -44,10 +64,19 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 	if isUpstreamTransportError(ctx) {
 		return r.handleUpstreamTransportError(responseBody, ctx)
 	}
+	// Speech audio has no neutral response. Forward the bytes before recovery,
+	// JSON decoding, response policy or the response cache can rewrite them.
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAISpeechV1 {
+		return r.handleSpeechResponseBody(ctx, completionLatency)
+	}
 
 	if ctx.IsStreamingResponse {
 		return r.handleSemanticStreamingResponseBody(responseBody, endOfStream, ctx)
 	}
+	// Recovery and redaction replace this slice before the pipeline copies
+	// it. Compare with the decoded upstream body so same-format Chat still
+	// emits BodyMutation. Gzip replacement stays in deliverUpstreamResponseBody.
+	incomingBody := responseBody
 	recoveredBody, recoveryErr := r.handleContextRecoveryFollowup(
 		ctx.TraceContext,
 		responseBody,
@@ -59,14 +88,29 @@ func (r *OpenAIRouter) handleDecodedResponseBody(
 			"error":      recoveryErr.Error(),
 		})
 		if contextRecoveryFailClosed(r.Config, ctx) {
-			return r.createErrorResponse(502, "Context recovery followup failed")
+			return r.answerInPlaceOfUpstream(ctx, http.StatusBadGateway, "Context recovery followup failed", "request_processing_failed")
 		}
 		responseBody = r.redactContextRecoveryToolCalls(responseBody, ctx)
 	} else {
 		responseBody = recoveredBody
 	}
 
-	return r.handleNonStreamingResponseBody(responseBody, ctx, completionLatency)
+	return r.handleNonStreamingResponseBody(
+		responseBody,
+		ctx,
+		completionLatency,
+		!bytes.Equal(responseBody, incomingBody),
+	)
+}
+
+// handleSpeechResponseBody forwards Speech API audio to the client unchanged.
+// Audio has no neutral response, so it skips decoding, the response cache and
+// response policy. The request still completes with zero token usage, which
+// releases its in-flight slot, and the replay record closes without the audio.
+func (r *OpenAIRouter) handleSpeechResponseBody(ctx *RequestContext, completionLatency time.Duration) *ext_proc.ProcessingResponse {
+	r.reportNonStreamingUsage(ctx, completionLatency, responseUsageMetrics{})
+	r.attachRouterReplayResponse(ctx, nil, true)
+	return buildResponseBodyContinueResponse(nil, nil)
 }
 
 func contextRecoveryFailClosed(cfg *config.RouterConfig, ctx *RequestContext) bool {

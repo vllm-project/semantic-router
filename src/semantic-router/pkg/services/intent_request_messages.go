@@ -56,6 +56,9 @@ type intentConversationHistory struct {
 	routingInput        routinginput.Outcome
 	// turns are the user and assistant messages with text, in order.
 	turns []classification.ConversationTurn
+
+	// images are every image the request carries, as intentMessageImages.
+	images []string
 }
 
 // priorTurns are the turns before the current (last) user turn.
@@ -147,6 +150,9 @@ func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector)
 			input.requestFacts.InputModality.TextContentCount = 1
 		}
 		input.semanticRequest = req.neutralSelectionRequest(fallbackText(rawText, useTopLevelTextFallback))
+		// invalid_tool_call is computed from the same neutral request the
+		// data plane reads, so a preview matches live routing.
+		input.conversationFacts.InvalidToolCalls = classification.InvalidRecentToolCalls(input.semanticRequest)
 		return input, nil
 	}
 
@@ -312,9 +318,7 @@ func resolveIntentSignalInputFromMessages(messages []IntentMessage, toolDefiniti
 		conversationFacts: history.conversationFacts,
 		requestFacts:      classification.RequestFacts{InputModality: history.inputModality, RoutingInput: history.routingInput, Turns: history.priorTurns()},
 	}
-	if history.currentUserImageURL != "" {
-		input.requestFacts.Images = []string{history.currentUserImageURL}
-	}
+	input.requestFacts.Images = history.images
 
 	// Promote system/assistant text only with no user text AND no image; the
 	// image guard stops an image-only turn from promoting assistant text, leaving
@@ -363,9 +367,11 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
-	routing := selector.Walk()
+	toolFailures := intentToolFailures{calls: map[string]*llmprotocol.ToolCall{}}
+	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
 	for index, msg := range messages {
+		history.images = append(history.images, intentMessageImages(msg.Content)...)
 		role := strings.ToLower(strings.TrimSpace(msg.Role))
 		rawText := extractIntentMessageRawText(msg.Content)
 		if role == "user" {
@@ -396,6 +402,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 			msg.ToolCallID,
 			previousWasToolResult,
 		)
+		toolFailures.observe(role, msg, rawText)
 		if text != "" && (role == "user" || role == "assistant") {
 			history.turns = append(history.turns, classification.ConversationTurn{Role: role, Text: text})
 		}
@@ -405,8 +412,53 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		recordIntentNonUserMessage(&history, role, text)
 	}
 	history.routingInput = routing.Outcome()
+	history.conversationFacts.FailedToolResults = toolFailures.count.Failed
 
 	return history
+}
+
+// intentToolFailures counts failed tool results as live routing counts them
+// in a Chat Completions request: a user message starts a new turn, and a
+// tool message is read with the call it answers.
+type intentToolFailures struct {
+	count classification.ToolFailureCount
+	calls map[string]*llmprotocol.ToolCall
+}
+
+func (f *intentToolFailures) observe(role string, msg IntentMessage, text string) {
+	switch role {
+	case "user":
+		f.count = classification.ToolFailureCount{}
+	case "assistant":
+		for _, raw := range msg.ToolCalls {
+			var call struct {
+				ID       string `json:"id"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			}
+			if json.Unmarshal(raw, &call) == nil {
+				f.calls[call.ID] = &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}
+			}
+		}
+	case "tool":
+		f.count.Observe(classification.ToolResultStatusOf(llmprotocol.OpenAIChatV1, f.calls[msg.ToolCallID], nil, text))
+	}
+}
+
+// intentUserTexts lists the user messages as routing_input reads them, for a
+// walk's fallback; none without a selector.
+func intentUserTexts(selector *routinginput.Selector, messages []IntentMessage) []routinginput.UserText {
+	if selector == nil {
+		return nil
+	}
+	var texts []routinginput.UserText
+	for index, msg := range messages {
+		if strings.ToLower(strings.TrimSpace(msg.Role)) == "user" {
+			texts = append(texts, routinginput.UserText{Index: index, Text: extractIntentMessageRawText(msg.Content), TextOnly: intentMessageTextOnly(msg.Content)})
+		}
+	}
+	return texts
 }
 
 // intentMessageTextOnly reports whether message content is nothing but text,
@@ -546,6 +598,32 @@ func firstSafeImageURL(parts []intentMessageContentPart) string {
 		}
 	}
 	return ""
+}
+
+// intentMessageImages are a message's image parts as canonical base64 data
+// URLs, an empty entry for one that is not inline, which is never fetched,
+// so a rule that reads images is unknown rather than asked about the rest.
+func intentMessageImages(raw json.RawMessage) []string {
+	var parts []intentMessageContentPart
+	if json.Unmarshal(bytesTrimSpace(raw), &parts) != nil {
+		var part intentMessageContentPart
+		if json.Unmarshal(bytesTrimSpace(raw), &part) != nil {
+			return nil
+		}
+		parts = []intentMessageContentPart{part}
+	}
+	var images []string
+	for _, part := range parts {
+		if modality, _ := config.InputModalityForContentPartType(part.Type); modality != config.InputModalityImage {
+			continue
+		}
+		image := ""
+		if part.ImageURL != nil {
+			image, _ = imageurl.CanonicalDataURL(strings.TrimSpace(part.ImageURL.URL))
+		}
+		images = append(images, image)
+	}
+	return images
 }
 
 // countIntentMessageModalities counts image, audio, and video content parts in

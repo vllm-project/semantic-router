@@ -2,16 +2,35 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemonecodec"
 )
 
 const systemOneSignalErrorPrefix = "systemone_"
+
+// unreadToolResult is why a rule that reads the tool results read only part
+// of them: a tool result held content the Router cannot read as text.
+const unreadToolResult = "unreadable_tool_result"
+
+// unreadUserContent is why a text-only jailbreak projection left part of a
+// user message unread.
+const unreadUserContent = "unreadable_user_content"
+
+// unreadImage is why a rule that reads the images read only part of them: an
+// image no decision model decodes, such as a remote URL or a GIF.
+const unreadImage = "unreadable_image"
+
+// unreadVideo is why a rule that reads the videos read only part of them: a
+// video no decision model decodes, such as a remote URL or an AVI.
+const unreadVideo = "unreadable_video"
 
 // SystemOneQuestionID is the ID a rule's question carries on the wire: the
 // Router's own, with a ':', so it is never an ID a model family was trained
@@ -65,18 +84,40 @@ type ConversationTurn struct {
 }
 
 // systemOneReading is what a stage gives its rules to read: the current user
-// turn as it came, the conversation before it, the request's tool results and
-// the current turn's images and videos, and at the response stage the
-// model's answer and its grounding context.
+// turn as it came, the conversation before it, the request's tool results,
+// its images and the current turn's videos, and at the response stage the
+// model's answer and its grounding context. toolResultsIncomplete is whether
+// a tool result held content that is not text, which toolResults leaves out,
+// and imagesIncomplete whether an image is one no decision model decodes,
+// which images leaves out.
+// tailCap keeps the last limit bytes of s behind a truncation marker. A
+// limit of 0, the config default, keeps s whole. The cut backs onto a rune
+// start: a mid-rune cut would read U+FFFD at the seam.
+func tailCap(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	const marker = "[state truncated] "
+	for len(s)-limit < len(s) && !utf8.RuneStart(s[len(s)-limit]) {
+		limit--
+	}
+	return marker + s[len(s)-limit:]
+}
+
 type systemOneReading struct {
-	request     string
-	history     []string
-	turns       []ConversationTurn
-	toolResults []string
-	answer      string
-	context     string
-	images      []string
-	videos      []string
+	request               string
+	requestIncomplete     bool
+	history               []string
+	historyIncomplete     bool
+	turns                 []ConversationTurn
+	toolResults           []string
+	toolResultsIncomplete bool
+	imagesIncomplete      bool
+	answer                string
+	context               string
+	images                []string
+	videos                []string
+	videosIncomplete      bool
 }
 
 // previousAnswer is the last assistant turn before the current user turn,
@@ -97,16 +138,17 @@ func (r systemOneReading) previousAnswer() string {
 func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request {
 	input := rule.Input
 	if !input.ReadsRequest() {
-		return modelservice.Request{State: strings.Join(r.besidesRequest(input), "\n\n")}
+		return modelservice.Request{State: tailCap(strings.Join(r.besidesRequest(input), "\n\n"), input.MaxStateBytes)}
 	}
 	if request, ok := r.spanScan(rule); ok {
 		return request
 	}
 	parts := map[string]string{}
 	add := func(name, text string) {
-		if strings.TrimSpace(text) != "" {
-			parts[name] = text
+		if strings.TrimSpace(text) == "" {
+			return
 		}
+		parts[name] = tailCap(text, input.MaxStateBytes)
 	}
 	if input.History {
 		add("history", strings.Join(r.history, "\n\n"))
@@ -131,7 +173,7 @@ func (r systemOneReading) state(rule config.SystemOneRule) modelservice.Request 
 	if input.Answer {
 		add("answer", r.answer)
 	}
-	request := modelservice.Request{State: r.request}
+	request := modelservice.Request{State: tailCap(r.request, input.MaxStateBytes)}
 	if len(parts) > 0 {
 		add("request", r.request)
 		request = modelservice.Request{Parts: parts}
@@ -181,24 +223,61 @@ func (r systemOneReading) besidesRequest(input config.SystemOneInput) []string {
 	return slices.DeleteFunc(texts, func(text string) bool { return strings.TrimSpace(text) == "" })
 }
 
-// hasInput reports whether a rule has text to read: a rule that leaves the
+// hasInput reports whether a rule has input to read. A rule that leaves the
 // current user turn out has none until the earlier turns or the tool results
-// it reads hold some, and is not asked, so it does not match.
+// it reads hold some. A rule that reads only the user's text, with the earlier
+// turns or tool results it may add, has none when they hold no text: a turn of
+// a picture alone, or of tool results the rule leaves out, gives it nothing to
+// judge. A rule with nothing to read is not asked, so it does not match; one
+// that also reads the answer, the context, earlier turns or media is asked.
 func (r systemOneReading) hasInput(rule config.SystemOneRule) bool {
-	return rule.Input.ReadsRequest() || len(r.besidesRequest(rule.Input)) > 0
+	input := rule.Input
+	if len(r.besidesRequest(input)) > 0 {
+		return true
+	}
+	if !input.ReadsRequest() {
+		return false
+	}
+	if input.Answer || input.Context || input.PreviousTurns > 0 || input.PreviousAnswer ||
+		input.Image || input.Audio || input.Video {
+		return true
+	}
+	return strings.TrimSpace(r.request) != ""
+}
+
+// unread is why a full-coverage rule misses part of its input, which it then
+// resolves as on_unscanned says. Only the input the rule reads counts.
+func (r systemOneReading) unread(rule config.SystemOneRule) string {
+	switch {
+	case !rule.FullCoverage():
+		return ""
+	case r.requestIncomplete && rule.Input.ReadsRequest(), r.historyIncomplete && rule.Input.History:
+		return unreadUserContent
+	case r.toolResultsIncomplete && rule.Input.ToolResults:
+		return unreadToolResult
+	case r.imagesIncomplete && rule.Input.Image:
+		return unreadImage
+	case r.videosIncomplete && rule.Input.Video:
+		return unreadVideo
+	}
+	return ""
 }
 
 // askedRule is one rule a stage asks: a systemone rule, or an application
 // rule compiled into one, which publishes its matches and values under its
 // application type and shares its preset's question with the stage's other
 // rules of the preset. path is where the configuration asks it when that is
-// not a rule (fusion grounding).
+// not a rule (fusion grounding). unread is why it misses part of its input,
+// empty when it reads it all. minCoverage is the share of a long input's
+// windows best_effort must have read to decide on them.
 type askedRule struct {
-	signalType string
-	rule       config.SystemOneRule
-	preset     string
-	failClosed bool
-	path       string
+	signalType  string
+	rule        config.SystemOneRule
+	preset      string
+	failClosed  bool
+	path        string
+	unread      string
+	minCoverage float64
 }
 
 func systemOneAsked(rule config.SystemOneRule) askedRule {
@@ -206,7 +285,7 @@ func systemOneAsked(rule config.SystemOneRule) askedRule {
 }
 
 func applicationAsked(rule config.ApplicationRule) askedRule {
-	return askedRule{signalType: rule.Type, rule: rule.Rule, preset: rule.Preset, failClosed: rule.FailClosed}
+	return askedRule{signalType: rule.Type, rule: rule.Rule, preset: rule.Preset, failClosed: rule.FailClosed, minCoverage: rule.MinCoverage}
 }
 
 // questionID is the ID of the question whose answer the rule reads.
@@ -220,14 +299,25 @@ func (a askedRule) questionID() string {
 // systemOneCall is the rules a stage asks one deployment about one state.
 // requestAlone is whether that state is the request text and nothing else.
 type systemOneCall struct {
-	deployment   string
-	request      modelservice.Request
-	rules        []askedRule
-	requestAlone bool
+	deployment string
+	// fallbackChain includes the primary and is set for configured System One
+	// signals only. For these calls, request keeps the rule's input before any
+	// deployment's routing view is applied.
+	fallbackChain []string
+	request       modelservice.Request
+	rules         []askedRule
+	requestAlone  bool
 	// scan is the guard scan a window call reads a window of, and window
 	// that window's index.
 	scan   *guardScan
 	window int
+	// reread is whether the window reads part of the input again: the larger
+	// window it reads again answered its questions, so its failure leaves
+	// none of them unknown.
+	reread bool
+	// verdict keys the window's answers in windowVerdicts; nil for a call
+	// whose answers are not kept.
+	verdict *windowVerdictKey
 }
 
 // systemOneCalls groups rules by the deployment that answers them and the
@@ -235,7 +325,7 @@ type systemOneCall struct {
 // deployment in one call, a batch with an entry per state when it reads
 // several. A rule that does not read its whole input reads the routing view
 // of its state, and a guard rule whose input is longer than one window reads
-// it in windows: a call per window of the scans returned.
+// it in windows: the scans returned, whose windows windowReaders reads.
 func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading) ([]*systemOneCall, []*guardScan) {
 	var calls []*systemOneCall
 	var scans []*guardScan
@@ -243,7 +333,12 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 		if !reading.hasInput(asked.rule) {
 			continue
 		}
+		asked.unread = reading.unread(asked.rule)
 		deployment := c.Config.SystemOneRuleDeployment(asked.rule)
+		var chain []string
+		if asked.signalType == config.SignalTypeSystemOne && len(c.Config.ModelDeployments[deployment].Fallbacks) != 0 {
+			chain = c.Config.DecisionDeploymentChain(deployment)
+		}
 		state := reading.state(asked.rule)
 		switch {
 		case guardScanned(asked):
@@ -251,21 +346,20 @@ func (c *Classifier) systemOneCalls(rules []askedRule, reading systemOneReading)
 				scan.rules = append(scan.rules, asked)
 				continue
 			}
-		case !asked.rule.FullCoverage():
+		case len(chain) == 0 && !asked.rule.FullCoverage():
 			budget, headShare := c.routingViewBudget(deployment)
 			state = boundedState(state, budget, headShare)
 		}
 		index := slices.IndexFunc(calls, func(call *systemOneCall) bool {
-			return call.scan == nil && call.deployment == deployment && sameState(call.request, state)
+			return call.scan == nil && call.deployment == deployment && sameState(call.request, state) &&
+				(len(call.fallbackChain) > 0) == (len(chain) > 0) &&
+				(len(chain) == 0 || call.rules[0].rule.FullCoverage() == asked.rule.FullCoverage())
 		})
 		if index < 0 {
-			calls = append(calls, &systemOneCall{deployment: deployment, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
+			calls = append(calls, &systemOneCall{deployment: deployment, fallbackChain: chain, request: state, requestAlone: state.Parts == nil && state.State == reading.request})
 			index = len(calls) - 1
 		}
 		calls[index].rules = append(calls[index].rules, asked)
-	}
-	for _, scan := range scans {
-		calls = append(calls, scan.windowCalls()...)
 	}
 	return calls, scans
 }
@@ -278,8 +372,7 @@ func (c *Classifier) guardScanOf(scans *[]*guardScan, deployment string, state m
 			return scan
 		}
 	}
-	size, overlap := c.scanWindowBudget(deployment)
-	scan := newGuardScan(deployment, state, size, overlap)
+	scan := newGuardScan(deployment, state, c.scanWindowBudget(deployment))
 	if scan == nil {
 		return nil
 	}
@@ -339,14 +432,17 @@ type ResponseInput struct {
 	PriorUserMessages []string
 	Turns             []ConversationTurn
 	ToolResultTexts   []string
-	Images            []string
-	Videos            []string
+	// ToolResultsIncomplete is whether a tool result held content that is
+	// not text, which ToolResultTexts leaves out.
+	ToolResultsIncomplete bool
+	Images                []string
+	Videos                []string
 }
 
 func (input ResponseInput) reading() systemOneReading {
 	return systemOneReading{
 		request: input.Request, history: input.PriorUserMessages, turns: input.Turns, toolResults: input.ToolResultTexts,
-		answer: input.Answer, context: input.Context, images: input.Images, videos: input.Videos,
+		toolResultsIncomplete: input.ToolResultsIncomplete, answer: input.Answer, context: input.Context, images: input.Images, videos: input.Videos,
 	}
 }
 
@@ -357,19 +453,64 @@ func newResponseSignalResults() *SignalResults {
 	}
 }
 
+// askSystemOneRules asks rules about reading. Rules read only the images a
+// decision model decodes. A rule with only unreadable input is not asked and
+// resolves as its on_unscanned says.
 func (c *Classifier) askSystemOneRules(ctx context.Context, results *SignalResults, mu *sync.Mutex, rules []askedRule, reading systemOneReading) {
-	calls, scans := c.systemOneCalls(rules, reading)
-	modelservice.Fan(ctx, len(calls), func(i int) {
-		if call := calls[i]; call.scan != nil {
-			response, latency, err := c.sendCall(ctx, call)
-			call.scan.record(call.window, response, err, latency)
-			return
+	reading.images, reading.imagesIncomplete = decodedImages(reading.images)
+	reading.videos, reading.videosIncomplete = decodedVideos(reading.videos)
+	for _, asked := range rules {
+		if reason := reading.unread(asked.rule); reason != "" && !reading.hasInput(asked.rule) {
+			mu.Lock()
+			c.recordGuardRead(results, asked, false)
+			c.resolveUnread(results, asked, c.Config.SystemOneRuleDeployment(asked.rule), reason)
+			mu.Unlock()
 		}
-		c.evaluateSystemOneDeployment(ctx, results, mu, calls[i])
-	})
+	}
+	calls, scans := c.systemOneCalls(rules, reading)
+	work := make([]func(), 0, len(calls))
+	for _, call := range calls {
+		work = append(work, func() { c.evaluateSystemOneDeployment(ctx, results, mu, call) })
+	}
+	readers, release := c.windowReaders(ctx, scans)
+	work = append(work, readers...)
+	modelservice.Fan(ctx, len(work), func(i int) { work[i]() })
+	release()
+	// Signals the request abandoned decide nothing, and the calls they cut
+	// short are no guard's failure.
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	for _, scan := range scans {
 		c.applyScan(results, mu, scan)
 	}
+}
+
+// undecodedImage reports an image no decision model decodes: one that was
+// not inline, an empty entry, or another format such as GIF. The codec is the
+// one that reads the medium downstream, so it answers what decodes.
+func undecodedImage(image string) bool {
+	return !systemonecodec.DecodesImage(image)
+}
+
+// undecodedVideo reports a video no decision model decodes: one that was
+// not inline, an empty entry, or another format.
+func undecodedVideo(video string) bool {
+	return !systemonecodec.DecodesVideo(video)
+}
+
+// decodedImages keeps the images a decision model decodes and reports
+// whether it left one out.
+func decodedImages(images []string) ([]string, bool) {
+	kept := slices.DeleteFunc(slices.Clone(images), undecodedImage)
+	return kept, len(kept) < len(images)
+}
+
+// decodedVideos keeps the videos a decision model decodes and reports
+// whether an input video is one no decision model decodes.
+func decodedVideos(videos []string) ([]string, bool) {
+	kept := slices.DeleteFunc(slices.Clone(videos), undecodedVideo)
+	return kept, len(kept) < len(videos)
 }
 
 func (c *Classifier) evaluateSystemOneDeployment(
@@ -396,6 +537,9 @@ func (c *Classifier) askCall(
 	if observe != nil {
 		observe(response, err)
 	}
+	if modelservice.SignalsAbandoned(ctx) {
+		return
+	}
 	c.applyCall(results, call, response, err, latency)
 }
 
@@ -409,25 +553,53 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	request := call.request
 	request.MaxTokens = c.Config.ModelDeployments[deployment].ScanBudget()
 	request.Questions = callQuestions(rules)
-	remote := c.Config.IsSystemOneDeployment(deployment)
-	callCtx, cancel := systemOneCallContext(ctx, rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
-	defer cancel()
 	started := time.Now()
-	var response modelservice.Response
-	var err error
-	if remote {
-		response, err = askSystemOneDeployment(callCtx, c.systemOne(), deployment, request)
-	} else if card, ok := c.decisionTaskCard(deployment); ok {
-		response, err = modelservice.ExecuteQuestions(callCtx, c.decider(), deployment, card, request)
-	} else if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
-		err = modelservice.ErrUnavailable
-	} else {
-		response, err = c.decider().Decide(callCtx, deployment, request)
+	response, waited, err := c.sendSystemOneQuestions(ctx, call, request)
+	if waited && call.scan != nil {
+		call.scan.markWaited(err == nil)
 	}
-	if err != nil {
+	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
 	return response, time.Since(started).Seconds(), err
+}
+
+func (c *Classifier) sendSystemOneQuestions(ctx context.Context, call *systemOneCall, request modelservice.Request) (modelservice.Response, bool, error) {
+	if len(call.fallbackChain) > 0 {
+		response, err := c.sendSystemOneFailover(ctx, call, request)
+		return response, false, err
+	}
+	deployment := call.deployment
+	remote := c.Config.IsSystemOneDeployment(deployment)
+	// Each attempt has the rules' timeout of its own: a request that waits
+	// for capacity (on_signal_overload) waits within the stage's deadline.
+	return c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
+		callCtx, cancel := systemOneCallContext(asking, call.rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
+		defer cancel()
+		return c.askDecisionDeployment(callCtx, deployment, request)
+	})
+}
+
+func (c *Classifier) askDecisionDeployment(ctx context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
+	if c.Config.IsSystemOneDeployment(deployment) {
+		return askSystemOneDeployment(ctx, c.systemOne(), deployment, request)
+	}
+	if card, ok := c.decisionTaskCard(deployment); ok {
+		return modelservice.ExecuteQuestions(ctx, c.decider(), deployment, card, request)
+	}
+	if c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil {
+		return modelservice.Response{}, modelservice.ErrUnavailable
+	}
+	return c.decider().Decide(ctx, deployment, request)
+}
+
+// answersGivenUp reports a call cancelled because its answers are no longer
+// needed, rather than one its deployment left unanswered: the request
+// abandoned its signals, a window decided the stage's scans, or a scan's
+// re-plan reads the window in a larger one.
+func answersGivenUp(ctx context.Context) bool {
+	cause := context.Cause(ctx)
+	return modelservice.SignalsAbandoned(ctx) || errors.Is(cause, errScanDecided) || errors.Is(cause, errWindowReplaced)
 }
 
 // applyCall applies each rule's answer in one call's response to results.
@@ -445,11 +617,21 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		answer, ok := response.Answers[asked.questionID()]
-		if !ok || answer.Error != "" {
+		// A full-coverage rule reads its whole input, and only an answer that
+		// attests complete coverage proves it did. The card-backed path
+		// derives that requirement in ExecuteQuestions, but a direct decider
+		// can return a plausible answer without covering the input, so its
+		// answer is unread here. A window call has its own coverage check: it
+		// reads one window and applyScan merges what the windows read.
+		uncovered := ok && call.scan == nil && asked.unread == "" && answer.Error == "" && rule.FullCoverage() && answer.InputCoverage != "complete"
+		if !ok || answer.Error != "" || uncovered {
 			c.recordGuardRead(results, asked, false)
 			reason := answer.Error
-			if !ok {
+			switch {
+			case !ok:
 				reason = "missing_answer"
+			case uncovered:
+				reason = "input_coverage_unknown"
 			}
 			if ok && rule.FullCoverage() && unscanned(reason) {
 				switch rule.EffectiveOnUnscanned() {
@@ -464,8 +646,20 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		c.recordGuardRead(results, asked, true)
+		if c.resolveUnreadCall(results, asked, deployment, answer) {
+			continue
+		}
 		c.applyRuleAnswer(results, asked, answer)
 	}
+}
+
+// resolveUnreadCall preserves a positive verdict on the text that was read,
+// just as a matching window decides a longer guard scan.
+func (c *Classifier) resolveUnreadCall(results *SignalResults, asked askedRule, deployment string, answer modelservice.Answer) bool {
+	if asked.unread == "" || (guardScanned(asked) && answer.InputCoverage == "complete" && decidedBy(asked, []windowAnswer{{answer: answer}})) {
+		return false
+	}
+	return c.resolveUnread(results, asked, deployment, asked.unread)
 }
 
 // recordGuardRead counts the coverage of a guard rule that read its input
@@ -554,7 +748,7 @@ func mergeReads(reads, more []string) []string {
 // read the whole input.
 func unscanned(reason string) bool {
 	switch reason {
-	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded", "partial_scan":
+	case "scan_budget_exceeded", "input_coverage_unknown", "max_length_exceeded", "partial_scan", unreadToolResult, unreadUserContent, unreadImage:
 		return true
 	}
 	return false
@@ -572,6 +766,31 @@ func (c *Classifier) applyUnscanned(results *SignalResults, asked askedRule, dep
 	}
 	c.appendPolicyMatches(results, asked)
 	c.recordSignalFailClosed(asked.signalType, asked.rule.Name, deployment, reason)
+}
+
+// resolveUnread resolves a full-coverage rule that read only part of its
+// input as its on_unscanned says, and reports whether that settled it:
+// best_effort leaves the rule to decide on what it read. reason is why part
+// went unread, which a match is logged under and an unknown rule's error
+// names.
+func (c *Classifier) resolveUnread(results *SignalResults, asked askedRule, deployment, reason string) bool {
+	policy := asked.rule.EffectiveOnUnscanned()
+	// A systemone rule reads its input in one call, so best_effort has no
+	// read part to decide on and reads as unknown, as the docs say.
+	if policy == config.SystemOneUnscannedBestEffort && asked.signalType == config.SignalTypeSystemOne {
+		policy = config.SystemOneUnscannedUnknown
+	}
+	switch policy {
+	case config.SystemOneUnscannedMatch:
+		c.applyUnscanned(results, asked, deployment, reason)
+	case config.SystemOneUnscannedNoMatch:
+	case config.SystemOneUnscannedUnknown:
+		results.SignalErrors[signalConfidenceKey(asked.signalType, asked.rule.Name)] = systemOneSignalErrorPrefix + reason
+		c.applyFailClosed(results, asked, deployment, reason)
+	default:
+		return false
+	}
+	return true
 }
 
 // applyFailClosed resolves a fail-closed rule whose deployment gave no answer

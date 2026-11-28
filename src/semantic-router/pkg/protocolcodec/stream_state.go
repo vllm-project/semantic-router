@@ -41,6 +41,15 @@ type streamState struct {
 	imageProgressSeen     map[int]map[llmprotocol.ImageGenerationStatus]bool
 	nextPartialImageIndex map[int]int64
 	reportedUnknownFields map[string]bool
+	// a tool call whose arguments ended before forming a JSON object; only a
+	// max_tokens stop explains one, which the terminal event decides
+	cutToolArguments bool
+	// cutToolArgumentsEvidence names those arguments by length and shape for the
+	// rejection log; the payload itself is not kept
+	cutToolArgumentsEvidence error
+	// the streamed arguments a close replaced when a stream ended mid-call,
+	// kept for the encoders that already sent the fragments as deltas
+	closedToolArguments map[int]string
 }
 
 // appendStreamUnknownFields reports each unknown upstream member once per
@@ -255,6 +264,11 @@ func (state *streamState) prepareStartEvent(event llmprotocol.Event) (llmprotoco
 }
 
 func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.Event, error) {
+	if state.cutToolArguments && isOutputItemEvent(event.Type) {
+		// A limit cuts only the final output, so a later item means the call's
+		// arguments were malformed rather than cut.
+		return llmprotocol.Event{}, nonObjectToolArgumentsErrorWithCause(state.cutToolArgumentsEvidence)
+	}
 	switch event.Type {
 	case llmprotocol.EventOutputItemStarted:
 		return state.startItem(event)
@@ -266,6 +280,15 @@ func (state *streamState) applyItemEvent(event llmprotocol.Event) (llmprotocol.E
 		return state.completeItem(event)
 	}
 	return event, nil
+}
+
+func isOutputItemEvent(eventType llmprotocol.EventType) bool {
+	switch eventType {
+	case llmprotocol.EventOutputItemStarted, llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta,
+		llmprotocol.EventToolCallDelta, llmprotocol.EventImageGenerationProgress, llmprotocol.EventOutputItemCompleted:
+		return true
+	}
+	return false
 }
 
 func (state *streamState) startItem(event llmprotocol.Event) (llmprotocol.Event, error) {
@@ -474,7 +497,8 @@ func (state *streamState) observeReasoningScope(key streamContentKey, event llmp
 		return nil
 	}
 	scope := event.Content.Reasoning
-	if scope != llmprotocol.ReasoningScopeText && scope != llmprotocol.ReasoningScopeSummary {
+	if scope != llmprotocol.ReasoningScopeText && scope != llmprotocol.ReasoningScopeSummary &&
+		scope != llmprotocol.ReasoningScopeRedacted {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,
 			"invalid_reasoning_scope",
@@ -542,6 +566,7 @@ func (state *streamState) recordToolDelta(event llmprotocol.Event) (llmprotocol.
 	}
 	state.toolCalls[event.ItemIndex] = call
 	event.ToolCall.Kind, event.ToolCall.KindKnown, event.ToolCall.ID, event.ToolCall.Name = call.Kind, call.KindKnown, call.ID, call.Name
+	event.ToolCall.Namespace = call.Namespace
 	current := state.toolArguments[event.ItemIndex]
 	if call.Kind == "" && bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
 		current = nil

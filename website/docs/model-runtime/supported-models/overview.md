@@ -78,10 +78,13 @@ rest. A model without spans can still be the decision model: bind `pii` and
 | Model | Parameters | Answers | Spans | Reads | Device memory |
 | --- | --- | --- | --- | --- | --- |
 | [vela3-fast](./vela-3/vela3-fast) | 1.52B | choice, noul, span | router | text | 12 GiB |
+| [vela3.1-fast](./vela-3/vela3-1-fast) | 1.93B | choice, noul, span | router | text | 15 GiB |
 | [vela3-lite](./vela-3/vela3-lite) | 0.903B | choice, noul, score, span | router | text, image, video | 4 GiB |
 | [vela3-mini](./vela-3/vela3-mini) | 4.79B | choice, noul, score, span | router | text, image, video | 16 GiB |
 | [vela3-flash](./vela-3/vela3-flash) | 8.83B | choice, noul, score, span | router | text, image, video | 32 GiB |
 | [vela3-turbo](./vela-3/vela3-turbo) | 27.6B | choice, noul, score, span | router | text, image, video | 72 GiB |
+| [vela3.1-pico-150m](./vela-3/vela3-1-pico-150m) | 0.153B | choice, noul, span | router | text | 2 GiB |
+| [vela3.1-pico-380m](./vela-3/vela3-1-pico-380m) | 0.381B | choice, noul, span | router | text | 3 GiB |
 
 ### Vela 2.0
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 )
 
 // DeploymentStatus is the observable state of one deployment. Restarts counts
@@ -138,7 +139,8 @@ func (l *Lease) Card(ctx context.Context, deployment string) (ModelCard, error) 
 
 // CurrentCard reads ready metadata already observed by this generation's
 // workers. It performs no discovery, waiting or network I/O. A closed lease or
-// a deployment without a compatible ready worker has no current card. Returned
+// a deployment without a compatible ready worker has no current card. A pool's
+// Dtype is empty unless all eligible workers report the same precision. Returned
 // metadata is immutable: callers must not change its nested slices or pointers.
 func (l *Lease) CurrentCard(deployment string) (ModelCard, bool) {
 	if l == nil {
@@ -151,15 +153,7 @@ func (l *Lease) CurrentCard(deployment string) (ModelCard, bool) {
 		return ModelCard{}, false
 	}
 	if m.pool != nil {
-		ready, _ := m.pool.readyWorkers()
-		if len(ready) == 0 {
-			return ModelCard{}, false
-		}
-		m.pool.mu.Lock()
-		card := *m.pool.baseline
-		m.pool.mu.Unlock()
-		card.ID, card.Ready, card.Status = deployment, true, "ready"
-		return card, true
+		return m.pool.currentCard()
 	}
 	m.group.mu.Lock()
 	defer m.group.mu.Unlock()
@@ -245,7 +239,8 @@ func (l *Lease) lookup(deployment string) (member, bool) {
 func (l *Lease) call(deployment string) (member, error) {
 	m, ok := l.lookup(deployment)
 	if !ok {
-		requestsTotal.WithLabelValues(deployment, ErrorReason(ErrUnknownDeployment)).Inc()
+		// The name can be caller text: a label per name would grow without bound.
+		requestsTotal.WithLabelValues(consts.UnknownLabel, ErrorReason(ErrUnknownDeployment)).Inc()
 		return member{}, ErrUnknownDeployment
 	}
 	if m.pool != nil {
@@ -279,6 +274,7 @@ func (l *Lease) observe(m member, deployment, surface string, started time.Time,
 // bundle when there is one; the bundle answers it together with the stage's
 // other questions to the same model.
 func (l *Lease) Decide(ctx context.Context, deployment string, request Request) (Response, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return Response{}, err
@@ -314,6 +310,7 @@ func (l *Lease) Decide(ctx context.Context, deployment string, request Request) 
 
 // Classify runs a classify request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Classify(ctx context.Context, deployment string, request ClassifyRequest) (ClassifyResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return ClassifyResponse{}, err
@@ -341,6 +338,7 @@ func (l *Lease) Classify(ctx context.Context, deployment string, request Classif
 
 // Embed runs an embeddings request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedRequest) (EmbedResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return EmbedResponse{}, err
@@ -353,6 +351,7 @@ func (l *Lease) Embed(ctx context.Context, deployment string, request EmbedReque
 
 // Rerank runs a rerank request on a deployment, inside the context's bundle when there is one.
 func (l *Lease) Rerank(ctx context.Context, deployment string, request RerankRequest) (RerankResponse, error) {
+	ctx = WithMeterDeployment(ctx, deployment)
 	m, err := l.call(deployment)
 	if err != nil {
 		return RerankResponse{}, err

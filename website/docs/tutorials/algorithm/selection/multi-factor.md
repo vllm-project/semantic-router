@@ -89,8 +89,9 @@ session protection, and dispatch. These steps cannot restore a model excluded
 by an earlier quality or cost band. Recorded scores may still include excluded
 models to explain the selection.
 
-Preview returns `selection_trace` for lexicographic selection, and Insights
-saves the same structure under `route_diagnostics.selection_trace`:
+Preview returns `selection_trace` for lexicographic selection, and the request
+record that the Dashboard's **Requests** page shows saves the same structure
+under `route_diagnostics.selection_trace`:
 
 - the stages reached and skipped, with measurement coverage and the available
   values;
@@ -184,7 +185,10 @@ for operator-defined evidence.
 | Neither known | The configured per-million-token rates |
 
 The same request mix feeds the cost factor, `max_cost_per_1m` and the
-`cheapest` fallback.
+`cheapest` fallback. A candidate without rates has no cost for any of them,
+but a Model without `pricing` may carry its catalog
+[list price](../../../installation/catalog-backed-models#list-prices), which
+they read like any other rates.
 
 ```yaml
 multi_factor:

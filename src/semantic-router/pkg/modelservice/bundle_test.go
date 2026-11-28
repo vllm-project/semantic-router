@@ -3,10 +3,29 @@ package modelservice
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 )
+
+// A call in a bundle whose base the request abandoned is abandoned before
+// its own context says so: the exchange that carries it ends with the base.
+func TestACallInAnAbandonedBundleIsAbandoned(t *testing.T) {
+	base, abandon := context.WithCancelCause(context.Background())
+	stage, _ := WithBundle(base, 0)
+	call := context.WithoutCancel(stage)
+	if SignalsAbandoned(call) {
+		t.Fatal("the call was abandoned before its bundle")
+	}
+	abandon(fmt.Errorf("refused for its length: %w", ErrSignalsAbandoned))
+	if !SignalsAbandoned(call) {
+		t.Fatal("a call in an abandoned bundle was not abandoned")
+	}
+	if SignalsAbandoned(context.WithoutCancel(base)) {
+		t.Fatal("a call in no bundle was abandoned without its own context")
+	}
+}
 
 func TestBundleSendsOneCallForEveryParticipant(t *testing.T) {
 	runtime := &surfaceRuntime{}

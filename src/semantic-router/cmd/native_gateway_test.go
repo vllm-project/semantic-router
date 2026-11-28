@@ -3,12 +3,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"math/big"
@@ -318,6 +320,40 @@ func TestListenNativeBindsTheOverrideAddress(t *testing.T) {
 	}
 }
 
+// The listener's timeout bounds reading a request body: a client that stalls
+// it gets 408 instead of holding the connection.
+func TestListenNativeBoundsAStalledBodyByTheListenerTimeout(t *testing.T) {
+	cfg := backendConfig(t, "http://127.0.0.1:1")
+	cfg.Listeners[0].Port = 0
+	cfg.Listeners[0].Timeout = "200ms"
+	listeners, err := listenNative(cfg, "127.0.0.1", gateway.Options{Serving: gateway.Static(gateway.Serving{})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := listeners[0]
+	go func() { _ = gateway.Serve(l.server, l.listener) }()
+	defer func() { _ = l.server.Close() }()
+	conn, err := net.Dial("tcp", l.listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	if err = conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = conn.Write([]byte("POST /v1/chat/completions HTTP/1.1\r\nHost: localhost\r\nContent-Length: 100\r\n\r\n{")); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatalf("no answer to a stalled body: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestTimeout {
+		t.Fatalf("stalled body answered %d, want 408", resp.StatusCode)
+	}
+}
+
 func TestListenerServerOptionsLoadTheListenersCertificate(t *testing.T) {
 	cfg := backendConfig(t, "http://127.0.0.1:1")
 	cfg.ConfigBaseDir = t.TempDir()
@@ -344,6 +380,38 @@ func TestListenerServerOptionsLoadTheListenersCertificate(t *testing.T) {
 	spec.TLS = &config.ListenerTLS{CertFile: "missing.crt", KeyFile: "tls.key"}
 	if _, err := listenerServerOptions(cfg, spec); err == nil || !strings.Contains(err.Error(), "tls:") {
 		t.Fatalf("a certificate that cannot load must fail the listener, got %v", err)
+	}
+}
+
+func TestListenerServerOptionsLoadDockerMountedTLSFiles(t *testing.T) {
+	base, certDir, keyDir := t.TempDir(), t.TempDir(), t.TempDir()
+	certPEM, keyPEM := selfSignedPair(t)
+	certFile, keyFile := filepath.Join(certDir, "tls.crt"), filepath.Join(keyDir, "tls.key")
+	if err := os.WriteFile(certFile, certPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := json.Marshal(map[string]string{
+		"certs/tls.crt":          certFile,
+		"/original/keys/tls.key": keyFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_LISTENER_TLS_PATHS", string(paths))
+	cfg := &config.RouterConfig{ConfigBaseDir: base}
+	spec := config.Listener{TLS: &config.ListenerTLS{
+		CertFile: " certs/tls.crt ",
+		KeyFile:  "/original/keys/tls.key",
+	}}
+	opts, err := listenerServerOptions(cfg, spec)
+	if err != nil {
+		t.Fatalf("the listener must load its pair through the Docker mounts: %v", err)
+	}
+	if opts.TLS == nil || opts.TLS.GetCertificate == nil {
+		t.Fatalf("options = %+v, want TLS", opts)
 	}
 }
 

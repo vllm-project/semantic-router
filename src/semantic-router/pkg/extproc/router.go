@@ -20,6 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/kvtransfer"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/maskingregistry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -33,6 +34,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/systemone"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tokencount"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -42,13 +44,18 @@ type OpenAIRouter struct {
 	KVHandoff KVHandoffPlanner
 
 	nativeExecutors map[string]*systemone.Executor
+	// maskingIdentities are the opened masking identity namespaces by name.
+	maskingIdentities map[string]*maskingregistry.Identity
 	// signals is the signal runtime this router extracts signals with; a
 	// later generation can share it.
 	signals *signalRuntime
 	// decisionDecider answers decision selectors; nil uses the process-wide model runtime manager.
 	decisionDecider modelservice.Decider
 	// systemOneDecider answers decision selectors on systemone deployments.
-	systemOneDecider     modelservice.Remote
+	systemOneDecider modelservice.Remote
+	// tokenizers loads the tokenizers that count prompts for the context
+	// window check; nil uses the process-wide registry.
+	tokenizers           *tokencount.Registry
 	decisionCards        map[string]modelservice.ModelCard
 	Embeddings           *embedding.Set
 	serviceEmbeddings    *embedding.Set
@@ -111,6 +118,11 @@ type OpenAIRouter struct {
 	FallbackOrchestrator        *fallback.Orchestrator
 	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCaller              fallbackTransportCaller
+
+	// replayAggregates and replayRuns keep this generation's recent answers to
+	// the replay reads that scan the whole history.
+	replayAggregates replayReadCache[routerReplayAggregateResponse]
+	replayRuns       replayReadCache[replayRunList]
 
 	routerLearningMu      sync.Mutex
 	routerLearningRuntime *routerLearningRuntime

@@ -17,8 +17,8 @@ translation:
 ## 前置条件
 
 - Linux，以及你计划运行的 vLLM 发行版所支持的 NVIDIA GPU；
-- 使用当前 Semantic Router CUDA 镜像时需要 x86-64 主机；
-- Router 镜像需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
+- x86-64 或 Arm64 主机；
+- Router 镜像在 x86-64 上需要计算能力为 7.0 或更高的 GPU（Volta 及更新架构），在 Arm64 上需要 8.0 或更高，这是其 PyTorch 构建（CUDA 12.8）包含的最旧架构；
 - NVIDIA 驱动，以及为在 CUDA 上运行的 Router 侧模型传入 Router 容器的 GPU；
 - Docker 和 NVIDIA Container Toolkit；
 - 有足够的 GPU 内存用于 vLLM 模型、KV cache 以及任何 Router 侧模型；以及

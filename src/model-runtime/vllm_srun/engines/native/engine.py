@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from functools import partial
@@ -12,7 +13,7 @@ from typing import Any, TypeVar, cast
 import torch
 from torch import nn
 
-from ...accel import onednn
+from ...accel import onednn, zentorch
 from ...accel.kernels import CONTIGUOUS
 from ...plugins.base import (
     Accelerator,
@@ -51,7 +52,8 @@ from .models.forest import ForestShape
 from .models.gated_lora import Gate, attach_gated
 from .models.lora import attach, fold_scaling
 from .models.packed import Packed, packed_unavailable
-from .models.qwen3_5 import noncausal_masks, rope_index
+from .models.qwen3_5 import Qwen3_5Backbone, noncausal_masks, rope_index
+from .models.qwen3_5_decode import greedy, pad_batch
 from .models.tree import Tree
 from .reduced import REDUCED_AUTOCAST, linear_bytes, reduced_view, unavailable
 from .weights import (
@@ -93,6 +95,44 @@ def graph_receipt(graphs: dict[str | None, EncoderGraphs]) -> dict[str, Any]:
     return out
 
 
+def language_model_head(backbone: nn.Module, spec: ModelSpec) -> torch.Tensor | None:
+    """The spec's LM head on ``backbone``'s device and embedding dtype, or None when it names none.
+
+    A tied head is the input embedding itself. A grafted head is read from its file and cast;
+    it is not a backbone parameter, so the base package's parameter count is unchanged.
+    """
+    head = spec.backbone.lm_head
+    if head is None:
+        return None
+    embedding = getattr(backbone, "embed_tokens", None)
+    if not isinstance(embedding, nn.Embedding):
+        raise ValueError(f"{spec.name} has an LM head and no input embedding")
+    weight = embedding.weight
+    if head.tied:
+        if spec.backbone.config.get("tie_word_embeddings", True) is False:
+            raise ValueError(
+                f"{spec.name} refuses a tied LM head on an untied embedding"
+            )
+        return weight
+    if head.weight_file is None:
+        raise ValueError(f"{spec.name} grafted LM head names no weight file")
+    from safetensors.torch import load_file
+
+    try:
+        stored = load_file(str(head.weight_file))[head.tensor]
+    except (OSError, KeyError) as exc:
+        raise ValueError(
+            f"{spec.name} grafted LM head {head.weight_file.name} has no {head.tensor}"
+        ) from exc
+    grafted = stored.to(device=weight.device, dtype=weight.dtype)
+    if tuple(grafted.shape) != tuple(weight.shape):
+        raise ValueError(
+            f"{spec.name} grafted LM head shape {tuple(grafted.shape)} "
+            f"does not match the embedding {tuple(weight.shape)}"
+        )
+    return grafted
+
+
 class NativeEngineModel(EngineModel):
     spec: ModelSpec
 
@@ -123,6 +163,9 @@ class NativeEngineModel(EngineModel):
         self.options = options
         # Gated adapters wrap the placed backbone's Linears before any view or layout copies them.
         self.gate = Gate()
+        self.lm_head = language_model_head(backbone, spec)
+        # generate runs on the request thread, forwards on the worker. One lock, so they never share the backbone.
+        self._backbone_lock = threading.Lock()
         self.gated = (
             attach_gated(backbone, spec.backbone.gated, self.gate, self.device)
             if spec.backbone.gated
@@ -152,8 +195,13 @@ class NativeEngineModel(EngineModel):
             }
         )
         self.kernels = accelerator.kernels(device_info)
-        self.kernels.allow_approximate = (
-            not options.exact_kernels_only and spec.dtype.approximate_kernels
+        # Consent is per device class: a record on one says nothing about the
+        # other, and a frozenset consents to some slots only. The accelerator
+        # scope narrows consent further when a record covers only some of the
+        # device class's accelerators.
+        self.kernels.consent(
+            spec.dtype.consents_on(accelerator.name, self.device.type == "cpu"),
+            options.exact_kernels_only,
         )
         self.kernels.use_variants(spec.kernel_variants)
         fused_int4 = self.kernels.allow_approximate and torch.version.hip is None
@@ -167,9 +215,12 @@ class NativeEngineModel(EngineModel):
                 nvfp4.append(layer)
         self.fast: dict[str, Any] = {"lora_folded": folded} if folded else {}
         self.linear = self.kernels.select("linear")
-        if self.linear.variant is not None:
+        if self._lays_out_linears:
+            laid: dict[tuple[int, int | None], nn.Module] = (
+                {}
+            )  # one layout per shared weight
             for module in (backbone, *self.branches.values(), *self.towers.values()):
-                lay_out_linears(module, self.linear.fn)
+                lay_out_linears(module, self.linear.fn, laid)
         self._cpu_threads = options.threads or torch.get_num_threads()
         # Contiguous GeGLU, norms and unpadded uniform attention grids
         # (``packed(uniform=True)``) compute each row the same in any batch;
@@ -504,9 +555,7 @@ class NativeEngineModel(EngineModel):
         """
         resolver = self.threads_resolver
         if resolver is None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(self._cpu_threads)
-            return run()
+            return self._untimed(run)
         count = resolver.pick(tokens)
         if resolver.adopted:
             # The table is final — one pass, nothing left to measure.
@@ -537,6 +586,12 @@ class NativeEngineModel(EngineModel):
         run()
         resolver.record_base(tokens, (time.perf_counter() - started) * 1000.0)
         return result
+
+    def _untimed(self, run: Callable[[], _T]) -> _T:
+        """One pass at the configured count, which the thread resolver never times."""
+        if self.device.type == "cpu":
+            adaptive_threads.CpuTeam.apply(self._cpu_threads)
+        return run()
 
     def _state_once(self) -> models.StateOnceBackbone:
         backbone = self.backbone
@@ -854,7 +909,44 @@ class NativeEngineModel(EngineModel):
             with self.gate.on(adapter):
                 return self._forward(batch)
 
-        return self._with_threads(batch.input_ids.numel(), run)
+        tokens = batch.input_ids.numel()
+        if self.lm_head is None:
+            return self._with_threads(tokens, run)
+        with self._backbone_lock:
+            return self._with_threads(tokens, run)
+
+    def generate(
+        self,
+        input_ids: Sequence[Sequence[int]],
+        *,
+        max_new_tokens: int,
+        eos_token_id: int | None,
+        pad_token_id: int,
+    ) -> list[list[int]]:
+        """Greedy tokens from the LM head, every adapter off, causal even on a noncausal backbone."""
+        weight = self.lm_head
+        backbone = self.backbone
+        if weight is None or not isinstance(backbone, Qwen3_5Backbone):
+            raise NotImplementedError(
+                f"{self.spec.name} has no Qwen3.5 generation path"
+            )
+        ids, mask = pad_batch(input_ids, pad_token_id, self.device)
+
+        def run() -> list[list[int]]:
+            with self.gate.on(None), torch.inference_mode(), self.autocast():
+                return greedy(
+                    backbone,
+                    weight,
+                    ids,
+                    mask,
+                    max_new_tokens,
+                    eos_token_id,
+                    pad_token_id,
+                )
+
+        # Decoding is not a forward: the thread resolver does not time it.
+        with self._backbone_lock:
+            return self._untimed(run)
 
     def _forward(self, batch: ForwardBatch) -> ForwardOutput:
         if batch.shared_prefix:
@@ -1038,13 +1130,7 @@ class NativeEngineModel(EngineModel):
         count and stay out of the token-size learning.
         """
         if batch.tower is not None:
-            if self.device.type == "cpu":
-                adaptive_threads.CpuTeam.apply(
-                    self.threads_resolver.base
-                    if self.threads_resolver is not None
-                    else self._cpu_threads
-                )
-            return self._encode(batch)
+            return self._untimed(lambda: self._encode(batch))
         return self._with_threads(batch.input_ids.numel(), lambda: self._encode(batch))
 
     def _encode(self, batch: EncoderBatch) -> EncoderOutput:
@@ -1162,6 +1248,23 @@ class NativeEngineModel(EngineModel):
         adaptive_threads.CpuTeam.apply(self._cpu_threads)
         return onednn.invariant(self._packed())
 
+    @property
+    def _lays_out_linears(self) -> bool:
+        """A variant, or an approximate linear the model consents to, lays the weights
+        out once at load; the reference keeps ``nn.Linear``."""
+        return self.linear.variant is not None or not self.linear.exact
+
+    def _laid_out(self) -> list[onednn.PackedLinear | zentorch.ZentorchLinear]:
+        """Every laid-out linear once (branches share the backbone's layers): its weight is a
+        buffer, counted through ``weight_elements``."""
+        unique = {
+            id(layer): layer
+            for module in self._modules()
+            for layer in module.modules()
+            if isinstance(layer, (onednn.PackedLinear, zentorch.ZentorchLinear))
+        }
+        return list(unique.values())
+
     def _packed(self) -> list[onednn.PackedLinear]:
         return [
             layer
@@ -1182,7 +1285,7 @@ class NativeEngineModel(EngineModel):
         return GATED_DELTA_ELEMENTS // width
 
     def parameter_count(self) -> int:
-        packed = sum(layer.weight_elements for layer in self._packed())
+        packed = sum(layer.weight_elements for layer in self._laid_out())
         packed += sum(layer.weight_elements for layer in self._quantized())
         return packed + sum(parameter.numel() for parameter in self._parameters())
 
@@ -1190,24 +1293,35 @@ class NativeEngineModel(EngineModel):
         copy_bytes = sum(linear_bytes(view) for view in self.reduced.values())
         packed = sum(
             layer.packed.numel() * layer.packed.element_size()
-            for layer in self._packed()
+            for layer in self._laid_out()
         )
         packed += sum(layer.stored_bytes() for layer in self._quantized())
+        head = self.lm_head
+        embed = getattr(self.backbone, "embed_tokens", None)
+        extra = 0
+        if (
+            head is not None
+            and embed is not None
+            and head.data_ptr() != embed.weight.data_ptr()
+        ):
+            extra = head.numel() * head.element_size()
         return (
             copy_bytes
             + packed
+            + extra
             + sum(p.numel() * p.element_size() for p in self._parameters())
         )
 
     def place(self, module: ModuleT) -> ModuleT:
         """A head on this device, its linear layers laid out like the backbone's."""
         module = module.to(self.device)
-        if self.linear.variant is not None:
+        if self._lays_out_linears:
             lay_out_linears(module, self.linear.fn)
         return module
 
     def close(self) -> None:
         self.backbone = None  # type: ignore[assignment]  # close() releases the backbone; a closed model runs nothing
+        self.lm_head = None
         self.branches = {}
         self.towers = {}
         self.reduced = {}

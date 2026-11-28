@@ -153,3 +153,70 @@ func TestSystemOneDeploymentFailuresLeaveItsSignalsUnknown(t *testing.T) {
 		t.Fatalf("the default timeout bounds a remote call, took %s", took)
 	}
 }
+
+// A systemone span rule masking reads asks for the whole text, whatever
+// coverage the rule asks for a decision, and its spans come back under the
+// rule's name.
+func TestSystemOneSpanRuleSpansReadTheWholeText(t *testing.T) {
+	remote := newFakeSystemOne()
+	remote.card = modelservice.RemoteCard("vllm-sr/d3-ultra", []string{"choice", "noul", "score", "span"}, nil)
+	remote.answers["systemone:customer_account"] = modelservice.Answer{
+		Type: "span", InputCoverage: "complete",
+		Spans: []modelservice.Span{{Label: "account number", Start: 12, End: 19, Text: "88-1910", Probability: 0.9}},
+	}
+	classifier := systemOneTestClassifier(newLocalDecider(), remote, 0, 0)
+	classifier.Config.SystemOneRules = append(classifier.Config.SystemOneRules, config.SystemOneRule{
+		Name: "customer_account", Deployment: "hosted-d3",
+		Question: config.SystemOneQuestion{Type: "span", Instructions: "Which spans are account numbers?", Labels: []config.SystemOneOption{{Key: "account number"}}},
+	})
+	spans, err := classifier.RuleSpans(t.Context(), config.SignalTypeSystemOne, "customer_account", "Paid for #  88-1910 today")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(spans) != 1 || spans[0].Label != "customer_account" || spans[0].Text != "88-1910" {
+		t.Fatalf("spans = %+v, want the account number under the rule's name", spans)
+	}
+	question := remote.asked[len(remote.asked)-1].Questions[0]
+	if question.ID != "systemone:customer_account" || question.Truncate {
+		t.Fatalf("masking asked %+v, want the rule's question over the whole text", question)
+	}
+	// A span outside the text fails the read rather than being clamped onto
+	// a range that leaves part of the value in clear text.
+	for _, bad := range [][2]int{{-1, 3}, {12, 99}, {5, 5}} {
+		remote.answers["systemone:customer_account"] = modelservice.Answer{
+			Type: "span", InputCoverage: "complete",
+			Spans: []modelservice.Span{{Label: "account number", Start: bad[0], End: bad[1], Text: "88-1910", Probability: 0.9}},
+		}
+		if spans, err := classifier.RuleSpans(t.Context(), config.SignalTypeSystemOne, "customer_account", "Paid for #  88-1910 today"); err == nil {
+			t.Fatalf("span %v read as %+v, want an error", bad, spans)
+		}
+	}
+}
+
+// A guard rule the plugins ask reads the whole command, and matches only by
+// its own name: a choice answer that names one of its options without the
+// rule matching is no match.
+func TestSystemOneGuardRuleMatchesReadTheWholeText(t *testing.T) {
+	remote := newFakeSystemOne()
+	remote.answers["systemone:deletes_data"] = modelservice.Answer{Type: "noul", Noul: 0.9, InputCoverage: "complete"}
+	remote.answers["systemone:support_team"] = modelservice.Answer{Type: "choice", Choice: "engineering", Probabilities: map[string]float64{"billing": 0.1, "engineering": 0.9}, InputCoverage: "complete"}
+	classifier := systemOneTestClassifier(newLocalDecider(), remote, 0, 0)
+	classifier.Config.SystemOneRules = append(classifier.Config.SystemOneRules, config.SystemOneRule{
+		Name: "deletes_data", Deployment: "hosted-d3", Question: config.SystemOneQuestion{Type: "noul", Instructions: "Does this delete data?"},
+	})
+	matched, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "deletes_data", "rm -rf /srv/data")
+	if err != nil || !matched {
+		t.Fatalf("matched = %v, %v; want the noul rule to match", matched, err)
+	}
+	if question := remote.asked[len(remote.asked)-1].Questions[0]; question.Truncate {
+		t.Fatalf("guard asked %+v, want the whole command", question)
+	}
+	// support_team has no labels: its answer names an option, never the rule.
+	if matched, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "support_team", "fix the login"); err != nil || matched {
+		t.Fatalf("a choice rule without labels matched = %v, %v", matched, err)
+	}
+	delete(remote.answers, "systemone:deletes_data")
+	if _, err := classifier.RuleMatches(t.Context(), config.SignalTypeSystemOne, "deletes_data", "rm -rf /srv/data"); err == nil {
+		t.Fatal("a missing answer read as no match")
+	}
+}

@@ -35,9 +35,16 @@ class StorageInventoryTests(unittest.TestCase):
             ("./pkg/vectorstore", "postgres"),
             ("./pkg/contextcompression", "redis"),
             ("./pkg/responsestore", "redis"),
+            ("./pkg/classification", "redis"),
         ):
             with self.subTest(package=package):
                 self.assertTrue(inventory[package][backend])
+
+    def test_shared_guard_verdicts_require_redis(self):
+        self.assertIn(
+            "TestRedisSharedGuardVerdictsAcrossReplicas",
+            go_storage_tests()["./pkg/classification"]["redis"],
+        )
 
     def test_exact_valkey_cases_are_required_service_tests(self):
         inventory = go_storage_tests()["./pkg/cache"]["valkey"]
@@ -54,8 +61,14 @@ class StorageInventoryTests(unittest.TestCase):
         self.assertCountEqual(
             inventory,
             [
+                "TestPostgresHarnessQueriesIntegration",
                 "TestPostgresMetadataIntegration",
                 "TestPostgresProviderCacheIntegration",
                 "TestPostgresQueryBeyondTenThousandIntegration",
+                "TestPostgresQueryRunIntegration",
+                "TestPostgresReviewMetadataScanIntegration",
+                "TestPostgresReviewQueriesIntegration",
+                "TestPostgresServedModelIntegration",
+                "TestPostgresTurnQueriesIntegration",
             ],
         )

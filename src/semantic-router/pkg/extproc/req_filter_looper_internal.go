@@ -8,6 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
 // getReasoningInfoFromDecision extracts reasoning configuration from a decision for a specific model.
@@ -119,7 +121,7 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	}
 	common.HeaderMutation.RemoveHeaders = append(
 		common.HeaderMutation.RemoveHeaders,
-		providerBoundRemovals()...,
+		providerBoundRemovals(ctx.identity)...,
 	)
 	return r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 }
@@ -158,6 +160,16 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 
 	r.prepareLooperInternalContext(decisionName, decision, modelName, ctx)
 	useReasoning, reasoningEffort := r.getReasoningInfoFromDecision(decision, modelName)
+	if useReasoning {
+		// The same rule the single-model path applies: a request that states no
+		// reasoning preference and sets an output limit below
+		// providers.defaults.reasoning_min_output_tokens would spend the whole
+		// budget thinking, so this hop stages reasoning off instead.
+		if reason := r.unstatedReasoningOffReason(ctx, modelName); reason != "" {
+			useReasoning, reasoningEffort = false, ""
+			ctx.VSRReasoningMode, ctx.VSRReasoningReason = "off", reason
+		}
+	}
 	applyLooperReasoningContext(ctx, modelName, useReasoning, reasoningEffort)
 
 	request, err := r.parseLooperRequestForPlugins(ctx)
@@ -319,5 +331,28 @@ func (r *OpenAIRouter) startLooperInternalReplay(
 	decisionName string,
 ) {
 	ctx.RouterReplayID = ""
-	r.startRouterReplay(ctx, "ReMoM", modelName, decisionName)
+	// A hop's record opens before its dispatch, from a request that already
+	// carries the reasoning controls the hop's decision wrote for its model.
+	ctx.dispatchReasoningMode, ctx.dispatchReasoningEffort = "", ""
+	if ctx.SemanticRequest != nil {
+		ctx.dispatchReasoningEffort = ctx.SemanticRequest.ReasoningEffort
+	}
+	if decisionName != "" && r.getModelReasoningFamily(modelName) != nil {
+		ctx.dispatchReasoningMode = ctx.VSRReasoningMode
+	}
+	r.startRouterReplay(ctx, looperHopLabel(ctx.VSRSelectedDecision), modelName, decisionName)
+	// A hop's usage and price belong to the request that made it, whose
+	// record counts the call; this one says so rather than reading as unpriced.
+	r.writeRouterReplayUsageCost(ctx, routerreplay.UsageCost{
+		CostAccounting: &store.CostAccounting{UnpricedReason: store.UnpricedCountedInParent},
+	})
+}
+
+// looperHopLabel is what a hop's record names as its requested model, since
+// no client asked for one: the algorithm of the decision that made the call.
+func looperHopLabel(decision *config.Decision) string {
+	if decision == nil || decision.Algorithm == nil || decision.Algorithm.Type == "" {
+		return "Looper"
+	}
+	return config.DecisionAlgorithmDisplayName(decision.Algorithm.Type)
 }

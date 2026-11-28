@@ -66,7 +66,7 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from embed_corpus import PARAGRAPHS, QUERIES, RERANK, texts
-from legacy_parity import REPO, flat_copy, percentile, read_lines
+from legacy_parity import REPO, flat_copy, percentile, percentile_or_none, read_lines
 
 GO_TEST = "zz_legacy_embed_dump_test.go"
 EMBEDDING = (
@@ -861,19 +861,31 @@ def run_ab(args: argparse.Namespace) -> None:
 
     report: dict[str, Any] = {}
     for spec in specs:
+        if not requests[spec["Job"]]:
+            continue
         for _ in range(3):
             call_runtime(spec, 0)
     for round_index in range(args.rounds):
         for spec in specs:
             entry = report.setdefault(
-                spec["Job"], {"legacy": [], "runtime": [], "ratio": []}
+                spec["Job"],
+                {
+                    "legacy": [],
+                    "runtime": [],
+                    "ratio": [],
+                    "total_pairs": 0,
+                    "failed_pairs": 0,
+                },
             )
             for index in range(len(spec["Inputs"])):
                 legacy_ns, runtime_ns = pair(spec, index, round_index % 2 == 0)
+                entry["total_pairs"] += 1
                 if legacy_ns > 0 and runtime_ns > 0:
                     entry["legacy"].append(legacy_ns)
                     entry["runtime"].append(runtime_ns)
                     entry["ratio"].append(legacy_ns / runtime_ns)
+                else:
+                    entry["failed_pairs"] += 1
         for spec in specs if args.concurrency else ():
             rates = report[spec["Job"]].setdefault(
                 "throughput", {"legacy": [], "runtime": []}
@@ -901,6 +913,8 @@ def run_ab(args: argparse.Namespace) -> None:
     summary = {
         job: {
             "pairs": len(values["ratio"]),
+            "total_pairs": values.get("total_pairs", 0),
+            "failed_pairs": values.get("failed_pairs", 0),
             "legacy": latency([{"latency_ns": values["legacy"]}]),
             "runtime": latency([{"latency_ns": values["runtime"]}]),
             "median_speedup": (
@@ -933,9 +947,12 @@ def run_ab(args: argparse.Namespace) -> None:
     print(json.dumps(summary))
 
 
-def latency(lines: Iterable[dict[str, Any]]) -> dict[str, float]:
+def latency(lines: Iterable[dict[str, Any]]) -> dict[str, float | None]:
     values = [ns for line in lines for ns in line["latency_ns"]]
-    return {"p50_ms": percentile(values, 0.5), "p95_ms": percentile(values, 0.95)}
+    return {
+        "p50_ms": percentile_or_none(values, 0.5),
+        "p95_ms": percentile_or_none(values, 0.95),
+    }
 
 
 def intervals(values: dict[str, Any], replicates: int = 2000) -> dict[str, list[float]]:

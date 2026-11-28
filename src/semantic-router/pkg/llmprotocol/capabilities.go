@@ -59,6 +59,18 @@ const (
 	CapabilityCustomTools
 	CapabilityTextVerbosity
 	CapabilityReasoningContinuity
+	CapabilitySamplingLogitBias
+	// CapabilityDeveloperRole is a backend reading a developer message as an
+	// instruction, the way OpenAI reads it. Models only declare it
+	// unsupported; no request requires it.
+	CapabilityDeveloperRole
+	// CapabilityServerTools covers tools the provider runs or defines itself
+	// and the blocks they leave in a reply, such as Anthropic's web search.
+	CapabilityServerTools
+	// CapabilitySpeechGeneration covers the Speech API text-to-speech
+	// operation (POST /v1/audio/speech). It is not interchangeable with
+	// audio input or audio output.
+	CapabilitySpeechGeneration
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -88,7 +100,7 @@ func (set CapabilitySet) Empty() bool { return set.bits == 0 }
 // (tools/streaming/reasoning/caching) is protocol concern rather than a task
 // modality, so model capability declarations are compared against this mask.
 var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
-	CapabilityAudioInput | CapabilityAudioOutput |
+	CapabilityAudioInput | CapabilityAudioOutput | CapabilitySpeechGeneration |
 	CapabilityVideoInput | CapabilityVideoOutput |
 	CapabilityFileInput | CapabilityFileOutput
 
@@ -130,6 +142,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
 		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilitySamplingLogitBias, "sampling_logit_bias"},
 		{CapabilityRepetitionPenalty, "repetition_penalty"},
 		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
@@ -147,6 +160,9 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityCustomTools, "custom_tools"},
 		{CapabilityTextVerbosity, "text_verbosity"},
 		{CapabilityReasoningContinuity, "reasoning_continuity"},
+		{CapabilityDeveloperRole, "developer_role"},
+		{CapabilityServerTools, "server_tools"},
+		{CapabilitySpeechGeneration, "speech_generation"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -165,6 +181,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
 		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
+	}
+	if request.SpeechGeneration != nil {
+		required.bits |= CapabilitySpeechGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
@@ -200,6 +219,9 @@ func requestSamplingCapabilities(request Request) Capability {
 	var required Capability
 	if request.Sampling.MinP != nil {
 		required |= CapabilitySamplingMinP
+	}
+	if len(request.Sampling.LogitBias) > 0 {
+		required |= CapabilitySamplingLogitBias
 	}
 	if request.Sampling.RepetitionPenalty != nil {
 		required |= CapabilityRepetitionPenalty
@@ -283,6 +305,9 @@ func toolCapabilities(tools []Tool) Capability {
 		if tool.Kind == ToolKindCustom {
 			required |= CapabilityCustomTools
 		}
+		if tool.Kind == ToolKindServer {
+			required |= CapabilityServerTools
+		}
 	}
 	return required
 }
@@ -333,7 +358,16 @@ func RequiredResponseCapabilities(response Response) CapabilitySet {
 func RequiredEventCapabilities(event Event) CapabilitySet {
 	var required CapabilitySet
 	if event.Content != nil && event.Content.ReasoningDetail != nil {
-		required.bits |= CapabilityReasoningContinuity
+		required.bits |= CapabilityReasoning
+		if !IsResponsesReasoning(event.Content.ReasoningDetail) {
+			required.bits |= CapabilityReasoningContinuity
+		}
+	}
+	// Redacted reasoning is opaque continuity state. Only a target that can
+	// carry it verbatim (the reasoning-signature capability) may accept it.
+	if event.Content != nil && event.Content.Kind == ContentReasoning &&
+		event.Content.Reasoning == ReasoningScopeRedacted {
+		required.bits |= CapabilityReasoningSignature
 	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
@@ -345,10 +379,26 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
 		required.bits |= CapabilityCustomTools
 	}
+	if event.Content != nil {
+		required.bits |= serverToolContentCapability(*event.Content)
+	}
 	return required
 }
 
+// serverToolContentCapability is what a server tool's block, or the
+// citations it attached to text, asks of a wire format.
+func serverToolContentCapability(content Content) Capability {
+	if content.Kind == ContentServerTool || len(content.Raw) > 0 {
+		return CapabilityServerTools
+	}
+	return 0
+}
+
 func capabilityForRequestContent(content Content) Capability {
+	return requestContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func requestContentCapabilities(content Content) Capability {
 	var cache Capability
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
@@ -363,6 +413,9 @@ func capabilityForRequestContent(content Content) Capability {
 	case ContentToolResult:
 		return requestToolResultCapabilities(content.ToolResult) | cache
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning | cache
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity | cache
 		}
@@ -375,6 +428,10 @@ func capabilityForRequestContent(content Content) Capability {
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	return responseContentCapabilities(content) | serverToolContentCapability(content)
+}
+
+func responseContentCapabilities(content Content) Capability {
 	if isCustomToolCall(content) {
 		return CapabilityTools | CapabilityCustomTools
 	}
@@ -385,6 +442,9 @@ func capabilityForResponseContent(content Content) Capability {
 	case ContentToolResult:
 		return responseToolResultCapabilities(content.ToolResult)
 	case ContentReasoning:
+		if IsResponsesReasoning(content.ReasoningDetail) {
+			return CapabilityReasoning
+		}
 		if content.ReasoningDetail != nil {
 			return CapabilityReasoning | CapabilityReasoningContinuity
 		}
@@ -476,6 +536,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
 		"sampling_min_p":        CapabilitySamplingMinP,
+		"sampling_logit_bias":   CapabilitySamplingLogitBias,
 		"repetition_penalty":    CapabilityRepetitionPenalty,
 		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
@@ -490,9 +551,12 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
+		"speech_generation":     CapabilitySpeechGeneration,
 		"custom_tools":          CapabilityCustomTools,
 		"text_verbosity":        CapabilityTextVerbosity,
 		"reasoning_continuity":  CapabilityReasoningContinuity,
+		"developer_role":        CapabilityDeveloperRole,
+		"server_tools":          CapabilityServerTools,
 	}
 	var set CapabilitySet
 	for _, name := range names {

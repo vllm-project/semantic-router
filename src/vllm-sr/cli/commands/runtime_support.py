@@ -33,11 +33,12 @@ from cli.consts import (
 )
 from cli.container_management_listener import resolve_managed_management_listener
 from cli.gateway_mode import GATEWAY_ENV, GATEWAY_STANDALONE, runs_envoy
+from cli.masking_identity import inject_local_masking_identity
 from cli.models import UserConfig
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.runtime_env_names import (
-    _ENV_NAME,
     RESERVED_RUNTIME_ENV_NAMES,
+    expand_router_references,
     normalize_runtime_env_names,
 )
 from cli.runtime_stack import resolve_runtime_stack
@@ -144,9 +145,11 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            named = node.get(API_KEY_ENV_FIELD)
-            if isinstance(named, str) and named.strip():
-                names.add(named.strip())
+            # Runtime credentials may be named rather than interpolated.
+            for field in (API_KEY_ENV_FIELD, "key_env", "hmac_key_env", "password_env"):
+                named = node.get(field)
+                if isinstance(named, str) and named.strip():
+                    names.add(named.strip())
             pending.extend(node.values())
         elif isinstance(node, list):
             pending.extend(node)
@@ -155,39 +158,28 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     return names
 
 
+def guard_verdict_secret_env_names(config_path: Path | str) -> set[str]:
+    """Guard signing and store credentials belong only to the Router."""
+    try:
+        node = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return set()
+    for field in ("global", "stores", "guard_verdicts"):
+        node = node.get(field) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or node.get("backend") != "redis":
+        return set()
+    redis = node.get("redis")
+    values = [node.get("hmac_key_env")]
+    if isinstance(redis, dict):
+        values.append(redis.get("password_env"))
+    return {
+        value.strip() for value in values if isinstance(value, str) and value.strip()
+    }
+
+
 def _router_consulted_env_names(value: str) -> set[str]:
     names: set[str] = set()
-    index = 0
-    while index < len(value):
-        if value[index] != "$":
-            index += 1
-            continue
-        if index + 1 < len(value) and value[index + 1] == "$":
-            index += 2
-            continue
-        if index + 1 < len(value) and value[index + 1] == "{":
-            close = value.find("}", index + 2)
-            if close < 0:
-                index += 1
-                continue
-            name, separator, _ = value[index + 2 : close].partition("-")
-            if separator:
-                name = name.removesuffix(":")
-            if _ENV_NAME.fullmatch(name):
-                names.add(name)
-            index = close + 1
-            continue
-        end = index + 1
-        while end < len(value) and (
-            value[end].isascii() and (value[end].isalnum() or value[end] == "_")
-        ):
-            end += 1
-        if end > index + 1:
-            if _ENV_NAME.fullmatch(value[index + 1 : end]):
-                names.add(value[index + 1 : end])
-            index = end
-            continue
-        index += 1
+    expand_router_references(value, names.add)
     return names
 
 
@@ -379,6 +371,7 @@ def _resolve_effective_config_document(
     setup_mode: bool,
     *,
     materialize_local_runtime: bool = True,
+    enable_observability: bool = True,
 ) -> tuple[dict[str, object], bool]:
     with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
@@ -386,9 +379,16 @@ def _resolve_effective_config_document(
     changed = False
     if not setup_mode and materialize_local_runtime:
         stack = resolve_runtime_stack()
+        changed = inject_local_masking_identity(config, stack.stack_name) or changed
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
+        if not enable_observability:
+            # Repeat serve's projection for a stack without the local collector.
+            changed = (
+                apply_local_tracing_endpoint(config, stack, enable_observability=False)
+                or changed
+            )
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
@@ -399,13 +399,20 @@ def build_effective_config_bytes(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
+    *,
+    enable_observability: bool = True,
 ) -> bytes:
-    """Build the effective config bytes."""
+    """Build the effective config bytes.
+
+    *enable_observability* False also turns off tracing aimed at the local
+    collector, as serve does for a stack that does not run one.
+    """
 
     config, changed = _resolve_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
+        enable_observability=enable_observability,
     )
     if not changed:
         return config_path.read_bytes()

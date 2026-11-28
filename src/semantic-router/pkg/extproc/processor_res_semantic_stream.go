@@ -1,12 +1,19 @@
 package extproc
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -15,6 +22,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // semanticResponseStreamState is request-scoped reconstruction state for
@@ -23,6 +32,10 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	// sawContent marks the first model content, including a choice held by
+	// the decoder for ordering. It ignores keepalive and metadata frames.
+	sawContent bool
+	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
 	usage      llmprotocol.Usage
@@ -30,6 +43,8 @@ type semanticResponseStreamState struct {
 	order      []int
 	terminal   bool
 	failed     *llmprotocol.ProtocolError
+	// decoded reports that the stream decoder read at least one event.
+	decoded bool
 }
 
 type semanticStreamItem struct {
@@ -39,10 +54,15 @@ type semanticStreamItem struct {
 	refusal          string
 	reasoning        string
 	reasoningSig     string
+	reasoningScope   llmprotocol.ReasoningScope
 	toolCall         *llmprotocol.ToolCall
 	image            *llmprotocol.GeneratedImage
 	completed        bool
 	reasoningDetails map[int]llmprotocol.ReasoningDetail
+	// serverTool and citations are what an Anthropic server tool left: its
+	// call or result as written, and the citations on this item's text.
+	serverTool json.RawMessage
+	citations  json.RawMessage
 }
 
 func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
@@ -50,18 +70,45 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	recordStreamingTTFT(ctx)
 	if ctx.ResponseGuardHold != nil {
 		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
 	}
 	r.initializeSemanticResponseStream(ctx)
 	buffers := semanticStreamBuffers{}
+	responseBody, endOfStream = r.bridgeBufferedBody(&buffers, responseBody, endOfStream, ctx)
 	buffers.push(responseBody, ctx)
+	if endOfStream && buffers.unread(ctx) {
+		// The client gets what a buffered client gets for such a body.
+		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
+	}
+	// TTFT waits for the first upstream content: a keepalive or comment
+	// frame a gateway sends while it queues is not the model's answer.
+	// It is recorded before the stream settles, because the turn's session
+	// evidence is written there and takes the latency it has by then.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
 	}
 	return buffers.processingResponse(ctx)
+}
+
+// bridgeBufferedBody replaces a buffered provider object with stream events.
+// Only a provider body that is not SSE can be a buffered answer. Such a reply
+// arrives as one body message, whose end_of_stream is false when trailers
+// follow, so a complete object ends the read rather than the flag.
+func (r *OpenAIRouter) bridgeBufferedBody(
+	buffers *semanticStreamBuffers,
+	body []byte,
+	endOfStream bool,
+	ctx *RequestContext,
+) ([]byte, bool) {
+	bridged, ok := r.bridgeBufferedResponsesBody(body, ctx)
+	if !ok {
+		return body, endOfStream
+	}
+	buffers.bridged = true
+	return bridged, true
 }
 
 func (r *OpenAIRouter) initializeSemanticResponseStream(ctx *RequestContext) {
@@ -80,26 +127,40 @@ type semanticStreamBuffers struct {
 	public     []byte
 	errorFrame []byte
 	streamErr  error
+	// bridged marks a body the Router rewrote from a buffered provider object
+	// into stream events, so the client keeps the codec's frames instead of the
+	// upstream bytes.
+	bridged bool
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
-		return
-	}
 	if ctx.PublicChatUsageFilter != nil {
+		// An empty final read still marks the boundary for a codec failure
+		// discovered while finalizing an unterminated frame.
 		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
 		buffers.public = append(buffers.public, filtered...)
 		buffers.recordError(ctx, err, true)
 	}
-	if ctx.ProtocolResponseStream != nil {
+	if len(responseBody) != 0 && ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		if frame := failureFrame(frames, events); frame != nil {
 			buffers.errorFrame = frame
 		}
 		observeProtocolStream(ctx, events, diagnostics)
+		if state := ctx.SemanticStreamState; err == nil && state != nil && ctx.ProtocolResponseStream.HasPendingContent() {
+			state.sawContent = true
+		}
 		buffers.recordError(ctx, err, true)
 	}
+}
+
+// unread reports a body the provider answered whole, which its client has not
+// seen yet, that neither the bridge nor the stream decoder could read
+// anything from.
+func (buffers *semanticStreamBuffers) unread(ctx *RequestContext) bool {
+	state := ctx.SemanticStreamState
+	return !ctx.UpstreamBodyStreamed && !buffers.bridged && ctx.ProtocolResponseStream != nil && state != nil && !state.decoded
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
@@ -130,6 +191,71 @@ func (buffers *semanticStreamBuffers) recordError(ctx *RequestContext, err error
 	ctx.StreamingAborted = true
 }
 
+// bridgeBufferedResponsesBody renders a buffered provider answer as the event
+// stream the client asked for. A provider may ignore stream:true and reply with
+// one JSON object; that body carries no data: line for the SSE decoder, so the
+// forced streaming path would drop every byte and report stream_incomplete. The
+// neutral response is decoded and re-emitted through the same encoder synthetic
+// producers and cache replay use.
+//
+// It only applies to a body the provider did not send as SSE, and only once the
+// body is complete: the header phase keeps such an answer out of streamed reads
+// so the whole object arrives in one message. A gzip reply is decoded here,
+// since the streaming path leaves content coding to the client; the client body
+// is encoded again under that header.
+func (r *OpenAIRouter) bridgeBufferedResponsesBody(body []byte, ctx *RequestContext) ([]byte, bool) {
+	if !isResponseAPIStreamRequest(ctx) || ctx.UpstreamBodyStreamed {
+		return nil, false
+	}
+	if ctx.UpstreamResponseGzip {
+		decoded, err := gunzipBounded(ctx.TraceContext, body, maxDecodedUpstreamBodyBytes)
+		if err != nil {
+			return nil, false
+		}
+		body = decoded
+	}
+	if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) || !json.Valid(body) {
+		return nil, false
+	}
+	var probe struct {
+		Object string `json:"object"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil || probe.Object != "response" {
+		return nil, false
+	}
+	engine, err := r.protocolEngineForBackend(ctx)
+	if err != nil {
+		return nil, false
+	}
+	source, target := responseWireFormats(ctx)
+	response, _, diagnostics, err := engine.DecodeResponse(source, body)
+	if err != nil {
+		return nil, false
+	}
+	frames, encoded, err := engine.EncodeResponseStream(target, response, responseStreamContext(ctx, source, target))
+	if err != nil || len(frames) == 0 {
+		return nil, false
+	}
+	// The synthesized stream cannot report what decoding already stripped, so
+	// the buffered path's diagnostics are recorded here.
+	observeProtocolStream(ctx, nil, append(diagnostics, encoded...))
+	return frames, true
+}
+
+// encodeGzip encodes frames under the coding the client's content-encoding
+// header still names.
+func encodeGzip(frames []byte) ([]byte, error) {
+	var out bytes.Buffer
+	writer := gzip.NewWriter(&out)
+	if _, err := writer.Write(frames); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
+}
+
 func appendProtocolFrames(body []byte, frames [][]byte) []byte {
 	for _, frame := range frames {
 		body = append(body, frame...)
@@ -149,6 +275,40 @@ func observeProtocolStream(
 	recordProtocolDiagnostics(ctx, diagnostics)
 	ctx.protocolDiagnosticsReported = len(ctx.ProtocolDiagnostics)
 	ctx.SemanticStreamState.observe(events)
+}
+
+func estimateAbortedLooperOutputTokens(state *semanticResponseStreamState) int {
+	if state == nil || len(state.items) == 0 {
+		return 0
+	}
+	var b strings.Builder
+	for _, item := range state.items {
+		if item == nil {
+			continue
+		}
+		if item.text != "" {
+			b.WriteString(item.text)
+		}
+		if item.reasoning != "" {
+			b.WriteString(item.reasoning)
+		}
+		if item.refusal != "" {
+			b.WriteString(item.refusal)
+		}
+		if item.toolCall != nil {
+			if item.toolCall.Name != "" {
+				b.WriteString(item.toolCall.Name)
+			}
+			if item.toolCall.Arguments != "" {
+				b.WriteString(item.toolCall.Arguments)
+			}
+		}
+	}
+	combined := b.String()
+	if combined == "" {
+		return 0
+	}
+	return contextcompression.EstimateTokens(combined)
 }
 
 // failureFrame returns the frame the encoder wrote for an upstream failure in
@@ -174,9 +334,25 @@ func (buffers *semanticStreamBuffers) processingResponse(ctx *RequestContext) *e
 		}, nil)
 	}
 	if ctx.ProtocolResponseStream != nil &&
-		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted) {
+		(requiresClientResponseRewrite(ctx) || ctx.StreamingAborted || buffers.bridged) {
+		body := buffers.translated
+		// A stream failure switches a same-format client from the public
+		// filter's bytes to the codec's frames, which carry only the failing
+		// read's output. The tool-argument frames the filter held back in
+		// earlier reads must ride along, or the client loses the accepted
+		// prefix of the call the provider went on to break.
+		if ctx.StreamingAborted && !requiresClientResponseRewrite(ctx) {
+			body = append(ctx.PublicChatUsageFilter.ReleaseHeldForAbort(), body...)
+		}
+		// A bridged answer replaces a gzip provider body, and the client's
+		// content-encoding still names that coding, so the frames carry it too.
+		if buffers.bridged && ctx.UpstreamResponseGzip {
+			if encoded, err := encodeGzip(body); err == nil {
+				body = encoded
+			}
+		}
 		return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
-			Mutation: &ext_proc.BodyMutation_Body{Body: buffers.translated},
+			Mutation: &ext_proc.BodyMutation_Body{Body: body},
 		}, nil)
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -191,22 +367,49 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	if ctx == nil || ctx.TTFTRecorded || ctx.ProcessingStartTime.IsZero() || ctx.RequestModel == "" {
 		return
 	}
+	if state := ctx.SemanticStreamState; state == nil || !state.sawContent {
+		return
+	}
 
 	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 	if ttft <= 0 {
 		return
 	}
 
-	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
-	latency.UpdateTTFT(ctx.RequestModel, ttft)
+	if !ctx.LooperStreamingActive {
+		metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
+		latency.UpdateTTFT(ctx.RequestModel, ttft)
+	}
 	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
 		Model:       ctx.RequestModel,
 		TTFTSeconds: ttft,
 	})
 	maybeEmitTransitionEvent(ctx)
 	logging.Debugf("Recorded TTFT on first streamed body chunk: model=%q, TTFT=%.4fs", ctx.RequestModel, ttft)
+}
+
+func responseStreamContext(
+	ctx *RequestContext,
+	source, target llmprotocol.WireFormat,
+) llmprotocol.StreamContext {
+	streamContext := llmprotocol.StreamContext{
+		Context: ctx.TraceContext, Source: source, Target: target,
+		Options:     clientStreamOptions(ctx),
+		PublicModel: ctx.RequestModel, ResponseRender: responseObjectRender(ctx),
+		// The model the upstream reports, as buffered and same-format replies pass it through.
+		PreferProviderModel: true,
+	}
+	if responseID := responseObjectPublicID(ctx); responseID != "" {
+		streamContext.ResponseID = responseID
+	}
+	// Chat and Responses providers report usage only at the end, after the
+	// message_start a Messages client reads input usage from.
+	if target == llmprotocol.AnthropicMessagesV1 && source != llmprotocol.AnthropicMessagesV1 && ctx.SemanticRequest != nil {
+		streamContext.EstimatedInputTokens = int64(estimateCountTokens(ctx.SemanticRequest))
+	}
+	return streamContext
 }
 
 func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
@@ -221,26 +424,18 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		return err
 	}
 	source, target := responseWireFormats(ctx)
-	streamContext := llmprotocol.StreamContext{
-		Context: ctx.TraceContext, Source: source, Target: target,
-		Options:     clientStreamOptions(ctx),
-		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
-		// The model the upstream reports, as buffered and same-format replies pass it through.
-		PreferProviderModel: true,
-	}
+	streamContext := responseStreamContext(ctx, source, target)
 	mutation := clientStreamMutation(ctx, source)
-	if responseID := responseObjectPublicID(ctx); responseID != "" {
-		streamContext.ResponseID = responseID
-	}
 	stream, err := engine.NewStreamWithMutation(source, target, streamContext, mutation)
 	if err != nil {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
 	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
-			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
-		)
+		ctx.PublicChatUsageFilter = engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
+		if ctx.LooperStreamingActive && ctx.RequestModel != "" {
+			ctx.PublicChatUsageFilter.SetPublicModel(ctx.RequestModel)
+		}
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -259,12 +454,17 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	if state == nil {
 		return
 	}
+	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
+		state.sawContent = state.sawContent || streamEventCarriesContent(event)
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
 		if event.Model != "" {
 			state.model = event.Model
+		}
+		if state.createdAt.IsZero() {
+			state.createdAt = event.CreatedAt
 		}
 		if event.Usage != nil {
 			state.usage = *event.Usage
@@ -283,9 +483,16 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
+				item.reasoningScope = event.Content.Reasoning
+			}
+			if event.Content != nil && event.Content.Kind == llmprotocol.ContentServerTool {
+				item.serverTool = event.Content.Raw
 			}
 		case llmprotocol.EventOutputTextDelta:
 			item := state.item(event.ItemIndex)
+			if event.Content != nil {
+				item.citations = llmprotocol.AppendCitations(item.citations, event.Content.Raw)
+			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentRefusal {
 				item.refusal += event.Delta
 			} else {
@@ -310,8 +517,13 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				continue
 			}
 			item.reasoning += event.Delta
-			if event.Content != nil && event.Content.Signature != "" {
-				item.reasoningSig = event.Content.Signature
+			if event.Content != nil {
+				if event.Content.Signature != "" {
+					item.reasoningSig = event.Content.Signature
+				}
+				if event.Content.Reasoning != "" {
+					item.reasoningScope = event.Content.Reasoning
+				}
 			}
 		case llmprotocol.EventToolCallDelta:
 			item := state.item(event.ItemIndex)
@@ -327,6 +539,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				}
 				if event.ToolCall.Name != "" {
 					item.toolCall.Name = event.ToolCall.Name
+				}
+				if event.ToolCall.Namespace != "" {
+					item.toolCall.Namespace = event.ToolCall.Namespace
 				}
 				item.toolCall.Arguments += event.ToolCall.Arguments
 			}
@@ -351,6 +566,38 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	}
 }
 
+// streamEventCarriesContent recognizes the first model output for TTFT.
+func streamEventCarriesContent(event llmprotocol.Event) bool {
+	switch {
+	case event.Delta != "":
+		return true
+	case event.ToolCall != nil:
+		call := event.ToolCall
+		return call.ID != "" || call.Name != "" || call.Arguments != ""
+	case event.GeneratedImage != nil:
+		return event.GeneratedImage.PartialImage != ""
+	default:
+		return streamBlockCarriesContent(event.Content)
+	}
+}
+
+func streamBlockCarriesContent(block *llmprotocol.Content) bool {
+	if block == nil {
+		return false
+	}
+	switch block.Kind {
+	case llmprotocol.ContentReasoning:
+		return block.Text != "" || block.ReasoningDetail != nil && block.ReasoningDetail.PayloadBytes() > 0
+	case llmprotocol.ContentServerTool:
+		return len(block.Raw) > 0
+	case llmprotocol.ContentGeneratedImage:
+		image := block.GeneratedImage
+		return image != nil && image.Result != nil && *image.Result != ""
+	default:
+		return block.Text != ""
+	}
+}
+
 func (state *semanticResponseStreamState) item(index int) *semanticStreamItem {
 	item := state.items[index]
 	if item != nil {
@@ -362,9 +609,40 @@ func (state *semanticResponseStreamState) item(index int) *semanticStreamItem {
 	return item
 }
 
+// delivered reports whether the stream reached its terminal event without a
+// failure, which makes it a whole answer for its client.
+func (state *semanticResponseStreamState) delivered() bool {
+	return state != nil && state.failed == nil && state.terminal
+}
+
+// streamFailureSummary names a protocol failure by its normalized category and,
+// for an error the Router authored, its code. A decoder copies a provider
+// frame's code, message and parameter verbatim, and those can echo request
+// content, so a provider-framed error contributes only its category. Only a
+// Router-authored ErrorDiagnostic is printed from the cause chain: a parser
+// error's text can name provider fields. The client keeps the failure it always
+// saw.
+func streamFailureSummary(err *llmprotocol.ProtocolError) string {
+	summary := "category=" + string(err.Category)
+	if err.ProviderFramed {
+		return summary
+	}
+	if err.Code != "" {
+		summary += ", code=" + err.Code
+	}
+	var diagnostic llmprotocol.ErrorDiagnostic
+	if errors.As(err, &diagnostic) {
+		summary += "; " + string(diagnostic)
+	}
+	return summary
+}
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
-	if state == nil || state.failed != nil || !state.terminal {
+	if !state.delivered() {
+		if state != nil && state.failed != nil {
+			return nil, fmt.Errorf("semantic stream did not complete successfully: %s", streamFailureSummary(state.failed))
+		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
@@ -388,14 +666,17 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if item.reasoning != "" || item.reasoningSig != "" {
 			contents = append(contents, llmprotocol.Content{
 				Kind: llmprotocol.ContentReasoning, Text: item.reasoning,
-				Signature: item.reasoningSig,
+				Signature: item.reasoningSig, Reasoning: item.reasoningScope,
 			})
 		}
 		if item.refusal != "" {
 			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentRefusal, Text: item.refusal})
 		}
 		if item.text != "" {
-			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text})
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: item.text, Raw: item.citations})
+		}
+		if item.serverTool != nil {
+			contents = append(contents, llmprotocol.Content{Kind: llmprotocol.ContentServerTool, Raw: item.serverTool})
 		}
 		if item.toolCall != nil {
 			call := *item.toolCall
@@ -417,23 +698,41 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 	if state.stop == "" {
 		state.stop = llmprotocol.StopUnknown
 	}
+	createdAt := state.createdAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
 	return &llmprotocol.Response{
-		Generation: 1, ID: state.responseID, CreatedAt: time.Now().UTC(),
+		Generation: 1, ID: state.responseID, CreatedAt: createdAt,
 		Model: state.model, Output: output, StopReason: state.stop,
 		MatchedStopSequence: state.stopSeq, Usage: state.usage,
 	}, nil
 }
 
 func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, streamErr error) {
+	clean := streamErr == nil && !ctx.StreamingAborted
 	if semanticResponse := r.completeSemanticStream(ctx, streamErr); semanticResponse != nil {
+		if !ctx.StreamingAborted {
+			r.finishNativeFallbackResponse(ctx, "")
+		}
 		r.commitStreamedAnswer(ctx, semanticResponse)
 	}
+	r.endStreamRouterReplay(ctx, clean)
 }
 
 // completeSemanticStream settles a stream once it ended: its latency, usage
 // and inflight admission. It returns the answer the stream reconstructs, or
 // nil when the stream ended without one or was settled before.
 func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr error) *llmprotocol.Response {
+	return r.completeSemanticStreamWith(ctx, streamErr, nil)
+}
+
+// completeSemanticStreamWith settles a stream as completeSemanticStream does,
+// with the answer replace makes of the whole answer the stream reconstructs
+// in place of that answer, when replace is set.
+func (r *OpenAIRouter) completeSemanticStreamWith(
+	ctx *RequestContext, streamErr error, replace func(*llmprotocol.Response) *llmprotocol.Response,
+) *llmprotocol.Response {
 	if ctx == nil || ctx.StreamingComplete {
 		return nil
 	}
@@ -443,14 +742,22 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	}
 	semanticResponse, responseErr := ctx.SemanticStreamState.response()
 	if responseErr == nil {
+		if ctx.SourceFormat == llmprotocol.AnthropicMessagesV1 {
+			// The answer the Router keeps carries the identifiers the client read.
+			source, _ := responseWireFormats(ctx)
+			*semanticResponse = protocolcodec.AnthropicReplyIdentifiers(source, *semanticResponse)
+		}
 		ctx.SemanticResponse = semanticResponse
+		if replace != nil && !ctx.StreamingAborted {
+			semanticResponse = replace(semanticResponse)
+		}
 	} else {
 		ctx.StreamingAborted = true
 	}
 	completionLatency := time.Duration(0)
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
-		if ctx.RequestModel != "" {
+		if !ctx.LooperStreamingActive && ctx.RequestModel != "" {
 			metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		}
 	}
@@ -458,12 +765,63 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
-	// Decoded stream events carry the client-facing model, not the provider's.
-	observeUpstreamResponse(ctx, "", usage)
+	// The buffered path records the response's model; the stream reconstructs
+	// the same answer, so the span names the model it observed too. A stream
+	// that never initialised (unsupported source format) still settles here.
+	responseModel := ""
+	if state := ctx.SemanticStreamState; state != nil {
+		responseModel = state.model
+	}
+	observeUpstreamResponse(ctx, responseModel, usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
-	r.calibrateTokenEstimator(ctx, usage.promptTokens)
+	if ctx.LooperStreamingActive {
+		if !usage.invalid {
+			ctx.LooperUsageSettled = true
+			logging.ComponentEvent("extproc", "looper_streaming_completed", map[string]interface{}{
+				"request_id":        ctx.RequestID,
+				"decision":          ctx.VSRSelectedDecisionName,
+				"algorithm":         ctx.VSRSelectionMethod,
+				"models_used":       ctx.LooperModelsUsed,
+				"iterations":        ctx.LooperIterations,
+				"selected_model":    firstNonEmpty(ctx.LooperTargetModel, ctx.VSRSelectedModel),
+				"prompt_tokens":     usage.promptTokens,
+				"completion_tokens": usage.completionTokens,
+				"total_tokens":      responseUsageTotal(usage),
+				"trace_recorded":    ctx.LooperExecutionTrace != nil,
+			})
+		} else {
+			abortErr := streamErr
+			if abortErr == nil {
+				abortErr = responseErr
+			}
+			r.settleAbortedLooperStreamingUsage(ctx, abortErr)
+		}
+	}
+
+	calibrationPromptTokens := usage.promptTokens
+	if ctx.LooperStreamingActive {
+		calibrationPromptTokens = 0
+		if ctx.SemanticResponse != nil {
+			synthesisUsage := responseUsageFromSemanticUsage(ctx.SemanticResponse.Usage)
+			if !synthesisUsage.invalid {
+				calibrationPromptTokens = synthesisUsage.promptTokens
+			}
+		}
+	}
+	r.calibrateTokenEstimatorForModel(
+		ctx,
+		calibrationTargetModel(ctx),
+		streamingCalibrationByteLen(ctx),
+		calibrationPromptTokens,
+	)
+
+	if ctx.LooperStreamingActive && (responseErr != nil || usage.invalid) {
+		ctx.StreamingAborted = true
+		r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "upstream_stream_incomplete")
+	}
 
 	if responseErr != nil {
+		observeStreamedApprovalReviewFailure(ctx)
 		logging.ComponentWarnEvent("extproc", "neutral_stream_reconstruction_skipped", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
@@ -482,6 +840,8 @@ func (r *OpenAIRouter) completeSemanticStream(ctx *RequestContext, streamErr err
 // Router Replay only.
 func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticResponse *llmprotocol.Response) {
 	recordPrimaryOutputDigest(ctx, semanticResponse)
+	observeApprovalReviewVerdict(ctx, semanticResponse)
+	observeSessionTitle(ctx, semanticResponse)
 	ctx.ResponseGuard = r.runResponseGuard(ctx, semanticAssistantContent(semanticResponse))
 	if ctx.ResponseGuard != nil {
 		ctx.ResponseGuard.live = true
@@ -508,11 +868,69 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 		metrics.RecordCacheWriteSkipped(delegatedCredentialCode)
 		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", delegatedCredentialCode, false)
 	} else {
-		r.updateResponseCache(ctx, encoded)
+		if !ctx.LooperStreamingActive {
+			r.updateResponseCache(ctx, encoded)
+		}
 		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 		r.persistResponseObject(ctx)
 	}
-	r.attachRouterReplayResponse(ctx, encoded, true)
+	r.attachRouterReplayResponse(ctx, attachLooperTraceToReplaySnapshot(ctx, encoded), true)
+}
+
+func streamingCalibrationByteLen(ctx *RequestContext) int {
+	if ctx == nil {
+		return 0
+	}
+	if ctx.LooperStreamingActive {
+		if ctx.LooperSynthesisTextBytes > 0 {
+			return ctx.LooperSynthesisTextBytes
+		}
+		return 0
+	}
+	return tokenCalibrationByteLen(ctx)
+}
+
+func attachLooperTraceToReplaySnapshot(ctx *RequestContext, encoded []byte) []byte {
+	if ctx == nil || !ctx.LooperStreamingActive || ctx.LooperExecutionTrace == nil || len(encoded) == 0 {
+		return encoded
+	}
+	traceJSON, err := json.Marshal(ctx.LooperExecutionTrace)
+	if err != nil || len(traceJSON) == 0 || string(traceJSON) == "null" {
+		return encoded
+	}
+	field := "looper_trace"
+	switch ctx.VSRSelectionMethod {
+	case config.DecisionAlgorithmFusion:
+		field = "fusion"
+	case config.DecisionAlgorithmWorkflows:
+		field = "flow"
+	}
+	return restoreLooperFieldJSON(encoded, traceJSON, field)
+}
+
+// reportStreamingAnswerEstimate debits a stream that carried no usage from its
+// rate-limit budget, with the provider-calibrated estimate of the answer the
+// stream reconstructed. The metrics stay unreported - nothing measured them -
+// but a token budget must not treat the output as free.
+func (r *OpenAIRouter) reportStreamingAnswerEstimate(ctx *RequestContext, response *llmprotocol.Response) int {
+	if r == nil || ctx == nil || r.RateLimiter == nil || ctx.RateLimitCtx == nil || response == nil {
+		return 0
+	}
+	bytes := 0
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			bytes += len(content.Text)
+		}
+	}
+	if bytes == 0 {
+		return 0
+	}
+	tokens, _ := r.classifierForRequest(ctx).EstimateTokens(tokenCalibrationCategory(ctx), bytes)
+	if tokens <= 0 {
+		return 0
+	}
+	r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{OutputTokens: tokens, TotalTokens: tokens})
+	return tokens
 }
 
 func (r *OpenAIRouter) reportSemanticStreamingUsage(
@@ -523,13 +941,26 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	if ctx == nil {
 		return
 	}
-	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+	pricing := r.sessionTurnPricing(ctx.RequestModel)
+	if ctx.LooperStreamingActive {
+		pricing = sessiontelemetry.TurnPricing{}
+	}
+	recordSessionTurnOutcome(ctx, usage, pricing)
 	if usage.invalid {
+		if r.recordInterruptedStreamUsage(ctx) {
+			// Request finalization settles the partial charge.
+			return
+		}
+		// The stream carried no usable usage, so the request is settled with
+		// what it knows, as the buffered path does: skipping the report would
+		// leave its output tokens out of a token budget. What it knows is an
+		// estimate of the answer it reconstructed.
 		r.updateRouterReplayUsageCost(ctx, r.buildReplayUsageCost(ctx, usage))
-		return
+		r.reportStreamingAnswerEstimate(ctx, ctx.SemanticResponse)
+		usage = responseUsageMetrics{}
 	}
 	totalTokens := responseUsageTotal(usage)
-	if r.RateLimiter != nil && ctx.RateLimitCtx != nil && totalTokens > 0 {
+	if r.RateLimiter != nil && ctx.RateLimitCtx != nil {
 		r.RateLimiter.Report(*ctx.RateLimitCtx, ratelimit.TokenUsage{
 			InputTokens:  usage.promptTokens,
 			OutputTokens: usage.completionTokens,
@@ -537,24 +968,27 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		})
 	}
 	if totalTokens > 0 {
-		recordSessionTurn(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+		recordSessionTurn(ctx, usage, pricing)
 	}
 	if ctx.RequestModel == "" {
 		return
 	}
-	recordModelUsageTokens(ctx.RequestModel, usage)
-	metrics.RecordModelWindowedRequest(
-		ctx.RequestModel,
-		completionLatency.Seconds(),
-		int64(usage.promptTokens),
-		int64(usage.completionTokens),
-	)
-	if usage.completionTokens > 0 && completionLatency > 0 {
-		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
-		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
+	if !ctx.LooperStreamingActive {
+		recordModelUsageTokens(ctx.RequestModel, usage)
+		metrics.RecordModelWindowedRequest(
+			ctx.RequestModel,
+			completionLatency.Seconds(),
+			int64(usage.promptTokens),
+			int64(usage.completionTokens),
+		)
+		if usage.completionTokens > 0 && completionLatency > 0 {
+			timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
+			metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
+		}
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
+	r.settleRequestSpend(ctx, &replayUsage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
 	r.observeRouterLearningUsageTelemetry(ctx, completionLatency, usage, replayUsage)
 }

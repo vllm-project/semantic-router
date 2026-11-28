@@ -94,6 +94,44 @@ func TestIntentRequestResolveSignalInput_ExtractsConversationAndToolFacts(t *tes
 	assert.True(t, facts.LastUserAfterToolResult)
 }
 
+// The preview computes invalid_tool_call from the same neutral request the
+// data plane reads, so a rule over it matches in classify exactly when it
+// matches live.
+func TestIntentRequestResolveSignalInput_CountsInvalidToolCalls(t *testing.T) {
+	req := IntentRequest{
+		Tools: []json.RawMessage{
+			mustMessageContent(t, map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": "write",
+					"parameters": map[string]any{
+						"type":     "object",
+						"required": []string{"path"},
+						"properties": map[string]any{
+							"path": map[string]any{"type": "string"},
+						},
+					},
+				},
+			}),
+		},
+		Messages: []IntentMessage{
+			{Role: "user", Content: mustMessageContent(t, "write the file")},
+			{
+				Role:    "assistant",
+				Content: mustMessageContent(t, ""),
+				ToolCalls: []json.RawMessage{mustMessageContent(t, map[string]any{
+					"id": "call-1", "type": "function",
+					"function": map[string]any{"name": "write", "arguments": "{}"},
+				})},
+			},
+		},
+	}
+
+	input, err := req.resolveSignalInput()
+	require.NoError(t, err)
+	assert.Equal(t, 1, input.conversationFacts.InvalidToolCalls)
+}
+
 func TestIntentRequestResolveSignalInput_LastUserAfterToolResultRequiresAdjacency(t *testing.T) {
 	req := IntentRequest{
 		Messages: []IntentMessage{
@@ -510,6 +548,31 @@ func TestIntentRequestResolveSignalInput_DropsUnsafeImageURL(t *testing.T) {
 	assert.Empty(t, input.imageURL, "non-data-URI image references must be rejected to prevent SSRF")
 	assert.Equal(t, 1, input.requestFacts.InputModality.ImageContentCount,
 		"image input is a shape fact and must not depend on URL fetch safety")
+	assert.Equal(t, []string{""}, input.requestFacts.Images,
+		"a rule that reads images must be unknown, not asked about the text alone")
+}
+
+func TestIntentRequestResolveSignalInput_ImageRulesReadEveryTurnsImages(t *testing.T) {
+	const dataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
+	for name, url := range map[string]string{"inline": dataURI, "remote": "https://example.com/cat.png"} {
+		t.Run(name, func(t *testing.T) {
+			req := IntentRequest{Messages: []IntentMessage{
+				{Role: "user", Content: mustMessageContent(t, []map[string]interface{}{
+					{"type": "text", "text": "Describe it."},
+					{"type": "image_url", "image_url": map[string]string{"url": url}},
+				})},
+				{Role: "assistant", Content: mustMessageContent(t, "A cat.")},
+				{Role: "user", Content: mustMessageContent(t, "Tell me more.")},
+			}}
+
+			input, err := req.resolveSignalInput()
+			require.NoError(t, err)
+
+			want := map[string][]string{"inline": {dataURI}, "remote": {""}}[name]
+			assert.Equal(t, want, input.requestFacts.Images,
+				"an image rule reads the images of earlier turns, which the backend also gets")
+		})
+	}
 }
 
 func TestIntentRequestResolveSignalInput_AcceptsMetadataOnly(t *testing.T) {

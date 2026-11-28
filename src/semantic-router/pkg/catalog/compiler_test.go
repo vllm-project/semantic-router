@@ -181,6 +181,37 @@ func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
 	}
 }
 
+// Ollama's declared operations resolve to the two paths its conformance
+// captures were recorded from, on an endpoint that needs no credential. Both
+// accepted replies and failure envelopes were observed on a running Ollama, so
+// the provider records live_verified.
+func TestOllamaProviderContractFixture(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := registry.Provider("ollama")
+	if !ok {
+		t.Fatal("ollama provider is missing")
+	}
+	wantOps := "openai/chat-completions@1#create,openai/chat-completions@1#list_models"
+	if got := strings.Join(provider.SupportedOperations, ","); got != wantOps {
+		t.Fatalf("supported operations = %v, want %v", got, wantOps)
+	}
+	if provider.Auth.Strategy != "none" {
+		t.Fatalf("unexpected auth contract: %+v", provider.Auth)
+	}
+	for operation, want := range map[string]string{"create": "/v1/chat/completions", "list_models": "/v1/models"} {
+		path, err := registry.ResolveOperationPath("ollama", provider.DefaultProtocol, operation, "/v1")
+		if err != nil || path != want {
+			t.Fatalf("%s path = %q, err = %v, want %s", operation, path, err, want)
+		}
+	}
+	if provider.Conformance.Status != "live_verified" || provider.Conformance.VerifiedAt != "2026-11-21" {
+		t.Fatalf("conformance = %+v, want live_verified on 2026-11-21", provider.Conformance)
+	}
+}
+
 func TestProviderLookupReturnsDefensiveOperationOverrides(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {

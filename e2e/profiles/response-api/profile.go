@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -19,7 +20,6 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -34,7 +34,11 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "response-api",
 			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
+			// provider-mocker serves the embedding fixture, which the Router
+			// prepares as it starts.
+			PrerequisiteManifests: []string{"deploy/kubernetes/response-api/provider-mocker.yaml"},
+			PrerequisiteWaits:     []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
+			ResourceManifests:     resourceManifests,
 		}),
 	}
 }
@@ -107,6 +111,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-image-file-id",
 		"response-api-image-generation",
 		"response-api-image-generation-stream",
+		"response-api-image-generation-history",
 		"input-modality-cross-protocol",
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",
@@ -123,11 +128,14 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-responses-backend-tool-lifecycle",
 		"protocol-codec-tool-result-error-opt-in",
 		"protocol-codec-unreadable-file-opt-in",
+		"protocol-codec-defer-loading-opt-in",
 		"protocol-codec-anthropic-system-messages-opt-in",
+		"protocol-codec-later-instructions-opt-in",
 		"protocol-codec-tool-description-limit",
 		"protocol-codec-anthropic-cache-tool-loop-responses",
 		"protocol-codec-anthropic-adaptive-responses",
 		"protocol-codec-anthropic-per-message-effort",
+		"protocol-codec-later-instructions",
 		"protocol-codec-chat-backend-structured-output",
 		"protocol-codec-responses-backend-structured-output",
 		"protocol-codec-chat-backend-error-matrix",
@@ -141,12 +149,14 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-responses-input-compat",
 		"protocol-codec-azure-ingress",
 		"protocol-codec-reasoning-summary-responses-backend",
+		"protocol-codec-responses-encrypted-reasoning",
 		"protocol-codec-reasoning-summary-template-responses-backend",
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",
 		"protocol-codec-vllm-stop-sequence",
 		"protocol-codec-vllm-reasoning-order",
 		"protocol-codec-vllm-stream-error",
+		"protocol-codec-chat-stream-multiple-choices",
 		"protocol-codec-auto-unsupported-capability",
 		"protocol-codec-chat-backend-agent-client-replay",
 		"protocol-codec-responses-backend-agent-client-replay",

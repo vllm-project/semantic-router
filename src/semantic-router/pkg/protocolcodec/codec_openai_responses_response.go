@@ -62,21 +62,6 @@ type responsesResponseWire struct {
 	User                 json.RawMessage   `json:"user,omitempty"`
 }
 
-func newResponsesResponseWire(id, model, status string, createdAt int64, previousResponseID string) responsesResponseWire {
-	return responsesResponseWire{
-		ID: id, Object: "response", CreatedAt: float64(createdAt), Model: model, Status: status,
-		Output:             json.RawMessage(`[]`),
-		Metadata:           map[string]string{},
-		Instructions:       json.RawMessage(`null`),
-		ParallelToolCalls:  json.RawMessage(`true`),
-		Temperature:        json.RawMessage(`null`),
-		ToolChoice:         json.RawMessage(`"auto"`),
-		Tools:              json.RawMessage(`[]`),
-		TopP:               json.RawMessage(`null`),
-		PreviousResponseID: previousResponseID,
-	}
-}
-
 type responsesUsageWire struct {
 	InputTokens         int64                        `json:"input_tokens"`
 	OutputTokens        int64                        `json:"output_tokens"`
@@ -193,13 +178,12 @@ func decodeResponsesResponseResource(
 	policy llmprotocol.Policy,
 	diagnostics *llmprotocol.Diagnostics,
 ) (llmprotocol.Response, error) {
-	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
-	if wire.CreatedAt > 0 {
-		seconds, fraction := math.Modf(wire.CreatedAt)
-		response.CreatedAt = time.Unix(int64(seconds), int64(math.Round(fraction*float64(time.Second)))).UTC()
+	response := llmprotocol.Response{
+		Generation: 1, ID: wire.ID, Model: wire.Model, CreatedAt: responsesCreatedTime(wire.CreatedAt),
+		Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 	}
 	if wire.Error != nil {
-		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message}
+		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message, ProviderFramed: true}
 		response.StopReason = llmprotocol.StopError
 	}
 	output, err := decodeResponsesOutput(wire.Output, policy, diagnostics)
@@ -289,18 +273,25 @@ func decodeResponsesOutput(
 	return output, nil
 }
 
+const responsesItemMetadataReason = "response item metadata has no protocol-neutral representation"
+
+// responsesItemMetadataFields names the output item metadata that the neutral
+// contract cannot carry. Buffered and streamed replies drop the same set.
+func responsesItemMetadataFields(item responsesItemWire) map[string]bool {
+	return map[string]bool{
+		"output.async":  len(item.Async) > 0,
+		"output.caller": len(item.Caller) > 0,
+		"output.phase":  len(item.Phase) > 0,
+		"output.status": item.Status != "" && item.Type != "image_generation_call",
+	}
+}
+
 func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprotocol.Policy, diagnostics *llmprotocol.Diagnostics) (llmprotocol.OutputItem, error) {
 	if err := validateResponsesOutputItemStatus(item); err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
-	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
-		"output.async":             len(item.Async) > 0,
-		"output.caller":            len(item.Caller) > 0,
-		"output.encrypted_content": len(item.EncryptedContent) > 0,
-		"output.namespace":         item.Namespace != "",
-		"output.phase":             len(item.Phase) > 0,
-		"output.status":            item.Status != "" && item.Type != "image_generation_call",
-	}, "response item metadata has no protocol-neutral representation")
+	appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1,
+		responsesItemMetadataFields(item), responsesItemMetadataReason)
 	id := item.ID
 	if id == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		id = llmprotocol.StableID("response-output", fmt.Sprint(index), item.Type, item.CallID)
@@ -310,9 +301,9 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 	case "message":
 		return decodeResponsesMessageOutput(output, item, policy, diagnostics)
 	case "function_call":
-		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments, Namespace: item.Namespace}}}
 	case "custom_tool_call":
-		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}}}
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input, Namespace: item.Namespace}}}
 	case "reasoning":
 		return decodeResponsesReasoningOutput(output, item, policy)
 	case "image_generation_call":
@@ -378,6 +369,13 @@ func decodeResponsesReasoningOutput(
 		return llmprotocol.OutputItem{}, err
 	}
 	output.Content = append(content, reasoning...)
+	encrypted, err := decodeResponsesEncryptedReasoning(item, policy, true)
+	if err != nil {
+		return llmprotocol.OutputItem{}, err
+	}
+	if encrypted != nil {
+		output.Content = append(output.Content, *encrypted)
+	}
 	return output, nil
 }
 
@@ -416,8 +414,12 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 }
 
 func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
-	if err := rejectReasoningContinuity(llmprotocol.OpenAIResponsesV1, llmprotocol.RequiredResponseCapabilities(response)); err != nil {
-		return nil, nil, err
+	for _, items := range append([][]llmprotocol.OutputItem{response.Output}, response.Alternatives...) {
+		for _, item := range items {
+			if err := requireReasoningRepresentation(llmprotocol.OpenAIResponsesV1, item.Content); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 	if envelope.CanReplay(llmprotocol.OpenAIResponsesV1, response.Generation, policy, true) {
 		return append([]byte(nil), envelope.Response...), nil, nil
@@ -452,7 +454,7 @@ func encodeResponsesErrorResource(response llmprotocol.Response, envelope llmpro
 		response.Model,
 		"failed",
 		responsesCreatedAt(response.CreatedAt),
-		envelope.ResponseRender.PreviousResponseID,
+		envelope.ResponseRender,
 	)
 	wire.Error = &responsesErrorWire{Code: responsesErrorCode(response.Error), Message: response.Error.Message}
 	if response.Usage.State == llmprotocol.UsageAvailable {
@@ -467,7 +469,7 @@ func encodeResponsesSuccessResource(response llmprotocol.Response, envelope llmp
 		response.Model,
 		"completed",
 		responsesCreatedAt(response.CreatedAt),
-		envelope.ResponseRender.PreviousResponseID,
+		envelope.ResponseRender,
 	)
 	items := make([]responsesItemWire, 0, len(response.Output))
 	for _, item := range response.Output {
@@ -480,6 +482,9 @@ func encodeResponsesSuccessResource(response llmprotocol.Response, envelope llmp
 	if len(items) == 0 {
 		return wire, nil
 	}
+	if last := &items[len(items)-1]; last.Type == "message" && responsesOutputLimitStop(response.StopReason) {
+		last.Status = "incomplete"
+	}
 	encoded, err := json.Marshal(items)
 	wire.Output = encoded
 	return wire, err
@@ -490,6 +495,22 @@ func responsesCreatedAt(createdAt time.Time) int64 {
 		return 0
 	}
 	return createdAt.Unix()
+}
+
+// responsesCreatedTime reads created_at seconds, which some providers send
+// with a fraction.
+func responsesCreatedTime(seconds float64) time.Time {
+	if seconds <= 0 {
+		return time.Time{}
+	}
+	whole, fraction := math.Modf(seconds)
+	return time.Unix(int64(whole), int64(math.Round(fraction*float64(time.Second)))).UTC()
+}
+
+// responsesOutputLimitStop reports a stop that Responses renders as an
+// incomplete response with reason max_output_tokens.
+func responsesOutputLimitStop(stop llmprotocol.StopReason) bool {
+	return stop == llmprotocol.StopMaxTokens || stop == llmprotocol.StopContextWindow
 }
 
 func applyResponsesStopReason(

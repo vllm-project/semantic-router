@@ -14,10 +14,8 @@ import (
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
-// Claude Code's Artifact tool description is about 20 KiB. The response-api
-// profile's opt-in Router raises global.router.protocol_limits; its main Router
-// keeps the 16 KiB default.
-const artifactToolDescriptionBytes = 20_225
+// The response-api profile's opt-in Router raises the 256 KiB default.
+const oversizedToolDescriptionBytes = 300 << 10
 
 func init() {
 	pkgtestcases.Register("protocol-codec-tool-description-limit", pkgtestcases.TestCase{
@@ -28,7 +26,7 @@ func init() {
 }
 
 func testProtocolCodecToolDescriptionLimit(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	description := "artifact-" + strings.Repeat("d", artifactToolDescriptionBytes-len("artifact-"))
+	description := "artifact-" + strings.Repeat("d", oversizedToolDescriptionBytes-len("artifact-"))
 
 	defaultSession, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
@@ -40,7 +38,7 @@ func testProtocolCodecToolDescriptionLimit(ctx context.Context, client *kubernet
 	if err != nil {
 		return fmt.Errorf("default-limit request: %w", err)
 	}
-	want := fmt.Sprintf("tools[0].description is %d bytes and exceeds the configured limit of 16384 bytes", artifactToolDescriptionBytes)
+	want := fmt.Sprintf("tools[0].description is %d bytes and exceeds the configured limit of 262144 bytes", oversizedToolDescriptionBytes)
 	if rejected.StatusCode != http.StatusBadRequest || !bytes.Contains(rejected.Body, []byte(want)) {
 		return fmt.Errorf("default Router must reject the tool with %q: status=%d body=%s",
 			want, rejected.StatusCode, truncateString(string(rejected.Body), 500))

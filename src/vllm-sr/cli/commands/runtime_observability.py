@@ -31,8 +31,10 @@ def apply_local_tracing_endpoint(
     """Scope only an omitted or built-in local OTLP endpoint.
 
     Explicit external endpoints, environment references, disabled tracing and
-    other exporters remain authoritative. Call only while materializing a local
-    runtime document; the operator's source and target-neutral config stay intact.
+    other exporters remain authoritative, and an `enabled` that is not a boolean
+    stays as written for the Router to reject. Call only while materializing a
+    local runtime document; the operator's source and target-neutral config stay
+    intact.
     """
     mappings = []
     current = config
@@ -47,7 +49,11 @@ def apply_local_tracing_endpoint(
 
     tracing = mappings[-1][0]
     exporter = current
-    if tracing.get("enabled") is False or exporter.get("type", "otlp") != "otlp":
+    enabled = tracing.get("enabled")
+    if enabled is not None and not isinstance(enabled, bool):
+        # Overwriting it would hide the mistake from the Router's validation.
+        return False
+    if enabled is False or exporter.get("type", "otlp") != "otlp":
         return False
     endpoint = exporter.get("endpoint")
     scoped_endpoint = stack_layout.otlp_service_endpoint.removeprefix("http://")
@@ -108,6 +114,17 @@ def _load_tracing_projection(state_path: Path) -> dict[str, object] | None:
     ):
         raise ValueError(f"Invalid local tracing projection state: {state_path}")
     return state
+
+
+def runtime_tracing_disabled(runtime_path: Path) -> bool:
+    """Whether serve turned tracing off because the stack runs no collector.
+
+    The projection state exists only while that override is in force, so a
+    later materialization of the same stack can repeat it.
+    """
+    return (
+        _load_tracing_projection(runtime_path.with_suffix(".tracing.json")) is not None
+    )
 
 
 def recover_runtime_tracing_projection(runtime_path: Path) -> None:

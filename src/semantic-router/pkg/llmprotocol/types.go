@@ -28,7 +28,29 @@ const (
 	// to /v1/images/generations, and the generated image is decoded back into
 	// the protocol-neutral GeneratedImage output item.
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
+	// OpenAISpeechV1 is the OpenAI Speech API dialect (POST /v1/audio/speech)
+	// served by TTS backends such as vLLM-Omni. It is a sink dialect: the
+	// router reads the input text and forwards the other request fields, and
+	// the audio response bypasses the neutral response.
+	OpenAISpeechV1 WireFormat = "openai.speech.v1"
 )
+
+// APIName is the API a wire format serves, as clients and operators call it;
+// the identifier itself is not client-facing.
+func (format WireFormat) APIName() string {
+	switch format {
+	case OpenAIChatV1:
+		return "Chat Completions"
+	case OpenAIResponsesV1:
+		return "Responses"
+	case AnthropicMessagesV1:
+		return "Anthropic Messages"
+	case OpenAIImagesV1:
+		return "Images"
+	default:
+		return string(format)
+	}
+}
 
 type Role string
 
@@ -42,10 +64,10 @@ const (
 
 type ContentKind string
 
-// ReasoningScope preserves whether a provider exposed full reasoning text or
-// a user-facing summary. An empty scope means the source format did not make
-// that distinction; codecs must not guess that unspecified reasoning is a
-// summary.
+// ReasoningScope preserves whether a provider exposed full reasoning text,
+// a user-facing summary, or opaque redacted state. An empty scope means the
+// source format did not make that distinction; codecs must not guess that
+// unspecified reasoning is a summary.
 type ReasoningScope string
 
 const (
@@ -63,11 +85,19 @@ const (
 	// image supplied as model input, while this kind preserves the lifecycle of
 	// a model-hosted image generation tool.
 	ContentGeneratedImage ContentKind = "generated_image"
+	// ContentServerTool is a call or a result of a tool the provider runs
+	// itself, such as Anthropic's web search. Raw holds the block as the
+	// provider wrote it, which only the same wire format can carry.
+	ContentServerTool ContentKind = "server_tool"
 )
 
 const (
 	ReasoningScopeText    ReasoningScope = "text"
 	ReasoningScopeSummary ReasoningScope = "summary"
+	// ReasoningScopeRedacted marks opaque reasoning that the provider hid. Its
+	// payload lives in Signature and has no text-only approximation, so only a
+	// wire format that can carry the same opacity may accept it.
+	ReasoningScopeRedacted ReasoningScope = "redacted"
 )
 
 // Content is one ordered semantic block. Fields are closed by Kind. Data and
@@ -91,6 +121,10 @@ type Content struct {
 	// ReasoningDetail is a typed continuity block, distinct from display text.
 	// Its identity and opaque payload must survive routing and tool turns.
 	ReasoningDetail *ReasoningDetail
+	// Raw is a ContentServerTool block as written, and for text the
+	// citations a server tool attached to it, as a JSON array. Neither has a
+	// neutral form, so only the wire format they came from carries them.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 // CacheDirective marks a request block or tool definition as an explicit
@@ -123,12 +157,24 @@ type Message struct {
 	// next to an Anthropic tool_result block. It continues the tool loop
 	// rather than starting a user turn. It is not a wire field.
 	WithToolResults bool `json:",omitempty"`
+	// SourcePosition is the client message this one was decoded from, counted
+	// from one, so a refusal can name the client's own field. Only Anthropic
+	// Messages decoding sets it; zero means unknown, as for a message the
+	// Router added. It is not a wire field.
+	SourcePosition int `json:",omitempty"`
 }
 
 type InstructionBlock struct {
 	Role    Role
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
+	// Position is how many conversation messages came before the instruction
+	// where the client sent it, zero for one that leads the conversation.
+	// Chat and Responses decoding keep later instructions in Messages; an
+	// instruction explicitly positioned here is also supported by the system
+	// message projection. Code that inserts or removes messages keeps it with InsertMessages and
+	// KeepInstructionPositions. It is not a wire field.
+	Position int `json:",omitempty"`
 }
 
 type ToolCall struct {
@@ -141,6 +187,10 @@ type ToolCall struct {
 	ID        string
 	Name      string
 	Arguments string
+	// Namespace is the Responses namespace the client knows the tool under, and
+	// Name is then the tool's name inside it. Backends never receive it: their
+	// requests carry the flat name of the tool instead.
+	Namespace string
 }
 
 type ToolResult struct {
@@ -163,6 +213,10 @@ type ToolKind string
 
 const ToolKindCustom ToolKind = "custom"
 
+// ToolKindServer is a tool its provider defines, such as Anthropic's
+// web_search_20250305. Raw holds the definition as the client sent it.
+const ToolKindServer ToolKind = "server"
+
 type Tool struct {
 	Kind        ToolKind
 	Name        string
@@ -172,6 +226,12 @@ type Tool struct {
 	// CustomFormat constrains a custom tool's input. Nil means unconstrained text.
 	CustomFormat *CustomToolFormat
 	Cache        *CacheDirective
+	// Namespace and LocalName record where a tool flattened from a Responses
+	// namespace came from. Name holds the flat name every backend receives.
+	Namespace string
+	LocalName string
+	// Raw is a ToolKindServer definition as sent, in the source wire format.
+	Raw json.RawMessage `json:",omitempty"`
 }
 
 type CustomToolFormat struct {
@@ -225,6 +285,7 @@ type Sampling struct {
 	TopP              *float64
 	TopK              *int64 // -1 disables the limit for supporting providers.
 	MinP              *float64
+	LogitBias         map[string]float64 // Token ID to a bias from -100 to 100.
 	RepetitionPenalty *float64
 	MaxOutputTokens   *int64
 	Seed              *int64
@@ -263,12 +324,15 @@ type TrustedMetadata struct {
 }
 
 type Request struct {
-	Generation        uint64
-	Model             string
-	Instructions      []InstructionBlock
-	Messages          []Message
-	Tools             []Tool
-	ImageGeneration   *ImageGenerationOptions
+	Generation      uint64
+	Model           string
+	Instructions    []InstructionBlock
+	Messages        []Message
+	Tools           []Tool
+	ImageGeneration *ImageGenerationOptions
+	// SpeechGeneration is set for a Speech API request. Its presence requires
+	// CapabilitySpeechGeneration. The text to speak is the last user message.
+	SpeechGeneration  *SpeechGenerationOptions
 	ToolChoice        ToolChoice
 	ParallelToolCalls *bool
 	CandidateCount    *int64
@@ -282,6 +346,8 @@ type Request struct {
 	// ReasoningSummary asks a Responses provider for a reasoning summary: auto,
 	// concise or detailed. Chat Completions and Messages cannot carry it.
 	ReasoningSummary string
+	// IncludeEncryptedReasoning requests Responses encrypted continuation state.
+	IncludeEncryptedReasoning bool
 	// ReasoningDisplay controls whether a provider returns summarized reasoning
 	// content or only its signed continuation token. It is distinct from whether
 	// reasoning itself is enabled.
@@ -303,11 +369,27 @@ type Request struct {
 	// ContextManagement carries Anthropic context edits through routing and
 	// same-format re-encoding. Other wire formats must reject or report its loss.
 	ContextManagement json.RawMessage
+	// Safeguards carries the context Claude Code's auto mode sends for
+	// Anthropic's server-side classifier review, as sent. Only Anthropic
+	// Messages re-encodes it; other wire formats report its omission.
+	Safeguards json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
 	// output, but targets that cannot carry it must reject it, not drop it.
 	PromptCacheKey string
+	// ExtensionFields holds operator-whitelisted top-level request members
+	// the wire format does not declare (Policy.AllowedRequestExtensions),
+	// captured opaquely at ingress. Same-format dispatch merges them back;
+	// crossing formats drops them with a diagnostic. The Router never
+	// interprets their values.
+	ExtensionFields map[string]json.RawMessage
+	// ExtensionFieldsFormat is the wire format the members were captured from.
+	ExtensionFieldsFormat WireFormat
+	// ToolNameOrigins is decode state that no wire carries. A request that
+	// flattened a Responses namespace keeps where each tool name came from, so
+	// retained history prepended later is checked against the same names.
+	ToolNameOrigins ToolNameOrigins
 }
 
 type StopReason string

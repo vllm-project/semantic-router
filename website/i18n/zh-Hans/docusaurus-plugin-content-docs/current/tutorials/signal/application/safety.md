@@ -62,11 +62,12 @@ recipes:
 | `labels` | 规则匹配的危害类别；不写时，规则匹配不安全的请求 |
 | `predicate` | 不带 labels 时，`unsafe` 的最低概率：请求阶段默认为模型的校准阈值（vela3-fast 上为 0.52），否则为 0.5。带 labels 时，列出类别的最低概率；不写时以模型自己的选择为准 |
 | `stage` | `request`（默认）或 `response`，后者读取模型的答案 |
+| `min_coverage` | 长输入至少要读完的窗口比例（0 到 1），达到后才根据已读窗口判断；低于该比例时规则为未知。默认关闭 |
 | `deployment`、`timeout_ms` | 回答问题的部署，以及答案的截止时间 |
 
 每个阶段中，所有不带 labels 的规则共享一个问题，所有带 labels 的规则共享 34 类别问题；每条规则应用自己的 labels 和 predicate。阳性答案可能来自正处于危机中寻求帮助的人：它并不意味着恶意。请在决策中选择响应策略，并让提示攻击决策与内容风险决策并存，明确设置它们的优先级。
 
-问题读取完整输入：超过部署一个 `scan_window` 的输入被切成相互重叠的窗口，先读结尾，再读开头，然后读中间；任何一个窗口被判为不安全或属于所列类别，整个输入即被标记（参见[长输入](../../../system-one/deploy/performance.md#long-inputs)）。与 `jailbreak` 一样，它也会读取 `global.router.routing_input` 从路由文本中移除的内容。如果截止时间在所有窗口读完之前到达，规则根据已读窗口作出判断。模型一个窗口都没有回答时，规则为未知，由决策的 `rules.on_unknown` 决定：上面的 `fail_request` 会返回 HTTP 503。
+问题读取完整输入：超过部署一个 `scan_window` 的输入被切成相互重叠的窗口，先读结尾，再读开头，然后按二分读中间；任何一个窗口被判为不安全或属于所列类别，整个输入即被标记（参见[长输入](../../../system-one/deploy/performance.md#long-inputs)）。与 `jailbreak` 一样，它也会读取 `global.router.routing_input` 从路由文本中移除的内容。如果截止时间在所有窗口读完之前到达，规则根据已读窗口作出判断；设置了 `min_coverage` 时，需读完该比例的窗口，低于该比例时规则为未知。模型一个窗口都没有回答时，规则为未知，由决策的 `rules.on_unknown` 决定：上面的 `fail_request` 会返回 HTTP 503。
 
 ### 危害类别 {#harm-categories}
 

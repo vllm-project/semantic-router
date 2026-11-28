@@ -79,6 +79,13 @@ Get the router ConfigMap name
 {{- end }}
 
 {{/*
+The Secret that keeps the keys a ConfigMap save moves out of config.yaml.
+*/}}
+{{- define "semantic-router.keySecretName" -}}
+{{- printf "%s-provider-keys" (include "semantic-router.fullname" .) }}
+{{- end }}
+
+{{/*
 After installation, management APIs may update config.yaml in the live
 ConfigMap. Helm values are the install seed. A changed revision explicitly
 reapplies them once; --reuse-values with the same revision preserves later
@@ -161,6 +168,39 @@ replaces the chart's data volume.
 {{- end -}}
 {{- end -}}
 {{- $custom -}}
+{{- end }}
+
+{{/*
+"true" when the Router's ext_proc listener serves TLS, which kubelet's native
+gRPC probe cannot reach: that probe speaks plaintext. Mirrors the Operator's
+routerUsesGRPCTLS, so a chart release and an Operator release probe the same
+listener the same way. The Router's own boolean flag syntax and last-value-wins
+behavior apply, and an argument list ends at a bare "--".
+*/}}
+{{- define "semantic-router.extprocGRPCTLS" -}}
+{{- $secure := false -}}
+{{- range .Values.args -}}
+{{- $arg := toString . -}}
+{{- if eq $arg "--" -}}
+{{- break -}}
+{{- end -}}
+{{- $name := $arg -}}
+{{- $value := "" -}}
+{{- $hasValue := false -}}
+{{- if contains "=" $arg -}}
+{{- $parts := splitList "=" $arg -}}
+{{- $name = index $parts 0 -}}
+{{- $value = index $parts 1 -}}
+{{- $hasValue = true -}}
+{{- end -}}
+{{- if or (eq $name "--secure") (eq $name "-secure") -}}
+{{- $secure = true -}}
+{{- if $hasValue -}}
+{{- $secure = has $value (list "1" "t" "T" "TRUE" "True" "true") -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $secure -}}
 {{- end }}
 
 {{/*

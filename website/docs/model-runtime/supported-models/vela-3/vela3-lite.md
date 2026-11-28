@@ -1,7 +1,7 @@
 ---
 title: "vela3-lite"
 sidebar_label: "vela3-lite"
-sidebar_position: 3
+sidebar_position: 4
 description: "Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and image input, with lower latency on a small GPU."
 custom_edit_url: null
 ---
@@ -37,8 +37,8 @@ Vela 3.0 on d3-lite: trained adapters for the built-in questions, spans, and ima
 | `set` | Yes, asked as one `noul` per label |
 | `span` | Yes, on the `router` span head |
 
-Rules that read the turn's images (`input.image`) or videos (`input.video`) can
-resolve to it.
+Rules that read the request's images (`input.image`) or the current turn's
+videos (`input.video`) can resolve to it.
 
 ## Built-in questions
 
@@ -57,9 +57,10 @@ This model has no calibrated thresholds: a built-in question without a
 Each time it loads, the model compares its answers with the reference
 answers recorded for its revision. They are recorded for:
 
+- NVIDIA Ada (sm_89) (`cuda:sm_89`)
 - AMD GPU (ROCm) (`rocm`)
 
-On a CPU or an NVIDIA GPU no reference is recorded, so the model serves
+On a CPU no reference is recorded, so the model serves
 there with its self-check reported as `unverified`.
 
 [Choose a model](model-runtime/get-started/choose-a-model.md#hardware) lists the

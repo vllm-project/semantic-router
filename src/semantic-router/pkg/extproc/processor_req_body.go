@@ -6,6 +6,7 @@ import (
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/consts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -44,7 +45,7 @@ func (r *OpenAIRouter) handleRequestBody(
 		return nil, err
 	}
 
-	originalModel := strings.TrimSpace(snapshot.Model)
+	originalModel := r.routeUnservedModel(strings.TrimSpace(snapshot.Model), ctx)
 	if rejected := r.listenerModelRejection(originalModel, ctx); rejected != nil {
 		return rejected, nil
 	}
@@ -64,7 +65,7 @@ func (r *OpenAIRouter) handleRequestBody(
 		return r.handleLooperInternalRequestWithPlugins(originalModel, ctx)
 	}
 	ctx.UserContent = snapshot.UserContent
-	observeRoutingInput(snapshot.RoutingInput)
+	observeRoutingInput(ctx, snapshot.RoutingInput)
 	ctx.RequestImageURL = snapshot.FirstImageURL
 	ctx.RequestAudio = snapshot.FirstAudio
 
@@ -349,11 +350,13 @@ func (r *OpenAIRouter) unavailableModelResponse(
 	if ctx != nil {
 		requestID = ctx.RequestID
 	}
+	failure := modelNotFoundFailure(model)
 	logging.ComponentWarnEvent("extproc", "specified_model_not_found", map[string]interface{}{
 		"request_id": requestID,
-		"code":       routingFailureModelNotFound.code,
+		"code":       failure.code,
 		"model":      model,
 	})
-	metrics.RecordRequestError(model, "model_not_found")
-	return r.routingFailureResponse(ctx, routingFailureModelNotFound)
+	// The name is client text: a label per name would grow without bound.
+	metrics.RecordRequestError(consts.UnknownLabel, failure.code)
+	return r.routingFailureResponse(ctx, failure)
 }

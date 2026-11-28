@@ -16,6 +16,7 @@
     {"name": "model", "patch": {"model": "alternate-client-model"}},
     {"name": "output_config", "patch": {"output_config": {"effort": "high", "format": {"type": "json_schema", "schema": {"type": "object"}}}}},
     {"name": "service_tier", "patch": {"service_tier": "standard_only"}},
+    {"name": "safeguards", "patch": {"safeguards": [{"type": "auto_mode", "classifier_context": {"v": 1, "permission_mode": "auto"}}]}},
     {"name": "stop_sequences", "patch": {"stop_sequences": ["END", "STOP"]}},
     {"name": "stream", "patch": {"stream": true}},
     {"name": "system", "patch": {"system": [{"type": "text", "text": "Be concise."}]}},

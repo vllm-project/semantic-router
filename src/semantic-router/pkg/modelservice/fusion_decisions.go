@@ -29,11 +29,12 @@ import (
 // asked alone.
 
 // fusedDecision is a decisions task's states, in request order, and its
-// cache key.
+// cache key. A window task asks about one guard window and nothing else.
 type fusedDecision struct {
 	states []*fusedState
 	cache  *resultCache
 	key    cacheKey
+	window bool
 }
 
 // fusedState is one state of a fused decisions task: the calls about it, its
@@ -134,8 +135,9 @@ func compatibleAnswers(questions []Question, taken map[string]Question) bool {
 }
 
 // fuseDecisions turns the decisions calls parked for one process or remote
-// deployment into tasks of at most limit states each. The calls are placed in
-// a fixed order, their requests' Order first, so the same calls make the same
+// deployment into tasks of at most limit states each. A guard window's calls
+// make a task of their own about that window alone. The calls are placed in
+// a fixed order, windows in reading order, so the same calls make the same
 // tasks whatever order they parked in.
 func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 	type placed struct {
@@ -153,7 +155,7 @@ func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 		if len(ids) > 0 {
 			first = ids[0]
 		}
-		ordered[index] = placed{call: call, group: decisionGroup(call), order: call.decision.request.Order, text: stateText(call.decision.request), first: first}
+		ordered[index] = placed{call: call, group: decisionGroup(call), order: call.decision.request.Window, text: stateText(call.decision.request), first: first}
 	}
 	sort.SliceStable(ordered, func(i, j int) bool {
 		a, b := ordered[i], ordered[j]
@@ -172,20 +174,25 @@ func fuseDecisions(limit int, calls []*bundleCall) []*bundleTask {
 	open := make(map[string][]*bundleTask)
 	var tasks []*bundleTask
 	for _, entry := range ordered {
+		window := entry.order > 0
+		key, states := entry.group, limit
+		if window {
+			key, states = "window|"+entry.group, 1
+		}
 		var target *bundleTask
 		if entry.group != "" {
-			for _, task := range open[entry.group] {
-				if task.decision.fits(entry.call, entry.text, limit) {
+			for _, task := range open[key] {
+				if task.decision.fits(entry.call, entry.text, states) {
 					target = task
 					break
 				}
 			}
 		}
 		if target == nil {
-			target = &bundleTask{decision: &fusedDecision{cache: entry.call.decision.cache}}
+			target = &bundleTask{decision: &fusedDecision{cache: entry.call.decision.cache, window: window}}
 			tasks = append(tasks, target)
 			if entry.group != "" {
-				open[entry.group] = append(open[entry.group], target)
+				open[key] = append(open[key], target)
 			}
 		}
 		target.decision.add(entry.call, entry.text)
