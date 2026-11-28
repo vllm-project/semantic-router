@@ -147,6 +147,15 @@ On an `api_format: anthropic` backend, `enabled` thinking needs a
 backend as `thinking.type: adaptive` with `output_config.effort` set to the
 selected effort.
 
+A decision that turns thinking off on an `api_format: anthropic` backend sends
+`thinking.type: disabled` and no effort. That covers the per-message effort
+changes of a Messages client too: a `system` message in `messages` that carries
+its own `output_config.effort`. The Router removes that field, and removes the
+message when it holds nothing else. With thinking off the backend takes one
+effort level for the whole request, and Claude Haiku 5.5 rejects a request that
+changes it. When the decision keeps thinking on, per-message effort changes
+reach the backend as the client sent them.
+
 In the Dashboard decision editor, select the Model first. The UI derives the
 mode and effort choices from its effective family and disables controls that
 the Model or Provider cannot support. A custom Model without a family stays a

@@ -170,6 +170,13 @@
   default: high
   modes: [adaptive, disabled]
   default_mode: disabled
+- id: claude-effort-adaptive-medium
+  type: reasoning_effort
+  parameter: effort
+  levels: [low, medium, high, xhigh, max]
+  default: medium
+  modes: [adaptive, disabled]
+  default_mode: adaptive
 - id: kimi-k3
   type: reasoning_effort
   parameter: reasoning_effort
