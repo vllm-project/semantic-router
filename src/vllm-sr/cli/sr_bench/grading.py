@@ -13,12 +13,34 @@ MCQ_GRADER_VERSION = "sr-bench-mcq-final-v2"
 FINAL_GRADER_VERSION = "sr-bench-final-v2"
 ARC_MAX_COLOR = 9
 ResultKind: TypeAlias = Literal[
-    "binary", "weighted-rubric-v1", "token-coverage-v1", "cache-observation-v1"
+    "binary",
+    "weighted-rubric-v1",
+    "token-coverage-v1",
+    "cache-observation-v1",
+    "session-observation-v1",
+    "mrcr-sequence-ratio-v1",
 ]
 BINARY_RESULT: ResultKind = "binary"
 WEIGHTED_RUBRIC_RESULT: ResultKind = "weighted-rubric-v1"
 TOKEN_COVERAGE_RESULT: ResultKind = "token-coverage-v1"
 CACHE_OBSERVATION_RESULT: ResultKind = "cache-observation-v1"
+SESSION_OBSERVATION_RESULT: ResultKind = "session-observation-v1"
+MRCR_SEQUENCE_RESULT: ResultKind = "mrcr-sequence-ratio-v1"
+# EvalScope 1.8.1 declares the metric in its adapter and the bins in utils:
+# https://github.com/modelscope/evalscope/blob/fce1d21391dc2d7b45c9cf0edb9b9e40d526aed3/evalscope/benchmarks/openai_mrcr/openai_mrcr_adapter.py#L53
+# https://github.com/modelscope/evalscope/blob/fce1d21391dc2d7b45c9cf0edb9b9e40d526aed3/evalscope/benchmarks/openai_mrcr/utils.py#L8-L17
+MRCR_METRIC: str = "mrcr_score"
+MRCR_REPORT_VERSION: str = "mrcr-sequence-report-v1"
+MRCR_TOKEN_BINS: tuple[tuple[int, int], ...] = (
+    (4096, 8192),
+    (8192, 16384),
+    (16384, 32768),
+    (32768, 65536),
+    (65536, 131072),
+    (131072, 262144),
+    (262144, 524288),
+    (524288, 1048576),
+)
 
 
 def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
@@ -31,6 +53,8 @@ def frozen_result_kind(manifest: dict[str, Any], benchmark: str) -> ResultKind:
         WEIGHTED_RUBRIC_RESULT,
         TOKEN_COVERAGE_RESULT,
         CACHE_OBSERVATION_RESULT,
+        SESSION_OBSERVATION_RESULT,
+        MRCR_SEQUENCE_RESULT,
     }:
         raise ValueError("Unknown frozen result kind")
     return kind
@@ -51,6 +75,9 @@ def validate_result(kind: ResultKind, result: object) -> None:
     if kind == CACHE_OBSERVATION_RESULT:
         _validate_cache_observation(result)
         return
+    if kind == SESSION_OBSERVATION_RESULT:
+        _validate_session_observation(result)
+        return
     if kind == BINARY_RESULT:
         if (
             not isinstance(result, dict)
@@ -61,6 +88,9 @@ def validate_result(kind: ResultKind, result: object) -> None:
         return
     if kind == TOKEN_COVERAGE_RESULT:
         _validate_token_coverage(result)
+        return
+    if kind == MRCR_SEQUENCE_RESULT:
+        _validate_mrcr_sequence_result(result)
         return
     if kind != WEIGHTED_RUBRIC_RESULT:
         raise ValueError("Unknown adapter result kind")
@@ -149,6 +179,38 @@ def _validate_token_coverage(result: object) -> None:
         raise ValueError("Token coverage differs from native rounded substring credit")
 
 
+def _validate_mrcr_sequence_result(result: object) -> None:
+    if (
+        not isinstance(result, dict)
+        or result.get("correct") is not None
+        or not isinstance(result.get("answer"), str)
+    ):
+        raise ValueError("MRCR sequence results must not claim binary correctness")
+    score = result.get("score")
+    details = result.get("details")
+    mrcr = details.get("mrcr") if isinstance(details, dict) else None
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, (int, float))
+        or not math.isfinite(score)
+        or not 0 <= score <= 1
+        or not isinstance(mrcr, dict)
+        or mrcr.get("version") != MRCR_SEQUENCE_RESULT
+        or mrcr.get("native_metric") != MRCR_METRIC
+        or type(mrcr.get("source_index")) is not int
+        or mrcr["source_index"] < 0
+        or type(mrcr.get("bin_index")) is not int
+        or not 0 <= mrcr["bin_index"] < len(MRCR_TOKEN_BINS)
+        or type(mrcr.get("raw_input_tok_cnt")) is not int
+        or mrcr["raw_input_tok_cnt"] < 0
+        or type(mrcr.get("total_tok_cnt")) is not int
+        or mrcr["total_tok_cnt"] < mrcr["raw_input_tok_cnt"]
+    ):
+        raise ValueError(
+            "MRCR sequence result does not match its native score contract"
+        )
+
+
 def _validate_cache_observation(result: object) -> None:
     if not isinstance(result, dict) or any(
         key not in result or result[key] is not None
@@ -169,6 +231,31 @@ def _validate_cache_observation(result: object) -> None:
     ):
         raise ValueError(
             "Cache observation result requires a completed repeat sequence"
+        )
+
+
+def _validate_session_observation(result: object) -> None:
+    if not isinstance(result, dict) or any(
+        key not in result or result[key] is not None
+        for key in ("answer", "correct", "score")
+    ):
+        raise ValueError(
+            "Session observations must not claim an answer or quality score"
+        )
+    details = result.get("details")
+    observation = (
+        details.get("session_observation") if isinstance(details, dict) else None
+    )
+    if (
+        not isinstance(observation, dict)
+        or observation.get("version") != SESSION_OBSERVATION_RESULT
+        or type(observation.get("planned_turns")) is not int
+        or observation["planned_turns"] < 1
+        or type(observation.get("completed_turns")) is not int
+        or observation["completed_turns"] != observation["planned_turns"]
+    ):
+        raise ValueError(
+            "Session observation result requires a completed frozen turn sequence"
         )
 
 

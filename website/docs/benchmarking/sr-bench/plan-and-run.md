@@ -83,6 +83,62 @@ vllm-sr benchmark report RUN_ID --output report.json
   case and run time, call and output limits still apply. Known spend is
   recorded, but missing prices or usage don't support savings claims.
 
+## Session-routing observations
+
+The six native live session-routing schedules are opt-in custom cases. They do
+not add a published benchmark weight or answer-quality score. Prepare a frozen
+dataset from a repository checkout. Repeat `--scenario` for each schedule you
+want; choices are `balanced`, `tool-heavy`, `frontier-heavy`, `idle-heavy`,
+`stateful-heavy` and `drift-heavy`.
+
+```bash
+uv run --project src/vllm-sr python -m cli.sr_bench.session_routing \
+  --store ~/.local/share/vllm-sr/sr-bench \
+  --scenario balanced --scenario tool-heavy \
+  --sessions 1 --turns 6 --max-tokens 64 --timeout 60 \
+  --profile quick > session-routing-dataset.json
+```
+
+Copy the returned `path`, `sha256`, `profile` and `seed` fields into a normal
+benchmark manifest. Match the frozen request settings and call limits:
+
+```yaml
+version: sr-bench-1.0
+name: Session routing observations
+mode: live
+profile: quick
+seed: 0
+dataset:
+  path: /absolute/path/from/the/preparation/output/cases.jsonl
+  sha256: SHA256_FROM_PREPARATION
+targets:
+  - id: router
+    kind: mom
+    base_url: http://router.example:8000/v1
+    model: vllm-sr/auto
+    config_hash: REPLACE_WITH_ACTIVE_RUNTIME_HASH
+    session_mode: session_aware
+cost_policy: capability_only
+sampling:
+  temperature: 0
+  max_tokens: 64
+limits:
+  max_calls_per_case: 6
+  total_timeout_s: 60
+```
+
+Plan and run it with the standard commands above. The dataset freezes the
+scenario messages and pauses. The report separates workload phases, phases
+derived from sent request messages, and Router response phases. Missing model,
+usage or cache evidence stays unknown. The `stateful-heavy` schedule labels
+prompt phases; it does not send Responses API state. Retry and error-recovery
+controls are rejected. An idle-boundary request reuses the same session ID, but
+does not prove Router recovery or session retirement.
+
+For a live MoM target, set `config_hash` to the Router's `active_runtime_hash`
+from `GET /api/v1/config/hash`. Wait until `activation_status` is `active` and
+`generated_runtime_hash` matches it.
+
 ## Native output capacity
 
 Set `output_policy: native` to explore each model's available output

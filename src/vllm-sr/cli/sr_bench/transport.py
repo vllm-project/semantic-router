@@ -531,6 +531,8 @@ def chat(
             "tool_calls": list(tool_calls.values()),
             "phase": observed_session_phase,
             "phase_source": observed_phase_source,
+            "request_phase": request_phase(messages),
+            "previous_response_id_sent": "previous_response_id" in body,
             "cache_read_reported": cache_read_reported,
             "cache_write_reported": cache_write_reported,
             "cost_usd": (
