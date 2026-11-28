@@ -436,6 +436,8 @@ func invalidAnthropicMediaSource(message string) error {
 
 func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.AnthropicMessagesV1, false)
+	request, placementDiagnostics := llmprotocol.ProjectInstructionsAfterToolResults(request, llmprotocol.AnthropicMessagesV1)
+	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, placementDiagnostics, policy.Limits.Diagnostics)
 	if err := rejectReasoningContinuity(llmprotocol.AnthropicMessagesV1, llmprotocol.RequiredCapabilities(request)); err != nil {
 		return nil, projectionDiagnostics, err
 	}
@@ -503,6 +505,12 @@ func buildAnthropicRequestWire(
 	}
 	if messagesErr := appendAnthropicMessages(&wire, responsesAssistantTurns(request)); messagesErr != nil {
 		return anthropicRequestWire{}, diagnostics, messagesErr
+	}
+	if len(wire.Messages) == 0 {
+		return anthropicRequestWire{}, diagnostics, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "anthropic_messages_required",
+			"Anthropic Messages requires at least one conversation message", nil,
+		)
 	}
 	if toolsErr := appendAnthropicTools(&wire, request.Tools); toolsErr != nil {
 		return anthropicRequestWire{}, diagnostics, toolsErr
@@ -762,8 +770,10 @@ func encodeAnthropicToolChoice(wire *anthropicRequestWire, request llmprotocol.R
 
 func encodeAnthropicMessage(message llmprotocol.Message) ([]anthropicMessageWire, error) {
 	role := message.Role
+	// developer is OpenAI's successor to system, so a later developer message
+	// takes the same channel as a Messages client's system message in place.
 	if role == llmprotocol.RoleDeveloper {
-		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "developer_message_position", "developer messages must be normalized as instructions", nil)
+		role = llmprotocol.RoleSystem
 	}
 	if role == llmprotocol.RoleTool {
 		role = llmprotocol.RoleUser
@@ -776,6 +786,10 @@ func encodeAnthropicMessage(message llmprotocol.Message) ([]anthropicMessageWire
 		return nil, err
 	}
 	if bytes.Equal(content, []byte("[]")) && message.ReasoningEffort == "" {
+		// Empty instructions carry no text, just like an empty top-level system.
+		if role == llmprotocol.RoleSystem {
+			return nil, nil
+		}
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "empty_anthropic_message", "Anthropic Messages cannot represent a message containing only empty text", nil)
 	}
 	wire := anthropicMessageWire{Role: string(role), Content: content}

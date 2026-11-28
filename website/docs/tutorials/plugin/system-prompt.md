@@ -36,7 +36,7 @@ plugins:
 `mode: insert` (the default) puts this prompt before the caller's system
 prompt. `mode: replace` drops every system and developer instruction the
 caller sent, including the Responses `instructions` field and the system
-messages a Messages client puts inside `messages`, and sends this prompt in
+and developer messages later in the conversation, and sends this prompt in
 their place, followed by any context a `context` plugin injected into the
 system prompt. A system message that also sets per-message
 `output_config.effort` keeps that effort in its place without its text. Any

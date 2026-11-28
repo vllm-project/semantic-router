@@ -20,13 +20,15 @@ const (
 // its own turn, and a model shown turns that end in text without a call ends
 // its own turn the same way. Items join only in turn order, so nothing moves
 // across other content, and only at this projection boundary, so native
-// Responses keeps its item identities.
+// Responses keeps its item identities. Instruction placement has already been
+// projected before grouping these turns.
 func responsesAssistantTurns(request llmprotocol.Request) []llmprotocol.Message {
 	if request.Trusted.SourceFormat != llmprotocol.OpenAIResponsesV1 {
 		return request.Messages
 	}
-	turns := make([]llmprotocol.Message, 0, len(request.Messages))
-	for _, message := range request.Messages {
+	messages := request.Messages
+	turns := make([]llmprotocol.Message, 0, len(messages))
+	for _, message := range messages {
 		if n := len(turns); n > 0 && continuesAssistantTurn(turns[n-1], message) {
 			// Clip so the append never writes into the request's own content.
 			turns[n-1].Content = append(slices.Clip(turns[n-1].Content), message.Content...)

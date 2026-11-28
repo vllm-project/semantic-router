@@ -117,3 +117,28 @@ func TestAnthropicEmptyHistoryTurnIsNotSilentlyDropped(t *testing.T) {
 		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "empty_anthropic_message")
 	}
 }
+
+func TestAnthropicReencodingRequiresMessagesAfterEmptyInstructionsAreOmitted(t *testing.T) {
+	for _, content := range []string{`""`, `[{"type":"text","text":""}]`} {
+		t.Run(content, func(t *testing.T) {
+			body := []byte(`{"model":"m","max_tokens":16,"messages":[{"role":"system","content":` + content + `}]}`)
+			_, err := NewBuiltinEngine().TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, body, routeRequest)
+			assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "anthropic_messages_required")
+		})
+	}
+}
+
+func TestAnthropicReencodingKeepsAnEmptyEffortMessage(t *testing.T) {
+	body := []byte(`{"model":"m","max_tokens":16,"messages":[{"role":"system","content":"","output_config":{"effort":"low"}}]}`)
+	translated, err := NewBuiltinEngine().TranslateRequest(llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, body, routeRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire anthropicRequestWire
+	if err = json.Unmarshal(translated.Body, &wire); err != nil {
+		t.Fatal(err)
+	}
+	if len(wire.Messages) != 1 || wire.Messages[0].OutputConfig == nil || wire.Messages[0].OutputConfig.Effort != "low" {
+		t.Fatalf("effort-only message was not retained: %s", translated.Body)
+	}
+}
