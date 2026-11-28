@@ -39,6 +39,7 @@ type QdrantCache struct {
 	hitCount            int64
 	missCount           int64
 	embeddingDeployment string
+	expiredRowSweeper   *expiredRowSweeper
 }
 
 type QdrantCacheOptions struct {
@@ -110,7 +111,33 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		return nil, fmt.Errorf("failed to initialise qdrant cache collection: %w", err)
 	}
 
+	c.expiredRowSweeper = startExpiredRowSweeper(expiredRowSweepInterval(c.ttlSeconds), c.deleteExpiredRows)
 	return c, nil
+}
+
+// deleteExpiredRows removes semantic and exact points whose expires_at has
+// passed; reads already skip them, so this only reclaims storage.
+func (c *QdrantCache) deleteExpiredRows(ctx context.Context) error {
+	start := time.Now()
+	_, err := c.client.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: c.collectionName,
+		Wait:           qdrant.PtrOf(true),
+		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
+			Must: []*qdrant.Condition{
+				qdrant.NewRange("expires_at", &qdrant.Range{
+					Gt:  qdrant.PtrOf(0.0),
+					Lte: qdrant.PtrOf(float64(start.Unix())),
+				}),
+			},
+		}),
+	})
+	if err != nil {
+		metrics.RecordCacheOperation("qdrant", "cleanup_expired", "error", time.Since(start).Seconds())
+		logging.Warnf("QdrantCache: failed to delete expired points from %s: %v", c.collectionName, err)
+		return err
+	}
+	metrics.RecordCacheOperation("qdrant", "cleanup_expired", "success", time.Since(start).Seconds())
+	return nil
 }
 
 func (c *QdrantCache) connTimeout() time.Duration {
@@ -532,6 +559,7 @@ func (c *QdrantCache) SearchCollection(
 }
 
 func (c *QdrantCache) Close() error {
+	c.expiredRowSweeper.stop()
 	if c.client != nil {
 		return c.client.Close()
 	}

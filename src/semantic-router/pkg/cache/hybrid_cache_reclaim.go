@@ -36,8 +36,8 @@ func reclaimIntervalForTTL(ttlSeconds int) time.Duration {
 
 // startBackgroundReclaim launches the periodic TTL-reclamation goroutine.
 //
-// The hybrid backend keeps an in-process HNSW index alongside Milvus. Milvus
-// expires entries via its own TTL and silently deletes them, but the in-memory
+// The hybrid backend keeps an in-process HNSW index alongside Milvus. The
+// Milvus cache deletes expired rows on its own periodic sweep, but the in-memory
 // index is otherwise only trimmed when it reaches maxMemoryEntries. Without this
 // goroutine, entries that Milvus has already expired keep occupying in-process
 // memory (and HNSW search slots) until the capacity cap forces FIFO eviction
