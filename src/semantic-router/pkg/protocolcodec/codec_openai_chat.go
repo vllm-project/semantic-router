@@ -36,49 +36,49 @@ func (OpenAIChatCodec) Capabilities() llmprotocol.CapabilitySet {
 }
 
 type chatRequestWire struct {
-	Model                string                 `json:"model"`
-	Messages             []chatMessageWire      `json:"messages"`
-	Tools                []chatToolWire         `json:"tools,omitempty"`
-	ToolChoice           json.RawMessage        `json:"tool_choice,omitempty"`
-	ParallelToolCalls    *bool                  `json:"parallel_tool_calls,omitempty"`
-	CandidateCount       *int64                 `json:"n,omitempty"`
-	Temperature          *float64               `json:"temperature,omitempty"`
-	TopP                 *float64               `json:"top_p,omitempty"`
-	MaxTokens            *int64                 `json:"max_tokens,omitempty"`
-	MaxCompletionTokens  *int64                 `json:"max_completion_tokens,omitempty"`
-	Seed                 *int64                 `json:"seed,omitempty"`
-	FrequencyPenalty     *float64               `json:"frequency_penalty,omitempty"`
-	PresencePenalty      *float64               `json:"presence_penalty,omitempty"`
-	Stop                 json.RawMessage        `json:"stop,omitempty"`
-	ResponseFormat       *chatOutputWire        `json:"response_format,omitempty"`
-	ReasoningEffort      string                 `json:"reasoning_effort,omitempty"`
-	ReasoningBudget      *int64                 `json:"reasoning_budget_tokens,omitempty"`
-	Stream               bool                   `json:"stream,omitempty"`
-	StreamOptions        *chatStreamOptionsWire `json:"stream_options,omitempty"`
-	Metadata             map[string]string      `json:"metadata,omitempty"`
-	Store                *bool                  `json:"store,omitempty"`
-	User                 string                 `json:"user,omitempty"`
-	PromptCacheKey       string                 `json:"prompt_cache_key,omitempty"`
-	PromptCacheRetention json.RawMessage        `json:"prompt_cache_retention,omitempty"`
-	PromptCacheOptions   json.RawMessage        `json:"prompt_cache_options,omitempty"`
-	SafetyIdentifier     json.RawMessage        `json:"safety_identifier,omitempty"`
-	Audio                json.RawMessage        `json:"audio,omitempty"`
-	FunctionCall         json.RawMessage        `json:"function_call,omitempty"`
-	Functions            json.RawMessage        `json:"functions,omitempty"`
-	LogitBias            map[string]float64     `json:"logit_bias,omitempty"`
-	Logprobs             json.RawMessage        `json:"logprobs,omitempty"`
-	Modalities           json.RawMessage        `json:"modalities,omitempty"`
-	Moderation           json.RawMessage        `json:"moderation,omitempty"`
-	Prediction           json.RawMessage        `json:"prediction,omitempty"`
-	ServiceTier          json.RawMessage        `json:"service_tier,omitempty"`
-	TopLogprobs          json.RawMessage        `json:"top_logprobs,omitempty"`
-	Verbosity            json.RawMessage        `json:"verbosity,omitempty"`
-	WebSearchOptions     json.RawMessage        `json:"web_search_options,omitempty"`
-	ChatTemplateKwargs   json.RawMessage        `json:"chat_template_kwargs,omitempty"`
-	TopK                 *int64                 `json:"top_k,omitempty"`
-	MinP                 *float64               `json:"min_p,omitempty"`
-	RepetitionPenalty    *float64               `json:"repetition_penalty,omitempty"`
-	CacheSalt            *string                `json:"cache_salt,omitempty"`
+	Model                string                     `json:"model"`
+	Messages             []chatMessageWire          `json:"messages"`
+	Tools                []chatToolWire             `json:"tools,omitempty"`
+	ToolChoice           json.RawMessage            `json:"tool_choice,omitempty"`
+	ParallelToolCalls    *bool                      `json:"parallel_tool_calls,omitempty"`
+	CandidateCount       *int64                     `json:"n,omitempty"`
+	Temperature          *float64                   `json:"temperature,omitempty"`
+	TopP                 *float64                   `json:"top_p,omitempty"`
+	MaxTokens            *int64                     `json:"max_tokens,omitempty"`
+	MaxCompletionTokens  *int64                     `json:"max_completion_tokens,omitempty"`
+	Seed                 *int64                     `json:"seed,omitempty"`
+	FrequencyPenalty     *float64                   `json:"frequency_penalty,omitempty"`
+	PresencePenalty      *float64                   `json:"presence_penalty,omitempty"`
+	Stop                 json.RawMessage            `json:"stop,omitempty"`
+	ResponseFormat       *chatOutputWire            `json:"response_format,omitempty"`
+	ReasoningEffort      string                     `json:"reasoning_effort,omitempty"`
+	ReasoningBudget      *int64                     `json:"reasoning_budget_tokens,omitempty"`
+	Stream               bool                       `json:"stream,omitempty"`
+	StreamOptions        *chatStreamOptionsWire     `json:"stream_options,omitempty"`
+	Metadata             map[string]json.RawMessage `json:"metadata,omitempty"`
+	Store                *bool                      `json:"store,omitempty"`
+	User                 string                     `json:"user,omitempty"`
+	PromptCacheKey       string                     `json:"prompt_cache_key,omitempty"`
+	PromptCacheRetention json.RawMessage            `json:"prompt_cache_retention,omitempty"`
+	PromptCacheOptions   json.RawMessage            `json:"prompt_cache_options,omitempty"`
+	SafetyIdentifier     json.RawMessage            `json:"safety_identifier,omitempty"`
+	Audio                json.RawMessage            `json:"audio,omitempty"`
+	FunctionCall         json.RawMessage            `json:"function_call,omitempty"`
+	Functions            json.RawMessage            `json:"functions,omitempty"`
+	LogitBias            map[string]float64         `json:"logit_bias,omitempty"`
+	Logprobs             json.RawMessage            `json:"logprobs,omitempty"`
+	Modalities           json.RawMessage            `json:"modalities,omitempty"`
+	Moderation           json.RawMessage            `json:"moderation,omitempty"`
+	Prediction           json.RawMessage            `json:"prediction,omitempty"`
+	ServiceTier          json.RawMessage            `json:"service_tier,omitempty"`
+	TopLogprobs          json.RawMessage            `json:"top_logprobs,omitempty"`
+	Verbosity            json.RawMessage            `json:"verbosity,omitempty"`
+	WebSearchOptions     json.RawMessage            `json:"web_search_options,omitempty"`
+	ChatTemplateKwargs   json.RawMessage            `json:"chat_template_kwargs,omitempty"`
+	TopK                 *int64                     `json:"top_k,omitempty"`
+	MinP                 *float64                   `json:"min_p,omitempty"`
+	RepetitionPenalty    *float64                   `json:"repetition_penalty,omitempty"`
+	CacheSalt            *string                    `json:"cache_salt,omitempty"`
 }
 
 type chatStreamOptionsWire struct {
@@ -304,8 +304,10 @@ func validateChatRequestWire(wire chatRequestWire) error {
 
 func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 	request := llmprotocol.Request{
-		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
-		EndUserID: wire.User, Store: wire.Store,
+		Generation: 1, Model: wire.Model, Stream: wire.Stream,
+		Metadata:     stringifyWireMetadataJSON(wire.Metadata),
+		MetadataJSON: cloneWireMetadataJSON(wire.Metadata),
+		EndUserID:    wire.User, Store: wire.Store,
 		ParallelToolCalls: wire.ParallelToolCalls, CandidateCount: wire.CandidateCount,
 		ReasoningEffort: wire.ReasoningEffort, ReasoningBudgetTokens: wire.ReasoningBudget,
 		Sampling: llmprotocol.Sampling{

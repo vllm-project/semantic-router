@@ -127,7 +127,7 @@ func appendToolResultImagesMoved(diagnostics *llmprotocol.Diagnostics, request l
 
 func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 	wire := chatRequestWire{
-		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
+		Model: request.Model, Stream: request.Stream, Metadata: encodeWireMetadataJSON(request),
 		Store: request.Store, User: request.EndUserID,
 		ParallelToolCalls: request.ParallelToolCalls, CandidateCount: request.CandidateCount,
 		Temperature: request.Sampling.Temperature, TopP: request.Sampling.TopP,
