@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,6 +19,7 @@ from .loop_evidence import (
     packet_split,
     target,
 )
+from .report_delivery import snapshot
 from .schedule import episode_ids
 
 
@@ -219,7 +221,7 @@ def compare(ledger, args):
         not args.disposition or bool(args.reason and args.reason.strip()),
         "record the reason for the disposition",
     )
-    return ledger.append(
+    result = ledger.append(
         {
             "kind": "comparison",
             "baseline": base["record_id"],
@@ -232,3 +234,8 @@ def compare(ledger, args):
             "reason": args.reason,
         }
     )
+    if getattr(args, "workspace", None):
+        # The local handoff lives outside the signed comparison record.
+        report = snapshot(Path(args.workspace), result)
+        print(f"Recipe Lab report: {report}", file=sys.stderr)
+    return result

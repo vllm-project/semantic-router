@@ -462,7 +462,8 @@ def test_cli_recipe_and_public_model_are_exclusive(tmp_path, capsys):
             ]
         )
     assert caught.value.code == 2
-    assert "not allowed with argument" in capsys.readouterr().err
+    # usage errors are JSON receipts, never prose
+    assert "not allowed with argument" in json.loads(capsys.readouterr().out)["reason"]
 
 
 # ---- run --validate and sidecar provenance ----

@@ -91,6 +91,8 @@ def test_attribute_honors_workload_selection(tmp_path, capsys):
                 "dev",
                 "--workload",
                 "office",
+                "--output-dir",
+                str(tmp_path / "attr"),
             ]
         )
         == 0
@@ -299,6 +301,8 @@ def test_attribute_cases_hash_match_passes(tmp_path, capsys):
                 str(records),
                 "--cases",
                 str(cases),
+                "--output-dir",
+                str(tmp_path / "attr"),
             ]
         )
         == 0
@@ -571,11 +575,19 @@ def test_run_proposer_rejects_invalid_tags(tag, capsys):
     with pytest.raises(SystemExit) as exc:
         main(["run", "--proposer", tag, "--spec", "s.yaml"])
     assert exc.value.code == EXIT_CONTRACT_ERROR
-    assert "invalid --proposer" in capsys.readouterr().err
+    # The tag is validated by the argument parser, so the refusal is a receipt.
+    assert "invalid --proposer" in json.loads(capsys.readouterr().out)["reason"]
 
 
-def test_run_agent_proposer_lands_in_ledger_provenance(monkeypatch, tmp_path):
-    # S5: a self-authored candidate tagged agent:<id> keeps the tag verbatim.
+@pytest.mark.parametrize(
+    ("proposer", "override", "expected_model"),
+    [
+        ("agent:claude-loop", None, "vllm-sr/auto"),
+    ],
+)
+def test_run_targets_proposer_entrypoint_and_records_provenance(
+    monkeypatch, tmp_path, proposer, override, expected_model
+):
     from recipe_lab import cli
 
     spec_path, cases = _write_frozen_spec(tmp_path)
@@ -584,15 +596,16 @@ def test_run_agent_proposer_lands_in_ledger_provenance(monkeypatch, tmp_path):
     cands = tmp_path / "cands"
     cands.mkdir()
     (cands / "cand-1.yaml").write_text("kind: config\n", encoding="utf-8")
-    monkeypatch.setattr(
-        cli,
-        "evaluate_candidate",
-        lambda **kwargs: {
+
+    def fake_evaluate(**kwargs):
+        assert kwargs["router_model"] == expected_model
+        return {
             "summary": {"accuracy": 0.9},
             "statuses": {"ok": 1},
             "bank_stats": {"no_bank_entry": 0},
-        },
-    )
+        }
+
+    monkeypatch.setattr(cli, "evaluate_candidate", fake_evaluate)
     ledger_path = tmp_path / "ledger.jsonl"
     assert (
         main(
@@ -611,7 +624,8 @@ def test_run_agent_proposer_lands_in_ledger_provenance(monkeypatch, tmp_path):
                 "--candidates",
                 str(cands),
                 "--proposer",
-                "agent:claude-loop",
+                proposer,
+                *(["--router-model", override] if override is not None else []),
                 "--router-bin",
                 "/bin/true",
                 "--mock-backend",
@@ -627,7 +641,7 @@ def test_run_agent_proposer_lands_in_ledger_provenance(monkeypatch, tmp_path):
         for line in ledger_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    assert rows[-1]["candidate"]["provenance"]["proposer"] == "agent:claude-loop"
+    assert rows[-1]["candidate"]["provenance"]["proposer"] == proposer
 
 
 # ---- B: --split handling + the split command ----
@@ -887,10 +901,86 @@ def test_missing_spec_exits_2_with_stderr_message(tmp_path, capsys):
     assert "contract error" in capsys.readouterr().err
 
 
-def test_argparse_usage_error_exits_2():
+def test_argparse_usage_error_exits_2(capsys):
+    # A usage error is a recipe-lab-cli-error-v1 receipt on stdout: the agent
+    # always has a document to parse and nothing lands on stderr.
     with pytest.raises(SystemExit) as exc:
         main(["no-such-command"])
     assert exc.value.code == EXIT_CONTRACT_ERROR
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    receipt = json.loads(captured.out)
+    assert receipt["schema"] == "recipe-lab-cli-error-v1"
+    assert receipt["verdict"] == "INCONCLUSIVE"
+    assert "invalid choice: 'no-such-command'" in receipt["reason"]
+
+
+def test_missing_subcommand_is_a_json_receipt_too(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main([])
+    assert exc.value.code == EXIT_CONTRACT_ERROR
+    assert "command" in json.loads(capsys.readouterr().out)["reason"]
+
+
+def test_record_draft_without_pass_exits_2(tmp_path, capsys):
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text("", encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        main(
+            [
+                "record-draft",
+                "--ledger",
+                str(ledger),
+                "--output",
+                str(tmp_path / "d.md"),
+            ]
+        )
+    assert exc.value.code == EXIT_CONTRACT_ERROR
+    assert "no PASS live record" in capsys.readouterr().err
+
+
+# ---- A6: every subcommand is documented in README and the skill reference ----
+
+
+def _top_level_subcommands() -> list[str]:
+    for action in build_parser()._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return sorted(action.choices)
+    raise AssertionError("build_parser() registers no subcommands")
+
+
+def _doc_texts() -> dict:
+    """Docs whose CLI surface must mirror build_parser() (S4, both ways)."""
+    root = Path(__file__).resolve().parents[3]
+    skill = root / "tools/agent/skills/recipe-lab-loop"
+    texts = {
+        "README": (root / "tools/recipe-lab/README.md").read_text(encoding="utf-8"),
+        "SKILL.md": (skill / "SKILL.md").read_text(encoding="utf-8"),
+    }
+    for ref in sorted((skill / "references").glob("*.md")):
+        texts[f"references/{ref.name}"] = ref.read_text(encoding="utf-8")
+    return texts
+
+
+def test_every_subcommand_is_documented():
+    # the command-surface docs must name every subcommand; prose references
+    # (SKILL.md steps, evidence/red-line notes) legitimately mention only the
+    # commands their flow uses, so they join the reverse check below only
+    docs = {
+        k: v
+        for k, v in _doc_texts().items()
+        if k in ("README", "references/command-reference.md")
+    }
+    missing = []
+    for name in _top_level_subcommands():
+        pattern = rf"(?<![\w-]){re.escape(name)}(?![\w-])"
+        for doc, text in docs.items():
+            if not re.search(pattern, text):
+                missing.append(f"{name}: {doc}")
+    assert not missing, "undocumented subcommands: " + ", ".join(missing)
+
+
+# ---- A6 reverse: every documented invocation exists in the CLI ----
 
 
 def _top_level_parser_map() -> dict:
@@ -902,13 +992,7 @@ def _top_level_parser_map() -> dict:
 
 def _documented_invocations() -> list:
     """(doc, args) for every recipe-lab invocation the docs teach."""
-    root = Path(__file__).resolve().parents[3]
-    docs = {
-        "README": (root / "tools/recipe-lab/README.md").read_text(encoding="utf-8"),
-        "command-reference.md": (
-            root / "tools/agent/skills/recipe-lab-loop/references/command-reference.md"
-        ).read_text(encoding="utf-8"),
-    }
+    docs = _doc_texts()
     found = []
     for doc, text in docs.items():
         for line in text.splitlines():
@@ -918,3 +1002,223 @@ def _documented_invocations() -> list:
         for m in re.finditer(r"`recipe-lab\s+([^`\n]+)`", text):
             found.append((doc, m.group(1).strip()))
     return found
+
+
+def test_every_documented_invocation_exists():
+    parsers = _top_level_parser_map()
+    unknown = []
+    for doc, invocation in _documented_invocations():
+        tokens = invocation.split()
+        if not tokens:
+            continue
+        name = tokens[0].rstrip(".")
+        if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
+            continue  # flags, placeholders and prose are not subcommands
+        if name not in parsers:
+            unknown.append(f"{doc}: recipe-lab {name}")
+            continue
+        sub_names = set()
+        for action in parsers[name]._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                sub_names = set(action.choices)
+        if (
+            len(tokens) > 1
+            and re.fullmatch(r"[a-z][a-z0-9|]*", tokens[1])
+            and sub_names
+        ):
+            for action in tokens[1].split("|"):
+                if action not in sub_names:
+                    unknown.append(f"{doc}: recipe-lab {name} {action}")
+    assert not unknown, "documented but nonexistent invocations: " + ", ".join(unknown)
+
+
+# ---- C7: the verify model_eval driver ----
+
+
+def _write_model_eval_spec(tmp_path):
+    """Spec with one model_eval-driver workload whose dev split is a real
+    cases manifest with its declared model_eval tasks rendering (Y3) and a
+    C2 labels file."""
+    dev = tmp_path / "dev.jsonl"
+    dev.write_bytes(b'{"case_id":"t1","prompt":"q","truth":"A"}\n')
+    tasks = tmp_path / "tasks.jsonl"
+    tasks.write_bytes(b'{"task_id":"t1","prompt_user":"q","answer":"A"}\n')
+    (tmp_path / "labels.jsonl").write_bytes(b'{"case_id":"t1","router_label":"math"}\n')
+    spec = copy.deepcopy(VALID_SPEC)
+    spec.pop("workload", None)
+    spec["workloads"] = [
+        {
+            "name": "cold",
+            "profile": "quick",
+            "driver": "model_eval",
+            "splits": {
+                "dev": {
+                    "manifest": "dev.jsonl",
+                    "content_hash": "sha256:"
+                    + hashlib.sha256(dev.read_bytes()).hexdigest(),
+                    "model_eval_tasks": "tasks.jsonl",
+                    "model_eval_tasks_sha256": "sha256:"
+                    + hashlib.sha256(tasks.read_bytes()).hexdigest(),
+                }
+            },
+        }
+    ]
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    return str(spec_path)
+
+
+_FAKE_MODEL_EVAL_RESULT = {
+    "verdict": "PASS",
+    "reasons": [],
+    "improvement_pct": 100.0,
+    "metrics": {"baseline": 0.5, "candidate": 1.0},
+    "gates": {},
+    "constraints": [],
+    "undeclared_measurements": [],
+    "bench_refs": ["meval:tasks:sha256:ab", "meval:baseline-rep0"],
+    "baseline_run_id": None,
+    "trials": {},
+    "abba_summary": {},
+    "preview": None,
+    "paired": None,
+    "evidence_quality": {},
+    "references": {},
+    "pareto": [],
+    "distribution": {"STRONG": 0.6, "WEAK": 0.4},
+    "driver": "model_eval",
+    "tasks_hash": "sha256:ab",
+    "config_sha256": "sha256:cd",
+    "planned_cases": 1,
+}
+
+
+def _model_eval_verify_args(spec_path, tmp_path, candidate):
+    return [
+        "verify",
+        "--spec",
+        spec_path,
+        "--candidate",
+        str(candidate),
+        "--tasks",
+        str(tmp_path / "tasks.jsonl"),
+        "--labels",
+        str(tmp_path / "labels.jsonl"),
+        "--candidate-config",
+        str(tmp_path / "candidate-config.yaml"),
+        "--baseline-router-endpoint",
+        "http://127.0.0.1:9001/v1",
+        "--candidate-router-endpoint",
+        "http://127.0.0.1:9002/v1",
+        "--model-eval-dir",
+        str(tmp_path / "scripts"),
+        "--repetitions",
+        "1",
+        "--work-dir",
+        str(tmp_path / "work"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("provenance", "override", "expected_model"),
+    [
+        ({}, None, "vllm-sr/auto"),
+        ({"proposer": "bindings"}, None, "vllm-sr/recipe-lab"),
+        ({"proposer": "bindings"}, "custom", "custom"),
+    ],
+)
+def _write_agentic_srbench_spec(tmp_path):
+    """Spec whose single workload is an sr-bench agentic workload (Z4)."""
+    dev = tmp_path / "dev.jsonl"
+    dev.write_bytes(b'{"case_id":"t1","prompt":"q","truth":"A"}\n')
+    spec = copy.deepcopy(VALID_SPEC)
+    spec.pop("workload", None)
+    spec["workloads"] = [
+        {
+            "name": "agentic-wl",
+            "kind": "agentic",
+            "benchmark": "terminal-bench-2.1",
+            "profile": "quick",
+            "splits": {
+                "dev": {
+                    "manifest": "dev.jsonl",
+                    "content_hash": "sha256:"
+                    + hashlib.sha256(dev.read_bytes()).hexdigest(),
+                }
+            },
+        }
+    ]
+    spec_path = tmp_path / "spec-agentic.yaml"
+    spec_path.write_text(yaml.safe_dump(spec), encoding="utf-8")
+    return str(spec_path)
+
+
+def _agentic_verify_args(spec_path, tmp_path):
+    return [
+        "verify",
+        "--spec",
+        spec_path,
+        "--candidate",
+        str(tmp_path / "candidate.json"),
+        "--repetitions",
+        "1",
+        "--work-dir",
+        str(tmp_path / "work"),
+    ]
+
+
+def test_verify_agentic_requires_arm_management_endpoints(
+    tmp_path, capsys, monkeypatch
+):
+    # Z4: the replay-sourced stability gates have exactly one evidence
+    # source - the arms' own router replay records - so an agentic verify
+    # without the management endpoints fails before anything is spent on
+    # runs, and the interrupted gate's default baseline pin additionally
+    # needs the baseline arm's router.
+    import recipe_lab.cli as cli_module
+
+    spec_path = _write_agentic_srbench_spec(tmp_path)
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"kind": "config", "srbench_targets": ["mom-router"]}),
+        encoding="utf-8",
+    )
+    rc = main(_agentic_verify_args(spec_path, tmp_path))
+    assert rc == EXIT_CONTRACT_ERROR
+    err = capsys.readouterr().err
+    assert "--candidate-management-endpoint" in err
+
+    rc = main(
+        [
+            *_agentic_verify_args(spec_path, tmp_path),
+            "--candidate-management-endpoint",
+            "http://127.0.0.1:8081",
+        ]
+    )
+    assert rc == EXIT_CONTRACT_ERROR
+    err = capsys.readouterr().err
+    assert "--baseline-management-endpoint" in err
+    assert "max_tool_loop_interrupted" in err
+
+    # both endpoints clear the CLI gate and reach verify_live verbatim
+    captured: dict = {}
+
+    def fake_verify(**kwargs):
+        captured.update(kwargs)
+        return {"verdict": "PASS"}
+
+    monkeypatch.setattr(cli_module, "verify_live", fake_verify)
+    assert (
+        main(
+            [
+                *_agentic_verify_args(spec_path, tmp_path),
+                "--candidate-management-endpoint",
+                "http://127.0.0.1:8081",
+                "--baseline-management-endpoint",
+                "http://127.0.0.1:8080",
+            ]
+        )
+        == 0
+    )
+    assert captured["candidate_management_endpoint"] == "http://127.0.0.1:8081"
+    assert captured["baseline_management_endpoint"] == "http://127.0.0.1:8080"

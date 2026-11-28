@@ -1,0 +1,102 @@
+"""Exercise the scope and disclosure boundary of the human report."""
+
+import pytest
+from recipe_lab.user_report import render_report
+
+CONFIG = "4" * 64
+RUN = {
+    "schema": "recipe-lab-sr-bench-run-v1",
+    "baseline_run": "r1",
+    "candidate_run": "r2",
+    "baseline_target": "parent",
+    "candidate_target": "candidate",
+    "candidate_sha256": CONFIG,
+    "min_speedup_pct": 15,
+    "verdict": "FAIL",
+    "reason": "protected case lost or task success fell",
+    "metrics": {
+        "paired_cases": 4,
+        "common_successes": 2,
+        "baseline_correct": 3,
+        "candidate_correct": 2,
+        "lost_cases": ["hidden-task"],
+        "guard_losses": ["hidden-task"],
+        "baseline_common_success_s": 100.0,
+        "candidate_common_success_s": 75.0,
+        "speedup_pct": 25.0,
+    },
+}
+
+
+def test_bench_report_keeps_order_limits_quality_and_provenance():
+    awaiting = {
+        **RUN,
+        "verdict": "INCONCLUSIVE",
+        "candidate_run": None,
+        "metrics": None,
+        "reason": "candidate submitted; awaiting evidence",
+    }
+    report = render_report([awaiting, RUN], background="Tune the service.")
+    for substring in (
+        "Tune the service.",
+        CONFIG,
+        "`parent`",
+        "3/4",
+        "2/4",
+        "2 joint successes",
+        "100 s",
+        "75 s",
+        "25%",
+        "FAIL",
+        "1 on protected cases",
+    ):
+        assert substring in report
+    assert "hidden-task" not in report
+    assert (
+        report.index("Latest supplied result")
+        < report.index("Receipt 2. FAIL")
+        < report.index("Recorded results")
+    )
+    assert report.count("FAIL. The candidate missed") == 1
+
+
+def test_service_target_names_and_generated_background():
+    report = render_report([{**RUN, "candidate_target": "decision:local/fast"}])
+    assert "`decision:local/fast`" in report
+    assert "Check whether the candidate preserves graded task success" in report
+
+
+def test_inconclusive_error_does_not_export_private_fields_or_errors():
+    attempt = {
+        **RUN,
+        "verdict": "INCONCLUSIVE",
+        "candidate_run": None,
+        "baseline_target": "https://user:private@host/path",
+        "metrics": None,
+        "reason": "private traceback with API token",
+        "trace": {"content": "hidden request"},
+    }
+    report = render_report(
+        [attempt], background="Goal\n## note\napi_key=sk-hidden-example"
+    )
+    assert "INCONCLUSIVE" in report and "no run ID recorded" in report
+    assert "    ## note" in report
+    assert "[redacted]" in report
+    for private in ("private", "hidden request", "sk-hidden-example", "://"):
+        assert private not in report
+
+
+@pytest.mark.parametrize(
+    "evidence",
+    [
+        [],
+        [{}],
+        [{"schema": "other"}],
+        [{"kind": "measurement", "split": "holdout"}],
+        [{**RUN, "verdict": "PASS", "metrics": None}],
+        [{**RUN, "candidate_sha256": "../bad"}],
+    ],
+)
+def test_rejects_empty_unknown_and_malformed_evidence(evidence):
+    with pytest.raises(ValueError):
+        render_report(evidence)

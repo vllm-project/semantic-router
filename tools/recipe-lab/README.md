@@ -29,14 +29,20 @@ pip install -e '.[dev]'
 | `split` | deterministic group-wise calib / dev / frozen_test split (B) |
 | `collect-replays` | pull `router_replay` records from the router management API and join them against the labeled case list (`--unlabeled` emits raw diagnostic rows) |
 | `attribute` | run the E1 / decision_mismatch / E2 / E3 misroute attribution over labeled records |
+| `attribute-session` | session-aware agentic attribution: lane_flap / tool_loop_interrupted / selection_failed (sub-issue 6 P2) |
 | `bank` | build / apply the per-case, per-model answer bank |
 | `propose-thresholds` | bounded single-signal threshold perturbations over a base config |
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
 | `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
 | `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
-| `cases-to-srbench` | render the labeled case list as an sr-bench dataset; the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
+| `cases` | case-file utilities; `to-srbench` renders the labeled case list as an sr-bench dataset, and the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
 | `verify` | drive sr-bench end to end for one candidate: Preview routing, `--repetitions` AB/BA pairs, per-pair compare and the shared three-state verdict (I) |
 | `live-verdict` | compare two already-recorded sr-bench runs -> PASS / FAIL / INCONCLUSIVE with guard floors from `spec.gates` (A3) |
+| `profile-agentic` | AG5: aggregate per-model single-target sr-bench run reports into the agentic profile (recipe-lab-agentic-profile-v1) |
+| `bootstrap-agentic` | AG5: generate an agentic candidate from the agent recipe template, the profile and the client identity contract, with per-lane evidence in a sidecar |
+| `propose-session-policy` | AG6: cause-keyed one-variable session-protection candidates from a diagnosis or route-replay summary; drift releases and rejected selections come back as handoffs, not knobs |
+| `run-agentic` | AG2: drive a real agent client (headless Claude Code) over a task file through one target, one session per task |
+| `judge-agentic` | AG2: judge a run-agentic directory with the SWE-bench official harness -> sr-bench-shaped per-task results |
 
 Worked examples with a runnable spec and records live in
 [`examples/`](examples/):
@@ -263,6 +269,48 @@ support a keep-or-rollback decision:
    (`recipe-lab-sr-bench-run-v1`) is printed as one JSON line and saved
    under `<workspace>/sr-bench`. Exit codes follow the verdict: 0 PASS,
    1 FAIL, 2 INCONCLUSIVE.
+
+## Reports and context
+
+Reports, the provenance manifest and promotion drafts replay from the ledger
+alone - the same ledger renders byte-identically, and a ledger mixing dataset
+hashes carries a loud "not directly comparable" warning:
+
+```bash
+# run report (ledger-only replay)
+recipe-lab report --ledger ledger.jsonl --output report.md
+
+# provenance manifest: recipe-lab-run-v1, aligned with the upstream schemas
+recipe-lab provenance --ledger ledger.jsonl --output manifest.json
+
+# promotion draft from the latest PASS live record (a draft, never a merge)
+recipe-lab record-draft --ledger ledger.jsonl --output promotion-draft.md
+
+# next-round context for an agent (same input -> byte-identical output)
+recipe-lab next --spec spec.yaml --ledger ledger.jsonl \
+  --symptom timeout --output next-context.md
+```
+
+`next` opens with an untrusted-reference-material header, summarizes the
+contract (objective, constraints, gates, split identities, budget left), the
+ledger tail, the best replay candidate (A2: ranked by the shared
+`best_replay` selection, matching `ledger top`), the last live verdict and
+the latest attribution summary (read through the hash-verified
+`attribution_ref`), each with a citable `--insight-refs` string. Optional
+`--diagnosis` and `--symptom` inputs join diagnosis highlights and casebook
+references - casebook entries are repository reference material, never
+measurements of this run. Frozen-test case content is never exported.
+
+## Agent-driven loop
+
+The [recipe-lab-loop skill](../../agent/skills/recipe-lab-loop/SKILL.md)
+packages this workflow for coding agents: read the evidence (`next`), propose
+one candidate, evaluate, record the verdict. A candidate the agent authored
+itself is submitted like any proposer output - pass the config through
+`--candidates` (a directory, a comma-separated list, or a single path) with
+`--proposer agent:<id>` (lowercase `[a-z0-9._-]`, e.g. `agent:claude-loop`);
+the tag is recorded verbatim in the ledger provenance and is filterable in
+`ledger show`.
 
 ## Scope of this slice
 

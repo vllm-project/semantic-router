@@ -54,7 +54,8 @@ STACK_MODES = {"external", "serve"}
 # A1: the replay tier ranks candidates with exactly one contracted metric.
 # `metric_key` stays the live sr-bench metric; `replay_metric` is what the
 # replay ledger records and `ledger top --spec` ranks by.
-REPLAY_METRICS = {"routed_accuracy"}
+DEFAULT_REPLAY_METRIC = "routed_accuracy"
+REPLAY_METRICS = {DEFAULT_REPLAY_METRIC}
 # M2: default minimum paired sample for a live verdict (objective.min_cases).
 DEFAULT_MIN_CASES = 200
 # M3: default output-quality ceilings for live evidence (evidence_quality).
@@ -63,7 +64,7 @@ DEFAULT_MAX_EVIDENCE_PCT = 2.0
 # replay/propose work and may only be touched by live-verdict --final, once.
 SPLIT_NAMES = ("calib", "dev", "frozen_test")
 RUNNABLE_SPLITS = ("calib", "dev")
-TIERS = {"replay", "preview", "live"}
+TIERS = {"replay", "preview", "live", "route_replay"}
 CANDIDATE_KINDS = {"config", "artifact"}
 VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE", "RANKED"}
 # Numeric predicate ops for oracle-policy conditions and truth facts, with
@@ -72,6 +73,13 @@ VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE", "RANKED"}
 PREDICATE_OPS = ("gte", "lte", "gt", "lt")
 LIVE_VERDICTS = {"PASS", "FAIL", "INCONCLUSIVE"}
 REPLAY_VERDICTS = {"RANKED"}
+# AG3: how a case's truth label names evidence. "decision" labels ARE the
+# intended decision (the legacy F1 mapping); "behavior" labels describe an
+# observed outcome and only constrain the model route through the oracle
+# mapping (or F2 rules) - a behavior label can never ground a
+# decision_mismatch verdict.
+TRUTH_SPACES = {"decision", "behavior"}
+DEFAULT_TRUTH_SPACE = "decision"
 
 
 class ContractError(ValueError):
@@ -159,6 +167,26 @@ def _read_srbench_case_ids(path: Path) -> set[str]:
     return ids
 
 
+def _read_model_eval_task_ids(path: Path) -> set[str]:
+    """The `task_id` set of one model_eval tasks JSONL (Y3 pairing input)."""
+    ids: set[str] = set()
+    with path.open("r", encoding="utf-8") as fh:
+        for line_no, line in enumerate(fh, 1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ContractError(
+                    f"{path}:{line_no} is not valid JSON: {exc}"
+                ) from exc
+            task_id = row.get("task_id") if isinstance(row, dict) else None
+            if not isinstance(task_id, str) or not task_id:
+                raise ContractError(f"{path}:{line_no} is missing a non-empty task_id")
+            ids.add(task_id)
+    return ids
+
+
 def _check_split_disjointness(base: Path, workload: Workload) -> None:
     """The three-way split must be disjoint: no case_id and no prompt content
     shared between two splits (else calibration data leaks into the frozen
@@ -219,13 +247,45 @@ def _check_cross_workload_disjointness(
 CONSTRAINT_OPS = ("gte", "lte")
 # M4: constraint bounds may pin a reference arm instead of the baseline;
 # the roles name the single-model targets declared in `references`.
-REF_BOUNDS = ("ref:strong", "ref:weak")
+# C8: `ref:random_mix` pins the cost-matched random mix the model_eval
+# driver computes from the candidate arm's routing distribution and the
+# reference arms' per-case results (evidence-side, not a declared arm).
+REF_BOUNDS = ("ref:strong", "ref:weak", "ref:random_mix")
 # M4: where the verdict's cost numbers come from (cost_basis.source).
 COST_BASIS_SOURCES = {"provider_pricing", "cost_model"}
 # M5: workload vocabulary. `kind` selects the request shape, `driver` the
 # evaluation harness (C7), `role` the quarantine (tune vs frozen_test rule).
 WORKLOAD_KINDS = {"mcq", "open", "agentic"}
 WORKLOAD_DRIVERS = {"srbench", "model_eval"}
+# AG1: agentic workloads name the sr-bench adapter that grades them.
+AGENTIC_BENCHMARKS = {"terminal-bench-2.1", "tau3"}
+# AG7: agentic stability hard gates. Every agentic workload carries the
+# full set (defaults below); a workload may override values, not the set.
+# An exceeded ceiling vetoes the live verdict with FAIL; `baseline` as a
+# value (only valid for max_tool_loop_interrupted) pins the baseline arm's
+# measured interruption count. Z5: upstream #5567 releases the tool-loop
+# lock when classification drifts to a different decision, so a raw
+# tool-loop switch count cannot be a zero ceiling - the drift transfer is
+# in-design. `max_unprotected_tool_loop_switches` caps the continuity
+# tool-loop total minus the replay drift releases (the residual the
+# identity-missing / bypassed switches live in), and
+# `max_decision_drift_switches_per_task` caps the drift transfers per
+# replay session; exceeding the drift ceiling points at threshold
+# calibration (propose-calibrated), not a routing regression.
+AGENTIC_GATE_NAMES = (
+    "max_unprotected_tool_loop_switches",
+    "max_selection_rejected",
+    "max_tool_loop_interrupted",
+    "max_mean_switches_per_task",
+    "max_decision_drift_switches_per_task",
+)
+DEFAULT_AGENTIC_GATES: dict[str, float | str] = {
+    "max_unprotected_tool_loop_switches": 0,
+    "max_selection_rejected": 0,
+    "max_tool_loop_interrupted": "baseline",
+    "max_mean_switches_per_task": 1.0,
+    "max_decision_drift_switches_per_task": 0.2,
+}
 WORKLOAD_ROLES = {"tune", "transfer"}
 # M5: default auto "not worse" guard per workload - the workload's paired
 # quality-delta CI lower bound must not fall below -guard_pp percentage
@@ -241,7 +301,8 @@ class Constraint:
     constraint is an economic condition (e.g. cost must not regress).
     `bound` is a number, the literal "baseline" (the baseline arm's
     measured value of the same metric), or a reference pin "ref:strong" /
-    "ref:weak" (M4: the named single-model arm's measured value).
+    "ref:weak" / "ref:random_mix" (M4: the named single-model arm's
+    measured value; C8: the model_eval driver's cost-matched random mix).
     `tolerance_pct` relaxes the bound by that percentage in the permissive
     direction; `tolerance_pp` (M4) relaxes it by absolute percentage
     points instead (for 0-1 fraction metrics, e.g. accuracy floors);
@@ -252,7 +313,9 @@ class Constraint:
     name: str
     metric: str
     op: str
-    bound: str | float  # "baseline", "ref:strong"/"ref:weak", or a number
+    bound: (
+        str | float
+    )  # "baseline", "ref:strong"/"ref:weak"/"ref:random_mix", or a number
     tolerance_pct: float = 0.0
     # M4: absolute pp relaxation / reference multiplier (0 and None stay
     # out of the serialized form for round-trip stability).
@@ -298,7 +361,8 @@ class Constraint:
             _require(factor > 0, f"constraints[{index}].factor must be > 0")
             _require(
                 bound in REF_BOUNDS,
-                f"constraints[{index}].factor is only valid with a ref:strong/ref:weak bound",
+                f"constraints[{index}].factor is only valid with a reference bound "
+                f"(one of {sorted(REF_BOUNDS)})",
             )
         return cls(
             name=name,
@@ -330,7 +394,7 @@ class Objective:
     metric_key: str
     direction: str
     min_improvement_pct: float
-    replay_metric: str = "routed_accuracy"
+    replay_metric: str = DEFAULT_REPLAY_METRIC
     # M2: paired-decision thresholds. `min_cases` is the minimum paired
     # sample a live verdict needs (fewer -> INCONCLUSIVE). `min_improvement_pp`
     # is an absolute percentage-point bar applied to the paired confidence
@@ -380,7 +444,7 @@ class Objective:
             and min_cases >= 1,
             "objective.min_cases must be an integer >= 1",
         )
-        replay_metric = raw.get("replay_metric", "routed_accuracy")
+        replay_metric = raw.get("replay_metric", DEFAULT_REPLAY_METRIC)
         _require(
             replay_metric in REPLAY_METRICS,
             f"objective.replay_metric must be one of {sorted(REPLAY_METRICS)} (got {replay_metric!r})",
@@ -426,16 +490,21 @@ class SplitSpec:
     recipe-lab cases JSONL (case_id/prompt/truth) that replay reads;
     `srbench_dataset`/`srbench_sha256` optionally declare the sr-bench
     format (id/messages/answer) rendering of the same cases that the live
-    tier binds its evidence to. The two srbench fields are declared
-    together or not at all; `cases to-srbench` generates the dataset
-    deterministically and verify_workload re-hashes it and checks its ids
-    pair 1:1 with the cases manifest.
+    tier binds its evidence to. Y3: `model_eval_tasks`/
+    `model_eval_tasks_sha256` optionally declare the model_eval tasks
+    rendering (task_id/prompt_user/answer, the deterministic `cases
+    to-model-eval` output) that the model_eval driver binds its arms to.
+    Each rendering pair is declared together or not at all; verify_workload
+    re-hashes every declared rendering and checks its ids pair 1:1 with
+    the cases manifest.
     """
 
     manifest: str
     content_hash: str
     srbench_dataset: str | None = None
     srbench_sha256: str | None = None
+    model_eval_tasks: str | None = None
+    model_eval_tasks_sha256: str | None = None
 
     @classmethod
     def from_dict(cls, raw: dict, name: str, prefix: str = "workload") -> SplitSpec:
@@ -465,11 +534,32 @@ class SplitSpec:
                 isinstance(srbench_sha256, str) and srbench_sha256.strip(),
                 f"{prefix}.splits.{name}.srbench_sha256 must be a non-empty string",
             )
+        model_eval_tasks = raw.get("model_eval_tasks")
+        model_eval_tasks_sha256 = raw.get("model_eval_tasks_sha256")
+        _require(
+            (model_eval_tasks is None) == (model_eval_tasks_sha256 is None),
+            f"{prefix}.splits.{name} must declare model_eval_tasks and "
+            "model_eval_tasks_sha256 together (the model_eval tasks rendering "
+            "of the same cases)",
+        )
+        if model_eval_tasks is not None:
+            _require(
+                isinstance(model_eval_tasks, str) and model_eval_tasks.strip(),
+                f"{prefix}.splits.{name}.model_eval_tasks must be a non-empty string",
+            )
+            _require(
+                isinstance(model_eval_tasks_sha256, str)
+                and model_eval_tasks_sha256.strip(),
+                f"{prefix}.splits.{name}.model_eval_tasks_sha256 must be a "
+                "non-empty string",
+            )
         return cls(
             manifest=manifest,
             content_hash=content_hash,
             srbench_dataset=srbench_dataset,
             srbench_sha256=srbench_sha256,
+            model_eval_tasks=model_eval_tasks,
+            model_eval_tasks_sha256=model_eval_tasks_sha256,
         )
 
     def to_dict(self) -> dict:
@@ -477,6 +567,9 @@ class SplitSpec:
         if self.srbench_dataset is not None:
             out["srbench_dataset"] = self.srbench_dataset
             out["srbench_sha256"] = self.srbench_sha256
+        if self.model_eval_tasks is not None:
+            out["model_eval_tasks"] = self.model_eval_tasks
+            out["model_eval_tasks_sha256"] = self.model_eval_tasks_sha256
         return out
 
 
@@ -507,6 +600,20 @@ class Workload:
     driver: str = "srbench"
     role: str = "tune"
     guard_pp: float = DEFAULT_GUARD_PP
+    # AG1: agentic workloads declare the sr-bench benchmark adapter and the
+    # per-run task repetitions used to enlarge the sample when a task tier
+    # is too small; `profile` doubles as the sr-bench task profile.
+    benchmark: str | None = None
+    repetitions: int = 1
+    # AG7: declared overrides for the stability hard gates (defaults apply
+    # to every agentic workload; see DEFAULT_AGENTIC_GATES). None keeps the
+    # defaults and round-trips nothing.
+    agentic_gates: dict[str, float | str] | None = None
+
+    def resolved_agentic_gates(self) -> dict[str, float | str]:
+        """AG7: the workload's stability ceilings - defaults under the
+        declared overrides. Only meaningful for kind: agentic workloads."""
+        return {**DEFAULT_AGENTIC_GATES, **(self.agentic_gates or {})}
 
     @classmethod
     def from_dict(
@@ -544,11 +651,64 @@ class Workload:
             driver in WORKLOAD_DRIVERS,
             f"{prefix}.driver must be one of {sorted(WORKLOAD_DRIVERS)}",
         )
+        benchmark = raw.get("benchmark")
+        repetitions = raw.get("repetitions", 1)
+        _require(
+            isinstance(repetitions, int)
+            and not isinstance(repetitions, bool)
+            and repetitions >= 1,
+            f"{prefix}.repetitions must be an integer >= 1",
+        )
+        if kind == "agentic":
+            _require(
+                driver != "model_eval",
+                f"{prefix}: the model_eval MCQ driver cannot measure agentic stability gates",
+            )
+            _require(
+                benchmark in AGENTIC_BENCHMARKS,
+                f"{prefix}.benchmark must be one of {sorted(AGENTIC_BENCHMARKS)} "
+                "for kind: agentic workloads",
+            )
+        else:
+            _require(
+                benchmark is None,
+                f"{prefix}.benchmark is only valid for kind: agentic workloads",
+            )
         role = raw.get("role", "tune")
         _require(
             role in WORKLOAD_ROLES,
             f"{prefix}.role must be one of {sorted(WORKLOAD_ROLES)}",
         )
+        agentic_gates = raw.get("agentic_gates")
+        if agentic_gates is not None:
+            _require(
+                kind == "agentic",
+                f"{prefix}.agentic_gates is only valid for kind: agentic workloads",
+            )
+            _require(
+                isinstance(agentic_gates, dict) and bool(agentic_gates),
+                f"{prefix}.agentic_gates must be a non-empty mapping",
+            )
+            unknown = sorted(set(agentic_gates) - set(AGENTIC_GATE_NAMES))
+            _require(
+                not unknown,
+                f"{prefix}.agentic_gates has unknown gates: {', '.join(unknown)}",
+            )
+            for gate_name, gate_value in agentic_gates.items():
+                if gate_value == "baseline":
+                    _require(
+                        gate_name == "max_tool_loop_interrupted",
+                        f'{prefix}.agentic_gates.{gate_name} may pin "baseline" '
+                        "only when it is max_tool_loop_interrupted",
+                    )
+                else:
+                    gate_number = _require_number(
+                        gate_value, f"{prefix}.agentic_gates.{gate_name}"
+                    )
+                    _require(
+                        gate_number >= 0,
+                        f"{prefix}.agentic_gates.{gate_name} must be >= 0",
+                    )
         guard_pp = _require_number(
             raw.get("guard_pp", DEFAULT_GUARD_PP), f"{prefix}.guard_pp"
         )
@@ -596,6 +756,9 @@ class Workload:
                 driver=driver,
                 role=role,
                 guard_pp=guard_pp,
+                benchmark=benchmark,
+                repetitions=repetitions,
+                agentic_gates=agentic_gates,
             )
         # legacy single-dataset form: treated as a dev-only workload
         _require(
@@ -629,6 +792,23 @@ class Workload:
                 isinstance(srbench_sha256, str) and srbench_sha256.strip(),
                 f"{prefix}.srbench_sha256 must be a non-empty string",
             )
+        model_eval_tasks = raw.get("model_eval_tasks")
+        model_eval_tasks_sha256 = raw.get("model_eval_tasks_sha256")
+        _require(
+            (model_eval_tasks is None) == (model_eval_tasks_sha256 is None),
+            f"{prefix} must declare model_eval_tasks and model_eval_tasks_sha256 "
+            "together (the model_eval tasks rendering of the same cases)",
+        )
+        if model_eval_tasks is not None:
+            _require(
+                isinstance(model_eval_tasks, str) and model_eval_tasks.strip(),
+                f"{prefix}.model_eval_tasks must be a non-empty string",
+            )
+            _require(
+                isinstance(model_eval_tasks_sha256, str)
+                and model_eval_tasks_sha256.strip(),
+                f"{prefix}.model_eval_tasks_sha256 must be a non-empty string",
+            )
         return cls(
             profile=profile,
             split_rule=None,
@@ -638,6 +818,8 @@ class Workload:
                     content_hash=content_hash,
                     srbench_dataset=srbench_dataset,
                     srbench_sha256=srbench_sha256,
+                    model_eval_tasks=model_eval_tasks,
+                    model_eval_tasks_sha256=model_eval_tasks_sha256,
                 )
             },
             legacy=True,
@@ -647,7 +829,29 @@ class Workload:
             driver=driver,
             role=role,
             guard_pp=guard_pp,
+            benchmark=benchmark,
+            repetitions=repetitions,
+            agentic_gates=agentic_gates,
         )
+
+    def check_live_split(self, split: str, *, final: bool) -> None:
+        if self.role == "transfer" and not final:
+            raise ContractError(
+                f"workload {self.name!r} has role 'transfer'; pass --final"
+            )
+        if split == "frozen_test" and not final:
+            raise ContractError(
+                "frozen_test is quarantined; pass --final for the promotion verdict"
+            )
+        if (
+            final
+            and not self.legacy
+            and self.role != "transfer"
+            and split != "frozen_test"
+        ):
+            raise ContractError(
+                "--final requires frozen_test or a quarantined transfer workload"
+            )
 
     def split_hash(self, name: str) -> str:
         if name not in self.splits:
@@ -679,6 +883,22 @@ class Workload:
             )
         return self.splits[name].srbench_sha256
 
+    def split_model_eval_tasks(self, name: str) -> str | None:
+        """The split's model_eval tasks rendering path, or None (Y3)."""
+        if name not in self.splits:
+            raise ContractError(
+                f"unknown workload split {name!r}; declared: {sorted(self.splits)}"
+            )
+        return self.splits[name].model_eval_tasks
+
+    def split_model_eval_tasks_hash(self, name: str) -> str | None:
+        """The split's model_eval tasks rendering hash, or None (Y3)."""
+        if name not in self.splits:
+            raise ContractError(
+                f"unknown workload split {name!r}; declared: {sorted(self.splits)}"
+            )
+        return self.splits[name].model_eval_tasks_sha256
+
     def live_dataset_hash(self, name: str) -> str:
         """X3: the dataset identity live evidence must bind to.
 
@@ -707,6 +927,12 @@ class Workload:
             extra["role"] = self.role
         if self.guard_pp != DEFAULT_GUARD_PP:
             extra["guard_pp"] = self.guard_pp
+        if self.benchmark is not None:
+            extra["benchmark"] = self.benchmark
+        if self.repetitions != 1:
+            extra["repetitions"] = self.repetitions
+        if self.agentic_gates is not None:
+            extra["agentic_gates"] = dict(self.agentic_gates)
         if self.legacy:
             split = self.splits["dev"]
             out = {
@@ -718,6 +944,9 @@ class Workload:
             if split.srbench_dataset is not None:
                 out["srbench_dataset"] = split.srbench_dataset
                 out["srbench_sha256"] = split.srbench_sha256
+            if split.model_eval_tasks is not None:
+                out["model_eval_tasks"] = split.model_eval_tasks
+                out["model_eval_tasks_sha256"] = split.model_eval_tasks_sha256
             return out
         return {
             "profile": self.profile,
@@ -900,9 +1129,14 @@ class OraclePolicy:
     mapping: dict[str, str] = field(default_factory=dict)
     rules: tuple[OracleRule, ...] = ()
     default: Expectation | None = None
+    # AG3: the truth namespace the mapping is written in (decision labels are
+    # intended decisions; behavior labels constrain the model route only).
+    truth_space: str = DEFAULT_TRUTH_SPACE
 
     @classmethod
-    def from_dict(cls, raw: Any) -> OraclePolicy:
+    def from_dict(
+        cls, raw: Any, truth_space: str = DEFAULT_TRUTH_SPACE
+    ) -> OraclePolicy:
         _require(
             isinstance(raw, dict) and bool(raw),
             "attribution.oracle_policy must be a non-empty mapping",
@@ -927,7 +1161,7 @@ class OraclePolicy:
                 if default_raw is not None
                 else None
             )
-            return cls(rules=rules, default=default)
+            return cls(rules=rules, default=default, truth_space=truth_space)
         for label, model in raw.items():
             _require(
                 isinstance(label, str) and label.strip(),
@@ -937,7 +1171,7 @@ class OraclePolicy:
                 isinstance(model, str) and model.strip(),
                 f"oracle policy model for label {label!r} must be a non-empty string",
             )
-        return cls(mapping=dict(raw))
+        return cls(mapping=dict(raw), truth_space=truth_space)
 
     @staticmethod
     def _rule_from_dict(raw: Any, index: int) -> OracleRule:
@@ -1083,6 +1317,31 @@ def _check_cost_model(raw: Any) -> dict[str, float] | None:
     return out
 
 
+def _derived_cost_model(rates: dict[str, dict[str, float]]) -> dict[str, float]:
+    """C6: derive the replay cost model from provider pricing rates.
+
+    One model's unit rate is the sum of its prompt and completion rates
+    (per-1M tokens); the relative cost is that sum divided by the cheapest
+    positive sum, so the cheapest priced model sits at 1.0 and a free model
+    stays at 0. Deterministic and token-statistics-free: it assumes direct
+    model evals spend a comparable token mix per question, which is exactly
+    the mcq workload shape the cold-start lane runs. All-zero rates cannot
+    be normalized and are a contract error.
+    """
+    totals = {
+        model: float(rates_["prompt_per_1m"]) + float(rates_["completion_per_1m"])
+        for model, rates_ in rates.items()
+    }
+    positives = [value for value in totals.values() if value > 0]
+    if not positives:
+        raise ContractError(
+            "cost_basis.assumed_pricing rates are all zero: cannot derive a "
+            "cost model (declare cost_model directly instead)"
+        )
+    floor = min(positives)
+    return {model: total / floor for model, total in totals.items()}
+
+
 @dataclass(frozen=True)
 class Stack:
     mode: str
@@ -1164,7 +1423,9 @@ class References:
     `strong` is the quality reference (the best candidate model),
     `weak` the cheapest one; constraint bounds may pin either via
     `bound: ref:strong` / `ref:weak`. Both must be registered single-model
-    target ids present in the compared runs.
+    target ids present in the compared runs. C8: `ref:random_mix` is also
+    a valid bound but resolves against computed driver evidence (the
+    cost-matched random mix), not against a declared arm here.
     """
 
     strong: str
@@ -1261,6 +1522,336 @@ class CostBasis:
         return out
 
 
+# Cold start (C3): profile/grouping setting. Labels with fewer observed
+# cases than this merge into `other` before the profile is computed.
+DEFAULT_MIN_LABEL_CASES = 20
+# Cold start (C3 lane mode): a lane observed on fewer cases than this is
+# reported as "not measured" (sub-issue-8 §2.1 bootstrap.min_lane_cases);
+# its binding follows the default rule and is marked untested.
+DEFAULT_MIN_LANE_CASES = 20
+# Cold start (bindings): below this advantage (percentage points) between a
+# lane's best model and the cheapest acceptable one, the routing-space check
+# reports "no benefit to routing" (sub-issue-8 §2.2 step 5).
+DEFAULT_MIN_ADVANTAGE_PP = 5.0
+# Cold start (bindings): a lane whose requirement is a context window needs
+# at least this many tokens (MoM V1 long_context lane: 200K, recipe.dsl L127).
+LONG_CONTEXT_MIN_TOKENS = 200_000
+# Cold start (C3): generation params shared by every direct-model eval and
+# the later live arms; keys mirror multi_benchmark_eval.py's load_params.
+GENERATION_KEYS = (
+    "temperature",
+    "top_p",
+    "max_tokens",
+    "chat_template_kwargs",
+    "extra_body",
+)
+
+
+@dataclass(frozen=True)
+class ModelCapabilities:
+    """Cold start (bindings): one model's user-declared capabilities.
+
+    recipe-lab never guesses capabilities (sub-issue-8 §2.1): lane
+    requirements filter against exactly what the user declared here.
+    """
+
+    vision: bool = False
+    tools: bool = False
+    reasoning: bool = False
+    context_window: int | None = None
+
+    def is_default(self) -> bool:
+        return self == ModelCapabilities()
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> ModelCapabilities:
+        unknown = sorted(set(raw) - {"vision", "tools", "reasoning", "context_window"})
+        _require(not unknown, f"capabilities has unknown keys: {', '.join(unknown)}")
+        for key in ("vision", "tools", "reasoning"):
+            if key in raw:
+                _require(
+                    isinstance(raw[key], bool),
+                    f"capabilities.{key} must be a boolean",
+                )
+        window = raw.get("context_window")
+        if window is not None:
+            _require(
+                isinstance(window, int)
+                and not isinstance(window, bool)
+                and window >= 1,
+                "capabilities.context_window must be an integer >= 1",
+            )
+        return cls(
+            vision=bool(raw.get("vision", False)),
+            tools=bool(raw.get("tools", False)),
+            reasoning=bool(raw.get("reasoning", False)),
+            context_window=window,
+        )
+
+    def to_dict(self) -> dict:
+        out: dict[str, Any] = {}
+        if self.vision:
+            out["vision"] = True
+        if self.tools:
+            out["tools"] = True
+        if self.reasoning:
+            out["reasoning"] = True
+        if self.context_window is not None:
+            out["context_window"] = self.context_window
+        return out
+
+
+@dataclass(frozen=True)
+class TemplateConfig:
+    """Cold start (C2/C4): the built-in recipe template the config is
+    generated from (sub-issue-8 §2.1 `template`).
+
+    `bundle` is a built-in model-bundle name (e.g. `mom-v1`) and `recipe`
+    the recipe inside it (e.g. `balance`); both are validated against
+    `vllm-sr recipe builtin list` at runtime, and the bundle's sha256 is
+    written into the provenance.
+    """
+
+    bundle: str
+    recipe: str
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> TemplateConfig:
+        unknown = sorted(set(raw) - {"bundle", "recipe"})
+        _require(not unknown, f"template has unknown keys: {', '.join(unknown)}")
+        bundle = raw.get("bundle")
+        recipe = raw.get("recipe")
+        _require(
+            isinstance(bundle, str) and bundle.strip(),
+            "template.bundle must be a non-empty string",
+        )
+        _require(
+            isinstance(recipe, str) and recipe.strip(),
+            "template.recipe must be a non-empty string",
+        )
+        return cls(bundle=bundle, recipe=recipe)
+
+    def to_dict(self) -> dict:
+        return {"bundle": self.bundle, "recipe": self.recipe}
+
+
+@dataclass(frozen=True)
+class BootstrapConfig:
+    """Cold start (bindings, sub-issue-8 §2.1 `bootstrap`): generation-side
+    settings shared by every lambda."""
+
+    min_lane_cases: int = DEFAULT_MIN_LANE_CASES
+    min_advantage_pp: float = DEFAULT_MIN_ADVANTAGE_PP
+    lambdas: tuple[float, ...] | None = None
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> BootstrapConfig:
+        unknown = sorted(set(raw) - {"min_lane_cases", "min_advantage_pp", "lambdas"})
+        _require(not unknown, f"bootstrap has unknown keys: {', '.join(unknown)}")
+        min_cases = raw.get("min_lane_cases", DEFAULT_MIN_LANE_CASES)
+        _require(
+            isinstance(min_cases, int)
+            and not isinstance(min_cases, bool)
+            and min_cases >= 1,
+            "bootstrap.min_lane_cases must be an integer >= 1",
+        )
+        advantage = raw.get("min_advantage_pp", DEFAULT_MIN_ADVANTAGE_PP)
+        _require(
+            isinstance(advantage, (int, float))
+            and not isinstance(advantage, bool)
+            and advantage > 0,
+            "bootstrap.min_advantage_pp must be a number > 0",
+        )
+        lambdas_raw = raw.get("lambdas")
+        lambdas: tuple[float, ...] | None = None
+        if lambdas_raw is not None:
+            _require(
+                isinstance(lambdas_raw, list) and bool(lambdas_raw),
+                "bootstrap.lambdas must be a non-empty list of numbers",
+            )
+            values: list[float] = []
+            seen: set[str] = set()
+            for i, entry in enumerate(lambdas_raw):
+                _require(
+                    isinstance(entry, (int, float))
+                    and not isinstance(entry, bool)
+                    and entry >= 0,
+                    f"bootstrap.lambdas[{i}] must be a number >= 0",
+                )
+                tag = lambda_tag(float(entry))
+                if tag not in seen:
+                    seen.add(tag)
+                    values.append(float(entry))
+            lambdas = tuple(values)
+        return cls(
+            min_lane_cases=min_cases,
+            min_advantage_pp=float(advantage),
+            lambdas=lambdas,
+        )
+
+    def to_dict(self) -> dict:
+        out: dict[str, Any] = {}
+        if self.min_lane_cases != DEFAULT_MIN_LANE_CASES:
+            out["min_lane_cases"] = self.min_lane_cases
+        if self.min_advantage_pp != DEFAULT_MIN_ADVANTAGE_PP:
+            out["min_advantage_pp"] = self.min_advantage_pp
+        if self.lambdas is not None:
+            out["lambdas"] = list(self.lambdas)
+        return out
+
+
+def lambda_tag(lam: float) -> str:
+    """Deterministic filename-safe tag for a lambda value.
+
+    Lives at module level so BootstrapConfig and the bindings CLI share one
+    tagging convention.
+    """
+    lam = float(lam)
+    if lam == int(lam):
+        return str(int(lam))
+    return repr(lam)
+
+
+@dataclass(frozen=True)
+class ModelEntry:
+    """Cold start (C3/C5): one candidate model and its direct endpoint.
+
+    `name` is the alias used in result dirnames, token-cost files and the
+    generated decisions. It must round-trip through result_to_config's
+    directory convention (§3.2-1: the first `_` becomes `/`, plus the
+    `_direct`/`_cot` suffix stripping), so it either contains exactly one
+    `/` or no `_` at all - and it must not be `auto` (collect_model_accuracies
+    skips that name).
+    """
+
+    name: str
+    endpoint: str
+    served_name: str
+    api_key_env: str | None = None
+    # Cold start (bindings): user-declared capabilities; lane requirements
+    # filter against exactly these (sub-issue-8 §2.1 - never guessed).
+    capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> ModelEntry:
+        unknown = sorted(
+            set(raw)
+            - {"name", "endpoint", "served_name", "api_key_env", "capabilities"}
+        )
+        _require(not unknown, f"model entry has unknown keys: {', '.join(unknown)}")
+        name = raw.get("name")
+        _require(
+            isinstance(name, str) and name.strip(),
+            "model name must be a non-empty string",
+        )
+        _require(
+            name != "auto",
+            "model name must not be 'auto' (collect_model_accuracies skips it)",
+        )
+        _require(
+            "/" not in name or name.count("/") == 1,
+            f"model name {name!r} must contain at most one '/' "
+            "(the dirname convention maps it back)",
+        )
+        _require(
+            "/" in name or "_" not in name,
+            f"model name {name!r} cannot round-trip through the result_to_config "
+            "dirname convention: it must contain '/' or no '_' at all",
+        )
+        endpoint = raw.get("endpoint")
+        _require(
+            isinstance(endpoint, str) and endpoint.startswith(("http://", "https://")),
+            f"model {name!r} endpoint must be an http(s) URL (got {endpoint!r})",
+        )
+        served = raw.get("served_name")
+        if served is None:
+            served = name
+        _require(
+            isinstance(served, str) and served.strip(),
+            f"model {name!r} served_name must be a non-empty string",
+        )
+        api_key_env = raw.get("api_key_env")
+        if api_key_env is not None:
+            _require(
+                isinstance(api_key_env, str) and api_key_env.strip(),
+                f"model {name!r} api_key_env must be a non-empty string",
+            )
+        capabilities_raw = raw.get("capabilities")
+        capabilities = (
+            ModelCapabilities.from_dict(
+                _require_mapping(capabilities_raw, f"model {name!r} capabilities")
+            )
+            if capabilities_raw is not None
+            else ModelCapabilities()
+        )
+        return cls(
+            name=name,
+            endpoint=endpoint,
+            served_name=served,
+            api_key_env=api_key_env,
+            capabilities=capabilities,
+        )
+
+    def to_dict(self) -> dict:
+        out: dict[str, Any] = {
+            "name": self.name,
+            "endpoint": self.endpoint,
+            "served_name": self.served_name,
+        }
+        if self.api_key_env is not None:
+            out["api_key_env"] = self.api_key_env
+        if not self.capabilities.is_default():
+            out["capabilities"] = self.capabilities.to_dict()
+        return out
+
+
+def _check_generation(raw: dict) -> dict[str, Any]:
+    """Validate the shared generation params (multi_benchmark_eval shape)."""
+    unknown = sorted(set(raw) - set(GENERATION_KEYS))
+    _require(not unknown, f"generation has unknown keys: {', '.join(unknown)}")
+    if "temperature" in raw:
+        temp = _require_number(raw["temperature"], "generation.temperature")
+        _require(temp >= 0, "generation.temperature must be >= 0")
+    if "max_tokens" in raw:
+        tokens = raw["max_tokens"]
+        _require(
+            isinstance(tokens, int) and not isinstance(tokens, bool) and tokens >= 1,
+            "generation.max_tokens must be an integer >= 1",
+        )
+    if "top_p" in raw and raw["top_p"] is not None:
+        top_p = _require_number(raw["top_p"], "generation.top_p")
+        _require(0 < top_p <= 1, "generation.top_p must be in (0, 1]")
+    for key in ("chat_template_kwargs", "extra_body"):
+        if key in raw and raw[key] is not None:
+            _require_mapping(raw[key], f"generation.{key}")
+    return dict(raw)
+
+
+@dataclass(frozen=True)
+class ProfileConfig:
+    """Cold start (C3): router-label profile settings."""
+
+    min_label_cases: int = DEFAULT_MIN_LABEL_CASES
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> ProfileConfig:
+        unknown = sorted(set(raw) - {"min_label_cases"})
+        _require(not unknown, f"profile has unknown keys: {', '.join(unknown)}")
+        min_cases = raw.get("min_label_cases", DEFAULT_MIN_LABEL_CASES)
+        _require(
+            isinstance(min_cases, int)
+            and not isinstance(min_cases, bool)
+            and min_cases >= 1,
+            "profile.min_label_cases must be an integer >= 1",
+        )
+        return cls(min_label_cases=min_cases)
+
+    def to_dict(self) -> dict:
+        if self.min_label_cases == DEFAULT_MIN_LABEL_CASES:
+            return {}
+        return {"min_label_cases": self.min_label_cases}
+
+
 @dataclass(frozen=True)
 class ExperimentSpec:
     api_version: str
@@ -1283,6 +1874,22 @@ class ExperimentSpec:
     # may pin, and where the verdict's cost numbers come from.
     references: References | None = None
     cost_basis: CostBasis | None = None
+    # Cold start (C3/C5): the candidate models and their direct endpoints,
+    # the generation params shared by every eval arm, and profile settings.
+    models: tuple[ModelEntry, ...] = field(default=())
+    generation: dict[str, Any] | None = None
+    profile_config: ProfileConfig = field(default_factory=ProfileConfig)
+    # Cold start (C2/C4, sub-issue-8 §2.1): the built-in template the config
+    # is generated from, the provider config `recipe builtin init --config`
+    # consumes (endpoints/credentials come only from there), and the
+    # generation-side bootstrap settings. All three are lane-mode only; the
+    # legacy domain-template path ignores them.
+    template: TemplateConfig | None = None
+    providers_config: str | None = None
+    bootstrap_config: BootstrapConfig = field(default_factory=BootstrapConfig)
+    # AG5: the models privacy/security traffic stays on (the agentic
+    # bootstrap pins those lanes to them with adaptation bypassed).
+    local_models: tuple[str, ...] = field(default=())
     # directory of the YAML file this spec was loaded from (from_yaml only);
     # workload.manifest resolves against it. Not part of the contract.
     spec_dir: str | None = None
@@ -1300,7 +1907,23 @@ class ExperimentSpec:
         )
         workloads = _parse_workloads(raw)
         attribution = _require_mapping(raw.get("attribution", {}), "attribution")
-        oracle_policy = OraclePolicy.from_dict(attribution.get("oracle_policy"))
+        truth_space = attribution.get("truth_space", DEFAULT_TRUTH_SPACE)
+        _require(
+            truth_space in TRUTH_SPACES,
+            f"attribution.truth_space must be one of {sorted(TRUTH_SPACES)}",
+        )
+        oracle_policy = OraclePolicy.from_dict(
+            attribution.get("oracle_policy"), truth_space=truth_space
+        )
+        local_models_raw = raw.get("local_models", [])
+        _require(
+            isinstance(local_models_raw, list)
+            and all(
+                isinstance(model, str) and model.strip() for model in local_models_raw
+            ),
+            "local_models must be a list of non-empty model names",
+        )
+        local_models = tuple(local_models_raw)
         gates_raw = raw.get("gates", [])
         _require(isinstance(gates_raw, list), "gates must be a list")
         gates = tuple(Gate.from_dict(g, i) for i, g in enumerate(gates_raw))
@@ -1334,6 +1957,78 @@ class ExperimentSpec:
             if cost_basis_raw is not None
             else None
         )
+        # C6: the replay cost model is derived from the cost basis, so a spec
+        # declares one economic source, never two. A provider-pricing basis
+        # with declared rates derives the cost model (relative to the
+        # cheapest model); rates are optional so a basis can still be
+        # declared for live-tier pricing alone. A cost_model basis must be
+        # backed by the top-level section it names.
+        if cost_basis is not None and cost_basis.source == "provider_pricing":
+            _require(
+                cost_model is None,
+                "cost_basis.source=provider_pricing derives the replay cost model "
+                "from assumed_pricing; remove the explicit cost_model section "
+                "(declare one or the other, not both)",
+            )
+            if cost_basis.assumed_pricing:
+                cost_model = _derived_cost_model(cost_basis.assumed_pricing)
+        elif cost_basis is not None and cost_basis.source == "cost_model":
+            _require(
+                cost_model is not None,
+                "cost_basis.source=cost_model requires the top-level cost_model "
+                "section it derives from",
+            )
+        # Cold start (C3): candidate models, shared generation params and
+        # profile settings.
+        models_raw = raw.get("models", [])
+        _require(isinstance(models_raw, list), "models must be a list")
+        models = tuple(
+            ModelEntry.from_dict(_require_mapping(m, f"models[{i}]"))
+            for i, m in enumerate(models_raw)
+        )
+        names = [model.name for model in models]
+        _require(
+            len(names) == len(set(names)),
+            "models names must be unique: " + ", ".join(sorted(names)),
+        )
+        generation_raw = raw.get("generation")
+        generation = (
+            _check_generation(_require_mapping(generation_raw, "generation"))
+            if generation_raw is not None
+            else None
+        )
+        profile_config = ProfileConfig.from_dict(
+            _require_mapping(raw.get("profile", {}), "profile")
+        )
+        # Cold start (sub-issue-8 §2.1): the lane-mode template, provider
+        # config and bootstrap settings; all optional (the legacy
+        # domain-template path declares none of them).
+        template_raw = raw.get("template")
+        template = (
+            TemplateConfig.from_dict(_require_mapping(template_raw, "template"))
+            if template_raw is not None
+            else None
+        )
+        providers_config = raw.get("providers_config")
+        if providers_config is not None:
+            _require(
+                isinstance(providers_config, str) and providers_config.strip(),
+                "providers_config must be a non-empty path string",
+            )
+        bootstrap_config = BootstrapConfig.from_dict(
+            _require_mapping(raw.get("bootstrap", {}), "bootstrap")
+        )
+        if template is not None:
+            _require(
+                bool(models),
+                "template requires the models section (the template path binds "
+                "its lanes from the declared candidates)",
+            )
+            _require(
+                providers_config is not None,
+                "template requires providers_config (recipe builtin init consumes "
+                "it; endpoints and credentials come only from there)",
+            )
         # M4: a benefit constraint (cost bounded against a reference arm)
         # is meaningless without a declared cost basis - refuse it; a ref
         # bound also needs the references section to resolve against.
@@ -1368,6 +2063,13 @@ class ExperimentSpec:
             evidence_quality=evidence_quality,
             references=references,
             cost_basis=cost_basis,
+            models=models,
+            generation=generation,
+            profile_config=profile_config,
+            template=template,
+            providers_config=providers_config,
+            bootstrap_config=bootstrap_config,
+            local_models=local_models,
         )
 
     @property
@@ -1463,6 +2165,7 @@ class ExperimentSpec:
                     f"dataset hash mismatch for split {name!r}: spec={selected.split_hash(name)} file={actual}"
                 )
             verified[name] = actual
+            case_ids: set[str] | None = None
             # X3: the declared sr-bench rendering is verified against its own
             # hash and paired 1:1 with the cases manifest, so live evidence
             # can never bind to a rendering of a different case set than the
@@ -1490,6 +2193,35 @@ class ExperimentSpec:
                     extra = sorted(srbench_ids - case_ids)
                     raise ContractError(
                         f"srbench dataset for split {name!r} does not pair 1:1 "
+                        f"with the cases manifest (missing: {missing}, extra: {extra})"
+                    )
+            # Y3: the declared model_eval tasks rendering is verified the same
+            # way, so the model_eval driver can never bind its arms to a
+            # rendering of a different case set than the one replay ranked on.
+            tasks_path = selected.split_model_eval_tasks(name)
+            if tasks_path is not None:
+                tasks_file = base / tasks_path
+                if not tasks_file.is_file():
+                    raise ContractError(
+                        f"model_eval tasks file not found: {tasks_file} (workload "
+                        f"{selected.name!r} split {name!r} model_eval_tasks is "
+                        "relative to the spec file)"
+                    )
+                tasks_actual = dataset_content_hash(tasks_file)
+                tasks_expected = selected.split_model_eval_tasks_hash(name)
+                if tasks_actual != tasks_expected:
+                    raise ContractError(
+                        f"model_eval tasks hash mismatch for split {name!r}: "
+                        f"spec={tasks_expected} file={tasks_actual}"
+                    )
+                if case_ids is None:
+                    case_ids, _ = _read_split_ids(manifest, name)
+                task_ids = _read_model_eval_task_ids(tasks_file)
+                if case_ids != task_ids:
+                    missing = sorted(case_ids - task_ids)
+                    extra = sorted(task_ids - case_ids)
+                    raise ContractError(
+                        f"model_eval tasks for split {name!r} do not pair 1:1 "
                         f"with the cases manifest (missing: {missing}, extra: {extra})"
                     )
         if split is None:
@@ -1535,13 +2267,32 @@ class ExperimentSpec:
                 if len(self.workloads) == 1
                 else [w.to_dict() for w in self.workloads]
             ),
-            "attribution": {"oracle_policy": self.oracle_policy.to_dict()},
+            "attribution": {
+                "oracle_policy": self.oracle_policy.to_dict(),
+                # round-trip stability: the default namespace serializes nothing
+                **(
+                    {"truth_space": self.oracle_policy.truth_space}
+                    if self.oracle_policy.truth_space != DEFAULT_TRUTH_SPACE
+                    else {}
+                ),
+            },
+            **({"local_models": list(self.local_models)} if self.local_models else {}),
             "gates": [g.to_dict() for g in self.gates],
             "budget": self.budget.to_dict(),
         }
         if self.stack is not None:
             out["stack"] = self.stack.to_dict()
-        if self.cost_model is not None:
+        # C6: a cost_model derived from a provider-pricing basis is not
+        # written back - re-parsing the output would re-derive it, and an
+        # explicit key would trip the one-economic-source check.
+        derived = None
+        if (
+            self.cost_basis is not None
+            and self.cost_basis.source == "provider_pricing"
+            and self.cost_basis.assumed_pricing
+        ):
+            derived = _derived_cost_model(self.cost_basis.assumed_pricing)
+        if self.cost_model is not None and self.cost_model != derived:
             out["cost_model"] = dict(self.cost_model)
         if self.evidence_quality != EvidenceQuality():
             out["evidence_quality"] = self.evidence_quality.to_dict()
@@ -1549,6 +2300,18 @@ class ExperimentSpec:
             out["references"] = self.references.to_dict()
         if self.cost_basis is not None:
             out["cost_basis"] = self.cost_basis.to_dict()
+        if self.models:
+            out["models"] = [model.to_dict() for model in self.models]
+        if self.generation is not None:
+            out["generation"] = dict(self.generation)
+        if self.profile_config != ProfileConfig():
+            out["profile"] = self.profile_config.to_dict()
+        if self.template is not None:
+            out["template"] = self.template.to_dict()
+        if self.providers_config is not None:
+            out["providers_config"] = self.providers_config
+        if self.bootstrap_config != BootstrapConfig():
+            out["bootstrap"] = self.bootstrap_config.to_dict()
         return out
 
 

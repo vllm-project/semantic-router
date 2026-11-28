@@ -6,7 +6,8 @@ import contextlib
 import math
 import re
 
-from .contract import SPLIT_NAMES, ContractError, ExperimentSpec
+from .agentic import AgenticGateResult
+from .contract import ContractError, ExperimentSpec, Workload
 from .ledger import compute_record_id, validate_record
 from .live import measurements_from_rows, paired_stats_from_comparison, resolve_gates
 from .verdict import evaluate_verdict, evidence_quality_reasons
@@ -22,6 +23,44 @@ def _number(value, field):
     return value
 
 
+def _agentic_gates(workload: Workload, record: dict) -> list[AgenticGateResult]:
+    if workload.kind != "agentic":
+        return []
+    agentic = record.get("agentic") or {}
+    if (
+        not isinstance(agentic, dict)
+        or agentic.get("workload") != workload.name
+        or agentic.get("benchmark") != workload.benchmark
+    ):
+        raise ContractError(
+            "agentic evidence does not identify the selected workload and benchmark"
+        )
+    limits = workload.resolved_agentic_gates()
+    details = agentic.get("gates_detail")
+    if not isinstance(details, list) or not all(
+        isinstance(row, dict) for row in details
+    ):
+        raise ContractError("agentic stability gate measurements are missing")
+    by_name = {row.get("name"): row for row in details}
+    if (
+        len(details) != len(limits)
+        or set(by_name) != set(limits)
+        or agentic.get("gates") != dict.fromkeys(limits, "pass")
+    ):
+        raise ContractError(
+            "every declared agentic stability gate needs measured passing evidence"
+        )
+    results = []
+    for name, limit in limits.items():
+        row = by_name[name]
+        bound = _number(row.get("bound"), name + " bound")
+        value = _number(row.get("value"), name + " value")
+        if value < 0 or bound < 0 or limit not in {"baseline", bound}:
+            raise ContractError(f"agentic gate {name} has an invalid value or bound")
+        results.append(AgenticGateResult(name=name, value=value, bound=bound))
+    return results
+
+
 def verify_promotion_evidence(spec: ExperimentSpec, record: dict) -> None:
     validate_record(record)
     if record.get("record_id") != compute_record_id(record):
@@ -30,8 +69,7 @@ def verify_promotion_evidence(spec: ExperimentSpec, record: dict) -> None:
         raise ContractError("promotion record must name one declared workload")
     workload = spec.select_workload(record.get("workload"))
     split = record.get("split") or ("dev" if workload.legacy else None)
-    if split not in SPLIT_NAMES:
-        raise ContractError(f"unknown live split: {split!r}")
+    workload.check_live_split(split, final=True)
     if not split or workload.split_hash(split) != record.get("dataset_hash"):
         raise ContractError(
             "promotion record dataset_hash does not match its workload split"
@@ -137,6 +175,7 @@ def verify_promotion_evidence(spec: ExperimentSpec, record: dict) -> None:
         guards=guards,
         constraints=inputs,
         references=references,
+        agentic_gates=_agentic_gates(workload, record),
         incomplete_reasons=incomplete,
     )
     if replayed.verdict != "PASS":
