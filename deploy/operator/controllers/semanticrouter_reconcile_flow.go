@@ -177,12 +177,8 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	ctx context.Context,
 	semanticrouter *vllmv1alpha1.SemanticRouter,
 	logger logr.Logger,
+	migrating bool,
 ) error {
-	if err := r.reconcileServiceAccount(ctx, semanticrouter); err != nil {
-		logger.Error(err, "Failed to reconcile ServiceAccount")
-		return err
-	}
-
 	if err := r.reconcileConfigMap(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile ConfigMap")
 		return err
@@ -201,9 +197,14 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter.Status.GatewayMode = gatewayMode
 	logger.Info("Gateway mode determined", "mode", gatewayMode)
 
-	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode, migrating); err != nil {
 		logger.Error(err, "Failed to reconcile Deployment")
 		return err
+	}
+
+	// The live sidecar still needs its configuration and the existing Service.
+	if migrating {
+		return nil
 	}
 
 	if err := r.deleteRetiredEnvoyConfig(ctx, semanticrouter); err != nil {

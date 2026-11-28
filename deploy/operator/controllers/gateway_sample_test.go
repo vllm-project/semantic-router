@@ -73,13 +73,13 @@ func TestGatewaySampleTargetsStandaloneInferenceListener(t *testing.T) {
 	if len(rule.Matches) != 1 || rule.Matches[0].Path == nil || *rule.Matches[0].Path.Value != "/v1" {
 		t.Fatal("the inference route must not expose management endpoints")
 	}
-	var targetPort string
+	var targetPort int32
 	for _, port := range service.Spec.Ports {
 		if port.Port == int32(*rule.BackendRefs[0].Port) {
-			targetPort = port.TargetPort.StrVal
+			targetPort = port.TargetPort.IntVal
 		}
 	}
-	if targetPort == "" {
+	if targetPort == 0 {
 		t.Fatal("route's backend port does not exist on the generated Service")
 	}
 	containers := r.generateContainers(sr, mode)
@@ -88,7 +88,7 @@ func TestGatewaySampleTargetsStandaloneInferenceListener(t *testing.T) {
 	}
 	var containerPort int32
 	for _, port := range containers[0].Ports {
-		if port.Name == targetPort {
+		if port.ContainerPort == targetPort {
 			containerPort = port.ContainerPort
 		}
 	}
@@ -97,7 +97,7 @@ func TestGatewaySampleTargetsStandaloneInferenceListener(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(canonical.Listeners) != 1 || canonical.Listeners[0].Port != int(containerPort) {
-		t.Fatalf("Service target %q is not the Router's configured listener %+v", targetPort, canonical.Listeners)
+		t.Fatalf("Service target %d is not the Router's configured listener %+v", targetPort, canonical.Listeners)
 	}
 }
 

@@ -168,7 +168,9 @@ spec:
 
 当 Router 应自包含，且集群尚未提供兼容网关时，此模式适用。
 
-standalone 模式之前的 Operator 版本在此模式下运行 Envoy sidecar，并提供同一个 Service 端口 8801。升级 Operator 后，由 Router 自己提供该端口；滚动更新完成后，Operator 会删除 sidecar 使用的 `<name>-envoy-config` ConfigMap。
+升级带有 Envoy sidecar 的部署时，Operator 先使用 `spec.image` 创建一次性 Pod，检查镜像能否识别 standalone 模式所需的参数。检查期间，现有 Deployment 继续使用原有配置，通过 Service 的 8801 端口处理请求。如果镜像拒绝所需参数，`Progressing` 条件会报告 `IncompatibleRouterImage`。将 `spec.image` 更新为兼容版本后，Operator 会自动继续升级。
+
+现有推理 Service 保留端口名和已分配的 NodePort，其数字目标端口 8801 适用于两代 Pod。迁移时，即使 CR 省略或关闭了就绪探针，新 Router 也必须通过 HTTP `/ready` 检查。新副本持续就绪十秒后，Deployment 才会移除旧副本。旧副本退出后，Operator 会删除 Envoy 使用的 ConfigMap。
 
 ### 现有 Gateway {#existing-gateway}
 

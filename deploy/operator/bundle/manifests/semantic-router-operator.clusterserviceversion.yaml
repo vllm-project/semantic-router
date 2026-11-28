@@ -229,6 +229,22 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - pods
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - pods/log
+          verbs:
+          - get
+        - apiGroups:
+          - ""
+          resources:
           - secrets
           verbs:
           - get
@@ -245,6 +261,14 @@ spec:
           - list
           - patch
           - update
+          - watch
+        - apiGroups:
+          - apps
+          resources:
+          - replicasets
+          verbs:
+          - get
+          - list
           - watch
         - apiGroups:
           - autoscaling

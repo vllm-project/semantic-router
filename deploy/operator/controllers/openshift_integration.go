@@ -20,6 +20,7 @@ import (
 	"context"
 
 	routev1 "github.com/openshift/api/route/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,6 +72,13 @@ func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.S
 	targetPort := intstr.FromString("api")
 	if gatewayMode == GatewayModeStandalone {
 		targetPort = intstr.FromString(DefaultListenerName)
+		svc := &corev1.Service{}
+		if err := c.Get(ctx, client.ObjectKeyFromObject(sr), svc); err != nil {
+			return err
+		}
+		if p := legacyInferencePort(svc); p != nil {
+			targetPort = intstr.FromString(p.Name)
+		}
 	}
 
 	termination := routev1.TLSTerminationEdge

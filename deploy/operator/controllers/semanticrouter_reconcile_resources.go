@@ -108,7 +108,7 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	return err
 }
 
-func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
+func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string, migrating bool) error {
 	deployment := r.generateDeployment(sr, gatewayMode)
 	hpaEnabled := sr.Spec.Autoscaling.Enabled != nil && *sr.Spec.Autoscaling.Enabled
 	if err := r.annotateDeploymentConfig(ctx, sr, deployment); err != nil {
@@ -124,6 +124,10 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 		return r.Create(ctx, deployment)
 	} else if err != nil {
 		return err
+	}
+
+	if gatewayMode == GatewayModeStandalone {
+		protectMigrationReadiness(sr, deployment, found, migrating)
 	}
 
 	// The HPA owns Deployment replicas while autoscaling is enabled. Keep the
@@ -182,27 +186,41 @@ func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vll
 		return err
 	}
 
-	found := &corev1.Service{}
-	err := r.Get(ctx, types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		return r.Create(ctx, svc)
-	} else if err != nil {
-		return err
-	}
-
-	if !reflect.DeepEqual(found.Spec.Ports, svc.Spec.Ports) ||
-		found.Spec.Type != svc.Spec.Type ||
-		!reflect.DeepEqual(found.Spec.Selector, svc.Spec.Selector) {
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(ctx, types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, found); err != nil {
-				return err
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		found := &corev1.Service{}
+		err := r.Get(ctx, client.ObjectKeyFromObject(svc), found)
+		if errors.IsNotFound(err) {
+			return r.Create(ctx, svc)
+		}
+		if err != nil {
+			return err
+		}
+		desired := svc.DeepCopy()
+		if gatewayMode == GatewayModeStandalone && metav1.IsControlledBy(found, sr) {
+			if old := legacyInferencePort(found); old != nil {
+				// EndpointSlices and kube-proxy identify this Service port by
+				// name. Renaming it after rollout still interrupts live traffic.
+				port := &desired.Spec.Ports[0]
+				port.Name = old.Name
+				if desired.Spec.Type == corev1.ServiceTypeNodePort || desired.Spec.Type == corev1.ServiceTypeLoadBalancer {
+					port.NodePort = old.NodePort
+				}
 			}
-			svc.Spec.ClusterIP = found.Spec.ClusterIP
-			found.Spec = svc.Spec
-			return r.Update(ctx, found)
-		})
-	}
+		}
+		if reflect.DeepEqual(found.Spec.Ports, desired.Spec.Ports) && found.Spec.Type == desired.Spec.Type && reflect.DeepEqual(found.Spec.Selector, desired.Spec.Selector) {
+			return nil
+		}
+		found.Spec.Ports, found.Spec.Type, found.Spec.Selector = desired.Spec.Ports, desired.Spec.Type, desired.Spec.Selector
+		return r.Update(ctx, found)
+	})
+}
 
+func legacyInferencePort(service *corev1.Service) *corev1.ServicePort {
+	for i, p := range service.Spec.Ports {
+		if p.Port == DefaultListenerPort && p.Name == "envoy-http" && p.Protocol == corev1.ProtocolTCP {
+			return &service.Spec.Ports[i]
+		}
+	}
 	return nil
 }
 

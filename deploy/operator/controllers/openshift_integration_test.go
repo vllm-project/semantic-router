@@ -22,6 +22,7 @@ import (
 
 	"github.com/go-logr/logr"
 	routev1 "github.com/openshift/api/route/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -176,7 +177,7 @@ func TestIngressAndRouteSendClientsToTheInferenceListener(t *testing.T) {
 	}
 	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).Build()
 	r := &SemanticRouterReconciler{Client: cl, Scheme: s, isOpenShift: &openShift}
-	if err := r.reconcileOwnedResources(context.Background(), sr, logr.Discard()); err != nil {
+	if err := r.reconcileOwnedResources(context.Background(), sr, logr.Discard(), false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -193,5 +194,24 @@ func TestIngressAndRouteSendClientsToTheInferenceListener(t *testing.T) {
 	}
 	if got := route.Spec.Port.TargetPort; got != intstr.FromString("http-8801") {
 		t.Errorf("Route target port = %s, want the listener's http-8801", got.String())
+	}
+
+	// A migrated Service keeps its original port name in EndpointSlices.
+	svc := &corev1.Service{}
+	if err := cl.Get(t.Context(), key, svc); err != nil {
+		t.Fatal(err)
+	}
+	svc.Spec.Ports[0].Name = "envoy-http"
+	if err := cl.Update(t.Context(), svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.reconcileOwnedResources(t.Context(), sr, logr.Discard(), false); err != nil {
+		t.Fatal(err)
+	}
+	if err := cl.Get(t.Context(), key, route); err != nil {
+		t.Fatal(err)
+	}
+	if got := route.Spec.Port.TargetPort; got != intstr.FromString("envoy-http") {
+		t.Fatalf("Route targets %v after migration", got)
 	}
 }

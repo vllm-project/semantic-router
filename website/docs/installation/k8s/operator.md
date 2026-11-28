@@ -196,10 +196,19 @@ listener, and the Service exposes it as port 8801 (`http-8801`).
 This mode is appropriate when the Router should be self-contained and the
 cluster does not already provide a compatible gateway.
 
-Operator releases before standalone mode ran an Envoy sidecar here and served
-the same Service port 8801. After an Operator upgrade the Router serves that
-port itself, and the Operator deletes the sidecar's `<name>-envoy-config`
-ConfigMap once the rollout completes.
+When upgrading a deployment with an Envoy sidecar, the Operator first runs a
+one-shot Pod using the image in `spec.image` to check the required standalone
+flags. During the check, the existing Deployment and its configuration continue
+serving on Service port 8801. If the image rejects a required flag, the
+`Progressing` condition reports `IncompatibleRouterImage`. Update `spec.image`
+to a compatible Router build to resume the rollout.
+
+The existing inference Service keeps its port name and allocated NodePort. Both
+Pod generations accept its numeric target port 8801. During
+migration the new Router must pass HTTP `/ready` and stay ready for ten seconds
+before the Deployment retires an old replica. This also applies when the CR
+omits or disables its readiness probe. The Operator removes the retired Envoy
+ConfigMap after the legacy replicas are gone.
 
 ### Existing Gateway
 
