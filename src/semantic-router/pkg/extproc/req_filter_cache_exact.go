@@ -11,6 +11,22 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
+func (r *OpenAIRouter) lookupFinalModelCache(ctx *RequestContext, dispatch *providerDispatch) (*ext_proc.ProcessingResponse, bool) {
+	if ctx.CacheSelectedModel == "" || ctx.CacheSelectedModel == dispatch.logicalModel {
+		return nil, false
+	}
+	if ctx.CacheLease.Leader {
+		r.responseCacheService().ReleaseLease(ctx.CacheLease)
+	}
+	ctx.CacheLease = cache.SingleflightLease{}
+	ctx.CacheSelectedModel = dispatch.logicalModel
+	ctx.CacheIdentity = responseCacheIdentity(ctx, ctx.CacheRequestModel)
+	if ctx.CacheReadBypass {
+		return nil, false
+	}
+	return r.performExactCacheLookup(ctx, dispatch.decisionName, r.semanticCacheEnabledForRequest(ctx))
+}
+
 func (r *OpenAIRouter) performExactCacheLookup(
 	ctx *RequestContext,
 	categoryName string,
@@ -83,6 +99,9 @@ func (r *OpenAIRouter) finishExactCacheLookup(
 	}
 	if !result.Found {
 		return nil, false
+	}
+	if refusal := r.checkFinalModelRateLimit(ctx, ctx.CacheSelectedModel); refusal != nil {
+		return refusal, true
 	}
 
 	ctx.VSRCacheHit = true

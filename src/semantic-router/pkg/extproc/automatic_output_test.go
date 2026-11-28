@@ -104,7 +104,7 @@ func TestAutomaticOutputUsesExactRenderedCandidateAndFinalBudgets(t *testing.T) 
 	require.EqualValues(t, 32768-demand.InputTokens-4, wireMax)
 	require.EqualValues(t, 20, wire["top_k"])
 	require.Equal(t, "arm_cache_namespace", wire["cache_salt"])
-	require.Equal(t, 3, calls)
+	require.Equal(t, 2, calls)
 	require.Equal(t, text+"more", ctx.SemanticRequest.Messages[0].Content[0].Text)
 	preview := r.SelectModelForEval(services.EvalModelSelectionInput{Decision: d, Demand: selection.CandidateDemand{Known: true, AutomaticOutput: true}})
 	require.Equal(t, services.EvalSelectionUnavailable, preview.Status)
@@ -203,7 +203,7 @@ func TestAutomaticOutputBlockedCallerBudgetUsesRenderer(t *testing.T) {
 			response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
 			_, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
 			require.NoError(t, err)
-			require.Equal(t, 3, calls)
+			require.Equal(t, 2, calls)
 			require.EqualValues(t, 32746, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
 		})
 	}

@@ -102,6 +102,9 @@ func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 ) (*ext_proc.ProcessingResponse, error) {
 	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
 	if err != nil {
+		if isDispatchBudgetError(err) {
+			return r.respondSelectionRejected(ctx, modelName, err), nil
+		}
 		return nil, err
 	}
 	// Semantic decision mutations already ran for this hop. Keep their stage

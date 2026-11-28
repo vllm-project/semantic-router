@@ -25,10 +25,24 @@ func (r *OpenAIRouter) applyRateLimit(ctx *RequestContext, selectedModel string)
 	}
 	limitContext := r.buildRateLimitContext(ctx, selectedModel)
 	decision, err := r.RateLimiter.Check(limitContext)
+	return r.finishRateLimitCheck(ctx, limitContext, decision, err)
+}
+
+func (r *OpenAIRouter) reserveRateLimit(ctx *RequestContext, model string) *ext_proc.ProcessingResponse {
+	limitContext := r.buildRateLimitContext(ctx, model)
+	reservation, decision := r.RateLimiter.ReserveLocal(limitContext)
+	if denial := r.finishRateLimitCheck(ctx, limitContext, decision, nil); denial != nil {
+		return denial
+	}
+	ctx.rateLimitReservation = reservation
+	return nil
+}
+
+func (r *OpenAIRouter) finishRateLimitCheck(ctx *RequestContext, limitContext ratelimit.Context, decision *ratelimit.Decision, err error) *ext_proc.ProcessingResponse {
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "rate_limit_check_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
-			"model":      selectedModel,
+			"model":      limitContext.Model,
 			"error":      err.Error(),
 		})
 		return r.createRateLimitResponse(decision)
@@ -45,6 +59,19 @@ func (r *OpenAIRouter) applyRateLimit(ctx *RequestContext, selectedModel string)
 	}
 	ctx.RateLimitCtx = &limitContext
 	return nil
+}
+
+func (r *OpenAIRouter) checkFinalModelRateLimit(ctx *RequestContext, model string) *ext_proc.ProcessingResponse {
+	reservation := ctx.rateLimitReservation
+	if reservation == nil {
+		return nil
+	}
+	ctx.rateLimitReservation = nil
+	limitContext := r.buildRateLimitContext(ctx, model)
+	limitContext.RequestModel = ctx.RateLimitCtx.Model
+	ctx.RateLimitCtx = nil
+	decision, err := r.RateLimiter.Finalize(limitContext, reservation)
+	return r.finishRateLimitCheck(ctx, limitContext, decision, err)
 }
 
 func (r *OpenAIRouter) buildRateLimitContext(ctx *RequestContext, selectedModel string) ratelimit.Context {
