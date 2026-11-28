@@ -254,6 +254,25 @@ func TestABadAPIPrefixIsRefused(t *testing.T) {
 	}
 }
 
+// The model listing is the one path every listener always serves, so a
+// prefixed mount serves it under its prefix too.
+func TestPrefixedListenerServesTheModelListing(t *testing.T) {
+	cfg, err := loadListenerAPIs(t, "      messages: {prefix: /anthropic}", "openai")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/anthropic/v1/models", "/anthropic/v1/models?q=1"} {
+		if got := cfg.APIPath(path); got != apiregistry.ModelsPath {
+			t.Errorf("APIPath(%q) = %q, want %q", path, got, apiregistry.ModelsPath)
+		}
+	}
+	for _, path := range []string{"/anthropic/v1/modelsx", "/anthropicx/v1/models", "/v1/models"} {
+		if got := cfg.APIPath(path); got != path {
+			t.Errorf("APIPath(%q) = %q, want it unchanged", path, got)
+		}
+	}
+}
+
 // Every API of the registry mounts under its own prefix, in each of its path
 // forms, and nowhere else.
 func TestEveryAPIMountsUnderItsPrefix(t *testing.T) {

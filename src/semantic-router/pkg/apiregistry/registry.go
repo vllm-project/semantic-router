@@ -315,6 +315,13 @@ func (a API) Unprefixed(prefix, path string) (string, bool) {
 	return rest, true
 }
 
+// ServesListing reports whether the path is the model listing under a
+// listener's prefix for an API. The listing is the one path every listener
+// serves, so a prefixed mount serves it under its prefix too.
+func ServesListing(prefix, path string) bool {
+	return prefix != "" && normalizePath(path) == prefix+ModelsPath
+}
+
 func normalizePath(path string) string {
 	if index := strings.IndexByte(path, '?'); index >= 0 {
 		path = path[:index]

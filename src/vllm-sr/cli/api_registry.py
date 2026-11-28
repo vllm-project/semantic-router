@@ -72,6 +72,7 @@ def served_path_regex(
         alternatives.append(inner)
         if prefix := (prefixes or {}).get(name):
             alternatives.append(re.escape(prefix) + "(?:" + inner + ")")
+            alternatives.append(re.escape(prefix) + MODELS_PATH)
     return "(" + "|".join([*alternatives, MODELS_PATH]) + ")"
 
 
