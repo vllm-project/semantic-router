@@ -86,6 +86,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
         selected_model_header: bool = False,
         model: str = "test-model",
         looper: bool = False,
+        listener_apis: dict[str, object] | None = None,
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
@@ -100,6 +101,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             api_only=True,
             skip_processing=skip_processing,
             looper=looper,
+            listener_apis=listener_apis,
             **serve_kwargs,
         ):
             self.assertTrue(
@@ -286,6 +288,36 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
 
         self.print_test_result(
             True, "Skip processing preserved the default route prefix"
+        )
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_skip_processing_forwards_the_api_path_of_a_prefixed_request(self):
+        """Send a skipped request under a listener's API prefix upstream without it."""
+        self.print_test_header(
+            "Skip-Processing API Prefix Integration Test",
+            "Forwards the API's own path without semantic routing",
+        )
+
+        # The Router sets no provider path for a skipped request, so the
+        # upstream must get the path a client without the prefix would send.
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="skip-api-prefix-path-upstream",
+            base_path="/compatible-mode/v1",
+            request_path="/team-a/v1/chat/completions?api-version=test",
+            direct_endpoint=True,
+            skip_processing=True,
+            listener_apis={"chat_completions": {"prefix": "/team-a"}},
+        )
+        self.assertEqual(
+            {"/compatible-mode/v1/chat/completions?api-version=test"},
+            upstream_paths,
+        )
+
+        self.print_test_result(
+            True, "Skip processing forwarded the API path without the prefix"
         )
 
     def _check_health_endpoint(self):

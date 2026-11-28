@@ -531,12 +531,14 @@ class CLITestBase(unittest.TestCase):
         managed_storage: bool = False,
         skip_processing: bool = False,
         looper: bool = False,
+        listener_apis: dict[str, object] | None = None,
     ) -> str:
         """Write a minimal runnable canonical v0.5 config into the temp workspace.
 
         *endpoint* is host:port over http, or a full URL. *managed_storage*
         asks for the service backends this CLI provisions locally, which is
-        what makes `serve` start Redis and Postgres.
+        what makes `serve` start Redis and Postgres. *listener_apis* is the
+        listener's `apis`; without it the listener serves every API.
         """
         config_path = Path(self.test_dir) / "config.yaml"
         backend_ref: dict[str, object] = {
@@ -594,6 +596,8 @@ class CLITestBase(unittest.TestCase):
             },
             "recipes": [{"name": "default", "decisions": [decision]}],
         }
+        if listener_apis is not None:
+            config["listeners"][0]["apis"] = listener_apis
         if api_only:
             config["global"] = _api_only_global_config()
         if skip_processing:
