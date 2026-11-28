@@ -120,6 +120,34 @@ func TestCountTokensEstimatesWithoutAMessagesBackend(t *testing.T) {
 	}
 }
 
+// A masking plugin of the recipe or global.plugins guards every turn, also
+// one that matches no decision, so count_tokens never forwards its content. A
+// default context plugin, which the stock configuration has, does not stop
+// the forward.
+func TestCountTokensEstimatesUnderARecipeMaskingPlugin(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+	router := routingTestRouter("test-model")
+	router.Config.DefaultPlugins = []config.DecisionPlugin{{
+		Type:          config.DecisionPluginMasking,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "signal": "personal"}),
+	}}
+	sessiontelemetry.RecordLastModel(sessiontelemetry.RoutingSessionKey(config.DefaultRecipeName, "masked-session"), "test-model")
+	response, _ := sendCountTokens(t, router, "masked-session", countTokensTestBody)
+	require.Nil(t, response.GetRequestBody().GetResponse(), "count_tokens forwarded content a recipe plugin masks")
+	request := llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "package main\nfunc main() {}\n"}},
+	}}}
+	require.Equal(t, estimateCountTokens(&request), countTokensEstimate(t, response))
+
+	router.Config.DefaultPlugins = []config.DecisionPlugin{{
+		Type:          config.DecisionPluginContext,
+		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
+	}}
+	response, _ = sendCountTokens(t, router, "masked-session", countTokensTestBody)
+	require.NotNil(t, response.GetRequestBody().GetResponse(), "a default context plugin stopped the count_tokens forward")
+}
+
 func TestCountTokensKeepsRoutingAdmission(t *testing.T) {
 	sessiontelemetry.ResetRouterSessionMemoryForTesting()
 	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
