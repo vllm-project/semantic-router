@@ -75,7 +75,6 @@ func TestOtherValuesOfNoOpFieldsAreRefused(t *testing.T) {
 	}{
 		{"chat flex tier", `{"model":"m",` + chatMessages + `,"service_tier":"flex"}`, "unsupported_service_tier", llmprotocol.OpenAIChatV1},
 		{"chat priority tier", `{"model":"m",` + chatMessages + `,"service_tier":"priority"}`, "unsupported_service_tier", llmprotocol.OpenAIChatV1},
-		{"chat audio output", `{"model":"m",` + chatMessages + `,"modalities":["text","audio"]}`, "unsupported_modalities", llmprotocol.OpenAIChatV1},
 		{"chat no modalities", `{"model":"m",` + chatMessages + `,"modalities":[]}`, "unsupported_modalities", llmprotocol.OpenAIChatV1},
 		{"chat numeric identifier", `{"model":"m",` + chatMessages + `,"safety_identifier":1234}`, "unsupported_safety_identifier", llmprotocol.OpenAIChatV1},
 		{"chat logprobs", `{"model":"m",` + chatMessages + `,"logprobs":true}`, "unsupported_logprobs", llmprotocol.OpenAIChatV1},

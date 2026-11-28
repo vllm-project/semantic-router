@@ -306,7 +306,7 @@ func validateChatExecutionMetadata(systemFingerprint *string) error {
 }
 
 func validateChatChoiceExtensions(choice chatChoiceWire) error {
-	return validateChatOutputExtensions(choice.Message.Audio, choice.Message.LegacyFunctionCall)
+	return validateChatLegacyFunctionCall(choice.Message.LegacyFunctionCall)
 }
 
 func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire) error {
@@ -359,6 +359,10 @@ func validateChatOutputExtensions(
 			nil,
 		)
 	}
+	return validateChatLegacyFunctionCall(legacyFunctionCall)
+}
+
+func validateChatLegacyFunctionCall(legacyFunctionCall *chatLegacyCallWire) error {
 	if legacyFunctionCall != nil {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUpstreamUnavailable,

@@ -107,6 +107,26 @@ func TestResponseGuardBlocksAnUngroundedAnswer(t *testing.T) {
 	}
 }
 
+func TestResponseGuardBlocksAnUngroundedAudioTranscript(t *testing.T) {
+	for _, alternative := range []bool{false, true} {
+		decider, _ := newHallucinationDecider([]string{"450 meters"}, false)
+		router, ctx := newHallucinationSignalRouter(t, decider, groundedGuard(config.ResponseGuardBlock, false, ""))
+		response := hallucinationAssistantResponse(hallucinationContext)
+		audio := llmprotocol.Content{
+			Kind: llmprotocol.ContentAudio,
+			GeneratedAudio: &llmprotocol.GeneratedAudio{
+				ID: "audio_1", Transcript: hallucinationAnswer,
+			},
+		}
+		if alternative {
+			response.Alternatives = [][]llmprotocol.OutputItem{{{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{audio}}}}
+		} else {
+			response.Output[0].Content = append(response.Output[0].Content, audio)
+		}
+		assertBlockedWith(t, guardResponse(t, router, ctx, response), "not supported by its grounding context")
+	}
+}
+
 func TestResponseGuardAnnotatesAnUngroundedAnswerWithDetails(t *testing.T) {
 	server, _ := newHallucinationDecider([]string{"450 meters"}, false)
 	router, ctx := newHallucinationSignalRouter(t, server, groundedGuard(config.ResponseGuardAnnotate, true, ""))

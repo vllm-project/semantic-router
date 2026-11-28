@@ -116,6 +116,7 @@ type Content struct {
 	ToolCall       *ToolCall
 	ToolResult     *ToolResult
 	GeneratedImage *GeneratedImage
+	GeneratedAudio *GeneratedAudio
 	Signature      string
 	Reasoning      ReasoningScope
 	// ReasoningDetail is a typed continuity block, distinct from display text.
@@ -330,6 +331,7 @@ type Request struct {
 	Messages        []Message
 	Tools           []Tool
 	ImageGeneration *ImageGenerationOptions
+	AudioOutput     *AudioOutputOptions
 	// SpeechGeneration is set for a Speech API request. Its presence requires
 	// CapabilitySpeechGeneration. The text to speak is the last user message.
 	SpeechGeneration  *SpeechGenerationOptions

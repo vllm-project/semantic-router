@@ -22,6 +22,7 @@
     {"wire": "chat_file_input", "official": ["file_data", "file_id", "filename"], "fixtures": ["request/007-chat-ordered-multimodal-in.json", "capability/037-chat-nested-request-fields-in.json"]},
     {"wire": "chat_image_url_input", "official": ["detail", "url"], "fixtures": ["request/007-chat-ordered-multimodal-in.json", "capability/037-chat-nested-request-fields-in.json"]},
     {"wire": "chat_audio_input", "official": ["data", "format"], "fixtures": ["capability/001-chat-audio-input-in.json"]},
+    {"wire": "chat_audio_request", "official": ["format", "voice"], "fixtures": ["contracts/chat-audio-request-in.json"]},
     {"wire": "chat_function_definition", "official": ["description", "name", "parameters", "strict"], "fixtures": ["request/004-chat-tool-lifecycle-in.json"]},
     {"wire": "chat_function_call", "official": ["arguments", "name"], "extensions": ["TokenizedArguments"], "fixtures": ["request/004-chat-tool-lifecycle-in.json", "response/004-chat-tool-call-in.json"]},
     {"wire": "chat_tool_call", "official": ["custom", "function", "id", "type"], "extensions": ["index"], "fixtures": ["request/004-chat-tool-lifecycle-in.json", "response/004-chat-tool-call-in.json", "capability/037-chat-nested-request-fields-in.json", "capability/051-chat-custom-tool-lifecycle-in.json"]},

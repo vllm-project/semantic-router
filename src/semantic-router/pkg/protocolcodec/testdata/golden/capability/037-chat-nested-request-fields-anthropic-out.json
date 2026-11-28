@@ -11,6 +11,16 @@
       }
     },
     {
+      "name": "audio_output",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
       "name": "file_data",
       "outcome": {
         "status": "ok",

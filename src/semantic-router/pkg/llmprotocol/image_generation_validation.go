@@ -120,7 +120,7 @@ func generatedImageContentHasForeignFields(content Content) bool {
 		content.Text != "", content.ToolCall != nil, content.ToolResult != nil, content.URL != "",
 		content.Data != "", content.FileID != "", content.Filename != "", content.MediaType != "",
 		content.Detail != "", content.Signature != "", content.Reasoning != "", content.Cache != nil,
-		len(content.Citations) != 0,
+		len(content.Citations) != 0, content.GeneratedAudio != nil,
 	}
 	for _, present := range foreignFields {
 		if present {
