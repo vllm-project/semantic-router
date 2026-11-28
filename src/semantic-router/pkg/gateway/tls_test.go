@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"os"
@@ -25,6 +26,9 @@ func copyPair(t *testing.T, certFile, keyFile, liveCert, liveKey string, at time
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Keep the file sizes the same across renewals even if the encoded
+		// signatures are different lengths.
+		data = append(data, bytes.Repeat([]byte{'\n'}, 2048-len(data))...)
 		if err := os.WriteFile(to, data, 0o600); err != nil {
 			t.Fatal(err)
 		}
@@ -71,12 +75,21 @@ func TestLoadTLSServesARotatedCertificateToNewConnections(t *testing.T) {
 		t.Fatal("the second certificate must not serve before it is written")
 	}
 
-	copyPair(t, certB, keyB, liveCert, liveKey, start.Add(time.Minute))
-	if err := handshake(addr, poolB); err != nil {
-		t.Fatalf("a new connection after the rotation: %v", err)
+	copyPair(t, certB, keyB, liveCert+".new", liveKey+".new", start)
+	if err := os.Rename(liveCert+".new", liveCert); err != nil {
+		t.Fatal(err)
 	}
-	if got := reported(); len(got) != 1 || got[0] != nil {
-		t.Fatalf("reloads = %v, want one success", got)
+	if err := handshake(addr, poolA); err != nil {
+		t.Fatalf("an incomplete rotation must leave the previous pair serving: %v", err)
+	}
+	if err := os.Rename(liveKey+".new", liveKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := handshake(addr, poolB); err != nil {
+		t.Fatalf("a new connection after an atomic rotation with equal size and mtime: %v", err)
+	}
+	if got := reported(); len(got) != 2 || got[0] == nil || got[1] != nil {
+		t.Fatalf("reloads = %v, want the incomplete rotation followed by a success", got)
 	}
 
 	if err := os.WriteFile(liveCert, []byte("not a certificate"), 0o600); err != nil {
@@ -93,7 +106,7 @@ func TestLoadTLSServesARotatedCertificateToNewConnections(t *testing.T) {
 			t.Fatalf("a missing file must leave the previous pair serving: %v", err)
 		}
 	}
-	if got := reported(); len(got) != 3 || got[1] == nil || got[2] == nil {
+	if got := reported(); len(got) != 4 || got[2] == nil || got[3] == nil {
 		t.Fatalf("reloads = %v, want the failed load and the missing file reported once each", got)
 	}
 }

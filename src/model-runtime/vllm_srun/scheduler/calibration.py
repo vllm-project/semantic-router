@@ -169,11 +169,8 @@ def calibrate(
             seconds = min(seconds, clock() - begun)
             if probe is not None:
                 measured = probe()
-                peak = (
-                    measured
-                    if peak is None or measured is None
-                    else max(peak, measured)
-                )
+                if measured is not None:
+                    peak = measured if peak is None else max(peak, measured)
         forwards.append(Forward(size, seconds, peak))
         if (
             available is not None

@@ -64,10 +64,10 @@ const (
 
 type ContentKind string
 
-// ReasoningScope preserves whether a provider exposed full reasoning text or
-// a user-facing summary. An empty scope means the source format did not make
-// that distinction; codecs must not guess that unspecified reasoning is a
-// summary.
+// ReasoningScope preserves whether a provider exposed full reasoning text,
+// a user-facing summary, or opaque redacted state. An empty scope means the
+// source format did not make that distinction; codecs must not guess that
+// unspecified reasoning is a summary.
 type ReasoningScope string
 
 const (
@@ -94,6 +94,10 @@ const (
 const (
 	ReasoningScopeText    ReasoningScope = "text"
 	ReasoningScopeSummary ReasoningScope = "summary"
+	// ReasoningScopeRedacted marks opaque reasoning that the provider hid. Its
+	// payload lives in Signature and has no text-only approximation, so only a
+	// wire format that can carry the same opacity may accept it.
+	ReasoningScopeRedacted ReasoningScope = "redacted"
 )
 
 // Content is one ordered semantic block. Fields are closed by Kind. Data and
@@ -165,10 +169,10 @@ type InstructionBlock struct {
 	Content []Content
 	Name    string // Chat Completions participant name; formats without one drop it.
 	// Position is how many conversation messages came before the instruction
-	// where the client sent it, zero for one that leads the conversation. Chat
-	// Completions and Responses decoding read a system or developer message
-	// anywhere as an instruction and record it here. Code that inserts or
-	// removes conversation messages keeps it with InsertMessages and
+	// where the client sent it, zero for one that leads the conversation.
+	// Chat and Responses decoding keep later instructions in Messages; an
+	// instruction explicitly positioned here is also supported by the system
+	// message projection. Code that inserts or removes messages keeps it with InsertMessages and
 	// KeepInstructionPositions. It is not a wire field.
 	Position int `json:",omitempty"`
 }

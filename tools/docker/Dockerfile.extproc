@@ -205,6 +205,7 @@ RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
 # in an independent layer.
 FROM runtime AS vllm-sr
 WORKDIR /app
+LABEL io.vllm-sr.listener-tls-directory-mounts="1"
 # The charts run the router as uid 65532; other uids (OpenShift) have no passwd
 # entry, so Python's getpass and PyTorch's compile caches take USER.
 RUN mkdir -p /app/config /app/models && \

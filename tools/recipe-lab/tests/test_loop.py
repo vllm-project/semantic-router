@@ -1,5 +1,6 @@
 """Exercise the ledger primitives shared by the development loop."""
 
+import argparse
 import json
 import tempfile
 import unittest
@@ -61,6 +62,73 @@ class LedgerTest(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             self.ledger.rows()
+
+    def _graded_fixtures(self):
+        """A real config file plus one physical episode (result + requests)."""
+        run = self.workspace.parent / "run"
+        folder = run / "dsh" / "runs" / "task" / "fixed" / "main"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "result.json").write_text(
+            json.dumps({"termination": "natural_completion"}), encoding="utf-8"
+        )
+        (folder / "requests.jsonl").write_text(
+            json.dumps({"event": "dispatch", "call": 1}) + "\n", encoding="utf-8"
+        )
+        config = run / "config.yaml"
+        config.write_text(
+            "version: v0.5\n"
+            "entrypoints:\n"
+            "  - model_names: [public]\n"
+            "    recipe: main\n"
+            "recipes:\n"
+            "  - name: sibling\n"
+            "  - name: main\n"
+            "providers:\n"
+            "  models:\n"
+            "    - name: A\n",
+            encoding="utf-8",
+        )
+        evidence = {
+            str(folder / "result.json"): digest((folder / "result.json").read_bytes()),
+            str(folder / "requests.jsonl"): digest(
+                (folder / "requests.jsonl").read_bytes()
+            ),
+        }
+        return config, evidence
+
+    def test_relabelled_measurement_is_not_an_independent_comparison(self):
+        config, evidence = self._graded_fixtures()
+
+        def measurement(hypothesis):
+            return {
+                "kind": "measurement",
+                "split": "dev",
+                "arm": "fixed",
+                "recipe": "main",
+                "public_model": "public",
+                "strong_model": "A",
+                "config": str(config),
+                "config_sha256": digest(config.read_bytes()),
+                "hypothesis": hypothesis,
+                "evidence": evidence,
+                "cases": {},
+            }
+
+        first = self.ledger.append(measurement("first import"))
+        second = self.ledger.append(measurement("Relabel the same physical run"))
+        self.assertNotEqual(first["record_id"], second["record_id"])
+        # Same physical episode (identical result/request fingerprints): a
+        # relabelled re-import must not become an independent comparison.
+        with self.assertRaises(ValueError):
+            loop.compare(
+                self.ledger,
+                argparse.Namespace(
+                    baseline=first["record_id"],
+                    candidate=second["record_id"],
+                    disposition=None,
+                    reason=None,
+                ),
+            )
 
     def test_failed_publication_preserves_previous_ledger(self):
         self.ledger.append(self.measurement("fixed", 12.5))

@@ -40,9 +40,9 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         with open(self._config_path(), "w", encoding="utf-8") as handle:
             yaml.safe_dump(document, handle, sort_keys=False)
 
-    def _serve(self) -> str:
+    def _serve(self, *extra: str) -> str:
         process = self._start_serve_background(
-            env=os.environ.copy(), arguments=("--config", "config.yaml")
+            env=os.environ.copy(), arguments=("--config", "config.yaml", *extra)
         )
         try:
             stdout, stderr = self._wait_for_serve_success(process)
@@ -230,6 +230,33 @@ class TestConfigLifecycle(MockUpstreamMixin, ServeSessionMixin, CLITestBase):
         finally:
             self.run_cli(["stop"], timeout=120)
         self.print_test_result(True, "apply and serve kept the management API")
+
+    def test_apply_to_a_minimal_stack_activates_without_a_restart(self):
+        self.print_test_header(
+            "config apply on a --minimal stack",
+            "A routing change goes live; tracing stays off as serve left it",
+        )
+        self._write_config(f"{self.runtime_stack.stack_name}-minimal-upstream")
+        self._serve("--minimal")
+        try:
+
+            def describe(document):
+                document["recipes"][0]["decisions"][0]["description"] = "Applied"
+
+            self._edit_config(describe)
+            # Before #6768 the Router refused this with RESTART_REQUIRED: apply
+            # turned tracing back on, which serve had turned off.
+            applied = self._cli_json("config", "apply", "--config", "config.yaml")
+            self.assertTrue(applied["applied"], applied)
+            active = self._cli_json("config", "get", "--format", "json")["config"]
+            self.assertEqual(
+                active["recipes"][0]["decisions"][0]["description"], "Applied"
+            )
+            tracing = active["global"]["services"]["observability"]["tracing"]
+            self.assertFalse(tracing["enabled"], tracing)
+        finally:
+            self.run_cli(["stop"], timeout=120)
+        self.print_test_result(True, "apply activated on a --minimal stack")
 
     def test_a_restart_required_apply_waits_for_serve(self):
         self.print_test_header(
