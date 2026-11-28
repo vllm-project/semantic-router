@@ -363,6 +363,12 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 			required.bits |= CapabilityReasoningContinuity
 		}
 	}
+	// Redacted reasoning is opaque continuity state. Only a target that can
+	// carry it verbatim (the reasoning-signature capability) may accept it.
+	if event.Content != nil && event.Content.Kind == ContentReasoning &&
+		event.Content.Reasoning == ReasoningScopeRedacted {
+		required.bits |= CapabilityReasoningSignature
+	}
 	if event.MatchedStopSequence != "" {
 		required.bits |= CapabilityMatchedStopSequence
 	}

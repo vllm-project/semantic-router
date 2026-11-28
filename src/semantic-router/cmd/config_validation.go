@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
+	"slices"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/upstream"
 )
 
 // configValidationReport is what -validate-config prints: the verdict of the
@@ -77,5 +80,43 @@ func validateConfigInto(report *configValidationReport, data []byte, gateway con
 		return err
 	}
 	report.Warnings = append(report.Warnings, config.Warnings(cfg)...)
-	return config.ValidateGatewayCapabilities(cfg, mode)
+	if err := config.ValidateGatewayCapabilities(cfg, mode); err != nil {
+		return err
+	}
+	// A standalone Router refuses to start when its upstream topology does
+	// not compile; in ext_proc mode Envoy carries the traffic and the Router
+	// only logs it. See upstreamPart.
+	if mode == config.GatewayStandalone && cfg.RoutingEnabled() {
+		if _, err := upstream.Compile(withoutEnvironmentReferences(cfg)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// withoutEnvironmentReferences is cfg for the upstream compiler, without the
+// values validation keeps as written that the serving Router resolves first:
+// a listener timeout and a backend base URL that hold an environment
+// reference. The timeout takes the default and the base URL adds no path
+// prefix; the endpoint itself, and every other value, is checked as written.
+func withoutEnvironmentReferences(cfg *config.RouterConfig) *config.RouterConfig {
+	deferred := *cfg
+	deferred.Listeners = slices.Clone(cfg.Listeners)
+	for i := range deferred.Listeners {
+		if holdsEnvironmentReference(deferred.Listeners[i].Timeout) {
+			deferred.Listeners[i].Timeout = ""
+		}
+	}
+	deferred.ProviderProfiles = maps.Clone(cfg.ProviderProfiles)
+	for name, profile := range deferred.ProviderProfiles {
+		if holdsEnvironmentReference(profile.BaseURL) {
+			profile.BaseURL = ""
+			deferred.ProviderProfiles[name] = profile
+		}
+	}
+	return &deferred
+}
+
+func holdsEnvironmentReference(value string) bool {
+	return len(config.EnvironmentReferenceNames(value)) > 0
 }

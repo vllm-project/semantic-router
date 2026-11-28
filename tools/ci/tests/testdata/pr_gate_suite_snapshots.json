@@ -1,7 +1,7 @@
 {
   "repository": "vllm-project/semantic-router",
   "recorded_utc": "2026-11-14T03:58:19.2076317Z",
-  "scope": "Public check/suite/run/rollup snapshots; qualification receipts in tests are synthetic. Closed PRs and superseded heads remain historical controls, not live failures.",
+  "scope": "Public check/suite/run/rollup snapshots; qualification receipts in tests are synthetic. Recorded queue outcomes are historical evidence, separate from the read-only diagnostic state.",
   "cases": [
     {
       "pr": 5140,
@@ -51,7 +51,8 @@
           "state": "FAILURE"
         }
       },
-      "expected_state": "suite_mismatch"
+      "expected_state": "suite_mismatch",
+      "expected_reason": "required_gate_suite_not_successful"
     },
     {
       "pr": 5267,
@@ -101,7 +102,8 @@
           "state": "FAILURE"
         }
       },
-      "expected_state": "suite_mismatch"
+      "expected_state": "suite_mismatch",
+      "expected_reason": "required_gate_suite_not_successful"
     },
     {
       "pr": 5693,
@@ -151,7 +153,8 @@
           "state": "FAILURE"
         }
       },
-      "expected_state": "suite_mismatch"
+      "expected_state": "suite_mismatch",
+      "expected_reason": "required_gate_suite_not_successful"
     },
     {
       "pr": 4955,
@@ -201,7 +204,8 @@
           "state": "SUCCESS"
         }
       },
-      "expected_state": "healthy"
+      "expected_state": "healthy",
+      "expected_reason": "no_competing_native_failure"
     },
     {
       "pr": 6431,
@@ -251,7 +255,122 @@
           "state": "SUCCESS"
         }
       },
-      "expected_state": "healthy"
+      "expected_state": "healthy",
+      "expected_reason": "no_competing_native_failure"
+    },
+    {
+      "pr": 6907,
+      "recorded_utc": "2026-11-19T14:21:10Z",
+      "gate": {
+        "id": 135283302639,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "f42f43f868aeeefd0aef05302a6437a9d33e452b",
+        "external_id": "semantic-router-ci:6907:44437027127:1",
+        "check_suite": {
+          "id": 120289849269
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 120289849269,
+        "head_sha": "f42f43f868aeeefd0aef05302a6437a9d33e452b",
+        "status": "completed",
+        "conclusion": "skipped",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 44437027127,
+        "head_sha": "f42f43f868aeeefd0aef05302a6437a9d33e452b",
+        "check_suite_id": 120289849687,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 1
+      },
+      "qualification_suite": {
+        "id": 120289849687,
+        "head_sha": "f42f43f868aeeefd0aef05302a6437a9d33e452b",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "f42f43f868aeeefd0aef05302a6437a9d33e452b",
+        "statusCheckRollup": {
+          "state": "SUCCESS"
+        }
+      },
+      "expected_state": "suite_mismatch",
+      "expected_reason": "required_gate_suite_not_successful",
+      "observed_queue_outcome": {
+        "state": "dequeued_missing_required_gate",
+        "draft_pr": 7106,
+        "source_url": "https://github.com/vllm-project/semantic-router/pull/6907#issuecomment-7004688402"
+      }
+    },
+    {
+      "pr": 6834,
+      "recorded_utc": "2026-11-19T14:21:12Z",
+      "gate": {
+        "id": 134566648175,
+        "name": "PR Gate",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": "7d3f960b834c064adc0063ac1c351c5c08769370",
+        "external_id": "semantic-router-ci:6834:44226753500:1",
+        "check_suite": {
+          "id": 119722398763
+        },
+        "app": {
+          "id": 15368
+        }
+      },
+      "gate_suite": {
+        "id": 119722398763,
+        "head_sha": "7d3f960b834c064adc0063ac1c351c5c08769370",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "qualification_run": {
+        "id": 44226753500,
+        "head_sha": "7d3f960b834c064adc0063ac1c351c5c08769370",
+        "check_suite_id": 119722398763,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 1
+      },
+      "qualification_suite": {
+        "id": 119722398763,
+        "head_sha": "7d3f960b834c064adc0063ac1c351c5c08769370",
+        "status": "completed",
+        "conclusion": "success",
+        "app": {
+          "id": 15368
+        }
+      },
+      "rollup": {
+        "oid": "7d3f960b834c064adc0063ac1c351c5c08769370",
+        "statusCheckRollup": {
+          "state": "SUCCESS"
+        }
+      },
+      "expected_state": "healthy",
+      "expected_reason": "no_competing_native_failure",
+      "observed_queue_outcome": {
+        "state": "merged",
+        "draft_pr": 6901,
+        "source_url": "https://github.com/vllm-project/semantic-router/pull/6834#issuecomment-6968630107"
+      }
     }
   ]
 }

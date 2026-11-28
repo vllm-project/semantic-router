@@ -94,6 +94,21 @@ def test_custom_or_disabled_tracing_is_preserved(
     assert source.read_bytes() == original
 
 
+@pytest.mark.parametrize("enable_observability", [True, False])
+def test_a_non_boolean_tracing_enabled_reaches_the_router(
+    tmp_path, monkeypatch, enable_observability
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "named-trial")
+    tracing = {"enabled": "false"}
+    runtime = yaml.safe_load(
+        build_effective_config_bytes(source_config(tmp_path, tracing), None, False)
+    )
+    apply_local_tracing_endpoint(
+        runtime, resolve_runtime_stack(), enable_observability=enable_observability
+    )
+    assert tracing_block(runtime) == tracing
+
+
 @pytest.mark.parametrize(
     "endpoint", [None, "vllm-sr-jaeger:4317", "named-trial-vllm-sr-jaeger:4317"]
 )

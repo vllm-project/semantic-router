@@ -47,6 +47,11 @@ func withoutReasoningSignatures(contents []Content) ([]Content, bool) {
 	var out []Content
 	for i, content := range contents {
 		switch {
+		case content.Kind == ContentReasoning && content.Reasoning == ReasoningScopeRedacted:
+			// There is no text-only rendering of an opaque redacted block.
+			// Leave it intact so the capability check still refuses it, even
+			// when the operator opted into lossy signature projection.
+			continue
 		case content.Kind == ContentReasoning && content.Signature != "":
 			content.Signature = ""
 		case content.Kind == ContentToolResult && content.ToolResult != nil:

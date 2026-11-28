@@ -1,5 +1,6 @@
 """Container startup orchestration for vLLM Semantic Router."""
 
+import json
 import os
 
 from cli.commands.runtime_management_credentials import (
@@ -25,6 +26,10 @@ from cli.container_gpu_isolation import router_compiler_cache, router_runtime_en
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
+)
+from cli.container_listener_tls import (
+    LISTENER_TLS_PATHS_ENV,
+    router_listener_tls_mounts,
 )
 from cli.container_log_spool import (
     LOG_SPOOL_GID_ENV,
@@ -492,6 +497,17 @@ def _build_router_runtime_command(
         stack_layout.stack_name,
         normalized_platform,
     )
+    image = compiler_cache.image_id if compiler_cache else router_image
+    listener_mounts = []
+    if gateway == GATEWAY_STANDALONE:
+        image, listener_mounts, listener_paths = router_listener_tls_mounts(
+            runtime,
+            image,
+            listeners,
+            os.path.dirname(runtime_paths["source_config_path"]),
+        )
+        if listener_paths:
+            router_env[LISTENER_TLS_PATHS_ENV] = json.dumps(listener_paths)
     # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
     # value reaches Docker through the Router child process environment. They
     # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
@@ -511,7 +527,7 @@ def _build_router_runtime_command(
     )
     return _build_service_run_command(
         runtime=runtime,
-        image=compiler_cache.image_id if compiler_cache else router_image,
+        image=image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
@@ -520,21 +536,8 @@ def _build_router_runtime_command(
             *_runtime_mount_specs(runtime_paths, include_models=True),
             *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
-            # A listener and a backend may name the same file, and the runtime
-            # refuses a second mount at one path.
-            *dict.fromkeys(
-                [
-                    *backend_tls_mounts,
-                    *(
-                        _listener_tls_mounts(
-                            listeners,
-                            os.path.dirname(runtime_paths["source_config_path"]),
-                        )
-                        if gateway == GATEWAY_STANDALONE
-                        else []
-                    ),
-                ]
-            ),
+            # Legacy file mounts can share a destination with backend TLS.
+            *dict.fromkeys([*backend_tls_mounts, *listener_mounts]),
         ],
         port_mappings=[
             ("127.0.0.1", stack_layout.router_port, 50051),
@@ -608,33 +611,6 @@ def _build_envoy_runtime_command(
         start_immediately=not setup_mode,
         supplemental_gids=[int(runtime_paths["log_spool_gid"])],
     )
-
-
-def _listener_tls_mounts(listeners, config_dir: str) -> list[str]:
-    """Mount each TLS listener's certificate and key read-only.
-
-    A relative path is relative to the config's directory on the host and to
-    /app, the Router's config base directory, in the container.
-    """
-    mounts = []
-    for listener in listeners:
-        tls = listener.get("tls") or {}
-        for field in ("cert_file", "key_file"):
-            path = str(tls.get(field) or "").strip()
-            if not path:
-                continue
-            if os.path.isabs(path):
-                host_path, container_path = path, path
-            else:
-                host_path = os.path.join(config_dir, path)
-                container_path = os.path.join("/app", path)
-            if not os.path.isfile(host_path):
-                raise ValueError(
-                    f"listener '{listener.get('name', 'unknown')}': tls.{field} "
-                    f"{host_path} is not a file"
-                )
-            mounts.append(f"{os.path.abspath(host_path)}:{container_path}:ro,z")
-    return mounts
 
 
 def _backend_tls_mounts(config: UserConfig) -> list[str]:
