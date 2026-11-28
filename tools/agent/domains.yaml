@@ -288,6 +288,14 @@ domains:
     checks: [make agent-vscode-test]
     verifications: [agent-plugins]
 
+  opencode-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - src/agent-harness/opencode/**
+    checks: [make agent-opencode-test]
+    verifications: [agent-plugins]
+
   vela-omni-artifacts:
     owner: model-runtime
     paths:
