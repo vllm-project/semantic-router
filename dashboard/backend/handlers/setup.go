@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
@@ -110,6 +112,7 @@ func SetupStateHandler(configPath string, setupResolver *setupmode.Resolver) htt
 			writeSetupStateResponse(w, SetupStateResponse{
 				SetupMode:         resolution.Active,
 				Reason:            reason,
+				ListenerPort:      listenerPortFromListenersBlock(configPath),
 				PublicBaseURL:     public.baseURL,
 				PublicRequiresKey: public.requiresKey,
 			})
@@ -423,6 +426,30 @@ func firstListenerPort(configFile *setupConfigFile) int {
 		return 0
 	}
 	return configFile.Listeners[0].Port
+}
+
+// listenersBlock is the only part of the config listenerPortFromListenersBlock
+// decodes, so a config the full schema rejects (for example an older schema
+// version) still reports the port its Router will listen on.
+type listenersBlock struct {
+	Listeners []struct {
+		Port int `yaml:"port"`
+	} `yaml:"listeners"`
+}
+
+// listenerPortFromListenersBlock returns the first listener's port, or 0 when
+// the config cannot be read or declares none. Like the setup resolver, it
+// decodes one block alone and never surfaces the parser error.
+func listenerPortFromListenersBlock(configPath string) int {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return 0
+	}
+	var block listenersBlock
+	if err := yaml.Unmarshal(data, &block); err != nil || len(block.Listeners) == 0 {
+		return 0
+	}
+	return block.Listeners[0].Port
 }
 
 func buildSetupCandidateConfig(
