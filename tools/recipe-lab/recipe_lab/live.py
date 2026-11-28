@@ -775,6 +775,13 @@ def live_verdict_from_runs(
     )
     comparison = cli.compare(baseline_run_id, candidate_run_id)
     incomplete = list(incomplete_reasons or [])
+    # sr-bench compares a failed run and scores its failed cases as wrong, so
+    # a run that did not complete would read as a difference between the arms.
+    if isinstance(comparison, dict):
+        for arm in ("baseline", "candidate"):
+            status = comparison.get(f"{arm}_status")
+            if status is not None and status != "completed":
+                incomplete.append(f"{arm} run is {status}, not completed")
     baseline_metric, candidate_metric = _pair_metrics(
         comparison, spec.objective.metric_key, incomplete
     )
