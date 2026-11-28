@@ -1,0 +1,43 @@
+- id: reflection/beam-1.0
+  display_name: Reflection Beam 1.0
+  description: Open-weight Reflection MoE model for coding, agentic tool use, and reasoning with a one-million-token context.
+  kind: physical
+  publisher: Reflection
+  presentation:
+    logo: monogram
+    monogram: R
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/tree/12950ae640b48cbbe9b5bb7735bf197507d6383f
+    license: Apache-2.0
+  family: beam
+  reasoning_family: reflection-beam
+  parameter_size: 501B (23B active)
+  released_at: '2026-10-05'
+  knowledge_cutoff: '2026-06-30'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Reflection
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+  tags:
+  - open_weights
+  - moe
+  - reasoning
+  - agentic

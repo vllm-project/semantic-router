@@ -2982,6 +2982,39 @@ providers:
   conformance:
     status: unverified
   models: []
+- id: reflection
+  display_name: Reflection
+  description: Beam models through the Reflection API.
+  category: model_api
+  support_tier: compatible
+  default_base_url: https://api.reflection.ai/openai/v1
+  protocols:
+  - openai/chat-completions@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  reasoning_transport: top_level_effort
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: R
+    monochrome: true
+  conformance:
+    status: unverified
+  models:
+  - catalog: reflection/beam-1.0
+    relationship: first_party
+    id: Beam-1.0-501B-A23B
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-11-22'
+      source: https://developers.reflection.ai/quickstart
 - id: reka
   display_name: Reka AI
   description: Reka multimodal models through the native OpenAI-compatible API.
@@ -5407,6 +5440,18 @@ reasoning_families:
   - medium
   - high
   default: medium
+  modes:
+  - enabled
+  default_mode: enabled
+- id: reflection-beam
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels:
+  - low
+  - medium
+  - high
+  - xhigh
+  - max
   modes:
   - enabled
   default_mode: enabled
@@ -10100,6 +10145,49 @@ models:
   - moe
   - efficient
   released_at: '2025-07-29'
+- id: reflection/beam-1.0
+  display_name: Reflection Beam 1.0
+  description: Open-weight Reflection MoE model for coding, agentic tool use, and reasoning with a one-million-token context.
+  kind: physical
+  publisher: Reflection
+  presentation:
+    logo: monogram
+    monogram: R
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/tree/12950ae640b48cbbe9b5bb7735bf197507d6383f
+    license: Apache-2.0
+  family: beam
+  reasoning_family: reflection-beam
+  parameter_size: 501B (23B active)
+  released_at: '2026-10-05'
+  knowledge_cutoff: '2026-06-30'
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Reflection
+    status: claimed
+    verified_at: '2026-11-22'
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+  tags:
+  - open_weights
+  - moe
+  - reasoning
+  - agentic
 - id: stepfun/step-5-preview
   display_name: Step 5 Preview
   description: StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.
@@ -40211,6 +40299,136 @@ evaluations:
     verification: imported
     source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
     redistributable: true
+- id: reflection/beam-1.0-model-card-deep-swe@1.0.0
+  model: reflection/beam-1.0
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: DeepSWE v1.1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
+  metrics:
+    resolved: 0.433
+  status: available
+  observed_at: '2026-11-22'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-swe-bench-pro@1.0.0
+  model: reflection/beam-1.0
+  benchmark: swe-bench/pro@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SWE Bench Pro v1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
+  metrics:
+    resolved: 0.661
+  status: available
+  observed_at: '2026-11-22'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0
+  model: reflection/beam-1.0
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: Terminal Bench v2.1
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
+  metrics:
+    resolved: 0.801
+  status: available
+  observed_at: '2026-11-22'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-swe-bench-verified@1.0.0
+  model: reflection/beam-1.0
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: SWEBench Verified
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
+  metrics:
+    resolved: 0.816
+  status: available
+  observed_at: '2026-11-22'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
+- id: reflection/beam-1.0-model-card-gpqa-diamond@1.0.0
+  model: reflection/beam-1.0
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: Beam-1.0-501B-A23B
+    precision: BF16
+    source_kind: official_model_card
+    source_label: GPQA Diamond
+    source_column: Beam (BF16)
+    sampling_temperature: 0.7
+    sampling_top_p: 0.99
+    reasoning_effort_value: 512
+    effort_source: technical_report_section_5_all_evaluations
+    effort_source_document: https://reflection.ai/documents/beam-model-tech-report
+    effort_mapping_source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja
+  metrics:
+    accuracy: 0.906
+  status: available
+  observed_at: '2026-11-22'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md
+    redistributable: true
 - id: independent/step-5-preview-humanitys-last-exam@1.0.0
   model: stepfun/step-5-preview
   benchmark: cais/humanitys-last-exam@1.0.0
@@ -56015,6 +56233,28 @@ index_results:
   - independent/qwen3-30b-a3b-2507-reasoning-terminalbench-v2-1@1.0.0
   - mmlu-pro-leaderboard/qwen3-30b-a3b-thinking-2507@1.0.0
   - qwen/qwen3-30b-thinking-2507-livecodebench-v6@1.0.0
+- model: reflection/beam-1.0
+  reasoning_effort: max
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 80.10000000000001
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.801
+    normalized: 0.801
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0
+  domains:
+    agentic_systems: 80.10000000000001
 - model: stepfun/step-3.7-flash
   reasoning_effort: high
   index: vllm-sr/reasoning@1.0.0

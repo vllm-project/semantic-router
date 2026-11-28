@@ -36453,6 +36453,161 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "verification": "claimed"
+      },
+      "id": "reflection/beam-1.0-model-card-deep-swe@1.0.0",
+      "metrics": {
+        "resolved": 0.433
+      },
+      "model": "reflection/beam-1.0",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_mapping_source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja",
+        "effort_source": "technical_report_section_5_all_evaluations",
+        "effort_source_document": "https://reflection.ai/documents/beam-model-tech-report",
+        "precision": "BF16",
+        "reasoning_effort_value": 512,
+        "sampling_temperature": 0.7,
+        "sampling_top_p": 0.99,
+        "source_column": "Beam (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "DeepSWE v1.1",
+        "variant": "Beam-1.0-501B-A23B"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "verification": "claimed"
+      },
+      "id": "reflection/beam-1.0-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.661
+      },
+      "model": "reflection/beam-1.0",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_mapping_source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja",
+        "effort_source": "technical_report_section_5_all_evaluations",
+        "effort_source_document": "https://reflection.ai/documents/beam-model-tech-report",
+        "precision": "BF16",
+        "reasoning_effort_value": 512,
+        "sampling_temperature": 0.7,
+        "sampling_top_p": 0.99,
+        "source_column": "Beam (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "SWE Bench Pro v1",
+        "variant": "Beam-1.0-501B-A23B"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "verification": "claimed"
+      },
+      "id": "reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.801
+      },
+      "model": "reflection/beam-1.0",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_mapping_source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja",
+        "effort_source": "technical_report_section_5_all_evaluations",
+        "effort_source_document": "https://reflection.ai/documents/beam-model-tech-report",
+        "precision": "BF16",
+        "reasoning_effort_value": 512,
+        "sampling_temperature": 0.7,
+        "sampling_top_p": 0.99,
+        "source_column": "Beam (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal Bench v2.1",
+        "variant": "Beam-1.0-501B-A23B"
+      }
+    },
+    {
+      "benchmark": "swe-bench/verified@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "verification": "claimed"
+      },
+      "id": "reflection/beam-1.0-model-card-swe-bench-verified@1.0.0",
+      "metrics": {
+        "resolved": 0.816
+      },
+      "model": "reflection/beam-1.0",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_mapping_source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja",
+        "effort_source": "technical_report_section_5_all_evaluations",
+        "effort_source_document": "https://reflection.ai/documents/beam-model-tech-report",
+        "precision": "BF16",
+        "reasoning_effort_value": 512,
+        "sampling_temperature": 0.7,
+        "sampling_top_p": 0.99,
+        "source_column": "Beam (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "SWEBench Verified",
+        "variant": "Beam-1.0-501B-A23B"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "verification": "claimed"
+      },
+      "id": "reflection/beam-1.0-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.906
+      },
+      "model": "reflection/beam-1.0",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "effort_mapping_source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/chat_template.jinja",
+        "effort_source": "technical_report_section_5_all_evaluations",
+        "effort_source_document": "https://reflection.ai/documents/beam-model-tech-report",
+        "precision": "BF16",
+        "reasoning_effort_value": 512,
+        "sampling_temperature": 0.7,
+        "sampling_top_p": 0.99,
+        "source_column": "Beam (BF16)",
+        "source_kind": "official_model_card",
+        "source_label": "GPQA Diamond",
+        "variant": "Beam-1.0-501B-A23B"
+      }
+    },
+    {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "independent-text-only",
       "evidence": {
@@ -98315,6 +98470,795 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "reflection/beam-1.0-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.906,
+          "status": "available",
+          "value": 0.906,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [
+        "reflection/beam-1.0-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.801,
+          "status": "available",
+          "value": 0.801,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 80.10000000000001
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [
+        "reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": 80.10000000000001,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.801,
+          "status": "available",
+          "value": 0.801,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "reflection/beam-1.0",
+      "provenance": [
+        "reflection/beam-1.0-model-card-gpqa-diamond@1.0.0",
+        "reflection/beam-1.0-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "stepfun/step-5-preview",
       "provenance": [],
       "reasoning_effort": "low",
@@ -119116,6 +120060,60 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools",
         "structured_output",
+        "long_context"
+      ],
+      "description": "Open-weight Reflection MoE model for coding, agentic tool use, and reasoning with a one-million-token context.",
+      "display_name": "Reflection Beam 1.0",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/tree/12950ae640b48cbbe9b5bb7735bf197507d6383f",
+        "type": "open_weights"
+      },
+      "family": "beam",
+      "id": "reflection/beam-1.0",
+      "kind": "physical",
+      "knowledge_cutoff": "2026-06-30",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "501B (23B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "R"
+      },
+      "publisher": "Reflection",
+      "reasoning_family": "reflection-beam",
+      "released_at": "2026-10-05",
+      "tags": [
+        "open_weights",
+        "moe",
+        "reasoning",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Reflection",
+        "source": "https://huggingface.co/reflection/Beam-1.0-501B-A23B/blob/12950ae640b48cbbe9b5bb7735bf197507d6383f/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-22"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "vision",
         "long_context"
       ],
@@ -125231,6 +126229,51 @@ const builtInCatalogJSON = `{
     },
     {
       "auth": {
+        "header": "Authorization",
+        "prefix": "Bearer",
+        "strategy": "bearer"
+      },
+      "category": "model_api",
+      "conformance": {
+        "status": "unverified"
+      },
+      "default_base_url": "https://api.reflection.ai/openai/v1",
+      "default_protocol": "openai/chat-completions@1",
+      "description": "Beam models through the Reflection API.",
+      "display_name": "Reflection",
+      "id": "reflection",
+      "models": [
+        {
+          "catalog": "reflection/beam-1.0",
+          "id": "Beam-1.0-501B-A23B",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://developers.reflection.ai/quickstart",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        }
+      ],
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "R"
+      },
+      "protocols": [
+        "openai/chat-completions@1"
+      ],
+      "reasoning_transport": "top_level_effort",
+      "support_tier": "compatible",
+      "supported_operations": [
+        "openai/chat-completions@1#create"
+      ]
+    },
+    {
+      "auth": {
         "header": "X-Api-Key",
         "prefix": "",
         "strategy": "api_key_header"
@@ -128498,6 +129541,22 @@ const builtInCatalogJSON = `{
         "low",
         "medium",
         "high"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "reflection-beam",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
       ],
       "modes": [
         "enabled"

@@ -679,6 +679,45 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                     metric, score = expected[record["benchmark"]]
                     self.assertEqual(record["metrics"][metric], score)
 
+    def test_reflection_holds_a_reviewed_one_representative_exception(self) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        creators = {
+            creator["publisher"]: creator
+            for creator in manifest["inventory"]["physical"]["creators"]
+        }
+        self.assertEqual(creators["Reflection"]["min_representatives"], 1)
+        self.assertEqual(
+            creators["Reflection"]["representative_models"], ["reflection/beam-1.0"]
+        )
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, {"reflection/beam-1.0"})
+        self.assertEqual(
+            buckets,
+            {
+                ("reflection/beam-1.0", "max", "vendor_claimed"): {
+                    "datacurve/deep-swe@1.1.0",
+                    "swe-bench/pro@1.0.0",
+                    "harbor/terminal-bench@2.1.0",
+                    "swe-bench/verified@1.0.0",
+                    "idavidrein/gpqa-diamond@1.0.0",
+                }
+            },
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        reflection = providers["reflection"]
+        self.assertEqual(
+            reflection["default_base_url"], "https://api.reflection.ai/openai/v1"
+        )
+        self.assertEqual(reflection["reasoning_transport"], "top_level_effort")
+        self.assertEqual(
+            [
+                (binding["catalog"], binding["id"], binding["relationship"])
+                for binding in reflection["models"]
+            ],
+            [("reflection/beam-1.0", "Beam-1.0-501B-A23B", "first_party")],
+        )
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
@@ -1032,6 +1071,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3.5-super-vl": "nemotron-ultra",
             "nvidia/nemotron-3.5-bolt": "nemotron-ultra",
             "google/gemini-3.5-flash-lite": "gemini-flash-four-level-minimal",
+            "reflection/beam-1.0": "reflection-beam",
         }
         self.assertEqual(
             {
