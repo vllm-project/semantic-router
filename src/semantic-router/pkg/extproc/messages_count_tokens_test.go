@@ -140,12 +140,14 @@ func TestCountTokensEstimatesUnderARecipeMaskingPlugin(t *testing.T) {
 	}}}
 	require.Equal(t, estimateCountTokens(&request), countTokensEstimate(t, response))
 
-	router.Config.DefaultPlugins = []config.DecisionPlugin{{
-		Type:          config.DecisionPluginContext,
-		Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true}),
-	}}
-	response, _ = sendCountTokens(t, router, "masked-session", countTokensTestBody)
-	require.NotNil(t, response.GetRequestBody().GetResponse(), "a default context plugin stopped the count_tokens forward")
+	for name, plugin := range map[string]config.DecisionPlugin{
+		"a default context plugin":  {Type: config.DecisionPluginContext, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true})},
+		"a disabled masking plugin": {Type: config.DecisionPluginMasking, Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": false, "signal": "personal"})},
+	} {
+		router.Config.DefaultPlugins = []config.DecisionPlugin{plugin}
+		response, _ = sendCountTokens(t, router, "masked-session", countTokensTestBody)
+		require.NotNil(t, response.GetRequestBody().GetResponse(), name+" stopped the count_tokens forward")
+	}
 }
 
 func TestCountTokensKeepsRoutingAdmission(t *testing.T) {

@@ -61,10 +61,11 @@ func extractToolResultTexts(req *llmprotocol.Request) toolResultTextExtraction {
 }
 
 // serverToolResultMetadata are the fields of an Anthropic server tool block
-// that name or describe it rather than carry what the tool returned.
+// that name or describe it rather than carry what the tool returned. A
+// page's url and title are read, since either can carry personal data.
 var serverToolResultMetadata = map[string]bool{
-	"type": true, "id": true, "tool_use_id": true, "url": true, "title": true,
-	"page_age": true, "media_type": true, "retrieved_at": true, "file_id": true,
+	"type": true, "id": true, "tool_use_id": true, "page_age": true,
+	"media_type": true, "retrieved_at": true, "file_id": true,
 }
 
 // addServerToolResult reads the text an Anthropic server tool returned, such

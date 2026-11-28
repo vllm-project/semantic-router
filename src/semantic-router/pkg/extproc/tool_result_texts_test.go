@@ -183,11 +183,12 @@ func TestExtractToolResultTextsReadsServerToolResults(t *testing.T) {
 		incomplete bool
 	}{
 		"fetched text": {
-			result: `{"type":"web_fetch_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"web_fetch_result","url":"https://example.invalid","content":{"type":"document","source":{"type":"text","media_type":"text/plain","data":"owner: alice@example.com"}}}}`,
-			texts:  []string{"owner: alice@example.com"},
+			result: `{"type":"web_fetch_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"web_fetch_result","url":"https://example.invalid/u/bob","content":{"type":"document","title":"bob@example.com","source":{"type":"text","media_type":"text/plain","data":"owner: alice@example.com"}}}}`,
+			texts:  []string{"owner: alice@example.com", "bob@example.com", "https://example.invalid/u/bob"},
 		},
 		"fetched pdf": {
 			result:     `{"type":"web_fetch_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"web_fetch_result","url":"https://example.invalid/a.pdf","content":{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBERi0xLjQ="}}}}`,
+			texts:      []string{"https://example.invalid/a.pdf"},
 			incomplete: true,
 		},
 		"search results": {

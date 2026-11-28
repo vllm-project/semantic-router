@@ -120,9 +120,11 @@ func recipeGuardsContent(ctx *RequestContext) bool {
 	if recipe == nil {
 		return false
 	}
+	if masking := config.MaskingPluginOf(recipe.Profile.DefaultPlugins); masking != nil && masking.Enabled {
+		return true
+	}
 	for _, plugin := range recipe.Profile.DefaultPlugins {
-		switch plugin.Type {
-		case config.DecisionPluginMasking, config.DecisionPluginTools, config.DecisionPluginFastResponse:
+		if plugin.Type == config.DecisionPluginTools || plugin.Type == config.DecisionPluginFastResponse {
 			return true
 		}
 	}
