@@ -22,7 +22,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
-from datasets import load_dataset
 from tqdm import tqdm
 
 # Configure logging
@@ -486,6 +485,8 @@ def parse_args():
 
 def load_dataset_by_id(dataset_id: str, max_samples: int | None = None):
     """Load dataset by dataset ID from registry."""
+    from datasets import load_dataset  # noqa: PLC0415 - only registry datasets need it
+
     config = DATASET_REGISTRY[dataset_id]
     dimension = config["dimension"]
     logger.info(
@@ -752,7 +753,7 @@ def evaluate_custom_dataset(records, dimension, endpoint, timeout, concurrent=1)
         "text_col": "question",
         "label_col": "answer",
         "label_mapping": {},
-        "signal_field": dimension,
+        "signal_field": "domains" if dimension == "domain" else dimension,
         "dimension": dimension,
         "name": "custom",
     }
