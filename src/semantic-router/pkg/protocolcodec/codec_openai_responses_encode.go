@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
 func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
@@ -340,13 +342,14 @@ func (state *responsesMessageEncodingState) appendToolCall(call *llmprotocol.Too
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_call", "tool call is invalid", nil)
 	}
 	item := responsesItemWire{
-		Type: "function_call", ID: state.itemID("function_call"),
+		Type:   "function_call",
 		CallID: call.ID, Name: call.Name, Namespace: call.Namespace, Arguments: call.Arguments,
 	}
 	if call.Kind == llmprotocol.ToolKindCustom {
 		item.Type, item.Input = "custom_tool_call", call.Arguments
 		item.Arguments = ""
 	}
+	item.ID = state.itemID(item.Type)
 	state.items = append(state.items, item)
 	return nil
 }
@@ -412,11 +415,19 @@ func (state *responsesMessageEncodingState) flushReasoning() error {
 	return nil
 }
 
+// responsesItemID is the id of the wire item at index among those one neutral
+// output item becomes, with the prefix the Responses API gives an item of
+// kind. A client sends the item back with its id, and an OpenAI backend
+// refuses an id whose prefix is not its type's, as one from a Chat backend's
+// answer would be. The neutral item's own id names its first wire item only
+// when it has that prefix, as an OpenAI backend's ids do.
 func responsesItemID(messageID string, index int, kind string) string {
-	if index == 0 && messageID != "" {
+	prefix := responseapi.OutputItemIDPrefix(kind)
+	if index == 0 && strings.HasPrefix(messageID, prefix) {
 		return messageID
 	}
-	return llmprotocol.StableID("responses-item", messageID, fmt.Sprint(index), kind)
+	derived := llmprotocol.StableID("responses-item", messageID, fmt.Sprint(index), kind)
+	return prefix + strings.TrimPrefix(derived, responseapi.ItemIDPrefix)
 }
 
 func (state *responsesMessageEncodingState) itemID(kind string) string {

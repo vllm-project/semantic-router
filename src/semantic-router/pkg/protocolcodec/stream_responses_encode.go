@@ -191,9 +191,7 @@ func (encoder *responsesStreamEncoder) startResponsesOutput(event llmprotocol.Ev
 	encoder.nextOutputIndex++
 	encoder.openOutputs = append(encoder.openOutputs, key)
 	encoder.itemOutputKeys[event.ItemIndex] = append(encoder.itemOutputKeys[event.ItemIndex], key)
-	id := encoder.responsesOutputID(event, key)
-	encoder.outputIDs[key] = id
-	item := responsesItemWire{Type: string(key.kind), ID: id, Status: "in_progress"}
+	item := responsesItemWire{Type: string(key.kind), Status: "in_progress"}
 	switch key.kind {
 	case responsesOutputMessage:
 		item.Role = "assistant"
@@ -211,6 +209,8 @@ func (encoder *responsesStreamEncoder) startResponsesOutput(event llmprotocol.Ev
 	case responsesOutputImage:
 		item.Type = "image_generation_call"
 	}
+	item.ID = encoder.responsesOutputID(event, key, item.Type)
+	encoder.outputIDs[key] = item.ID
 	wire := responsesEventWire{
 		Type:        "response.output_item.added",
 		Sequence:    encoder.nextWireSequence(),
@@ -224,7 +224,9 @@ func (encoder *responsesStreamEncoder) startResponsesOutput(event llmprotocol.Ev
 	return [][]byte{frame}, nil
 }
 
-func (encoder *responsesStreamEncoder) responsesOutputID(event llmprotocol.Event, key responsesOutputKey) string {
+// responsesOutputID is the id of the wire item of key, of itemType, named as
+// the buffered encoder names it from its neutral item's id.
+func (encoder *responsesStreamEncoder) responsesOutputID(event llmprotocol.Event, key responsesOutputKey, itemType string) string {
 	base := event.ItemID
 	if base == "" {
 		base = encoder.neutralItemIDs[event.ItemIndex]
@@ -232,13 +234,7 @@ func (encoder *responsesStreamEncoder) responsesOutputID(event llmprotocol.Event
 	if base == "" {
 		base = llmprotocol.StableID("responses-output", event.ResponseID, string(key.kind), strconv.Itoa(event.ItemIndex))
 	}
-	if len(encoder.itemOutputKeys[event.ItemIndex]) == 1 {
-		return base
-	}
-	if key.segment > 0 {
-		return llmprotocol.StableID("responses-output-split", base, string(key.kind), strconv.Itoa(key.segment))
-	}
-	return llmprotocol.StableID("responses-output-split", base, string(key.kind))
+	return responsesItemID(base, len(encoder.itemOutputKeys[event.ItemIndex])-1, itemType)
 }
 
 func (encoder *responsesStreamEncoder) encodeResponsesStart(event llmprotocol.Event) ([][]byte, error) {

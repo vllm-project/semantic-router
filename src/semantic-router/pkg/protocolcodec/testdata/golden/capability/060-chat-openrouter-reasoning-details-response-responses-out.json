@@ -21,14 +21,14 @@
                   "type": "reasoning_text"
                 }
               ],
-              "id": "item_63941a0bc238944da6d2b9f8",
+              "id": "rs_15ef5c43fe8d78d15447a081",
               "summary": [],
               "type": "reasoning"
             },
             {
               "arguments": "{\"city\":\"Paris\"}",
               "call_id": "call_1",
-              "id": "item_5e759701d1962c4879531e91",
+              "id": "fc_5e759701d1962c4879531e91",
               "name": "get_weather",
               "type": "function_call"
             }
@@ -113,14 +113,14 @@
                   "type": "reasoning_text"
                 }
               ],
-              "id": "item_63941a0bc238944da6d2b9f8",
+              "id": "rs_15ef5c43fe8d78d15447a081",
               "summary": [],
               "type": "reasoning"
             },
             {
               "arguments": "{\"city\":\"Paris\"}",
               "call_id": "call_9",
-              "id": "item_5e759701d1962c4879531e91",
+              "id": "fc_5e759701d1962c4879531e91",
               "name": "get_weather",
               "type": "function_call"
             }

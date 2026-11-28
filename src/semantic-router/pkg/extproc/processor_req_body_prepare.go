@@ -114,12 +114,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}
 	ctx.PluginBackendModel = selectedModel
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
-		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
-		// A fast response that could not be encoded is an error, which ends
-		// the record when requestBodyReply sends it.
-		status := int(resp.GetImmediateResponse().GetStatus().GetCode())
-		r.updateRouterReplayStatus(ctx, status, false)
-		r.attachRouterReplayResponse(ctx, resp.GetImmediateResponse().GetBody(), status < http.StatusBadRequest)
+		r.recordFastResponse(ctx, resp, originalModel, selectedModel, decisionName)
 		return requestDecisionState{}, resp
 	}
 	metrics.RecordModelRequest(selectedModel)

@@ -71,7 +71,7 @@ recipes:
 | Field | Meaning |
 |---|---|
 | `rules[].when` | A condition tree over named signals, as in `decisions[].rules`. Jailbreak, safety and `systemone` rules with `stage: response`, and every hallucination and refusal rule, read the answer; every other signal reads the request. `on_error` and `on_unknown` are not accepted on its nodes: the guard's `on_unknown` decides. |
-| `rules[].action` | `block` refuses the answer with HTTP 400, an `invalid_request_error` with code `response_blocked` in the client's protocol, or with the stream's error event for a streamed answer; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
+| `rules[].action` | `block` refuses the answer: with HTTP 400, an `invalid_request_error` with code `response_blocked` in the client's protocol, or, for a streamed answer, with the block's message as the answer the stream ends with; `annotate` delivers it with the rule's warning codes in `x-vsr-warnings`; `none` only records the outcome. |
 | `rules[].details` | With `annotate`, also writes a note at the head of the answer. The hallucination note names the unsupported spans. |
 | `on_unknown` | What a rule does when a response-stage signal it reads could not be read: the detector failed or timed out, the answer had no text, or there was no grounding context to check it against. `block`, `annotate` (the default) or `none`. |
 | `enabled` | `false` turns off the guard a decision inherits from `global.plugins` or its recipe's plugins; `rules` is then not required. |
@@ -86,10 +86,11 @@ the answer could not be checked), `response_jailbreak`, and `response_guard`
 for any other rule, one for each response-stage signal among the conditions
 that matched, or among all of them when the rule could not be decided. A
 blocked answer is replaced with a message that names what was found, never
-that a check failed. The refusal is a `400`, as a provider's content filter
-answers and as a [blocking `fast_response`](./fast-response#block-a-request)
-refuses a request: Claude Code re-runs its `apiKeyHelper` and retries a `401`
-or `403` up to ten times, and shows a `403` as a failed login.
+that a check failed. An answer that was not streamed is refused with a `400`,
+as a provider's content filter answers and as a
+[blocking `fast_response`](./fast-response#block-a-request) refuses a request:
+Claude Code re-runs its `apiKeyHelper` and retries a `401` or `403` up to ten
+times, and shows a `403` as a failed login.
 
 The grounding context is the documents and memories the
 [context plugin](./context.md) injected, in either injection mode, and the
@@ -121,21 +122,45 @@ receives one of:
   included, with the guard's codes in `x-vsr-warnings`;
 - the answer's events with the guard's note at its head, for a rule with
   `details`;
-- the refusal a buffered answer's 400 carries, as the protocol's stream
-  error: a Chat `error` chunk, a Responses `response.failed` event or a
-  Messages `error` event. When a deployment the guard asks takes the
-  delegated credential and the request carries none, a buffered answer is
-  refused with `401`, and the stream error carries that refusal instead.
+- for a blocked answer, the block's message as the answer, in a stream that
+  ends the way a finished answer does (`end_turn` on Messages, `stop` on
+  Chat, `response.completed` on Responses) and the ids a model's answer has
+  there, as a [blocking `fast_response`](./fast-response#block-a-request)
+  answers, with `x-vsr-response-path: blocked`, standalone and behind Envoy. A stream that fails does not end an
+  agent harness's turn: given the protocol's stream error, Claude Code
+  2.1.325 sends the request eight times in all, falling back to requests that
+  do not stream, and Codex 0.166.0 reconnects five times, and each try calls
+  the model again. Given the answer, Claude Code, Codex 0.166.0 and Pi 1.5.2
+  call the model once, show the message as the reply, and send the next prompt
+  as a turn of its own. The answer reports the usage of the model call it
+  replaces: that call ran and is paid for, and a harness counts the usage it
+  is told in its cost and context. The usage is the model's whole answer,
+  though the client receives only the message. Router Replay records the
+  call's cost either way. With `store` on, the Responses object a
+  `previous_response_id` continues from holds the message, not the blocked
+  answer;
+- the protocol's stream error (a Chat `error` chunk, a Responses
+  `response.failed` event or a Messages `error` event) when a deployment the
+  guard asks takes the delegated credential and the request carries none: a
+  buffered answer is refused with `401`, and the stream error carries that
+  refusal.
+
+The refused answer never reaches the client, so the history a harness sends
+with its next prompt holds the prompt and the block's message, not the
+answer. The next request is routed by its own newest turn; see
+[Later Requests Carry the Blocked Prompt](./fast-response#later-requests-carry-the-blocked-prompt).
 
 Behind Envoy the Router asks for the response body buffered for these
-requests only; standalone, it buffers the body itself. The cost is time to
+requests only, and Envoy holds the response headers with the body, so the
+headers the guard sets, such as `x-vsr-warnings` and `x-vsr-response-path`,
+reach the client; standalone, it buffers the body itself. The cost is time to
 first token: nothing reaches the client before the model has finished, so a
 long answer must fit the idle timeouts of the client and of any proxy. A held
 answer is bounded at 64 MiB, the size the Router accepts for any model
 response, and Envoy's own buffer limit applies before it. A larger answer is
-refused unread with the same stream error, and a stream that ends without a
-complete answer sends only its failure: nothing the guard has not read
-reaches the client.
+blocked unread, with a message that says so as the answer, and a stream that
+ends without a complete answer sends only its failure: nothing the guard has
+not read reaches the client.
 
 A guard whose rules only `annotate` without `details` or record (`none`)
 keeps true streaming. The client receives the answer as it is generated; the

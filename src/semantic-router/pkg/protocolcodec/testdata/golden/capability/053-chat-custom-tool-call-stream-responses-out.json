@@ -58,7 +58,7 @@
               "data": {
                 "item": {
                   "call_id": "call_1",
-                  "id": "item_f83d24bedd5d260a16bd7b5f",
+                  "id": "ctc_5ed1054d44d9e8a7ea88171f",
                   "input": "",
                   "name": "apply_patch",
                   "status": "in_progress",
@@ -73,7 +73,7 @@
             {
               "data": {
                 "delta": "*** Begin Patch\n",
-                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "item_id": "ctc_5ed1054d44d9e8a7ea88171f",
                 "output_index": 0,
                 "sequence_number": 3,
                 "type": "response.custom_tool_call_input.delta"
@@ -83,7 +83,7 @@
             {
               "data": {
                 "delta": "*** Add File: hello.txt\n+hi\n*** End Patch\n",
-                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "item_id": "ctc_5ed1054d44d9e8a7ea88171f",
                 "output_index": 0,
                 "sequence_number": 4,
                 "type": "response.custom_tool_call_input.delta"
@@ -93,7 +93,7 @@
             {
               "data": {
                 "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
-                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "item_id": "ctc_5ed1054d44d9e8a7ea88171f",
                 "output_index": 0,
                 "sequence_number": 5,
                 "type": "response.custom_tool_call_input.done"
@@ -104,7 +104,7 @@
               "data": {
                 "item": {
                   "call_id": "call_1",
-                  "id": "item_f83d24bedd5d260a16bd7b5f",
+                  "id": "ctc_5ed1054d44d9e8a7ea88171f",
                   "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
                   "name": "apply_patch",
                   "status": "completed",
@@ -130,7 +130,7 @@
                   "output": [
                     {
                       "call_id": "call_1",
-                      "id": "item_f83d24bedd5d260a16bd7b5f",
+                      "id": "ctc_5ed1054d44d9e8a7ea88171f",
                       "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
                       "name": "apply_patch",
                       "status": "completed",

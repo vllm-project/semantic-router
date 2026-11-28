@@ -31,25 +31,7 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	if format == "" {
 		format = llmprotocol.OpenAIChatV1
 	}
-	responseID := "resp_" + ctx.RequestID
-	itemID := "item_" + ctx.RequestID
-	if publicID := responseObjectPublicID(ctx); publicID != "" {
-		responseID = publicID
-		itemID = llmprotocol.StableID(publicID, "0")
-	}
-	usage := authoritativeZeroUsage()
-	response := &llmprotocol.Response{
-		Generation: 1,
-		ID:         responseID,
-		CreatedAt:  time.Now().UTC(),
-		Model:      ctx.RequestModel,
-		Output: []llmprotocol.OutputItem{{
-			ID: itemID, Role: llmprotocol.RoleAssistant,
-			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
-		}},
-		StopReason: llmprotocol.StopEndTurn,
-		Usage:      usage,
-	}
+	response := syntheticTextResponse(ctx, text)
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, "", nil, err
@@ -76,6 +58,24 @@ func (r *OpenAIRouter) encodeSyntheticTextResponse(
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	ctx.SemanticResponse = response
 	return body, "text/event-stream", response, nil
+}
+
+// syntheticTextResponse is a finished answer of the Router's own whose text
+// is text, with no model call behind it.
+func syntheticTextResponse(ctx *RequestContext, text string) *llmprotocol.Response {
+	responseID := routerResponseID(ctx, "synthetic-response")
+	return &llmprotocol.Response{
+		Generation: 1,
+		ID:         responseID,
+		CreatedAt:  time.Now().UTC(),
+		Model:      ctx.RequestModel,
+		Output: []llmprotocol.OutputItem{{
+			ID: llmprotocol.StableID(responseID, "0"), Role: llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+		}},
+		StopReason: llmprotocol.StopEndTurn,
+		Usage:      authoritativeZeroUsage(),
+	}
 }
 
 func authoritativeZeroUsage() llmprotocol.Usage {

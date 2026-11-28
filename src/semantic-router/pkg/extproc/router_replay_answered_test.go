@@ -528,9 +528,11 @@ func TestBlockedAnswerReplayKeepsTheClientsStatus(t *testing.T) {
 	}
 }
 
-// A blocking fast_response refuses the request with its message as a 400
-// invalid-request error in the client's protocol, streamed or not, and the
-// record ends failed with request_rejected.
+// A blocking fast_response refuses the request with its message. A request
+// that does not stream gets a 400 invalid-request error in its protocol. A
+// stream gets the message as a finished answer: an agent harness sends a
+// refused stream again, and Claude Code keeps the next prompt in the refused
+// turn. The record ends failed with request_rejected under the client's status.
 func TestBlockingFastResponseRefusesTheRequest(t *testing.T) {
 	const message = "Subagents may not send personal data."
 	engine := protocolcodec.NewBuiltinEngine()
@@ -552,21 +554,40 @@ func TestBlockingFastResponseRefusesTheRequest(t *testing.T) {
 				enableReplay(router, ctx)
 
 				_, response := router.runRequestPreRoutingStages("vllm-sr/auto", request, extractSemanticRequestSignals(request), ctx)
-				require.EqualValues(t, http.StatusBadRequest, response.GetImmediateResponse().GetStatus().GetCode())
 				require.Equal(t, headers.ResponsePathBlocked, immediateHeaderValue(response, headers.VSRResponsePath))
-				refusal, _, err := engine.DecodeTransportError(format, response.GetImmediateResponse().GetBody())
-				require.NoError(t, err)
-				require.Equal(t, message, refusal.Error.Message)
-				require.Equal(t, llmprotocol.ErrorInvalidRequest, refusal.Error.Category)
-				if format != llmprotocol.AnthropicMessagesV1 { // a Messages error carries its type, not a code
-					require.Equal(t, "request_blocked", refusal.Error.Code)
-				}
+				status := requireBlockReply(t, engine, format, streaming, response, message)
 				_, err = router.requestBodyReply(response, nil, ctx)
 				require.NoError(t, err)
 				require.NoError(t, router.handleProcessReceiveError(ctx, io.EOF))
 
-				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", http.StatusBadRequest)
+				requireReplayEnd(t, router, ctx, routerreplay.LifecycleFailed, "request_rejected", status)
 			})
 		}
 	}
+}
+
+// requireBlockReply checks the reply to a request a fast_response blocked:
+// the message as a streamed answer, else as a 400 invalid-request error. It
+// returns the reply's status.
+func requireBlockReply(t *testing.T, engine *protocolcodec.Engine, format llmprotocol.WireFormat, streaming bool, response *ext_proc.ProcessingResponse, message string) int {
+	t.Helper()
+	immediate := response.GetImmediateResponse()
+	if streaming {
+		require.EqualValues(t, http.StatusOK, immediate.GetStatus().GetCode())
+		require.Equal(t, "text/event-stream", immediateHeaderValue(response, "content-type"))
+		answer := assertBlockedStream(t, format, string(immediate.GetBody()), message, "ada@example.com")
+		if input := answer.Usage.InputTotal.Value; input != nil && *input != 0 {
+			t.Fatalf("usage = %+v, want none: no model was called", answer.Usage)
+		}
+		return http.StatusOK
+	}
+	require.EqualValues(t, http.StatusBadRequest, immediate.GetStatus().GetCode())
+	refusal, _, err := engine.DecodeTransportError(format, immediate.GetBody())
+	require.NoError(t, err)
+	require.Equal(t, message, refusal.Error.Message)
+	require.Equal(t, llmprotocol.ErrorInvalidRequest, refusal.Error.Category)
+	if format != llmprotocol.AnthropicMessagesV1 { // a Messages error carries its type, not a code
+		require.Equal(t, "request_blocked", refusal.Error.Code)
+	}
+	return http.StatusBadRequest
 }

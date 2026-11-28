@@ -54,7 +54,7 @@
         "item": {
           "arguments": "",
           "call_id": "call_1",
-          "id": "item_477e29052c1fc2e47731d0bb",
+          "id": "fc_005f97e7754bf09c33f1f551",
           "name": "lookup",
           "status": "in_progress",
           "type": "function_call"
@@ -68,7 +68,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "{\"city\":",
-        "item_id": "item_477e29052c1fc2e47731d0bb",
+        "item_id": "fc_005f97e7754bf09c33f1f551",
         "output_index": 0,
         "sequence_number": 3,
         "type": "response.function_call_arguments.delta"
@@ -78,7 +78,7 @@
       "event": "response.function_call_arguments.delta",
       "data": {
         "delta": "\"Paris\"}",
-        "item_id": "item_477e29052c1fc2e47731d0bb",
+        "item_id": "fc_005f97e7754bf09c33f1f551",
         "output_index": 0,
         "sequence_number": 4,
         "type": "response.function_call_arguments.delta"
@@ -88,7 +88,7 @@
       "event": "response.function_call_arguments.done",
       "data": {
         "arguments": "{\"city\":\"Paris\"}",
-        "item_id": "item_477e29052c1fc2e47731d0bb",
+        "item_id": "fc_005f97e7754bf09c33f1f551",
         "name": "lookup",
         "output_index": 0,
         "sequence_number": 5,
@@ -101,7 +101,7 @@
         "item": {
           "arguments": "{\"city\":\"Paris\"}",
           "call_id": "call_1",
-          "id": "item_477e29052c1fc2e47731d0bb",
+          "id": "fc_005f97e7754bf09c33f1f551",
           "name": "lookup",
           "status": "completed",
           "type": "function_call"
@@ -127,7 +127,7 @@
             {
               "arguments": "{\"city\":\"Paris\"}",
               "call_id": "call_1",
-              "id": "item_477e29052c1fc2e47731d0bb",
+              "id": "fc_005f97e7754bf09c33f1f551",
               "name": "lookup",
               "status": "completed",
               "type": "function_call"

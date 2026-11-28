@@ -384,18 +384,11 @@ func refreshCachedSemanticResponse(response *llmprotocol.Response, ctx *RequestC
 	if response == nil {
 		return
 	}
+	if ctx == nil {
+		ctx = &RequestContext{}
+	}
 	response.Generation++
-	requestID := ""
-	if ctx != nil {
-		requestID = ctx.RequestID
-	}
-	response.ID = llmprotocol.StableID("cache-response", requestID)
-	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
-		response.ID = "resp_" + strings.TrimPrefix(response.ID, "item_")
-	}
-	if publicID := responseObjectPublicID(ctx); publicID != "" {
-		response.ID = publicID
-	}
+	response.ID = routerResponseID(ctx, "cache-response")
 	response.CreatedAt = time.Now().UTC()
 	for index := range response.Output {
 		response.Output[index].ID = llmprotocol.StableID(response.ID, fmt.Sprint(index))

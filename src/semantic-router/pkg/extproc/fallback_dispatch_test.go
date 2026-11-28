@@ -2621,22 +2621,19 @@ func TestFallbackAnswerTheGuardPassesIsCached(t *testing.T) {
 	}
 }
 
-// A streaming client receives a blocked fallback answer's refusal as a
-// stream, as it receives a blocked held stream's.
-func TestFallbackResponsePolicyRefusesAStreamingClientInStreamForm(t *testing.T) {
+// A streaming client receives a blocked fallback answer as a stream of the
+// block's message, as it receives a blocked held stream's.
+func TestFallbackResponsePolicyAnswersAStreamingClientWithTheBlockMessage(t *testing.T) {
 	imm, ctx, responseCache := guardedFallbackAnswer(t, true, newJailbreakDecider(0.95))
 	body := string(imm.GetBody())
 	reply := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_ImmediateResponse{ImmediateResponse: imm}}
 	if imm.GetStatus().GetCode() != typev3.StatusCode_OK || immediateHeaderValue(reply, "content-type") != "text/event-stream" {
-		t.Fatalf("reply = %d %s, want the refusal as a 200 event stream", imm.GetStatus().GetCode(), body)
+		t.Fatalf("reply = %d %s, want the block's message as a 200 event stream", imm.GetStatus().GetCode(), body)
 	}
 	if path := immediateHeaderValue(reply, headers.VSRResponsePath); path != headers.ResponsePathBlocked {
 		t.Fatalf("%s = %q, want %q", headers.VSRResponsePath, path, headers.ResponsePathBlocked)
 	}
-	if !strings.HasPrefix(body, `data: {"error":`) || !strings.Contains(body, "jailbreak content detected in LLM output") ||
-		strings.Contains(body, unsafeAnswer) {
-		t.Fatalf("stream = %s, want one error chunk naming the block and none of the answer", body)
-	}
+	assertBlockedStream(t, llmprotocol.OpenAIChatV1, body, "jailbreak content detected in LLM output", unsafeAnswer)
 	if ctx.FallbackRecord.FinalStatus != "policy_blocked" {
 		t.Fatalf("fallback status = %q, want policy_blocked", ctx.FallbackRecord.FinalStatus)
 	}

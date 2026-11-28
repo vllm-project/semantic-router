@@ -81,7 +81,7 @@ func TestResponseGuardReadsTheLooperAnswerBeforeTheClient(t *testing.T) {
 				if status != 200 {
 					t.Fatalf("status = %d, want the stream's 200", status)
 				}
-				assertRefusedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", unsafeAnswer)
+				assertBlockedStream(t, llmprotocol.OpenAIChatV1, client, "jailbreak content detected", unsafeAnswer)
 			case blocked:
 				if status != 400 || !strings.Contains(client, "jailbreak content detected") || strings.Contains(client, unsafeAnswer) {
 					t.Fatalf("reply = %d %s, want the 400 refusal and none of the answer", status, client)
