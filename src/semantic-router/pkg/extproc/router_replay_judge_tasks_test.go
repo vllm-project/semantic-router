@@ -10,6 +10,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
@@ -80,12 +81,15 @@ func TestRouterReplayJudgeTasksCarryTheRecordedText(t *testing.T) {
 // digest of the input it shows.
 func TestRouterReplayJudgeTasksHideTheModelTheRequestWasSentTo(t *testing.T) {
 	record := judgedReplayRecord(t, "replay-1", openAIChatBody("primary answer"), "shadow answer")
-	captured := buildReplayRoutingRecord(&RequestContext{SemanticRequest: &llmprotocol.Request{
-		Model: "primary-upstream-id",
-		Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
-			{Kind: llmprotocol.ContentText, Text: "replay-1"},
-		}}},
-	}}, "public-model", "primary-upstream-id", "route")
+	captured := buildReplayRoutingRecord(&RequestContext{
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true},
+		SemanticRequest: &llmprotocol.Request{
+			Model: "primary-upstream-id",
+			Messages: []llmprotocol.Message{{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+				{Kind: llmprotocol.ContentText, Text: "replay-1"},
+			}}},
+		},
+	}, "public-model", "primary-upstream-id", "route")
 	if !strings.Contains(captured.RequestBody, "primary-upstream-id") {
 		t.Fatalf("the captured request should name its model: %s", captured.RequestBody)
 	}

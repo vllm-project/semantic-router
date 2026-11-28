@@ -15,8 +15,9 @@ func TestBuildReplayRoutingRecordSanitizesNeutralRequestToolTrace(t *testing.T) 
 	toolResultPIICanary := "customer@example.com"
 	isError := false
 	ctx := &RequestContext{
-		RequestID:    "req-tool-1",
-		SourceFormat: llmprotocol.OpenAIResponsesV1,
+		RouterReplayPluginConfig: &config.RouterReplayPluginConfig{PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true},
+		RequestID:                "req-tool-1",
+		SourceFormat:             llmprotocol.OpenAIResponsesV1,
 		SemanticRequest: &llmprotocol.Request{
 			Model: "vllm-sr/auto",
 			Messages: []llmprotocol.Message{
@@ -49,6 +50,7 @@ func TestBuildReplayRoutingRecordSanitizesNeutralRequestToolTrace(t *testing.T) 
 	require.Empty(t, record.ToolTrace.Steps[2].Text)
 	require.Empty(t, record.ToolTrace.Steps[2].Output)
 	require.Empty(t, record.ToolTrace.Steps[2].RawOutput)
+	require.Contains(t, record.RequestBody, "get_weather")
 	require.NotContains(t, record.RequestBody, toolResultPIICanary)
 	require.Equal(t, "Find the weather in San Francisco.", record.Prompt)
 	require.Contains(t, record.ToolDefinitions, "get_weather")
@@ -171,9 +173,10 @@ func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T)
 	const raw = "alice@example.com"
 	newCtx := func(looper bool) *RequestContext {
 		return &RequestContext{
-			RequestID:     "req-mask-trace",
-			SourceFormat:  llmprotocol.OpenAIChatV1,
-			LooperRequest: looper,
+			RouterReplayPluginConfig: &config.RouterReplayPluginConfig{PromptCapture: config.PromptCaptureRaw, CaptureRequestBody: true},
+			RequestID:                "req-mask-trace",
+			SourceFormat:             llmprotocol.OpenAIChatV1,
+			LooperRequest:            looper,
 			SemanticRequest: &llmprotocol.Request{
 				Model: "auto",
 				Messages: []llmprotocol.Message{
@@ -198,6 +201,7 @@ func TestBuildReplayRoutingRecordSuppressesRequestTraceWhenMasking(t *testing.T)
 
 	// Baseline: without the plugin the trace is recorded as before.
 	plain := buildReplayRoutingRecord(newCtx(false), "auto", "model-a", "route")
+	require.Contains(t, plain.RequestBody, raw)
 	require.NotNil(t, plain.ToolTrace, "a route without masking must still record its trace")
 
 	maskingDecision := &config.Decision{Plugins: []config.DecisionPlugin{{
@@ -251,8 +255,8 @@ func TestBuildReplayRoutingRecordCapturesToolResultsOnlyWhenOptedIn(t *testing.T
 		policy  *config.RouterReplayPluginConfig
 		capture bool
 	}{
-		{"default", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw}, false},
-		{"opted in", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureRaw, CaptureToolResults: true}, true},
+		{"default", &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, PromptCapture: config.PromptCaptureRaw}, false},
+		{"opted in", &config.RouterReplayPluginConfig{Enabled: true, CaptureRequestBody: true, PromptCapture: config.PromptCaptureRaw, CaptureToolResults: true}, true},
 		{"no prompt capture", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true}, false},
 		{"verified capture", &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: config.PromptCaptureVerified, CaptureToolResults: true}, false},
 		{"personal data withheld", &config.RouterReplayPluginConfig{Enabled: true, CaptureToolResults: true, CapturePersonalData: &no}, false},
