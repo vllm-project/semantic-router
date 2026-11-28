@@ -510,7 +510,11 @@ def target_list(client):
 @click.pass_obj
 @guarded
 def target_register(client, source):
-    """Replace the local registry from a JSON list of credential references."""
+    """Replace the local registry from a JSON list of credential references.
+
+    A mom target needs config_hash: the active_runtime_hash that the Router
+    reports at GET /api/v1/config/hash on its management API (port 8080).
+    """
     document = load_document(source)
     targets = document.get("targets") if isinstance(document, dict) else document
     validated = plan(

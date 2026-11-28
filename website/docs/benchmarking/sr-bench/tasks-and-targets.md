@@ -207,12 +207,57 @@ Record the pricing basis, and use exactly the same rates in paired runs.
 ### MoM targets
 
 - **Runtime binding.** A MoM target also binds the expected runtime
-  `config_hash`; preview uses its `preview_url`.
+  `config_hash`; preview uses its `preview_url`. Registration and live runs
+  reject a MoM target without one.
 - **Pricing.** Priced MoM runs declare `max_inference_calls`. The current
   direct MoM adapter requires one fully accounted inference call; unsupported
   compound usage can't be priced from the final selected model alone.
 - **Read-only in Dashboard.** Dashboard can select registered targets, but
   can't edit their destinations or credentials.
+
+#### Get the runtime `config_hash`
+
+`config_hash` is the lowercase SHA-256 of the configuration document the
+Router serves. Chat responses don't return it. Read `active_runtime_hash` from
+the Router management API, which a local stack serves on `127.0.0.1:8080`:
+
+```bash
+curl -sS http://127.0.0.1:8080/api/v1/config/hash \
+  | jq -r 'select(.activation_status == "active") | .active_runtime_hash'
+```
+
+- **Use it only when active.** An empty result means `activation_status` isn't
+  `active`: a change is still preparing (`pending`), was rejected (`failed`),
+  or needs a restart (`persisted`). See
+  [configuration management](../../installation/configuration-management.md).
+- **Authentication.** When management bearer authentication is enabled, add
+  `-H "Authorization: Bearer $TOKEN"`. See
+  [the API server reference](../../api/apiserver.md).
+- **Same value elsewhere.** `POST /api/v1/routing/preview` acknowledges the
+  generation it used in the `x-vsr-config-hash` response header.
+- **Re-register after a change.** Applying, rolling back or activating another
+  configuration changes the hash. Requests bound to the old hash then fail
+  with HTTP 412 before any model call, so read the hash again and re-register
+  the target.
+
+A `targets.json` with one MoM target for a local stack:
+
+```json
+[
+  {
+    "id": "local-mom",
+    "kind": "mom",
+    "base_url": "http://127.0.0.1:8899/v1",
+    "model": "vllm-sr/auto",
+    "config_hash": "<active_runtime_hash>",
+    "preview_url": "http://127.0.0.1:8080/api/v1/routing/preview"
+  }
+]
+```
+
+Replace `<active_runtime_hash>` with the 64-character value above. Add
+`prices` and `max_inference_calls` for priced runs, and `api_key_env` when the
+router's listener needs a credential.
 
 ### Sessions and generation settings
 
