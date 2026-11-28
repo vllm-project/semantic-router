@@ -1,0 +1,123 @@
+- id: inclusionai/ling-3.1-flash
+  display_name: InclusionAI Ling 3.1 Flash
+  description: Open-weight InclusionAI hybrid-linear MoE reasoning model for agents, office work and long-horizon software engineering.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: monogram
+    monogram: L
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/tree/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3
+    license: MIT
+  family: ling-3.1
+  reasoning_family: ling
+  parameter_size: 560B (25B active)
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+  tags:
+  - open_weights
+  - moe
+  - reasoning
+  - agentic
+- id: inclusionai/ling-3.0-flash
+  display_name: InclusionAI Ling 3.0 Flash
+  description: Cost-efficient open-weight InclusionAI hybrid-linear MoE reasoning model for high-frequency agentic tasks.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: monogram
+    monogram: L
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/tree/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43
+    license: MIT
+  family: ling-3.0
+  reasoning_family: ling
+  parameter_size: 124B (5.1B active)
+  released_at: '2026-07-23'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+  tags:
+  - open_weights
+  - moe
+  - efficient
+  - agentic
+- id: inclusionai/ling-3.0-flash-vl
+  display_name: InclusionAI Ling 3.0 Flash VL
+  description: Open-weight InclusionAI multimodal hybrid reasoning model with image and video input, built on Ling 3.0 Flash.
+  kind: physical
+  publisher: InclusionAI
+  presentation:
+    logo: monogram
+    monogram: L
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/tree/c22bf252f15b66d18ca00a15989ac7ed46b7f09e
+    license: MIT
+  family: ling-3.0
+  reasoning_family: ling
+  parameter_size: 124B (5.5B active)
+  released_at: '2026-09-04'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: InclusionAI
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
+  tags:
+  - open_weights
+  - moe
+  - multimodal
+  - efficient

@@ -559,6 +559,106 @@ const builtInCatalogJSON = `{
       "source": "https://github.com/zapier/AutomationBench"
     },
     {
+      "default_profile": "published-standard",
+      "display_name": "MATH-Vision",
+      "domain": "multimodal_reasoning",
+      "id": "mathllm/math-vision@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published MATH-Vision accuracy; the evaluated split (full test or testmini) stays on the evaluation record.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        }
+      ],
+      "source": "https://github.com/mathllm/MATH-V"
+    },
+    {
+      "default_profile": "published-standard",
+      "display_name": "CountBench",
+      "domain": "visual_reasoning",
+      "id": "google/countbench@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published object-counting accuracy on CountBench with the prompt format retained on the evaluation record.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        }
+      ],
+      "source": "https://arxiv.org/abs/2302.12066"
+    },
+    {
+      "default_profile": "published-standard",
+      "display_name": "WorldVQA",
+      "domain": "visual_reasoning",
+      "id": "moonshotai/worldvqa@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published WorldVQA accuracy on atomic vision-centric world knowledge; the category set evaluated stays on the evaluation record.",
+          "display_name": "Published standard",
+          "id": "published-standard"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/moonshotai/WorldVQA"
+    },
+    {
+      "default_profile": "published-agent",
+      "display_name": "WebVoyager",
+      "domain": "computer_use",
+      "id": "minorjerry/webvoyager@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "success_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Vendor-published WebVoyager task success rate on live websites; the agent, judge and task subset stay on the evaluation record.",
+          "display_name": "Published agent",
+          "id": "published-agent"
+        }
+      ],
+      "source": "https://github.com/MinorJerry/WebVoyager"
+    },
+    {
       "default_profile": "published-loop-250-steps",
       "display_name": "APEX-Agents 1.1",
       "domain": "knowledge_work",
@@ -609,6 +709,11 @@ const builtInCatalogJSON = `{
           "description": "Average of the Standard 10-option and vision-only evaluation settings.",
           "display_name": "Standard and vision average",
           "id": "standard-10-vision-average"
+        },
+        {
+          "description": "Vendor-published MMMU-Pro accuracy whose setting (Standard 10-option or the vision average) is not stated; visible as evidence but excluded from the default index.",
+          "display_name": "Published setup unspecified",
+          "id": "published-unspecified"
         }
       ],
       "source": "https://github.com/MMMU-Benchmark/MMMU"
@@ -15804,6 +15909,396 @@ const builtInCatalogJSON = `{
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Granite 4.2 3B"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.1-flash-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.8118
+      },
+      "model": "inclusionai/ling-3.1-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_column": "Ling-3.1-flash",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench-2.1",
+        "variant": "Ling-3.1-flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.1-flash-model-card-terminal-bench-4-0@1.0.0",
+      "metrics": {
+        "resolved": 0.4603
+      },
+      "model": "inclusionai/ling-3.1-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_column": "Ling-3.1-flash",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench-4.0",
+        "terminal_harness": "LingCode (customized from Pi)",
+        "variant": "Ling-3.1-flash"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.1-flash-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.6874
+      },
+      "model": "inclusionai/ling-3.1-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_column": "Ling-3.1-flash",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-bench Pro",
+        "swe_harness": "LingCode (customized from Pi)",
+        "variant": "Ling-3.1-flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.1-flash-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.3744
+      },
+      "model": "inclusionai/ling-3.1-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_column": "Ling-3.1-flash",
+        "source_kind": "official_model_card",
+        "source_label": "HLE",
+        "variant": "Ling-3.1-flash"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.1-flash-model-card-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.83
+      },
+      "model": "inclusionai/ling-3.1-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_column": "Ling-3.1-flash",
+        "source_kind": "official_model_card",
+        "source_label": "Mcp-altas",
+        "variant": "Ling-3.1-flash"
+      }
+    },
+    {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.566
+      },
+      "model": "inclusionai/ling-3.0-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash",
+        "source_kind": "official_model_card",
+        "source_label": "SWE-Bench Pro",
+        "swe_harness": "OpenHands",
+        "variant": "Ling-3.0-flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-model-card-terminal-bench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.57
+      },
+      "model": "inclusionai/ling-3.0-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 1.0,
+        "source_column": "Ling-3.0-flash",
+        "source_kind": "official_model_card",
+        "source_label": "Terminal-Bench 2.1",
+        "terminal_harness": "Terminus-2 (Artificial Analysis protocol)",
+        "trials": 3,
+        "variant": "Ling-3.0-flash"
+      }
+    },
+    {
+      "benchmark": "scale/mcp-atlas@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-model-card-mcp-atlas@1.0.0",
+      "metrics": {
+        "score": 0.655
+      },
+      "model": "inclusionai/ling-3.0-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "harness": "official v1 harness, 20-turn limit",
+        "judge_model": "Gemini-2.5-Pro",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash",
+        "source_kind": "official_model_card",
+        "source_label": "MCP-Atlas",
+        "task_count": 500,
+        "variant": "Ling-3.0-flash"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-model-card-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.828
+      },
+      "model": "inclusionai/ling-3.0-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "problem_window": "2024-08_to_2025-05",
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash",
+        "source_kind": "official_model_card",
+        "source_label": "LiveCodeBench (2408-2505)",
+        "variant": "Ling-3.0-flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-model-card-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.227
+      },
+      "model": "inclusionai/ling-3.0-flash",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash",
+        "source_kind": "official_model_card",
+        "source_label": "HLE",
+        "variant": "Ling-3.0-flash"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu-pro@1.0.0",
+      "benchmark_profile": "published-unspecified",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-vl-model-card-mmmu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.79
+      },
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash-VL",
+        "source_kind": "official_model_card",
+        "source_label": "MMMU-Pro",
+        "variant": "Ling-3.0-flash-VL"
+      }
+    },
+    {
+      "benchmark": "mathllm/math-vision@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-vl-model-card-math-vision@1.0.0",
+      "metrics": {
+        "accuracy": 0.8487
+      },
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash-VL",
+        "source_kind": "official_model_card",
+        "source_label": "MathVision",
+        "variant": "Ling-3.0-flash-VL"
+      }
+    },
+    {
+      "benchmark": "google/countbench@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-vl-model-card-countbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.9733
+      },
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash-VL",
+        "source_kind": "official_model_card",
+        "source_label": "CountBench",
+        "variant": "Ling-3.0-flash-VL"
+      }
+    },
+    {
+      "benchmark": "moonshotai/worldvqa@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-vl-model-card-worldvqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.4567
+      },
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash-VL",
+        "source_kind": "official_model_card",
+        "source_label": "WorldVQA",
+        "variant": "Ling-3.0-flash-VL"
+      }
+    },
+    {
+      "benchmark": "minorjerry/webvoyager@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "verification": "claimed"
+      },
+      "id": "inclusionai/ling-3.0-flash-vl-model-card-webvoyager@1.0.0",
+      "metrics": {
+        "success_rate": 0.9083
+      },
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "observed_at": "2026-11-22",
+      "reasoning_effort": "enabled",
+      "status": "available",
+      "subject": {
+        "sampling_temperature": 0.6,
+        "sampling_top_p": 0.95,
+        "source_column": "Ling-3.0-flash-VL",
+        "source_kind": "official_model_card",
+        "source_label": "WebVoyager",
+        "variant": "Ling-3.0-flash-VL"
       }
     },
     {
@@ -65452,6 +65947,1114 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "inclusionai/ling-3.1-flash-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.8118,
+          "status": "available",
+          "value": 0.8118,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 81.17999999999999
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [
+        "inclusionai/ling-3.1-flash-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 81.17999999999999,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.8118,
+          "status": "available",
+          "value": 0.8118,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.1-flash",
+      "provenance": [
+        "inclusionai/ling-3.1-flash-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "inclusionai/ling-3.0-flash-model-card-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.828,
+          "status": "available",
+          "value": 0.828,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [
+        "inclusionai/ling-3.0-flash-model-card-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "inclusionai/ling-3.0-flash-model-card-terminal-bench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.57,
+          "status": "available",
+          "value": 0.57,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 56.99999999999999
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [
+        "inclusionai/ling-3.0-flash-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": 56.99999999999999,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.57,
+          "status": "available",
+          "value": 0.57,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [
+        "inclusionai/ling-3.0-flash-model-card-livecodebench-v6@1.0.0",
+        "inclusionai/ling-3.0-flash-model-card-terminal-bench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.0-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "inclusionai/ling-3.0-flash-vl",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
@@ -115848,6 +117451,162 @@ const builtInCatalogJSON = `{
         "chat",
         "reasoning",
         "tools",
+        "long_context"
+      ],
+      "description": "Open-weight InclusionAI hybrid-linear MoE reasoning model for agents, office work and long-horizon software engineering.",
+      "display_name": "InclusionAI Ling 3.1 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/tree/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3",
+        "type": "open_weights"
+      },
+      "family": "ling-3.1",
+      "id": "inclusionai/ling-3.1-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "560B (25B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "L"
+      },
+      "publisher": "InclusionAI",
+      "reasoning_family": "ling",
+      "tags": [
+        "open_weights",
+        "moe",
+        "reasoning",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "InclusionAI",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-22"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "long_context"
+      ],
+      "description": "Cost-efficient open-weight InclusionAI hybrid-linear MoE reasoning model for high-frequency agentic tasks.",
+      "display_name": "InclusionAI Ling 3.0 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/tree/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43",
+        "type": "open_weights"
+      },
+      "family": "ling-3.0",
+      "id": "inclusionai/ling-3.0-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "124B (5.1B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "L"
+      },
+      "publisher": "InclusionAI",
+      "reasoning_family": "ling",
+      "released_at": "2026-07-23",
+      "tags": [
+        "open_weights",
+        "moe",
+        "efficient",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "InclusionAI",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-22"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "video",
+        "long_context"
+      ],
+      "description": "Open-weight InclusionAI multimodal hybrid reasoning model with image and video input, built on Ling 3.0 Flash.",
+      "display_name": "InclusionAI Ling 3.0 Flash VL",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/tree/c22bf252f15b66d18ca00a15989ac7ed46b7f09e",
+        "type": "open_weights"
+      },
+      "family": "ling-3.0",
+      "id": "inclusionai/ling-3.0-flash-vl",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "124B (5.5B active)",
+      "presentation": {
+        "logo": "monogram",
+        "monochrome": true,
+        "monogram": "L"
+      },
+      "publisher": "InclusionAI",
+      "reasoning_family": "ling",
+      "released_at": "2026-09-04",
+      "tags": [
+        "open_weights",
+        "moe",
+        "multimodal",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "InclusionAI",
+        "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+        "status": "claimed",
+        "verified_at": "2026-11-22"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
         "vision",
         "video",
         "long_context"
@@ -125371,6 +127130,60 @@ const builtInCatalogJSON = `{
       "id": "sglang",
       "models": [
         {
+          "catalog": "inclusionai/ling-3.1-flash",
+          "id": "inclusionAI/Ling-3.1-flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "reference_sglang_image": "lmsysorg/sglang:dev-ling-3.1-flash",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        },
+        {
+          "catalog": "inclusionai/ling-3.0-flash",
+          "id": "inclusionAI/Ling-3.0-flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "reference_sglang_image": "lmsysorg/sglang:dev-Ling-3.0-flash",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        },
+        {
+          "catalog": "inclusionai/ling-3.0-flash-vl",
+          "id": "inclusionAI/Ling-3.0-flash-VL",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "reference_sglang_image": "lmsysorg/sglang:dev-Ling-3.0-flash-VL",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        },
+        {
           "catalog": "qwen/qwen3.8-27b",
           "id": "Qwen/Qwen3.8-27B",
           "lifecycle": "experimental",
@@ -125969,6 +127782,42 @@ const builtInCatalogJSON = `{
       "display_name": "vLLM",
       "id": "vllm",
       "models": [
+        {
+          "catalog": "inclusionai/ling-3.0-flash",
+          "id": "inclusionAI/Ling-3.0-flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.28.0",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://github.com/vllm-project/vllm/releases/tag/v0.28.0",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        },
+        {
+          "catalog": "inclusionai/ling-3.0-flash-vl",
+          "id": "inclusionAI/Ling-3.0-flash-VL",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.30.0",
+            "trust_remote_code": true
+          },
+          "verification": {
+            "source": "https://github.com/vllm-project/vllm/releases/tag/v0.30.0",
+            "status": "claimed",
+            "verified_at": "2026-11-22"
+          }
+        },
         {
           "catalog": "baidu/ernie-4.5-300b-a47b",
           "id": "baidu/ERNIE-4.5-300B-A47B-PT",
@@ -128504,6 +130353,16 @@ const builtInCatalogJSON = `{
       ],
       "parameter": "reasoning_effort",
       "type": "reasoning_effort"
+    },
+    {
+      "default_mode": "enabled",
+      "id": "ling",
+      "modes": [
+        "enabled",
+        "disabled"
+      ],
+      "parameter": "enable_thinking",
+      "type": "chat_template_kwargs"
     }
   ],
   "schema_version": "vllm-sr/model-catalog/v2"

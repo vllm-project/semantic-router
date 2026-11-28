@@ -24,6 +24,45 @@ presentation:
 conformance:
   status: unverified
 models:
+- catalog: inclusionai/ling-3.1-flash
+  relationship: self_hosted
+  id: inclusionAI/Ling-3.1-flash
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    reference_sglang_image: lmsysorg/sglang:dev-ling-3.1-flash
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.1-flash/blob/dde57b1c6a365aa0e0a33e15cecce0f2be96f5a3/README.md
+- catalog: inclusionai/ling-3.0-flash
+  relationship: self_hosted
+  id: inclusionAI/Ling-3.0-flash
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    reference_sglang_image: lmsysorg/sglang:dev-Ling-3.0-flash
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash/blob/fcc60a52b34c69c6271d0ac8a8cb0815020b6a43/README.md
+- catalog: inclusionai/ling-3.0-flash-vl
+  relationship: self_hosted
+  id: inclusionAI/Ling-3.0-flash-VL
+  protocols:
+  - openai/chat-completions@1
+  restrictions:
+    reference_sglang_image: lmsysorg/sglang:dev-Ling-3.0-flash-VL
+    trust_remote_code: true
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-22
+    source: https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/blob/c22bf252f15b66d18ca00a15989ac7ed46b7f09e/README.md
 - catalog: qwen/qwen3.8-27b
   relationship: self_hosted
   id: Qwen/Qwen3.8-27B

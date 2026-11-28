@@ -679,6 +679,76 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                     metric, score = expected[record["benchmark"]]
                     self.assertEqual(record["metrics"][metric], score)
 
+    def test_inclusionai_creator_lands_three_self_hosted_representatives(
+        self,
+    ) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        ling_models = {
+            "inclusionai/ling-3.1-flash",
+            "inclusionai/ling-3.0-flash",
+            "inclusionai/ling-3.0-flash-vl",
+        }
+        creators = {
+            creator["publisher"]: creator
+            for creator in manifest["inventory"]["physical"]["creators"]
+        }
+        self.assertEqual(
+            set(creators["InclusionAI"]["representative_models"]), ling_models
+        )
+        self.assertNotIn("min_representatives", creators["InclusionAI"])
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, ling_models)
+        self.assertEqual(
+            buckets,
+            {
+                ("inclusionai/ling-3.1-flash", "unspecified", "vendor_claimed"): {
+                    "harbor/terminal-bench@2.1.0",
+                    "harbor/terminal-bench@4.0.0",
+                    "swe-bench/pro@1.0.0",
+                    "cais/humanitys-last-exam@1.0.0",
+                    "scale/mcp-atlas@1.0.0",
+                },
+                ("inclusionai/ling-3.0-flash", "enabled", "vendor_claimed"): {
+                    "swe-bench/pro@1.0.0",
+                    "harbor/terminal-bench@2.1.0",
+                    "scale/mcp-atlas@1.0.0",
+                    "livecodebench/livecodebench@6.0.0",
+                    "cais/humanitys-last-exam@1.0.0",
+                },
+                ("inclusionai/ling-3.0-flash-vl", "enabled", "vendor_claimed"): {
+                    "mmmu-benchmark/mmmu-pro@1.0.0",
+                    "mathllm/math-vision@1.0.0",
+                    "google/countbench@1.0.0",
+                    "moonshotai/worldvqa@1.0.0",
+                    "minorjerry/webvoyager@1.0.0",
+                },
+            },
+        )
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        bindings = {
+            (provider_id, binding["catalog"]): binding
+            for provider_id in ("sglang", "vllm", "openrouter")
+            for binding in providers[provider_id]["models"]
+            if binding.get("catalog") in ling_models
+        }
+        self.assertEqual(
+            set(bindings),
+            {
+                ("sglang", "inclusionai/ling-3.1-flash"),
+                ("sglang", "inclusionai/ling-3.0-flash"),
+                ("sglang", "inclusionai/ling-3.0-flash-vl"),
+                ("vllm", "inclusionai/ling-3.0-flash"),
+                ("vllm", "inclusionai/ling-3.0-flash-vl"),
+            },
+        )
+        for binding in bindings.values():
+            self.assertEqual(binding["relationship"], "self_hosted")
+        self.assertEqual(
+            bindings[("sglang", "inclusionai/ling-3.1-flash")]["id"],
+            "inclusionAI/Ling-3.1-flash",
+        )
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
@@ -1032,6 +1102,9 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "nvidia/nemotron-3.5-super-vl": "nemotron-ultra",
             "nvidia/nemotron-3.5-bolt": "nemotron-ultra",
             "google/gemini-3.5-flash-lite": "gemini-flash-four-level-minimal",
+            "inclusionai/ling-3.1-flash": "ling",
+            "inclusionai/ling-3.0-flash": "ling",
+            "inclusionai/ling-3.0-flash-vl": "ling",
         }
         self.assertEqual(
             {
