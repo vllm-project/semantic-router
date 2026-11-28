@@ -264,6 +264,37 @@ support a keep-or-rollback decision:
    under `<workspace>/sr-bench`. Exit codes follow the verdict: 0 PASS,
    1 FAIL, 2 INCONCLUSIVE.
 
+## Reports and context
+
+Reports, the provenance manifest and promotion drafts replay from the ledger
+alone - the same ledger renders byte-identically, and a ledger mixing dataset
+hashes carries a loud "not directly comparable" warning:
+
+```bash
+# run report (ledger-only replay)
+recipe-lab report --ledger ledger.jsonl --output report.md
+
+# provenance manifest: recipe-lab-run-v1, aligned with the upstream schemas
+recipe-lab provenance --ledger ledger.jsonl --output manifest.json
+
+# promotion draft from the latest PASS live record (a draft, never a merge)
+recipe-lab record-draft --ledger ledger.jsonl --output promotion-draft.md
+
+# next-round context for an agent (same input -> byte-identical output)
+recipe-lab next --spec spec.yaml --ledger ledger.jsonl \
+  --symptom timeout --output next-context.md
+```
+
+`next` opens with an untrusted-reference-material header, summarizes the
+contract (objective, constraints, gates, split identities, budget left), the
+ledger tail, the best replay candidate (A2: ranked by the shared
+`best_replay` selection, matching `ledger top`), the last live verdict and
+the latest attribution summary (read through the hash-verified
+`attribution_ref`), each with a citable `--insight-refs` string. Optional
+`--diagnosis` and `--symptom` inputs join diagnosis highlights and casebook
+references - casebook entries are repository reference material, never
+measurements of this run. Frozen-test case content is never exported.
+
 ## Scope of this slice
 
 This slice owns the replay tier and the live tier: contracts

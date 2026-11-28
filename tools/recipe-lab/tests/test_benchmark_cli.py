@@ -165,7 +165,9 @@ def experiment(tmp_path, monkeypatch, capsys):
         code = cli.main([*args, *extra])
         receipt = json.loads(capsys.readouterr().out)
         saved = json.loads(Path(receipt["receipt"]).read_bytes())
-        assert saved == {k: v for k, v in receipt.items() if k != "receipt"}
+        assert saved == {
+            k: v for k, v in receipt.items() if k not in ("receipt", "report")
+        }
         return code, receipt
 
     return run, worker
