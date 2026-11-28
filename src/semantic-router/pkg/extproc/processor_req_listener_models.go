@@ -51,6 +51,25 @@ const maxRequestedModelBytes = 256
 // is kept for the record and the trace only; no signal reads it. A System
 // One model keeps its own answer.
 func (r *OpenAIRouter) routeUnservedModel(model string, ctx *RequestContext) string {
+	target := r.unservedRouteTarget(model, ctx)
+	if target == model {
+		return model
+	}
+	ctx.RequestedModel = truncateShadowText(model, maxRequestedModelBytes)
+	if ctx.SemanticRequest != nil {
+		ctx.SemanticRequest.Model = target
+	}
+	logging.ComponentDebugEvent("extproc", "unserved_model_routed", map[string]interface{}{
+		"request_id": ctx.RequestID,
+		"route_to":   target,
+	})
+	return target
+}
+
+// unservedRouteTarget is the model routeUnservedModel routes a request as,
+// without recording the route, so client admission checks the key of the
+// entrypoint the request reaches.
+func (r *OpenAIRouter) unservedRouteTarget(model string, ctx *RequestContext) string {
 	if ctx == nil || ctx.UnservedModelRoute == "" || model == "" || model == ctx.UnservedModelRoute {
 		return model
 	}
@@ -60,14 +79,6 @@ func (r *OpenAIRouter) routeUnservedModel(model string, ctx *RequestContext) str
 	if (ctx.ListenerModels == nil || ctx.ListenerModels.Allows(model)) && r.servesModel(model) {
 		return model
 	}
-	ctx.RequestedModel = truncateShadowText(model, maxRequestedModelBytes)
-	if ctx.SemanticRequest != nil {
-		ctx.SemanticRequest.Model = ctx.UnservedModelRoute
-	}
-	logging.ComponentDebugEvent("extproc", "unserved_model_routed", map[string]interface{}{
-		"request_id": ctx.RequestID,
-		"route_to":   ctx.UnservedModelRoute,
-	})
 	return ctx.UnservedModelRoute
 }
 

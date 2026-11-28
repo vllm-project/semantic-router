@@ -43,25 +43,10 @@ func agentFacts(ctx *RequestContext, cfg config.RouterLearningProtectionConfig) 
 	return facts
 }
 
-// agentHarness names the harness whose identity headers the request carries.
+// agentHarness names the harness whose identity headers the request carries,
+// the one Router Replay records.
 func agentHarness(ctx *RequestContext) string {
-	switch {
-	case headerValueCI(ctx, headers.XClaudeCodeSessionID) != "" || headerValueCI(ctx, headers.XClaudeCodeAgentID) != "":
-		return config.AgentHarnessClaudeCode
-	case headerValueCI(ctx, headers.CodexSessionID) != "" || headerValueCI(ctx, headers.CodexThreadID) != "" ||
-		ctx.AgentTurn.SessionID != "" || ctx.AgentTurn.ThreadID != "":
-		return config.AgentHarnessCodex
-	case isOpenCode(ctx):
-		return config.AgentHarnessOpenCode
-	case isDeepSeekHarness(ctx):
-		return config.AgentHarnessDeepSeekHarness
-	case isCursor(ctx):
-		return config.AgentHarnessCursor
-	case isOpenClaw(ctx):
-		return config.AgentHarnessOpenClaw
-	default:
-		return ""
-	}
+	return requestHarness(ctx)
 }
 
 func subagentType(ctx *RequestContext, harness string) string {

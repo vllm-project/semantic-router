@@ -119,7 +119,7 @@ func (r *OpenAIRouter) spendLimits(ctx *RequestContext) []spendbudget.Limit {
 	identity := r.buildRateLimitContext(ctx, "")
 	var limits []spendbudget.Limit
 	if run := budgets.Run; run != nil {
-		session, _ := protectionSessionID(ctx, r.Config.RouterLearning.Protection)
+		session := harnessRunSession(ctx, r.Config.RouterLearning.Protection)
 		idle := run.IdleTimeout()
 		if session == "" {
 			session, idle = fmt.Sprintf("request %s %p", ctx.RequestID, ctx), sessionlessRunIdle

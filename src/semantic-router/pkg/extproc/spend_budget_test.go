@@ -305,3 +305,46 @@ func TestLooperHopKeepsTheClientBudgetScope(t *testing.T) {
 		})
 	}
 }
+
+// A run is the session Replay records, also for a harness that sends no
+// session header and when protection reads a header the harness never sends.
+func TestRunBudgetFollowsTheSessionReplayRecords(t *testing.T) {
+	cursor := func(t *testing.T, i int) *RequestContext {
+		request := spendTestRequest(1000)
+		request.Messages[0].Content[0].Text = "cursor workspace preamble"
+		return &RequestContext{
+			Headers:      map[string]string{headers.AuthzUserID: "alice", "user-agent": "Cursor/2.0"},
+			TraceContext: context.Background(), RequestID: t.Name() + strconv.Itoa(i), SemanticRequest: request,
+		}
+	}
+	unreadHeader := func(t *testing.T, i int) *RequestContext {
+		ctx := spendTestContext(t, "alice", "s1", "")
+		ctx.RequestID += strconv.Itoa(i)
+		return ctx
+	}
+	for name, newContext := range map[string]func(*testing.T, int) *RequestContext{"cursor": cursor, "unread session header": unreadHeader} {
+		t.Run(name, func(t *testing.T) {
+			router := spendTestRouter(config.BudgetsConfig{Run: &config.RunBudget{Limit: 1.5}})
+			session := "x-my-session"
+			router.Config.RouterLearning.Protection.Identity.Headers.Session = &session
+			for i := range 2 {
+				ctx := newContext(t, i)
+				if harnessRunSession(ctx, router.Config.RouterLearning.Protection) == "" {
+					t.Fatal("Replay records no session for this call")
+				}
+				refusal := router.reserveDispatchSpend(ctx, "priced", spendTestRequest(1000))
+				if i == 1 {
+					if refusal == nil {
+						t.Fatal("the second call of the session was admitted past its run of 1.5")
+					}
+					return
+				}
+				if refusal != nil {
+					t.Fatalf("the first call was refused: %v", refusal.message)
+				}
+				ctx.RequestCost, ctx.RequestCostCurrency, ctx.RequestCostPriced = 1.0, "USD", true
+				router.finishRequestSpend(ctx)
+			}
+		})
+	}
+}

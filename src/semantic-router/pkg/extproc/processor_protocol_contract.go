@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -159,9 +160,10 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if err != nil {
 		return nil, r.ingressDecodeErrorResponse(ctx, err)
 	}
-	// Admission takes the model decoding parsed, which routing uses too,
-	// before any observer, stored object or session reads the request.
-	if refused := r.clientAdmissionRefusal(ctx, request.Model); refused != nil {
+	// Admission takes the model routing uses, the one decoding parsed or its
+	// unserved_models route, before any observer, stored object or session
+	// reads the request.
+	if refused := r.clientAdmissionRefusal(ctx, r.unservedRouteTarget(strings.TrimSpace(request.Model), ctx)); refused != nil {
 		return nil, refused
 	}
 	request.Trusted.SourceFormat = ctx.SourceFormat
