@@ -24,10 +24,12 @@ func (m *MilvusStore) Update(ctx context.Context, id string, memory *Memory) err
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if id == "" {
 		status = "error"
@@ -80,10 +82,12 @@ func (m *MilvusStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if id == "" {
 		status = "error"
@@ -126,10 +130,12 @@ func (m *MilvusStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation(backend, operation, status, duration)
 	}()
 
-	if !m.enabled {
+	ctx, release, gateErr := m.life.begin(ctx, m.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("milvus store is not enabled")
+		return fmt.Errorf("milvus: %w", gateErr)
 	}
+	defer release()
 
 	if scope.UserID == "" {
 		status = "error"

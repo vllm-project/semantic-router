@@ -23,6 +23,7 @@ type QdrantStore struct {
 	qdrantConfig    *config.MemoryQdrantConfig
 	enabled         bool
 	embeddingConfig EmbeddingConfig
+	life            storeLifecycle
 
 	// retrievalUpdateMu serializes background reinforcement read-modify-writes so
 	// concurrent retrievals of the same memory cannot move access_count backwards.
@@ -267,10 +268,12 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 		status = "error"
 		return err
 	}
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if mem.ID == "" {
 		status = "error"
 		return fmt.Errorf("memory ID is required")
@@ -321,9 +324,11 @@ func (s *QdrantStore) Store(ctx context.Context, mem *Memory) error {
 }
 
 func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
-	if !s.enabled {
-		return nil, nil
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	start := time.Now()
 	status := "error"
 	resultCount := -1
@@ -389,7 +394,7 @@ func (s *QdrantStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 		if s.beginReinforcement() {
 			go func() {
 				defer s.finishReinforcement()
-				s.recordRetrievalBatch(retrieveResultIDs(results))
+				s.recordRetrievalBatch(context.Background(), retrieveResultIDs(results))
 			}()
 		}
 	}
@@ -417,7 +422,7 @@ func (s *QdrantStore) finishReinforcement() { s.reinforcementWG.Done() }
 // memory in the background. The mutex only serializes this store's own
 // reinforcements; the per-memory compare-and-set in recordRetrieval keeps the
 // increment safe against other Router processes sharing the collection.
-func (s *QdrantStore) recordRetrievalBatch(ids []string) {
+func (s *QdrantStore) recordRetrievalBatch(parent context.Context, ids []string) {
 	s.retrievalUpdateMu.Lock()
 	defer s.retrievalUpdateMu.Unlock()
 
@@ -428,7 +433,7 @@ func (s *QdrantStore) recordRetrievalBatch(ids []string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 	for _, id := range ids {
 		if err := s.recordRetrieval(ctx, id); err != nil {
@@ -558,9 +563,11 @@ func (s *QdrantStore) dropClaimField(ctx context.Context, pointID *qdrant.PointI
 }
 
 func (s *QdrantStore) Get(ctx context.Context, id string) (*Memory, error) {
-	if !s.enabled {
-		return nil, fmt.Errorf("qdrant store is not enabled")
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	pts, err := s.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: s.collectionName,
@@ -585,10 +592,12 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	existing, err := s.Get(ctx, id)
 	if err != nil {
@@ -629,9 +638,11 @@ func (s *QdrantStore) Update(ctx context.Context, id string, mem *Memory) error 
 }
 
 func (s *QdrantStore) List(ctx context.Context, opts ListOptions) (*ListResult, error) {
-	if !s.enabled {
-		return nil, fmt.Errorf("qdrant store is not enabled")
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return nil, fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if opts.UserID == "" {
 		return nil, fmt.Errorf("user ID is required for listing memories")
 	}
@@ -742,10 +753,12 @@ func (s *QdrantStore) Forget(ctx context.Context, id string) error {
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 
 	if _, err := s.Get(ctx, id); err != nil {
 		status = "error"
@@ -773,10 +786,12 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 		RecordMemoryStoreOperation("qdrant", operation, status, time.Since(startTime).Seconds())
 	}()
 
-	if !s.enabled {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
 		status = "error"
-		return fmt.Errorf("qdrant store is not enabled")
+		return fmt.Errorf("qdrant: %w", gateErr)
 	}
+	defer release()
 	if scope.UserID == "" {
 		status = "error"
 		return fmt.Errorf("user_id is required for ForgetByScope")
@@ -811,9 +826,14 @@ func (s *QdrantStore) ForgetByScope(ctx context.Context, scope MemoryScope) erro
 	return nil
 }
 
-func (s *QdrantStore) IsEnabled() bool { return s.enabled }
+func (s *QdrantStore) IsEnabled() bool { return s.enabled && !s.life.isClosed() }
 
 func (s *QdrantStore) CheckConnection(ctx context.Context) error {
+	ctx, release, gateErr := s.life.begin(ctx, s.enabled)
+	if gateErr != nil {
+		return fmt.Errorf("qdrant: %w", gateErr)
+	}
+	defer release()
 	_, err := s.client.ListCollections(ctx)
 	if err != nil {
 		return fmt.Errorf("qdrant connection check failed: %w", err)
@@ -821,16 +841,19 @@ func (s *QdrantStore) CheckConnection(ctx context.Context) error {
 	return nil
 }
 
+// Close releases the client once. The Qdrant client panics if used after its
+// own Close, so every method checks the lifecycle gate before touching it.
 func (s *QdrantStore) Close() error {
-	// Reject new reinforcement batches, then drain the in-flight and mutex-
-	// queued ones before releasing the client: a queued batch that resumed
-	// against a released pool would panic inside the client.
+	// Reject new reinforcement batches. Once every admitted operation has
+	// returned, drain the in-flight and queued batches and release the client.
 	s.closeMu.Lock()
 	s.closed.Store(true)
 	s.closeMu.Unlock()
-	s.reinforcementWG.Wait()
-	if s.client != nil {
+	return s.life.close("qdrant", func() error {
+		s.reinforcementWG.Wait()
+		if s.client == nil {
+			return nil
+		}
 		return s.client.Close()
-	}
-	return nil
+	})
 }

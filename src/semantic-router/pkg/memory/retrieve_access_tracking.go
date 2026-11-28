@@ -1,5 +1,7 @@
 package memory
 
+import "context"
+
 // Access tracking feeds retention scoring (Memory.AccessCount and
 // Memory.LastAccessed: S = S0 + AccessCount, t from LastAccessed) for the
 // persistent backends that support retrieve-time reinforcement. The assertions
@@ -10,7 +12,7 @@ package memory
 // accessTrackingStore is the reinforcement entrypoint each reinforcing backend
 // exposes for its Retrieve path.
 type accessTrackingStore interface {
-	recordRetrievalBatch(ids []string)
+	recordRetrievalBatch(ctx context.Context, ids []string)
 }
 
 var (

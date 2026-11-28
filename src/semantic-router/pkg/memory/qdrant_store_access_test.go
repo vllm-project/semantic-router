@@ -303,7 +303,7 @@ func TestQdrantRecordRetrievalBatchIncrementsEachMemory(t *testing.T) {
 	}
 	store := newReinforcementTestStore(t, fake)
 
-	store.recordRetrievalBatch([]string{"cold", "warm"})
+	store.recordRetrievalBatch(context.Background(), []string{"cold", "warm"})
 
 	byID := map[string]map[string]*qdrant.Value{}
 	for _, call := range fake.setPayloadCalls() {
@@ -323,7 +323,7 @@ func TestQdrantRecordRetrievalMissingMemoryWritesNothing(t *testing.T) {
 	fake := &fakePointsServer{payloads: map[string]map[string]*qdrant.Value{}}
 	store := newReinforcementTestStore(t, fake)
 
-	store.recordRetrievalBatch([]string{"missing"})
+	store.recordRetrievalBatch(context.Background(), []string{"missing"})
 
 	require.Empty(t, fake.setPayloadCalls())
 }
