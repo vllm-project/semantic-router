@@ -280,6 +280,16 @@ domains:
       - python3 -m unittest discover -s src/agent-harness/codex/hooks
     verifications: [agent-plugins]
 
+  copilot-cli-plugin:
+    owner: developer-experience
+    documentation_check: true
+    paths:
+      - .github/plugin/**
+      - src/agent-harness/copilot-cli/**
+    checks:
+      - python3 -m unittest discover -s src/agent-harness/copilot-cli/hooks
+    verifications: [agent-plugins]
+
   vscode-extension:
     owner: developer-experience
     documentation_check: true

@@ -1,0 +1,17 @@
+{
+  "name": "vllm-sr",
+  "description": "Plugins from the vLLM Semantic Router project for GitHub Copilot CLI.",
+  "owner": { "name": "vLLM Semantic Router" },
+  "plugins": [
+    {
+      "name": "vsr-copilot",
+      "source": "./src/agent-harness/copilot-cli",
+      "description": "vLLM Semantic Router's decision model beside GitHub Copilot CLI: guard holds risky shell commands, redact hides personal data in command output, and shield flags output that tries to give the agent orders."
+    },
+    {
+      "name": "vsr",
+      "source": "./src/agent-harness/claude-code",
+      "description": "The vLLM Semantic Router plugin for Claude Code. Copilot CLI installs its setup and calibrate skills and runs none of its hooks; install vsr-copilot for guard, redact and shield."
+    }
+  ]
+}
