@@ -123,6 +123,7 @@ until the selected cases are known to be isolated.
 - **external-gateway-responses**: ExtProc-only Responses create, get, and conversation chaining with external gateway-owned dispatch.
 - **dashboard**: dashboard API, validation, and routing-authoring contracts.
 - **routing-strategies**: keyword, entropy, and fallback routing.
+- **selector-algorithms**: deterministic selector algorithm contracts.
 - **signal-routing**: rule matching of the structure, context, conversation, complexity and preference signals, one recipe per signal behind its own `vllm-sr/<signal>` entrypoint, so no signal's decisions compete with another's.
 - **dynamic-config**: CRD-driven routing and embedding signals.
 - **remote-embedding**: OpenAI-compatible remote embedding providers, and all four Router error probes through Envoy with no provider default, so `no_route` is a real refusal. The baseline keeps its three unknown-model probes and its default-provider fallback checks; `standalone` also runs all four error probes.
