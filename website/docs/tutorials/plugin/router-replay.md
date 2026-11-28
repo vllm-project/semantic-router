@@ -594,12 +594,12 @@ in one result:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability`, `conversation_state` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
 | `sampled_out` | `sampled_out` |
 
 A request that needs a modality the shadow model's card omits, such as an image sent to a text-only model, skips that candidate with `backend_lacks_capability`. Other eligible candidates still run. A shadow model with no recognized declaration is not gated.
 
-A shadow never writes to the client's own state. A Responses request that names a `conversation` is not shadowed and is dropped with `conversation_state`, because the provider appends every call's items to that conversation, and a Responses shadow is sent with `store: false`.
+A Responses shadow is sent with `store: false`, so the provider keeps no copy of the shadowed prompt.
 
 - **Metrics.** Results and reasons are exported as
   `sr_shadow_dispatch_total{decision,result,reason}`, with

@@ -41,14 +41,11 @@ const (
 	shadowVerdictFailed    = "failed"
 	shadowVerdictDropped   = "dropped"
 
-	shadowReasonCompleted          = "completed"
-	shadowReasonSampledOut         = "sampled_out"
-	shadowReasonSameAsPrimary      = "same_as_primary"
-	shadowReasonInternalRequest    = "internal_request"
-	shadowReasonRequestUnavailable = "request_unavailable"
-	// A shadow answer never reaches the client's state, and the provider
-	// appends every call's items to the Responses conversation it names.
-	shadowReasonConversationState    = "conversation_state"
+	shadowReasonCompleted            = "completed"
+	shadowReasonSampledOut           = "sampled_out"
+	shadowReasonSameAsPrimary        = "same_as_primary"
+	shadowReasonInternalRequest      = "internal_request"
+	shadowReasonRequestUnavailable   = "request_unavailable"
 	shadowReasonQueueFull            = "queue_full"
 	shadowReasonReplayQueueFull      = "replay_queue_full"
 	shadowReasonQueueTimeout         = "queue_timeout"
@@ -401,9 +398,6 @@ func (d *shadowDispatcher) submit(
 		return
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
-		return
-	case ctx.SemanticRequest.ConversationID != "":
-		dropEarly(shadowReasonConversationState)
 		return
 	}
 	rate := cfg.EffectiveSampleRate()

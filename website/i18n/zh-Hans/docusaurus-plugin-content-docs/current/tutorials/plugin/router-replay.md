@@ -302,7 +302,7 @@ plugins:
 
 预估 token 或费用超限、启用费用上限且有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。无法准备的候选单独记为失败，上限只作用于其余候选。配置费用上限后，Replay 会记录已尝试派发的调用的预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
 
-shadow 不会写入客户端自己的状态：指定了 `conversation` 的 Responses 请求不会被 shadow，并以 `conversation_state` 丢弃，因为 provider 会把每次调用的条目追加到该 conversation；Responses shadow 以 `store: false` 发送。
+Responses shadow 以 `store: false` 发送，因此 provider 不保留被 shadow 的提示的副本。
 
 旧的扁平影子字段会被拒绝，请使用上面的嵌套结构。
 
@@ -318,7 +318,7 @@ shadow 不会写入客户端自己的状态：指定了 `conversation` 的 Respo
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability`, `conversation_state` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
 | `sampled_out` | `sampled_out` |
 
 - **指标。**结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，另有 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。
