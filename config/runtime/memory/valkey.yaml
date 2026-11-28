@@ -11,7 +11,7 @@
 # Use the valkey/valkey-bundle image or compile Valkey with --enable-search.
 
 # Connection settings
-host: "localhost"        # For production: use your Valkey cluster endpoint
+host: "localhost"        # For production: use your single-node Valkey endpoint
 port: 6379               # Standard Valkey port
 database: 0              # Database number (0-15)
 password: ""             # Authentication password (leave empty if not required)
