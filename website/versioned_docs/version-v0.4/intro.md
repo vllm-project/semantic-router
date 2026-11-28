@@ -70,16 +70,16 @@ responses. The Router coordinates the semantic work between them.
 
 - **Run it locally:** follow the [Quickstart](/docs/v0.4/installation) and send a
   request through the Router.
-- **Find the pattern for your workload:** explore [use cases](overview/use-cases)
+- **Find the pattern for your workload:** explore [use cases](/docs/v0.4/overview/use-cases)
   from cloud and data center to edge and enterprise deployments.
 - **Understand the system:** read the [System
-  Overview](overview/semantic-router-overview) and [Routing
-  Pipeline](overview/signal-driven-decisions).
+  Overview](/docs/v0.4/overview/semantic-router-overview) and [Routing
+  Pipeline](/docs/v0.4/overview/signal-driven-decisions).
 - **Create a stable model experience:** learn how [entrypoints and
-  recipes](tutorials/global/entrypoints-and-recipes) turn one shared model pool
+  recipes](/docs/v0.4/tutorials/global/entrypoints-and-recipes) turn one shared model pool
   into purpose-built virtual models.
 - **Choose an environment:** compare [Docker, Kubernetes, and hardware
-  paths](installation/deployment-options).
+  paths](/docs/v0.4/installation/deployment-options).
 
 ## Project
 

@@ -30,7 +30,7 @@ rewriting the harness integration.
 - **Judge with one model:** a decision model answers the policy's questions
   about each request.
 - **Serve judgments directly:** applications can also ask the decision model
-  through the [System One](system-one/overview) API.
+  through the [System One](/docs/system-one/overview) API.
 
 ## Why route?
 
@@ -63,18 +63,18 @@ them to:
 | **Inference platforms** | Chat backends, with their placement, batching and capacity |
 
 The Router serves its own listeners by default; an Envoy-based gateway is
-optional. See the [component architecture](overview/component-architecture)
+optional. See the [component architecture](/docs/overview/component-architecture)
 for the module boundaries.
 
 ## Start here
 
-- [Run the Quickstart](installation/installation.md).
-- [Connect an agent harness](installation/agent-harness).
-- Explore [use cases](overview/use-cases).
-- Read the [System Overview](overview/semantic-router-overview) and
-  [Routing Pipeline](overview/signal-driven-decisions).
-- Build virtual models with [entrypoints and recipes](tutorials/global/entrypoints-and-recipes).
-- Compare [deployment options](installation/deployment-options).
+- [Run the Quickstart](/docs/installation).
+- [Connect an agent harness](/docs/installation/agent-harness).
+- Explore [use cases](/docs/overview/use-cases).
+- Read the [System Overview](/docs/overview/semantic-router-overview) and
+  [Routing Pipeline](/docs/overview/signal-driven-decisions).
+- Build virtual models with [entrypoints and recipes](/docs/tutorials/global/entrypoints-and-recipes).
+- Compare [deployment options](/docs/installation/deployment-options).
 
 ## Project
 
