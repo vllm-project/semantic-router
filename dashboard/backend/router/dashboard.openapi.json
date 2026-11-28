@@ -5774,6 +5774,9 @@
                     "envoyUrl": {
                       "type": "string"
                     },
+                    "hostMemoryBytes": {
+                      "type": "integer"
+                    },
                     "platform": {
                       "type": "string"
                     },
@@ -5804,7 +5807,8 @@
                     "setupMode",
                     "platform",
                     "envoyUrl",
-                    "routerEvalEndpoint"
+                    "routerEvalEndpoint",
+                    "hostMemoryBytes"
                   ]
                 }
               }

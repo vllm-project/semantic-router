@@ -33,6 +33,7 @@ import {
   fetchPresetDelta,
   fetchPresets,
   getStepOneErrors,
+  hostMemoryGiB,
   isCpuOnlyPlatform,
   maskedSetupYaml,
   recommendedDecisionModels,
@@ -79,7 +80,7 @@ function namesDecisionModel(config: Record<string, unknown> | null): boolean {
 const SetupWizardPage: React.FC = () => {
   const navigate = useNavigate()
   const { setupState, refreshSetupState } = useSetup()
-  const { isReadonly, isLoading: readonlyLoading, platform } = useReadonly()
+  const { isReadonly, isLoading: readonlyLoading, platform, hostMemoryBytes } = useReadonly()
   const { isLoading: capabilitiesLoading, error: capabilitiesError } = useCapabilities()
   const setupCapability = useCapability('setup')
   const activationBlockedReason = capabilitiesLoading
@@ -220,12 +221,15 @@ const SetupWizardPage: React.FC = () => {
         : scratchConfig
 
   // On a CPU-only deployment the small Vela 3.1 models are preferred when the
-  // catalog has them; a route that names its own decision model keeps it.
+  // catalog has them, largest first among those that fit the container
+  // runtime's memory; a route that names its own decision model keeps it.
   const cpuOnly = isCpuOnlyPlatform(platform)
+  const memoryGiB = cpuOnly ? hostMemoryGiB(hostMemoryBytes) : null
   const recommendedModels = recommendedDecisionModels(
     DECISION_MODEL_OPTIONS,
     cpuOnly,
     DEFAULT_DECISION_MODEL,
+    memoryGiB,
   )
   const upcomingModels = cpuOnly ? upcomingCpuDecisionModels(DECISION_CATALOG_MODELS) : []
   const routeDecisionModel = configuredDecisionModel(routeConfig)
@@ -827,6 +831,7 @@ const SetupWizardPage: React.FC = () => {
                           recommended={recommendedModels}
                           upcoming={upcomingModels.map((option) => option.label)}
                           cpuOnly={cpuOnly}
+                          memoryGiB={memoryGiB}
                           onChange={(name) => {
                             setDecisionModelChoice(name)
                             resetReviewState()

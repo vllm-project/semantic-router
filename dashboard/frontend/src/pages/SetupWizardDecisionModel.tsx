@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { BrainCircuit, Check, ChevronDown, Clock, Cpu } from 'lucide-react'
+import { BrainCircuit, Check, ChevronDown, Clock, Cpu, TriangleAlert } from 'lucide-react'
 import { Badge, Collapsible, CollapsibleContent, CollapsibleTrigger, IconTile, cn } from '../ui'
 import type { DecisionModelName, DecisionModelOption } from './decisionModelSupport'
+import { formatGiB, memoryShortfall } from './setupWizardSupport'
 
 interface SetupDecisionModelSectionProps {
   value: DecisionModelName
@@ -11,6 +12,8 @@ interface SetupDecisionModelSectionProps {
   /** Labels of CPU models the catalog announces but the runtime does not serve yet. */
   upcoming?: readonly string[]
   cpuOnly: boolean
+  /** Memory the container runtime gives the deployment, in GiB; null when unknown. */
+  memoryGiB?: number | null
   onChange: (name: DecisionModelName) => void
 }
 
@@ -19,12 +22,14 @@ function ModelChoice({
   active,
   recommended,
   cpuOnly,
+  shortfall,
   onSelect,
 }: {
   option: DecisionModelOption
   active: boolean
   recommended: boolean
   cpuOnly: boolean
+  shortfall: string | null
   onSelect: () => void
 }) {
   return (
@@ -69,6 +74,12 @@ function ModelChoice({
           ) : null}
         </span>
         <span className="text-[13px] leading-relaxed text-muted-foreground">{option.summary}</span>
+        {shortfall ? (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-warning-foreground">
+            <TriangleAlert className="size-3.5 shrink-0" aria-hidden />
+            {shortfall}
+          </span>
+        ) : null}
         <span className="flex flex-wrap gap-1 pt-0.5">
           {option.questionTypes.map((type) => (
             <span
@@ -93,6 +104,7 @@ export function SetupDecisionModelSection({
   recommended,
   upcoming = [],
   cpuOnly,
+  memoryGiB = null,
   onChange,
 }: SetupDecisionModelSectionProps) {
   const recommendedNames = new Set(recommended.map((option) => option.name))
@@ -109,6 +121,9 @@ export function SetupDecisionModelSection({
             ? 'This deployment shows no GPU platform, so the models that run well on CPU come first. '
             : 'This deployment shows no GPU platform, so the recommended model is one that runs well on CPU. '
           : null}
+        {memoryGiB !== null
+          ? `Models that need more than this host's ${formatGiB(memoryGiB)} of memory are marked. `
+          : null}
         You can switch later on the Decision models page.
       </p>
       <div role="radiogroup" aria-label="Decision model" className="flex flex-col gap-2.5">
@@ -119,6 +134,7 @@ export function SetupDecisionModelSection({
             active={option.name === value}
             recommended
             cpuOnly={cpuOnly}
+            shortfall={memoryShortfall(option, memoryGiB)}
             onSelect={() => onChange(option.name)}
           />
         ))}
@@ -154,6 +170,7 @@ export function SetupDecisionModelSection({
                       .filter((option) => option.family === family)
                       .map((option) => {
                         const active = option.name === value
+                        const shortfall = memoryShortfall(option, memoryGiB)
                         return (
                           <button
                             key={option.name}
@@ -181,7 +198,18 @@ export function SetupDecisionModelSection({
                             <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
                               {option.label}
                             </span>
-                            <span className="shrink-0 text-xs text-subtle-foreground">
+                            <span
+                              className={cn(
+                                'flex shrink-0 items-center gap-1 text-xs',
+                                shortfall
+                                  ? 'font-medium text-warning-foreground'
+                                  : 'text-subtle-foreground',
+                              )}
+                              title={shortfall ?? undefined}
+                            >
+                              {shortfall ? (
+                                <TriangleAlert className="size-3.5" aria-label={shortfall} />
+                              ) : null}
                               {option.hardware}
                             </span>
                           </button>

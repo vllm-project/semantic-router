@@ -10,6 +10,7 @@ const readySettings = {
   platform: 'rocm',
   envoyUrl: 'http://envoy',
   routerEvalEndpoint: 'http://router/api/v1/routing/preview',
+  hostMemoryBytes: 8_268_021_760,
 }
 
 describe('decodeDashboardSettings', () => {
@@ -22,6 +23,8 @@ describe('decodeDashboardSettings', () => {
     ['missing split capability', { ...readySettings, runtimeConfigWritable: undefined }],
     ['missing setup mode', { ...readySettings, setupMode: undefined }],
     ['wrong platform type', { ...readySettings, platform: null }],
+    ['missing host memory', { ...readySettings, hostMemoryBytes: undefined }],
+    ['negative host memory', { ...readySettings, hostMemoryBytes: -1 }],
     ['array payload', []],
   ])('rejects %s instead of inferring authority', (_label, payload) => {
     expect(() => decodeDashboardSettings(payload)).toThrow()

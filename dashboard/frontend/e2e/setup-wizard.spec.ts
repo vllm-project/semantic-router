@@ -78,6 +78,7 @@ async function mockFirstRunSetup(
   page: Page,
   capabilities: Record<string, Record<string, unknown>> = {},
   platform = '',
+  hostMemoryBytes = 0,
 ) {
   await mockAuthenticatedAppShell(page, {
     capabilities,
@@ -95,6 +96,7 @@ async function mockFirstRunSetup(
       setupMode: true,
       platform,
       envoyUrl: '',
+      hostMemoryBytes,
     },
   })
   await page.route(/\/api\/setup\/presets$/, async (route) => {
@@ -571,5 +573,24 @@ test.describe('Setup wizard decision model', () => {
         .getByRole('radiogroup', { name: 'Decision model' })
         .getByRole('radio', { checked: true }),
     ).toHaveCount(1)
+  })
+
+  test('preselects the largest CPU model that fits the host memory', async ({ page }) => {
+    // A 7.7 GiB Docker host: Vela 3.1 fast needs 15 GiB, the pico models 2 and 3 GiB.
+    await mockFirstRunSetup(page, {}, '', 8_268_021_760)
+
+    await page.goto('/setup')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    const choices = page.getByRole('radiogroup', { name: 'Decision model' })
+    await expect(choices.getByRole('radio', { checked: true })).toContainText('Vela 3.1 pico 380M')
+    await expect(page.getByText("this host's 7.7 GiB of memory are marked")).toBeVisible()
+    await page.getByRole('button', { name: /Other decision models/ }).click()
+    await expect(
+      choices
+        .getByRole('radio', { name: /Vela 3\.1 fast/ })
+        .getByLabel('Needs 15 GiB; this host has 7.7 GiB'),
+    ).toBeVisible()
   })
 })

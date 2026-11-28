@@ -71,6 +71,7 @@ const defaultSettings = {
   platform: '',
   envoyUrl: '',
   routerEvalEndpoint: '',
+  hostMemoryBytes: 0,
 }
 
 export const dashboardSettingsResponse = (

@@ -696,21 +696,65 @@ export function isCpuOnlyPlatform(platform: string | undefined): boolean {
   return value !== 'rocm' && value !== 'cuda'
 }
 
+/** The memory the container runtime reports in GiB, or null when it is unknown. */
+export function hostMemoryGiB(bytes: number | undefined): number | null {
+  return bytes && Number.isFinite(bytes) && bytes > 0 ? bytes / 1024 ** 3 : null
+}
+
+/** Whether a model's memory floor fits the host; unknown memory or floor counts as fitting. */
+export function decisionModelFits(
+  option: { minMemoryGiB?: number | null },
+  memoryGiB: number | null,
+): boolean {
+  return memoryGiB === null || option.minMemoryGiB == null || option.minMemoryGiB <= memoryGiB
+}
+
+/** A memory size in GiB with at most one decimal, such as 7.7 GiB. */
+export function formatGiB(value: number): string {
+  return `${Number(value.toFixed(1))} GiB`
+}
+
+/** The warning for a model whose memory floor exceeds the host, or null when it fits. */
+export function memoryShortfall(
+  option: { minMemoryGiB?: number | null },
+  memoryGiB: number | null,
+): string | null {
+  if (memoryGiB === null || option.minMemoryGiB == null || decisionModelFits(option, memoryGiB))
+    return null
+  return `Needs ${formatGiB(option.minMemoryGiB)}; this host has ${formatGiB(memoryGiB)}`
+}
+
 /**
  * The decision models to recommend: on a CPU-only deployment the small Vela
- * 3.1 models the runtime catalog ships, otherwise the default.
+ * 3.1 models the runtime catalog ships, otherwise the default. When the host
+ * memory is known, only the CPU models that fit it are recommended, largest
+ * first, so the first one is the largest model the host can run.
  */
 export function recommendedDecisionModels<
-  T extends { name: string; label: string; artifact: string },
->(options: readonly T[], cpuOnly: boolean, defaultName: string): T[] {
+  T extends { name: string; label: string; artifact: string; minMemoryGiB?: number | null },
+>(
+  options: readonly T[],
+  cpuOnly: boolean,
+  defaultName: string,
+  memoryGiB: number | null = null,
+): T[] {
   if (cpuOnly) {
-    const matches = CPU_DECISION_MODELS.flatMap((pattern) => {
-      const found = options.find((option) =>
-        pattern.test(`${option.name} ${option.label} ${option.artifact}`),
-      )
-      return found ? [found] : []
-    })
-    if (matches.length) return [...new Set(matches)]
+    const matches = [
+      ...new Set(
+        CPU_DECISION_MODELS.flatMap((pattern) => {
+          const found = options.find((option) =>
+            pattern.test(`${option.name} ${option.label} ${option.artifact}`),
+          )
+          return found ? [found] : []
+        }),
+      ),
+    ]
+    const fitting = matches.filter((option) => decisionModelFits(option, memoryGiB))
+    if (memoryGiB !== null) {
+      fitting.sort((left, right) => (right.minMemoryGiB ?? 0) - (left.minMemoryGiB ?? 0))
+    }
+    if (fitting.length) return fitting
+    if (matches.length) return matches
   }
   const fallback = options.find((option) => option.name === defaultName)
   return fallback ? [fallback] : []
