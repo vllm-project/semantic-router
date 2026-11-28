@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import re
 import threading
@@ -12,12 +13,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .preparation_collections import CollectionError, execute_collection, pending_items
-from .preparation_runtime import execute
+from .preparation_runtime import MAX_DIAGNOSTIC_BYTES, execute, redact
 from .sources import COUNTS, HF_SOURCES
 
 JOB_ID = re.compile(r"prep-[0-9a-f]{32}\Z")
 ACTIVE = {"queued", "running"}
 PROFILES = ("smoke", "quick", "standard")
+LOGGER = logging.getLogger(__name__)
 
 
 class PreparationBusyError(ValueError):
@@ -275,9 +277,32 @@ class Preparations:
             details = (
                 {"error_code": exc.code} if isinstance(exc, CollectionError) else {}
             )
+            self._record_diagnostic(identifier, exc)
             self._update(
                 identifier, status="failed", phase="failed", error=message, **details
             )
+
+    def _record_diagnostic(self, identifier, exc):
+        # Operators get the cause (service log plus a private file beside the
+        # journal); clients keep the fixed message above.
+        cause, diagnostic = exc, None
+        while cause is not None and diagnostic is None:
+            diagnostic = getattr(cause, "diagnostic", None)
+            cause = cause.__cause__
+        if diagnostic is None:
+            diagnostic = redact(f"{type(exc).__name__}: {exc}")[:MAX_DIAGNOSTIC_BYTES]
+        LOGGER.warning("Dataset preparation %s failed:\n%s", identifier, diagnostic)
+        path = self.root / (identifier + ".log")
+        try:
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(diagnostic + "\n")
+        except OSError:
+            LOGGER.warning("Could not write dataset preparation diagnostic file")
 
     def close(self):
         with self.lock:
