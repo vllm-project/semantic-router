@@ -90,7 +90,8 @@ type CanonicalStoreGlobal struct {
 	// ToolSessions configures session-scoped sticky tool-set selection's
 	// shared store (issue #3347). Optional and pointer-shaped like
 	// VectorStore: most deployments won't enable sticky selection at all.
-	ToolSessions *ToolSessionStoreConfig `yaml:"tool_sessions,omitempty"`
+	ToolSessions  *ToolSessionStoreConfig  `yaml:"tool_sessions,omitempty"`
+	GuardVerdicts *GuardVerdictStoreConfig `yaml:"guard_verdicts,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -270,6 +271,7 @@ func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
 	cfg.Memory = stores.Memory
 	cfg.VectorStore = stores.VectorStore
 	cfg.ToolSessions = stores.ToolSessions
+	cfg.GuardVerdicts = stores.GuardVerdicts
 }
 
 func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {

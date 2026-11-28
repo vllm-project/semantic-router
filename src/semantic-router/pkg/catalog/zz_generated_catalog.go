@@ -941,6 +941,64 @@ const builtInCatalogJSON = `{
     },
     {
       "default_profile": "independent-agent",
+      "display_name": "AA-Briefcase v1.1",
+      "domain": "knowledge_work",
+      "id": "artificial-analysis/briefcase@1.1.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "elo",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
+          "range": [
+            0,
+            3000
+          ],
+          "unit": "elo"
+        },
+        {
+          "direction": "higher_is_better",
+          "id": "elo_lower",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
+          "range": [
+            0,
+            3000
+          ],
+          "unit": "elo"
+        },
+        {
+          "direction": "higher_is_better",
+          "id": "elo_upper",
+          "normalization": {
+            "max": 2500,
+            "min": 500,
+            "type": "linear_clamp"
+          },
+          "range": [
+            0,
+            3000
+          ],
+          "unit": "elo"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Artificial Analysis agentic knowledge-work evaluation over 91 tasks in four multi-week scenarios, with each task run independently. Version 1.1 fits Elo with Crowd-BT; the agent and grading setup remain on the evaluation record.",
+          "display_name": "Independent agent run",
+          "id": "independent-agent"
+        }
+      ],
+      "source": "https://artificialanalysis.ai/evaluations/aa-briefcase"
+    },
+    {
+      "default_profile": "independent-agent",
       "display_name": "τ³-Banking",
       "domain": "agentic_systems",
       "id": "tau-bench/tau3-banking@1.0.0",
@@ -1036,6 +1094,79 @@ const builtInCatalogJSON = `{
         }
       ],
       "source": "https://artificialanalysis.ai/evaluations/omniscience"
+    },
+    {
+      "default_profile": "independent-standard",
+      "display_name": "AA-Omniscience v1.1",
+      "domain": "knowledge_reliability",
+      "id": "artificial-analysis/omniscience@1.1.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        },
+        {
+          "direction": "higher_is_better",
+          "id": "net_score",
+          "normalization": {
+            "max": 100,
+            "min": -100,
+            "type": "linear_clamp"
+          },
+          "range": [
+            -100,
+            100
+          ],
+          "unit": "score"
+        },
+        {
+          "direction": "lower_is_better",
+          "id": "hallucination_rate",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Artificial Analysis knowledge and hallucination evaluation over the revised 3,000-question, 42-topic set. Answers are graded correct, incorrect, partial, or not attempted. Accuracy and Net Score are distinct metrics; scores are not directly comparable with the original 6,000-question version.",
+          "display_name": "Independent standard run",
+          "id": "independent-standard"
+        }
+      ],
+      "source": "https://artificialanalysis.ai/evaluations/omniscience"
+    },
+    {
+      "default_profile": "independent-full-1000-no-tools",
+      "display_name": "HLE-Diamond",
+      "domain": "frontier_reasoning",
+      "id": "cais/hle-diamond@1.0.0",
+      "metrics": [
+        {
+          "direction": "higher_is_better",
+          "id": "accuracy",
+          "range": [
+            0,
+            1
+          ],
+          "unit": "proportion"
+        }
+      ],
+      "profiles": [
+        {
+          "description": "Artificial Analysis pass@1 over all 1,000 questions (500 reasoning and 500 knowledge), including 272 image questions, without tools. Image-capable models receive images; other models receive question text and are still graded on all 1,000. Uses the official HLE system and judge prompts; distinct from original HLE text-only and HLE-Verified.",
+          "display_name": "Independent full 1,000 without tools",
+          "id": "independent-full-1000-no-tools"
+        }
+      ],
+      "source": "https://huggingface.co/datasets/cais/hle-diamond"
     },
     {
       "default_profile": "independent-standard",
@@ -14255,6 +14386,134 @@ const builtInCatalogJSON = `{
       }
     },
     {
+      "benchmark": "swe-bench/pro@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-swe-bench-pro@1.0.0",
+      "metrics": {
+        "resolved": 0.542
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "subset": "public",
+        "swe_harness": "internal version of the Antigravity harness",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0",
+      "metrics": {
+        "resolved": 0.54
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "terminal_harness": "Terminus-2",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "openai/mle-bench@1.0.0",
+      "benchmark_profile": "partial-30",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-mle-bench@1.0.0",
+      "metrics": {
+        "average_position": 0.392
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "runs_per_problem": 2,
+        "source_kind": "official_model_card",
+        "subset": "partial-30",
+        "tool_call_budget": 256,
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "osworld/verified@1.0.0",
+      "benchmark_profile": "official",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-osworld-verified@1.0.0",
+      "metrics": {
+        "success_rate": 0.74
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "averaged_runs": 5,
+        "max_steps": 100,
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
+      "benchmark": "princeton-nlp/charxiv@1.0.0",
+      "benchmark_profile": "no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://deepmind.google/models/model-cards/gemini-3-5-flash-lite/",
+        "verification": "claimed"
+      },
+      "id": "google/gemini-3.5-flash-lite-model-card-charxiv-reasoning@1.0.0",
+      "metrics": {
+        "score": 0.745
+      },
+      "model": "google/gemini-3.5-flash-lite",
+      "observed_at": "2026-11-24",
+      "reasoning_effort": "high",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://deepmind.google/models/evals-methodology/gemini-3-5-flash-lite/",
+        "reasoning_mode": "high",
+        "source_kind": "official_model_card",
+        "variant": "Gemini 3.5 Flash-Lite Thinking (High)"
+      }
+    },
+    {
       "benchmark": "cais/humanitys-last-exam@1.0.0",
       "benchmark_profile": "published-no-tools",
       "evidence": {
@@ -15879,6 +16138,436 @@ const builtInCatalogJSON = `{
         "thinking_mode": "unspecified_by_source",
         "tool_policy": "with_tools",
         "variant": "LongCat-2.0"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/muse-wonder-1-0-max-gdp-pdf@1.0.0",
+      "metrics": {
+        "all_pass": 0.306
+      },
+      "model": "meta/muse-wonder-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/gdp-pdf",
+        "repeats": 5,
+        "run_kind": "independent",
+        "scoring": "all_pass",
+        "source_model": "Muse Wonder (Max)",
+        "source_model_slug": "muse-wonder",
+        "task_count": 100
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/muse-wonder-1-0-max-scicode@1.0.0",
+      "metrics": {
+        "score": 0.603009259259259
+      },
+      "model": "meta/muse-wonder-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "dataset_status": "under review by Artificial Analysis",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/scicode",
+        "repeats": 3,
+        "run_kind": "independent",
+        "sample_count": 288,
+        "source_model": "Muse Wonder (Max)",
+        "source_model_slug": "muse-wonder"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/muse-wonder-1-0-max-hle@1.0.0",
+      "metrics": {
+        "accuracy": 0.500926784059314
+      },
+      "model": "meta/muse-wonder-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "run_kind": "independent",
+        "sample_count": 2158,
+        "source_model": "Muse Wonder (Max)",
+        "source_model_slug": "muse-wonder",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/critpt@1.0.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/muse-wonder-1-0-max-critpt@1.0.0",
+      "metrics": {
+        "score": 0.282857142857143
+      },
+      "model": "meta/muse-wonder-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "agent_harness": "none",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/critpt",
+        "run_kind": "independent",
+        "sample_count": 70,
+        "source_model": "Muse Wonder (Max)",
+        "source_model_slug": "muse-wonder"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/lcr@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-wonder-vs-agnes-2-5-pro-beta",
+        "verification": "imported"
+      },
+      "id": "independent/muse-wonder-1-0-max-lcr@1.1.0",
+      "metrics": {
+        "score": 0.806666666666667
+      },
+      "model": "meta/muse-wonder-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "methodology_source": "https://artificialanalysis.ai/evaluations/artificial-analysis-long-context-reasoning",
+        "run_kind": "independent",
+        "sample_count": 100,
+        "source_model": "Muse Wonder (Max)",
+        "source_model_slug": "muse-wonder"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/gdp-pdf@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra",
+        "verification": "imported"
+      },
+      "id": "independent/muse-ember-1-0-xhigh-gdp-pdf@1.0.0",
+      "metrics": {
+        "all_pass": 0.224
+      },
+      "model": "meta/muse-ember-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "judge": "GPT-5.6 Luna (medium)",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/gdp-pdf",
+        "repeats": 5,
+        "run_kind": "independent",
+        "scoring": "all_pass",
+        "source_model": "Muse Ember (Xhigh)",
+        "source_model_slug": "muse-ember-xhigh",
+        "task_count": 100,
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@4.0.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra",
+        "verification": "imported"
+      },
+      "id": "independent/muse-ember-1-0-xhigh-terminal-bench@4.0.0",
+      "metrics": {
+        "resolved": 0.353535353535354
+      },
+      "model": "meta/muse-ember-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "agent_harness": "mini-swe-agent",
+        "context_compaction": false,
+        "max_steps": 500,
+        "methodology_source": "https://artificialanalysis.ai/evaluations/terminalbench-4-0",
+        "repeats": 3,
+        "run_kind": "independent",
+        "scoring": "pass@1",
+        "source_model": "Muse Ember (Xhigh)",
+        "source_model_slug": "muse-ember-xhigh",
+        "task_count": 66
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/briefcase@1.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra",
+        "verification": "imported"
+      },
+      "id": "independent/muse-ember-1-0-xhigh-briefcase@1.1.0",
+      "metrics": {
+        "elo": 1524.47,
+        "elo_lower": 1514.44,
+        "elo_upper": 1535.13
+      },
+      "model": "meta/muse-ember-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "agent_harness": "Stirrup",
+        "confidence_interval": 0.95,
+        "internet_access": false,
+        "max_turns": 500,
+        "methodology_source": "https://artificialanalysis.ai/evaluations/aa-briefcase",
+        "pairwise_judge_panel": [
+          "Claude Opus 5 (high)",
+          "GPT-5.6 Sol (medium)",
+          "Gemini 3.8 Flash (high)"
+        ],
+        "rating_method": "Crowd-BT",
+        "rubric_judge_panel": [
+          "Claude Opus 4.8 (max)",
+          "GPT-5.5 (high)",
+          "Gemini 3.1 Pro Preview (high)"
+        ],
+        "run_kind": "independent",
+        "sandbox": "E2B",
+        "scenario_count": 4,
+        "source_model": "Muse Ember (Xhigh)",
+        "source_model_slug": "muse-ember-xhigh",
+        "task_count": 91,
+        "task_execution": "Independent run per task"
+      }
+    },
+    {
+      "benchmark": "artificial-analysis/omniscience@1.1.0",
+      "benchmark_profile": "independent-standard",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra",
+        "verification": "imported"
+      },
+      "id": "independent/muse-ember-1-0-xhigh-omniscience@1.1.0",
+      "metrics": {
+        "accuracy": 0.21366666666666667,
+        "hallucination_rate": 0.17337855023314963,
+        "net_score": 7.733333333333333
+      },
+      "model": "meta/muse-ember-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "judge": "GPT-5.6 Luna (medium)",
+        "methodology_source": "https://artificialanalysis.ai/evaluations/omniscience",
+        "run_kind": "independent",
+        "sample_count": 3000,
+        "source_model": "Muse Ember (Xhigh)",
+        "source_model_slug": "muse-ember-xhigh",
+        "topic_count": 42
+      }
+    },
+    {
+      "benchmark": "cais/hle-diamond@1.0.0",
+      "benchmark_profile": "independent-full-1000-no-tools",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/comparisons/muse-ember-xhigh-vs-gpt-6-1-terra",
+        "verification": "imported"
+      },
+      "id": "independent/muse-ember-1-0-xhigh-hle-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.236
+      },
+      "model": "meta/muse-ember-1.0",
+      "observed_at": "2026-11-27",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "image_questions": 272,
+        "input_modalities": [
+          "text",
+          "image"
+        ],
+        "judge": "GPT-5.6 Luna (medium)",
+        "knowledge_questions": 500,
+        "methodology_source": "https://artificialanalysis.ai/evaluations/hle-diamond",
+        "reasoning_questions": 500,
+        "repeats": 1,
+        "run_kind": "independent",
+        "sample_count": 1000,
+        "scoring": "pass@1",
+        "source_model": "Muse Ember (Xhigh)",
+        "source_model_slug": "muse-ember-xhigh",
+        "tool_policy": "no_tools"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-1@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/meta-muse-spark-open",
+        "verification": "imported"
+      },
+      "id": "arc-prize/muse-spark-open-arc-agi-1@1.0.0",
+      "metrics": {
+        "accuracy": 0.89
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "ARC Prize",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open (XHigh)",
+        "source_model_slug": "meta-muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "arc-prize/arc-agi-2@1.0.0",
+      "benchmark_profile": "semi-private",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://arcprize.org/results/meta-muse-spark-open",
+        "verification": "imported"
+      },
+      "id": "arc-prize/muse-spark-open-arc-agi-2@1.0.0",
+      "metrics": {
+        "accuracy": 0.575
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "ARC Prize",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open (XHigh)",
+        "source_model_slug": "meta-muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "duellab/gamebench@2.0.0",
+      "benchmark_profile": "public-games-bradley-terry",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://benchmarks.duellab.org/releases/gb2-20261119-235af8c04037/",
+        "verification": "imported"
+      },
+      "id": "duellab/muse-spark-open-xhigh-gamebench-2@1.0.0",
+      "measured_at": "2026-11-19",
+      "metrics": {
+        "score": 58.95964511856345
+      },
+      "model": "meta/muse-spark-open",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "benchmark_release": "gb2-20261119-235af8c04037",
+        "provider_model": "meta/muse-spark-open",
+        "provider_route": "openrouter",
+        "provider_setting": "XHigh",
+        "run_kind": "independent",
+        "source_model": "Muse Spark Open",
+        "source_model_slug": "meta-muse-spark-open",
+        "track": "full_freedom/mixed"
+      }
+    },
+    {
+      "benchmark": "scicode-bench/scicode@1.0.0",
+      "benchmark_profile": "independent-test-288",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks",
+        "verification": "imported"
+      },
+      "id": "independent/muse-spark-open-scicode@1.0.0",
+      "metrics": {
+        "score": 0.585
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "evaluator": "Artificial Analysis",
+        "methodology_source": "https://research.meta.ai/static/muse-spark-open-evaluation-methodology",
+        "run_kind": "independent",
+        "source_kind": "official_vendor_republication",
+        "source_model": "Muse Spark Open (xhigh)",
+        "source_model_slug": "muse-spark-open"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "independent-agent",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B#benchmarks",
+        "verification": "imported"
+      },
+      "id": "independent/muse-spark-open-terminalbench-2-1@1.0.0",
+      "metrics": {
+        "resolved": 0.764
+      },
+      "model": "meta/muse-spark-open",
+      "observed_at": "2026-11-21",
+      "reasoning_effort": "xhigh",
+      "status": "available",
+      "subject": {
+        "environment": "E2B",
+        "evaluator": "Artificial Analysis",
+        "harness": "Terminus 2",
+        "methodology_source": "https://research.meta.ai/static/muse-spark-open-evaluation-methodology",
+        "run_kind": "independent",
+        "source_kind": "official_vendor_republication",
+        "source_model": "Muse Spark Open (xhigh)",
+        "source_model_slug": "muse-spark-open"
       }
     },
     {
@@ -60451,6 +61140,635 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0",
+          "metric": "resolved",
+          "normalized": 0.54,
+          "status": "available",
+          "value": 0.54,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 54.0
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [
+        "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "high",
+      "score": 54.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.54,
+          "status": "available",
+          "value": 0.54,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "google/gemini-3.5-flash-lite",
+      "provenance": [
+        "google/gemini-3.5-flash-lite-model-card-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "google/gemini-3.1-pro",
       "provenance": [],
       "reasoning_effort": "default",
@@ -64930,6 +66248,2511 @@ const builtInCatalogJSON = `{
         "meituan/longcat-2.0-model-card-terminal-bench-2-1@1.0.0"
       ],
       "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "evaluation": "independent/muse-wonder-1-0-max-hle@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.500926784059314,
+          "status": "available",
+          "value": 0.500926784059314,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [
+        "independent/muse-wonder-1-0-max-hle@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/muse-wonder-1-0-max-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.603009259259259,
+          "status": "available",
+          "value": 0.603009259259259,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [
+        "independent/muse-wonder-1-0-max-scicode@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-wonder-1.0",
+      "provenance": [
+        "independent/muse-wonder-1-0-max-hle@1.0.0",
+        "independent/muse-wonder-1-0-max-scicode@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "minimal",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-ember-1.0",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "medium",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profile": "independent-test-288",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "evaluation": "independent/muse-spark-open-scicode@1.0.0",
+          "metric": "score",
+          "normalized": 0.585,
+          "status": "available",
+          "value": 0.585,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-scicode@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "independent-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "independent/muse-spark-open-terminalbench-2-1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.764,
+          "status": "available",
+          "value": 0.764,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 76.4
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-terminalbench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
+      "score": 76.4,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.764,
+          "status": "available",
+          "value": 0.764,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "meta/muse-spark-open",
+      "provenance": [
+        "independent/muse-spark-open-scicode@1.0.0",
+        "independent/muse-spark-open-terminalbench-2-1@1.0.0"
+      ],
+      "reasoning_effort": "xhigh",
       "score": null,
       "status": "partial"
     },
@@ -111404,6 +115227,63 @@ const builtInCatalogJSON = `{
         "video",
         "long_context"
       ],
+      "description": "Google's fastest, most cost-effective 3.5 model for high-throughput subagent tasks and document parsing.",
+      "display_name": "Gemini 3.5 Flash-Lite",
+      "distribution": {
+        "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+        "type": "proprietary_api"
+      },
+      "family": "gemini-3.5",
+      "id": "google/gemini-3.5-flash-lite",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 65536
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:gemini",
+        "monochrome": false,
+        "monogram": "G"
+      },
+      "publisher": "Google",
+      "reasoning_family": "gemini-flash-four-level-minimal",
+      "released_at": "2026-07-21",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Google",
+        "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+        "status": "claimed",
+        "verified_at": "2026-11-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
       "description": "Google's Gemini 3 Pro-series reasoning model for software engineering and agentic workflows, available in preview.",
       "display_name": "Gemini 3.1 Pro",
       "distribution": {
@@ -112070,6 +115950,178 @@ const builtInCatalogJSON = `{
         "source": "https://huggingface.co/meituan-longcat/LongCat-2.0/blob/834bf5ffe3047aa9f6cc7a64a9bc068b146b8274/README.md",
         "status": "claimed",
         "verified_at": "2026-11-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
+      "description": "Preview model for software engineering and multi-step tool use on the Meta Model API.",
+      "display_name": "Muse Wonder",
+      "distribution": {
+        "source": "https://dev.meta.ai/docs/muse-wonder",
+        "type": "proprietary_api"
+      },
+      "family": "muse-wonder",
+      "id": "meta/muse-wonder-1.0",
+      "kind": "physical",
+      "lifecycle": "experimental",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "document"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:meta",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Meta",
+      "reasoning_family": "muse-max-default",
+      "released_at": "2026-10-12",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic",
+        "coding",
+        "preview"
+      ],
+      "verification": {
+        "authority": "Meta",
+        "source": "https://dev.meta.ai/docs/muse-wonder",
+        "status": "claimed",
+        "verified_at": "2026-11-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
+      "description": "Standard mode Meta Model API model for high-volume tool calls, routing, and document processing.",
+      "display_name": "Muse Ember",
+      "distribution": {
+        "source": "https://dev.meta.ai/docs/muse-ember",
+        "type": "proprietary_api"
+      },
+      "family": "muse-ember",
+      "id": "meta/muse-ember-1.0",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 524288
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio",
+          "document"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "presentation": {
+        "logo": "package:meta",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Meta",
+      "reasoning_family": "muse-max-default",
+      "released_at": "2026-11-09",
+      "tags": [
+        "proprietary",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "Meta",
+        "source": "https://dev.meta.ai/docs/muse-ember",
+        "status": "claimed",
+        "verified_at": "2026-11-27"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "vision",
+        "video",
+        "audio",
+        "long_context"
+      ],
+      "description": "Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.",
+      "display_name": "Muse Spark Open",
+      "distribution": {
+        "license": "Muse Model License",
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B",
+        "type": "open_weights"
+      },
+      "family": "muse-spark",
+      "id": "meta/muse-spark-open",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "816B (42B active)",
+      "presentation": {
+        "logo": "package:meta",
+        "monochrome": false,
+        "monogram": "M"
+      },
+      "publisher": "Meta",
+      "reasoning_family": "muse-spark-open",
+      "released_at": "2026-10-15",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "moe",
+        "long_context"
+      ],
+      "verification": {
+        "authority": "Meta",
+        "source": "https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B",
+        "status": "claimed",
+        "verified_at": "2026-11-21"
       }
     },
     {
@@ -118657,6 +122709,33 @@ const builtInCatalogJSON = `{
       "id": "fireworks",
       "models": [
         {
+          "catalog": "meta/muse-spark-open",
+          "id": "accounts/fireworks/models/muse-spark-open",
+          "lifecycle": "active",
+          "pricing": {
+            "cached_input_per_1m": 0.15,
+            "completion_per_1m": 4.25,
+            "currency": "USD",
+            "prompt_per_1m": 1.25
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "managed_cloud",
+          "restrictions": {
+            "input_modalities": [
+              "text",
+              "image"
+            ]
+          },
+          "verification": {
+            "source": "https://fireworks.ai/models/fireworks/muse-spark-open",
+            "status": "claimed",
+            "verified_at": "2026-11-21"
+          }
+        },
+        {
           "catalog": "meta/muse-glimmer-30b",
           "id": "accounts/fireworks/models/muse-glimmer-30b",
           "lifecycle": "active",
@@ -118804,6 +122883,20 @@ const builtInCatalogJSON = `{
             "source": "https://ai.google.dev/gemini-api/docs/models",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "google/gemini-3.5-flash-lite",
+          "id": "gemini-3.5-flash-lite",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+            "status": "claimed",
+            "verified_at": "2026-11-24"
           }
         },
         {
@@ -119122,6 +123215,42 @@ const builtInCatalogJSON = `{
       "display_name": "Meta Model API",
       "id": "meta",
       "models": [
+        {
+          "catalog": "meta/muse-wonder-1.0",
+          "id": "muse-wonder-1.0",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "service_mode": "standard"
+          },
+          "verification": {
+            "source": "https://dev.meta.ai/docs/muse-wonder",
+            "status": "claimed",
+            "verified_at": "2026-11-27"
+          }
+        },
+        {
+          "catalog": "meta/muse-ember-1.0",
+          "id": "muse-ember-1.0",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "first_party",
+          "restrictions": {
+            "service_mode": "standard"
+          },
+          "verification": {
+            "source": "https://dev.meta.ai/docs/muse-ember",
+            "status": "claimed",
+            "verified_at": "2026-11-27"
+          }
+        },
         {
           "catalog": "meta/muse-spark-1.2",
           "id": "muse-spark-1.2",
@@ -119661,7 +123790,8 @@ const builtInCatalogJSON = `{
       },
       "category": "private_runtime",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-11-21"
       },
       "default_protocol": "openai/chat-completions@1",
       "description": "Connect a private Ollama endpoint.",
@@ -124184,6 +128314,22 @@ const builtInCatalogJSON = `{
       "type": "reasoning_effort"
     },
     {
+      "default": "xhigh",
+      "default_mode": "enabled",
+      "id": "muse-spark-open",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
       "default_mode": "enabled",
       "id": "muse-spark",
       "levels": [
@@ -124202,6 +128348,24 @@ const builtInCatalogJSON = `{
     {
       "default_mode": "enabled",
       "id": "muse-spark-1.3",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "max",
+      "default_mode": "enabled",
+      "id": "muse-max-default",
       "levels": [
         "minimal",
         "low",
@@ -124298,6 +128462,22 @@ const builtInCatalogJSON = `{
       "default": "medium",
       "default_mode": "enabled",
       "id": "gemini-flash-four-level-medium",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "modes": [
+        "enabled"
+      ],
+      "parameter": "reasoning_effort",
+      "type": "reasoning_effort"
+    },
+    {
+      "default": "minimal",
+      "default_mode": "enabled",
+      "id": "gemini-flash-four-level-minimal",
       "levels": [
         "minimal",
         "low",

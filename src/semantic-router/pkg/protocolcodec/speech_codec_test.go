@@ -95,6 +95,34 @@ func TestSpeechCodecRoundTripEachResponseFormat(t *testing.T) {
 	}
 }
 
+// The fallback path serves a candidate's audio itself, so the MIME type comes
+// from the format the client asked for. `pcm` is raw little-endian samples, so
+// `audio/pcm` names it; `audio/L16` (RFC 2586) would promise big-endian.
+func TestSpeechResponseMediaTypeFollowsResponseFormat(t *testing.T) {
+	for format, want := range map[string]string{
+		"wav":  "audio/wav",
+		"pcm":  "audio/pcm",
+		"flac": "audio/flac",
+		"opus": "audio/ogg",
+		"aac":  "audio/aac",
+		"mp3":  "audio/mpeg",
+	} {
+		t.Run(format, func(t *testing.T) {
+			body := []byte(`{"input":"Speak this","voice":"alloy","response_format":"` + format + `"}`)
+			request, _, _, err := SpeechCodec{}.DecodeRequest(body, llmprotocol.DefaultPolicy())
+			if err != nil {
+				t.Fatalf("DecodeRequest: %v", err)
+			}
+			if got := SpeechResponseMediaType(&request); got != want {
+				t.Fatalf("media type = %q, want %q", got, want)
+			}
+		})
+	}
+	if got := SpeechResponseMediaType(nil); got != "audio/mpeg" {
+		t.Fatalf("media type without a request = %q, want the default audio/mpeg", got)
+	}
+}
+
 func TestSpeechCodecDecodeRequestTurnsInputIntoUserText(t *testing.T) {
 	body := []byte(`{"model":"tts-1","input":"Route me by language","voice":"alloy"}`)
 	request, _, _, err := SpeechCodec{}.DecodeRequest(body, llmprotocol.DefaultPolicy())

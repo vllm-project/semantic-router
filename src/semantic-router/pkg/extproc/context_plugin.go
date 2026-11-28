@@ -1,9 +1,9 @@
 package extproc
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
@@ -99,10 +99,7 @@ func (r *OpenAIRouter) injectContext(ctx *RequestContext, plugin *config.Context
 	if !ok {
 		return fmt.Errorf("no user message found")
 	}
-	callID := fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
-	if ctx.RequestID != "" {
-		callID = fmt.Sprintf("%s%s_%d", prefix, ctx.RequestID, time.Now().UnixNano())
-	}
+	callID := injectedCallID(request, prefix, text)
 	if *calls == nil {
 		*calls = make(map[string]struct{})
 	}
@@ -123,6 +120,28 @@ func (r *OpenAIRouter) injectContext(ctx *RequestContext, plugin *config.Context
 	}
 	logging.Debugf("Injected %s context as a tool result (%d chars)", sourceType, len(text))
 	return nil
+}
+
+// injectedCallID derives the call ID from the injected text, so a later step
+// that injects the same text repeats the prompt a provider may have cached. It
+// skips the IDs the conversation already holds.
+func injectedCallID(request *llmprotocol.Request, prefix, text string) string {
+	sum := sha256.Sum256([]byte(text))
+	base := fmt.Sprintf("%s%x", prefix, sum[:12])
+	callID := base
+	for n := 2; holdsCallID(request, callID); n++ {
+		callID = fmt.Sprintf("%s_%d", base, n)
+	}
+	return callID
+}
+
+func holdsCallID(request *llmprotocol.Request, callID string) bool {
+	return slices.ContainsFunc(request.Messages, func(message llmprotocol.Message) bool {
+		return slices.ContainsFunc(message.Content, func(content llmprotocol.Content) bool {
+			return content.ToolCall != nil && content.ToolCall.ID == callID ||
+				content.ToolResult != nil && content.ToolResult.CallID == callID
+		})
+	})
 }
 
 // contextInsertionIndex is where the next source's tool exchange goes: after

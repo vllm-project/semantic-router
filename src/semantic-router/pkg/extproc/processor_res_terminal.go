@@ -9,7 +9,13 @@ func (r *OpenAIRouter) takeNeutralResponseUsage(ctx *RequestContext) responseUsa
 	if r == nil || ctx == nil || ctx.SemanticResponse == nil {
 		return invalidResponseTerminalUsage("authoritative_usage_missing")
 	}
-	return responseUsageFromSemanticUsage(ctx.SemanticResponse.Usage)
+	usage := responseUsageFromSemanticUsage(ctx.SemanticResponse.Usage)
+	if ctx.LooperStreamingActive && !usage.invalid {
+		usage.promptTokens += int(ctx.LooperIntermediateUsage.PromptTokens)
+		usage.completionTokens += int(ctx.LooperIntermediateUsage.CompletionTokens)
+		usage.totalTokens += int(ctx.LooperIntermediateUsage.TotalTokens)
+	}
+	return usage
 }
 
 func invalidResponseTerminalUsage(reason string) responseUsageMetrics {

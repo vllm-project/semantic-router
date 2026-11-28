@@ -18,12 +18,12 @@ var officialAnthropicStreamEvents = fields(
 // Server tool blocks and citations are carried for an Anthropic client; see
 // TestAnthropicServerToolsSurviveStream.
 var officialSupportedAnthropicStreamContentBlocks = fields(
-	"bash_code_execution_tool_result", "code_execution_tool_result", "server_tool_use",
+	"bash_code_execution_tool_result", "code_execution_tool_result", "redacted_thinking", "server_tool_use",
 	"text", "text_editor_code_execution_tool_result", "thinking", "tool_search_tool_result",
 	"tool_use", "web_fetch_tool_result", "web_search_tool_result",
 )
 
-var officialUnsupportedAnthropicStreamContentBlocks = fields("container_upload", "redacted_thinking")
+var officialUnsupportedAnthropicStreamContentBlocks = fields("container_upload")
 
 var officialSupportedAnthropicStreamDeltas = fields(
 	"citations_delta", "input_json_delta", "signature_delta", "text_delta", "thinking_delta",
@@ -104,14 +104,6 @@ type unsupportedAnthropicStreamCase struct {
 
 func officialUnsupportedAnthropicStreamCases() []unsupportedAnthropicStreamCase {
 	return []unsupportedAnthropicStreamCase{
-		{
-			name: "redacted thinking block",
-			event: map[string]any{
-				"type": "content_block_start", "index": 0,
-				"content_block": map[string]any{"type": "redacted_thinking", "data": "opaque"},
-			},
-			code: "unsupported_content",
-		},
 		{
 			name: "container upload block",
 			event: map[string]any{
