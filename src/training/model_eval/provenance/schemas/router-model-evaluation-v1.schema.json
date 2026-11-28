@@ -204,7 +204,48 @@
         "peak_memory_mb": {"type": "number", "minimum": 0},
         "throughput_rows_per_s": {"type": "number", "minimum": 0}
       }
+    },
+    "comparable": {
+      "description": "Explicit run-level comparability flag. False when the evaluated run cannot be ranked beside standard multi-class baselines (for example, a single surviving mapped gold class).",
+      "type": "boolean"
+    },
+    "comparability": {
+      "description": "Structured explanation and surviving mapped gold-class counts when run-level comparability is restricted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "surviving_gold_class_count", "surviving_gold_classes"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 1},
+        "surviving_gold_class_count": {"type": "integer", "minimum": 1},
+        "surviving_gold_classes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["class_id", "support"],
+            "properties": {
+              "class_id": {"type": "integer", "minimum": 0},
+              "label": {"type": "string", "minLength": 1},
+              "support": {"type": "integer", "minimum": 1}
+            }
+          }
+        }
+      }
     }
+  },
+  "dependentSchemas": {
+    "comparability": {
+      "required": ["comparable"],
+      "properties": {"comparable": {"const": false}}
+    }
+  },
+  "if": {
+    "properties": {"comparable": {"const": false}},
+    "required": ["comparable"]
+  },
+  "then": {
+    "required": ["comparability"]
   },
   "$defs": {
     "unitInterval": {"type": "number", "minimum": 0, "maximum": 1},

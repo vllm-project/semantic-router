@@ -62,6 +62,7 @@ from baseline_tasks import (
 )
 from constants import MODEL_REGISTRY
 from provenance.emit import resolve_hf_revision
+from provenance.metrics import gold_class_comparability
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_MAX_LENGTH = 512
@@ -200,6 +201,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     texts, labels, split_rows, matched, dropped_rows = load_rows(
         spec, mapping, args.limit, dataset_revision
     )
+    comparability = gold_class_comparability(labels, mapping)
+    if comparability.get("comparable") is False:
+        info = comparability["comparability"]
+        surviving = info["surviving_gold_classes"][0]
+        label = surviving.get("label", f"class_id={surviving['class_id']}")
+        logger.warning(
+            "run is non-comparable (%s): only one surviving mapped gold class "
+            "%r (class_id=%d, support=%d)",
+            info["reason"],
+            label,
+            surviving["class_id"],
+            surviving["support"],
+        )
     summary, model_config = _measure(args, measured, served, texts, labels, mapping)
     result = _build_result(
         args=args,
@@ -214,6 +228,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         mapping=mapping,
         findings=findings,
         summary=summary,
+        comparability=comparability,
     )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -236,7 +251,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             labels=labels,
             split_rows=split_rows,
             mapping=mapping,
-            summary=summary,
+            summary={**comparability, **summary},
         )
 
     return result
@@ -313,8 +328,9 @@ def _build_result(
     mapping: dict[str, int],
     findings: list[str],
     summary: dict[str, Any],
+    comparability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
+    payload: dict[str, Any] = {
         "task": args.task,
         "artifact": {
             "repo": measured.repo,
@@ -341,6 +357,9 @@ def _build_result(
         "gaps": findings,
         **summary,
     }
+    if comparability and "comparable" not in payload:
+        payload.update(comparability)
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -352,10 +371,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     metrics = result["metrics"]
     calibration = result["calibration"]
+    status = ""
+    if result.get("comparable") is False:
+        reason = (result.get("comparability") or {}).get("reason")
+        status = f" comparable=false ({reason})" if reason else " comparable=false"
     print(
         f"{result['task']}: rows={metrics['rows']} acc={metrics['accuracy']:.4f} "
         f"macro_f1={metrics['macro_f1']:.4f} ece={calibration['ece']:.4f} "
-        f"brier={calibration['brier']:.4f}"
+        f"brier={calibration['brier']:.4f}{status}"
     )
     for finding in result["gaps"]:
         print(f"gap: {finding}")

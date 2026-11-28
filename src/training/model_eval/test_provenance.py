@@ -9,18 +9,22 @@ import yaml
 TEST_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(TEST_DIR))
 
+from provenance import emit as emit_mod  # noqa: E402
 from provenance.crossref import (  # noqa: E402
     artifact_identity_digest,
     file_digest,
     validate_bundle,
     verify_artifact_bytes,
 )
+from provenance.emit import build_evaluation_manifest, write_manifest  # noqa: E402
 from provenance.manifest import ManifestError, load_manifest  # noqa: E402
 from provenance.metrics import (  # noqa: E402
+    SINGLE_MAPPED_GOLD_CLASS_REASON,
     abstention_curve,
     calibration_metrics,
     classification_metrics,
     discrimination,
+    gold_class_comparability,
     latency_percentiles,
     operating_points,
 )
@@ -621,3 +625,286 @@ def test_discrimination_reports_zero_recall_when_the_budget_is_unreachable():
     )
 
     assert separation["recall_at_fpr_budget"] == 0.0
+
+
+def test_gold_class_comparability_marks_single_surviving_class():
+    mapping = {"SAT": 0, "NO_FEEDBACK": 1}
+    single = gold_class_comparability([0, 0, 0], mapping)
+    assert single == {
+        "comparable": False,
+        "comparability": {
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [{"class_id": 0, "label": "SAT", "support": 3}],
+        },
+    }
+    assert gold_class_comparability([0, 1], mapping) == {}
+    with pytest.raises(ValueError, match="at least one row"):
+        gold_class_comparability([], mapping)
+    for bad_labels in ([-1, -1], [0, 99], [99, 99]):
+        with pytest.raises(ValueError, match="not defined in label_mapping"):
+            gold_class_comparability(bad_labels, mapping)
+    with pytest.raises(ValueError, match="must be an integer"):
+        gold_class_comparability([True, True], mapping)
+
+
+def _single_class_jailbreak_metrics(support: int = 2) -> dict:
+    return {
+        "rows": support,
+        "accuracy": 1.0,
+        "macro_f1": 1.0,
+        "weighted_f1": 1.0,
+        "per_label": {
+            "benign": {"precision": 0.0, "recall": 0.0, "f1": 0.0, "support": 0},
+            "jailbreak": {
+                "precision": 1.0,
+                "recall": 1.0,
+                "f1": 1.0,
+                "support": support,
+            },
+        },
+    }
+
+
+def test_evaluation_manifest_accepts_non_comparable_single_class_metadata(tmp_path):
+    mapping = {"benign": 0, "jailbreak": 1}
+    dataset = dataset_manifest(
+        splits=[{"name": "test", "rows": 2, "digest": "sha256:" + "2" * 64}]
+    )
+    manifest = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2),
+        **gold_class_comparability([1, 1], mapping),
+    )
+    summary = validate_bundle(
+        write_bundle(tmp_path, dataset=dataset, evaluation=manifest)
+    )
+    assert summary["evaluations"] == ["jailbreak-test-baseline"]
+    loaded = load_manifest(
+        tmp_path / "evaluation.manifest.yaml", expected_kind="evaluation"
+    )
+    assert loaded["comparable"] is False
+    assert loaded["comparability"] == {
+        "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+        "surviving_gold_class_count": 1,
+        "surviving_gold_classes": [{"class_id": 1, "label": "jailbreak", "support": 2}],
+    }
+
+
+def test_evaluation_manifest_rejects_inconsistent_comparability_fields(tmp_path):
+    missing_details = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2), comparable=False
+    )
+    with pytest.raises(ManifestError, match="comparability"):
+        load_manifest(
+            write_one(tmp_path, missing_details, name="missing.manifest.yaml")
+        )
+
+    missing_flag = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=10),
+        comparability={
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [
+                {"class_id": 1, "label": "jailbreak", "support": 10}
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="comparable"):
+        load_manifest(write_one(tmp_path, missing_flag, name="orphan.manifest.yaml"))
+
+    true_with_comparability = evaluation_manifest(
+        comparable=True,
+        comparability={
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [
+                {"class_id": 0, "label": "benign", "support": 400}
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="comparable"):
+        load_manifest(
+            write_one(tmp_path, true_with_comparability, name="true_comp.manifest.yaml")
+        )
+
+    multi_class_claiming_single = evaluation_manifest(
+        comparable=False,
+        comparability={
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [
+                {"class_id": 0, "label": "benign", "support": 400}
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="positive-support"):
+        load_manifest(
+            write_one(
+                tmp_path, multi_class_claiming_single, name="multi_single.manifest.yaml"
+            )
+        )
+
+    count_mismatch = evaluation_manifest(
+        comparable=False,
+        comparability={
+            "reason": "other_reason",
+            "surviving_gold_class_count": 2,
+            "surviving_gold_classes": [
+                {"class_id": 0, "label": "benign", "support": 400}
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="surviving_gold_classes length"):
+        load_manifest(
+            write_one(tmp_path, count_mismatch, name="count_mismatch.manifest.yaml")
+        )
+
+    duplicate_id = evaluation_manifest(
+        comparable=False,
+        comparability={
+            "reason": "other_reason",
+            "surviving_gold_class_count": 2,
+            "surviving_gold_classes": [
+                {"class_id": 0, "label": "benign", "support": 400},
+                {"class_id": 0, "label": "benign", "support": 400},
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="repeats class_id"):
+        load_manifest(write_one(tmp_path, duplicate_id, name="dup_id.manifest.yaml"))
+
+    permuted_label = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2),
+        comparable=False,
+        comparability={
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [
+                {"class_id": 0, "label": "jailbreak", "support": 2}
+            ],
+        },
+    )
+    with pytest.raises(ManifestError, match="maps to 'benign'"):
+        load_manifest(
+            write_one(tmp_path, permuted_label, name="permuted.manifest.yaml")
+        )
+
+    wrong_support = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2),
+        comparable=False,
+        comparability={
+            "reason": SINGLE_MAPPED_GOLD_CLASS_REASON,
+            "surviving_gold_class_count": 1,
+            "surviving_gold_classes": [
+                {"class_id": 1, "label": "jailbreak", "support": 99}
+            ],
+        },
+    )
+    with pytest.raises(
+        ManifestError, match=r"does not match metrics\.per_label support"
+    ):
+        load_manifest(write_one(tmp_path, wrong_support, name="support.manifest.yaml"))
+
+    silent_single_omitted = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2)
+    )
+    with pytest.raises(ManifestError, match="only one surviving mapped gold class"):
+        load_manifest(
+            write_one(tmp_path, silent_single_omitted, name="silent.manifest.yaml")
+        )
+
+    silent_single_true = evaluation_manifest(
+        metrics=_single_class_jailbreak_metrics(support=2), comparable=True
+    )
+    with pytest.raises(ManifestError, match="only one surviving mapped gold class"):
+        load_manifest(
+            write_one(tmp_path, silent_single_true, name="silent_true.manifest.yaml")
+        )
+
+
+def test_build_evaluation_manifest_forwards_comparability_when_present(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        emit_mod,
+        "code_revision",
+        lambda entrypoint, repo_root: {
+            "repo": "vllm-project/semantic-router",
+            "revision": CODE_REVISION,
+            "entrypoint": entrypoint,
+            "dirty": False,
+        },
+    )
+    monkeypatch.setattr(
+        emit_mod,
+        "dependency_versions",
+        lambda: {"python": "3.12.4", "packages": {"pyyaml": "6.0"}},
+    )
+
+    base_ev = evaluation_manifest()
+    mapping = {"SAT": 0, "NO_FEEDBACK": 1}
+    comp = gold_class_comparability([0, 0], mapping)
+
+    non_comp = build_evaluation_manifest(
+        manifest_id="feedback-legacy-test",
+        task="feedback",
+        artifact_ref=base_ev["artifact_ref"],
+        dataset_ref=base_ev["dataset_ref"],
+        split_rule="by_source",
+        entrypoint="src/training/model_eval/quality_baseline.py",
+        repo_root=tmp_path,
+        device="cpu",
+        device_name="x86_64",
+        batch_size=32,
+        max_length=512,
+        sample_limit=None,
+        seed=42,
+        label_mapping=mapping,
+        metrics={
+            "rows": 2,
+            "accuracy": 1.0,
+            "macro_f1": 1.0,
+            "weighted_f1": 1.0,
+            "per_label": {
+                "SAT": {"precision": 1.0, "recall": 1.0, "f1": 1.0, "support": 2},
+                "NO_FEEDBACK": {
+                    "precision": 0.0,
+                    "recall": 0.0,
+                    "f1": 0.0,
+                    "support": 0,
+                },
+            },
+        },
+        calibration=base_ev["calibration"],
+        abstention=base_ev["abstention"],
+        performance=base_ev["performance"],
+        comparable=comp["comparable"],
+        comparability=comp["comparability"],
+    )
+    written = write_manifest(non_comp, tmp_path / "non-comp.manifest.yaml")
+    loaded = load_manifest(written, expected_kind="evaluation")
+    assert loaded["comparable"] is False
+    assert loaded["comparability"]["reason"] == SINGLE_MAPPED_GOLD_CLASS_REASON
+
+    multi_comp = build_evaluation_manifest(
+        manifest_id="feedback-vela-test",
+        task="feedback",
+        artifact_ref=base_ev["artifact_ref"],
+        dataset_ref=base_ev["dataset_ref"],
+        split_rule="by_source",
+        entrypoint="src/training/model_eval/quality_baseline.py",
+        repo_root=tmp_path,
+        device="cpu",
+        device_name="x86_64",
+        batch_size=32,
+        max_length=512,
+        sample_limit=None,
+        seed=42,
+        label_mapping=mapping,
+        metrics=base_ev["metrics"],
+        calibration=base_ev["calibration"],
+        abstention=base_ev["abstention"],
+        performance=base_ev["performance"],
+    )
+    assert "comparable" not in multi_comp
+    assert "comparability" not in multi_comp
