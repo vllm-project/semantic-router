@@ -1,4 +1,4 @@
-import type { Dataset, DatasetPreparation } from './types'
+import type { Dataset, DatasetPreparation, DatasetSelection } from './types'
 
 const benchmarkTitles: Record<string, string> = {
   'arc-agi': 'ARC-AGI',
@@ -21,6 +21,24 @@ export const catalogBenchmarkTitle = (id: string, catalog?: { id: string; title?
   const title = catalog?.find((benchmark) => benchmark.id === id)?.title
   return title && title !== id ? title : benchmarkTitle(id)
 }
+/**
+ * Questions per target for the selected benchmarks, or null while any of them has no
+ * prepared count yet (a benchmark that is prepared at review time reports case_count 0).
+ */
+export function selectedQuestionCount(
+  selection: Pick<DatasetSelection, 'benchmarks'>,
+  benchmarks: string[],
+): number | null {
+  if (!benchmarks.length) return null
+  let total = 0
+  for (const id of benchmarks) {
+    const entry = selection.benchmarks.find((item) => item.id === id)
+    if (!entry?.eligible || entry.case_count <= 0) return null
+    total += entry.case_count
+  }
+  return total
+}
+
 export const profileTitle = (id?: string) =>
   ({ smoke: 'Smoke', quick: 'Quick', standard: 'Standard' })[id ?? ''] ?? 'Custom'
 export const profileDescription = (id?: string) =>
