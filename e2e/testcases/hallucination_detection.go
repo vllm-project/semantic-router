@@ -83,11 +83,13 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 	}
 
 	if opts.SetDetails != nil {
+		warned, failed, infra := summarizeHallucinationResults(results)
 		opts.SetDetails(map[string]interface{}{
 			"total_tests":  len(testCases),
-			"warned_tests": warnedCount,
-			"failed_tests": len(testCases) - warnedCount,
-			"warning_rate": fmt.Sprintf("%.2f%%", detectionRate(warnedCount, len(testCases))),
+			"warned_tests": warned,
+			"failed_tests": failed, // real detection failures only
+			"infra_errors": infra,  // infrastructure errors, reported separately
+			"warning_rate": fmt.Sprintf("%.2f%%", detectionRate(warned, warned+failed)),
 		})
 	}
 
@@ -117,6 +119,25 @@ func testHallucinationDetection(ctx context.Context, client *kubernetes.Clientse
 	}
 
 	return nil
+}
+
+// summarizeHallucinationResults classifies each result as warned, a real
+// detection failure (detector ran, no warning), or an infrastructure error
+// (detector never saw the sample). Infrastructure failures are the two early
+// returns in testSingleHallucinationDetection that set result.Error before
+// HallucinationWarned is ever assigned.
+func summarizeHallucinationResults(results []HallucinationResult) (warned, failed, infra int) {
+	for _, r := range results {
+		switch {
+		case r.HallucinationWarned:
+			warned++
+		case r.Error != "":
+			infra++
+		default:
+			failed++
+		}
+	}
+	return warned, failed, infra
 }
 
 func loadHallucinationCases(path string) ([]HallucinationTestCase, error) {
@@ -149,6 +170,11 @@ func testSingleHallucinationDetection(ctx context.Context, testCase Hallucinatio
 		result.Error = formatUnexpectedChatCompletionStatus(response)
 		logUnexpectedChatCompletionStatus(verbose, response, testCase.Description,
 			"Question: "+testCase.Question)
+		return result
+	}
+
+	if len(bytes.TrimSpace(response.Body)) == 0 {
+		result.Error = "empty HTTP response body"
 		return result
 	}
 
@@ -261,7 +287,8 @@ func printHallucinationResults(results []HallucinationResult, warnedCount int) {
 	fmt.Println(separator)
 	fmt.Printf("Total Tests: %d\n", len(results))
 	fmt.Printf("Responses Warned: %d\n", warnedCount)
-	fmt.Printf("Warning Rate: %.2f%%\n", detectionRate(warnedCount, len(results)))
+	warned, failed, _ := summarizeHallucinationResults(results)
+	fmt.Printf("Warning Rate: %.2f%%\n", detectionRate(warned, warned+failed))
 	fmt.Println(separator)
 
 	errorCount := 0
