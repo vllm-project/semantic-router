@@ -188,8 +188,8 @@ type ToolCall struct {
 	Name      string
 	Arguments string
 	// Namespace is the Responses namespace the client knows the tool under, and
-	// Name is then the tool's name inside it. Backends never receive it: their
-	// requests carry the flat name of the tool instead.
+	// Name is then the tool's name inside it. A backend receives it only where
+	// the request keeps namespaces; others get the flat name of the tool.
 	Namespace string
 }
 
@@ -227,9 +227,12 @@ type Tool struct {
 	CustomFormat *CustomToolFormat
 	Cache        *CacheDirective
 	// Namespace and LocalName record where a tool flattened from a Responses
-	// namespace came from. Name holds the flat name every backend receives.
-	Namespace string
-	LocalName string
+	// namespace came from. Name holds the flat name a backend receives unless
+	// the request keeps namespaces. Description then begins with the
+	// namespace's own, NamespaceDescription.
+	Namespace            string
+	LocalName            string
+	NamespaceDescription string
 	// Raw is a ToolKindServer definition as sent, in the source wire format.
 	Raw json.RawMessage `json:",omitempty"`
 }
@@ -390,6 +393,10 @@ type Request struct {
 	// flattened a Responses namespace keeps where each tool name came from, so
 	// retained history prepended later is checked against the same names.
 	ToolNameOrigins ToolNameOrigins
+	// KeepToolNamespaces sends each tool and call flattened from a Responses
+	// namespace under that namespace again, to a Responses backend that reads
+	// namespaces. A backend projection sets it; no wire carries it.
+	KeepToolNamespaces bool
 }
 
 type StopReason string

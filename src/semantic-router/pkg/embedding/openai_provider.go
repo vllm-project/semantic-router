@@ -241,9 +241,21 @@ func (p *OpenAICompatibleProvider) Backend() string {
 	return config.EmbeddingBackendOpenAICompatible
 }
 
+// meteredCall is an embeddings call and whether the provider replied: a call
+// no provider answered, whose connection failed or timed out before any
+// reply, charged nothing and is no call to price.
+type meteredCall struct {
+	modelservice.ModelCall
+	replied bool
+}
+
 func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []string, apiKey string) ([][]float32, error) {
-	call := modelservice.ModelCall{Kind: "embeddings", Model: p.model}
-	defer func() { modelservice.RecordModelCall(ctx, call) }()
+	call := meteredCall{ModelCall: modelservice.ModelCall{Kind: "embeddings", Model: p.model}}
+	defer func() {
+		if call.replied {
+			modelservice.RecordModelCall(ctx, call.ModelCall)
+		}
+	}()
 	body, err := json.Marshal(embeddingsRequest{Model: p.model, Input: texts, Dimensions: p.dimensions})
 	if err != nil {
 		return nil, err
@@ -255,11 +267,12 @@ func (p *OpenAICompatibleProvider) embedBatchOnce(ctx context.Context, texts []s
 	return p.embeddingHTTPOnce(ctx, body, texts, apiKey, &call)
 }
 
-func (p *OpenAICompatibleProvider) embeddingConnectorOnce(ctx context.Context, body []byte, texts []string, call *modelservice.ModelCall) ([][]float32, error) {
+func (p *OpenAICompatibleProvider) embeddingConnectorOnce(ctx context.Context, body []byte, texts []string, call *meteredCall) ([][]float32, error) {
 	response, callErr := p.connector.Do(ctx, connector.Operation{Name: "embedding.v1", Method: http.MethodPost, RetrySafe: true}, body)
+	var transport *connector.Error
+	call.replied = callErr == nil || errors.As(callErr, &transport) && transport.StatusCode != 0
 	if callErr != nil {
-		var transport *connector.Error
-		if errors.As(callErr, &transport) && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
+		if call.replied && (transport.StatusCode == http.StatusUnauthorized || transport.StatusCode == http.StatusForbidden) {
 			return nil, fmt.Errorf("embedding provider authentication failed: %w", callErr)
 		}
 		return nil, callErr
@@ -277,7 +290,7 @@ func (p *OpenAICompatibleProvider) embeddingConnectorOnce(ctx context.Context, b
 	return p.parseEmbeddings(decoded.Data, len(texts))
 }
 
-func (p *OpenAICompatibleProvider) embeddingHTTPOnce(ctx context.Context, body []byte, texts []string, apiKey string, call *modelservice.ModelCall) ([][]float32, error) {
+func (p *OpenAICompatibleProvider) embeddingHTTPOnce(ctx context.Context, body []byte, texts []string, apiKey string, call *meteredCall) ([][]float32, error) {
 	attemptCtx := ctx
 	var cancel context.CancelFunc
 	if p.timeout > 0 {
@@ -291,6 +304,7 @@ func (p *OpenAICompatibleProvider) embeddingHTTPOnce(ctx context.Context, body [
 	if err != nil {
 		return nil, err
 	}
+	call.replied = true
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {

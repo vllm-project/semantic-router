@@ -715,6 +715,18 @@ class TurnLineTest(unittest.TestCase):
             self.management.asked, [{"turn_id": TURN, "limit": "100", "offset": "0"}]
         )
 
+    def test_a_call_the_router_blocked_reads_as_blocked(self):
+        blocked = {
+            "turn_id": TURN,
+            "decision": "block_marker",
+            "terminal_reason": "request_rejected",
+        }
+        self.management.records = [call("gpt-6-luna", "coding"), blocked]
+        self.assertEqual(
+            run("stop", stop(), self.env)["systemMessage"],
+            "▚▞ vSR turn · 2 calls: blocked (1), gpt-6-luna (1) · decisions: block_marker, coding",
+        )
+
     def test_a_turn_the_router_has_no_record_of_or_that_cannot_be_read_ends_without_a_line(
         self,
     ):

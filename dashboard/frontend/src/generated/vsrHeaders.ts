@@ -232,6 +232,9 @@ export const X_VSR_OUTCOME_PRINCIPAL = 'x-vsr-outcome-principal'
 /** Outcome provenance a trusted control plane attests to the management API. Surface: internal. */
 export const X_VSR_OUTCOME_SOURCE = 'x-vsr-outcome-source'
 
+/** Any value marks a check request, such as those `vllm-sr connect --check` sends: Router Replay records it with `request_kind: probe` and leaves a session of only such requests out of the runs list. Surface: control. */
+export const X_VSR_PROBE = 'x-vsr-probe'
+
 /** Any non-empty value asks router-learning protection for a fresh decision on the request's protection key; `global.router.learning.protection.release.header` can rename it. Surface: control. */
 export const X_VSR_PROTECTION_RELEASE = 'x-vsr-protection-release'
 

@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 import ConfigPageRouterStructuredEditor from './ConfigPageRouterStructuredEditor'
-import { ROUTER_STRUCTURED_FIELDS } from './configPageRouterStructuredSchema'
+import { getRouterStructuredFieldDefinition } from './configPageRouterStructuredFields'
+import {
+  normalizeRouterStructuredFields,
+  ROUTER_STRUCTURED_FIELDS,
+} from './configPageRouterStructuredSchema'
 
 describe('ConfigPageRouterStructuredEditor', () => {
   it('renders nested object arrays and maps without a JSON textarea', () => {
@@ -77,5 +81,34 @@ describe('ConfigPageRouterStructuredEditor', () => {
     expect(markup).toContain('OPENAI_API_KEY')
     expect(markup).toContain('Max Response Bytes')
     expect(markup).not.toContain('<textarea')
+  })
+})
+
+describe('Router Learning protection', () => {
+  const protection = () => getRouterStructuredFieldDefinition('learning', 'protection')
+
+  it('shows cache economics on when it is unset, as the Router runs it', () => {
+    const cacheEconomics = protection().schema.fields?.tuning.fields?.cache_economics
+    expect(cacheEconomics).toBeDefined()
+    const markup = renderToStaticMarkup(
+      <ConfigPageRouterStructuredEditor
+        schema={cacheEconomics!}
+        value={{ cache_ttl_seconds: 600 }}
+        onChange={vi.fn()}
+      />,
+    )
+    expect(markup).toContain('checked=""')
+    expect(markup).toContain('Enabled (default)')
+    expect(markup).not.toContain('Disabled')
+  })
+
+  it('keeps an unset cache economics switch unset on save', () => {
+    const saved = normalizeRouterStructuredFields('learning', {
+      protection: { enabled: true, tuning: { cache_economics: { cache_ttl_seconds: 600 } } },
+    })
+    expect(saved.protection).toEqual({
+      enabled: true,
+      tuning: { cache_economics: { cache_ttl_seconds: 600 } },
+    })
   })
 })

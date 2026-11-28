@@ -191,7 +191,8 @@ export const ROUTER_STRUCTURED_FIELDS: Partial<
           switch_margin: number('Switch Margin', { min: 0 }),
           stability_weight: number('Stability Weight', { min: 0 }),
           cache_economics: object('Cache Economics', {
-            enabled: boolean('Enabled'),
+            // The Router prices protection's switches unless told not to.
+            enabled: boolean('Enabled', { defaultValue: true }),
             cache_ttl_seconds: number('Cache TTL Seconds', { min: 1, max: 86400 }),
             default_remaining_turns: number('Default Remaining Turns', { min: 1 }),
           }),

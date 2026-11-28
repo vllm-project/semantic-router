@@ -1182,7 +1182,7 @@ class FastResponsePluginConfig(BaseModel):
 
     enabled: bool = True
     message: Optional[str] = None
-    # block refuses the request with HTTP 403 and the message as the error.
+    # block refuses the request with HTTP 400 and the message as the error.
     block: bool = False
 
     @model_validator(mode="after")
@@ -1411,6 +1411,8 @@ class RouterReplayPluginConfig(BaseModel):
     capture_response_body: Optional[StrictBool] = None
     capture_personal_data: Optional[StrictBool] = None
     capture_tool_results: Optional[StrictBool] = None
+    capture_session_name: Optional[StrictBool] = None
+    capture_tool_names: Optional[StrictBool] = None
     max_records: Optional[int] = Field(default=None, ge=0)
     max_body_bytes: Optional[int] = Field(default=None, ge=0)
     max_prompt_bytes: Optional[int] = Field(default=None, ge=0)

@@ -35,7 +35,7 @@ import {
   type TimelineBreak,
   type TimelineMark,
 } from './insightsRunTimeline'
-import type { RunCall, RunSummary } from './insightsRunTypes'
+import type { RunCall, RunSummary, RunToolCall } from './insightsRunTypes'
 
 function modelTitle(labels: Record<string, string>, model: string): string {
   return model ? modelText(labels, model) : 'no model'
@@ -1006,7 +1006,10 @@ export function RunCallDetails({ call, currency }: { call: RunCall; currency?: s
               : undefined
           }
         >
-          {call.cost !== undefined ? cost : 'No price'}
+          {call.cost === undefined
+            ? 'No price'
+            : cost +
+              (cost !== '—' && call.pricing_source === 'catalog_list_price' ? ' list price' : '')}
         </Row>
         <Row label="Duration">{formatRunDuration(call.duration_ms)}</Row>
         {(call.router_calls ?? []).map((entry) => (
@@ -1044,8 +1047,8 @@ export function RunCallDetails({ call, currency }: { call: RunCall; currency?: s
         </div>
         <Row label="Tools">
           {call.tool_results
-            ? `${call.tool_results} returned · ${call.tool_failures ?? 0} failed`
-            : 'None returned'}
+            ? `${call.tool_results} results sent · ${call.tool_failures ?? 0} failed`
+            : 'No results sent'}
         </Row>
         {call.hops?.length ? (
           <Row label="Hops">
@@ -1111,6 +1114,7 @@ export function RunSegmentPanel({
           {countText(segment.calls.length, 'call')}
         </span>
       </header>
+      <RunToolList calls={segment.calls} />
       {segment.calls.length > 1 ? (
         <ol className="flex max-h-60 flex-col overflow-y-auto rounded-xl border border-border bg-card">
           {segment.calls.map((entry) => (
@@ -1127,7 +1131,9 @@ export function RunSegmentPanel({
                 <span className="hidden font-mono tabular text-subtle-foreground sm:inline">
                   {clock(Date.parse(entry.timestamp))}
                 </span>
-                <span className="truncate font-medium">{entry.decision || '—'}</span>
+                <span className="truncate font-medium">
+                  {entry.request_kind || entry.decision || '—'}
+                </span>
                 <Badge size="sm" tone={statusTone(entry)}>
                   {describeCallStatus(entry)}
                 </Badge>
@@ -1146,5 +1152,58 @@ export function RunSegmentPanel({
         <p className="text-[13px] text-muted-foreground">Pick a call for its card.</p>
       )}
     </aside>
+  )
+}
+
+// How long a tool call took on the client: the harness's own times when it
+// reported them, else the gateway's measure.
+function toolDuration(tool: RunToolCall): number | undefined {
+  if (tool.started_at && tool.ended_at) {
+    return Date.parse(tool.ended_at) - Date.parse(tool.started_at)
+  }
+  return tool.client_ms
+}
+
+function toolStatusText(status?: string): string {
+  if (status === 'succeeded') return 'ok'
+  if (status === 'failed') return 'failed'
+  return 'no result yet'
+}
+
+// How long a tool call took on the client, and whose clock says so.
+function ToolDuration({ tool }: { tool: RunToolCall }) {
+  const duration = toolDuration(tool)
+  if (duration === undefined) return <span />
+  const source =
+    tool.timing_source === 'plugin'
+      ? 'Run time the harness reported'
+      : 'From the response that asked for it to the request that carried its result, as the gateway saw it'
+  return <span title={source}>{formatRunDuration(duration)}</span>
+}
+
+// Every tool call of a block's turns with its arguments and result.
+function RunToolList({ calls }: { calls: RunCall[] }) {
+  const rows = calls.flatMap((entry) =>
+    (entry.tool_calls ?? []).map((tool, index) => ({ entry, tool, index })),
+  )
+  if (rows.length === 0) return null
+  return (
+    <ol
+      className="m-0 grid list-none grid-cols-[minmax(0,max-content)_minmax(0,1fr)_auto_auto] gap-x-2 gap-y-1 p-0"
+      aria-label="Tool calls"
+    >
+      {rows.map(({ entry, tool, index }) => (
+        <li
+          key={`${entry.record_id}-${tool.id || index}`}
+          data-status={tool.status}
+          className="col-span-full grid grid-cols-subgrid items-baseline text-xs text-muted-foreground data-[status=failed]:[&>span]:text-destructive-foreground"
+        >
+          <strong className="truncate font-mono font-semibold text-foreground">{tool.name}</strong>
+          <code className="truncate">{tool.arguments || tool.summary || 'arguments not kept'}</code>
+          <ToolDuration tool={tool} />
+          <span>{toolStatusText(tool.status)}</span>
+        </li>
+      ))}
+    </ol>
   )
 }

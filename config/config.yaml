@@ -1325,6 +1325,15 @@ recipes:
               # result, bounded by max_tool_trace_bytes, and requires
               # prompt_capture: raw; use it for development or audit.
               capture_tool_results: false
+              # Records keep the name a run reads by, the harness's title or
+              # /rename, else the first 120 characters of a headless run's
+              # first prompt, whatever prompt_capture says; false keeps none.
+              capture_session_name: true
+              # Records keep the tool history, each call's tool name, call id
+              # and result status, the names of the tools each request offered
+              # and each subagent's kind, without arguments, results or schemas,
+              # whatever prompt_capture says; false keeps none.
+              capture_tool_names: true
               max_body_bytes: 4096
               # The prompt a record keeps under raw or verified, cut on a
               # character boundary with the whole prompt's size and SHA-256.
@@ -3293,6 +3302,11 @@ global:
         capture_response_body: true
         # Client tool results stay redacted; true requires prompt_capture: raw.
         capture_tool_results: false
+        # Session names are kept whatever prompt_capture says; false keeps none.
+        capture_session_name: true
+        # Tool names, result statuses and subagent kinds are kept whatever
+        # prompt_capture says; false keeps none.
+        capture_tool_names: true
         max_records: 10000
         max_body_bytes: 4096
         # max_prompt_bytes is left unset, so the prompt keeps the bound of a

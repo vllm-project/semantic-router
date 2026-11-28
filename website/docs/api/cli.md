@@ -998,6 +998,7 @@ Route Claude Code's model calls through the gateway.
 | --- | --- |
 | `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
 | `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--serve / --no-serve` | Start the Router with vllm-sr serve --config when nothing answers at the configuration's first listener. Never with --base-url. Default: true. |
 | `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
@@ -1032,6 +1033,7 @@ The default is what the Codex app reads, and the Codex CLI without --profile.
 | --- | --- |
 | `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
 | `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--serve / --no-serve` | Start the Router with vllm-sr serve --config when nothing answers at the configuration's first listener. Never with --base-url. Default: true. |
 | `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |
@@ -1064,6 +1066,7 @@ Route Pi's model calls through the gateway, as a provider in its models.json.
 | --- | --- |
 | `--config FILE` | The Router configuration: its first listener is the gateway, and it is checked for what the harness needs. Never edited.  [default: config.yaml] |
 | `--base-url TEXT` | The gateway's origin; otherwise derived from --config. |
+| `--serve / --no-serve` | Start the Router with vllm-sr serve --config when nothing answers at the configuration's first listener. Never with --base-url. Default: true. |
 | `--model TEXT` | The entrypoint the harness asks for.  [default: vllm-sr/auto] |
 | `--api-key-env TEXT` | The variable that holds the listener's API key.  [default: VLLM_SR_API_KEY] |
 | `--dry-run` | Print the plan and the changes without writing anything. Default: false. |

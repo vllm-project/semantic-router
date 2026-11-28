@@ -1,11 +1,13 @@
 package extproc
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -19,34 +21,68 @@ type replayRunEntry struct {
 	parentRequestID string
 	// Tool calls whose results the call carried, and those that failed.
 	toolResults, toolFailures []string
+	// The tool calls its response asked for, and those of the agent's
+	// previous turn its request repeats with their results' status.
+	turnTools, carriedTools []routerreplay.RunToolCall
+	// turnIndex counts the user's prompts before the request, so a request
+	// with the same count as the agent's previous one continues its turn.
+	turnIndex int
+	// offered names the tools the request offered the model.
+	offered []string
 }
 
 func newReplayRunEntry(record routerreplay.RoutingRecord) replayRunEntry {
-	entry := replayRunEntry{call: buildReplayRunCall(record), parentRequestID: record.ParentRequestID}
+	entry := replayRunEntry{call: buildReplayRunCall(record), parentRequestID: record.ParentRequestID, turnIndex: record.TurnIndex}
 	if record.Agent != nil {
 		entry.agent = *record.Agent
 	}
 	entry.agent.ID = agentOf(record)
 	entry.toolResults, entry.toolFailures = replayNewToolResults(record.ToolTrace)
-	entry.call.ToolResults, entry.call.ToolFailures = len(entry.toolResults), len(entry.toolFailures)
-	if entry.call.ToolResults > 0 {
-		entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolLoop)
-	}
-	if entry.call.ToolFailures > 0 {
-		entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolFailure)
+	entry.turnTools, entry.carriedTools = replayTurnTools(record.ToolTrace), replayCarriedTools(record.ToolTrace)
+	if record.ToolTrace != nil {
+		entry.offered = record.ToolTrace.OfferedTools
 	}
 	return entry
+}
+
+// countReplayToolResults counts each tool result on the call that first
+// carried it, in time order. A later call carries the results again in its
+// history, which shows no step for a text answer or a new prompt, and a side
+// request or Looper hop copies them: none of these sent a result.
+func countReplayToolResults(entries []replayRunEntry) {
+	seen := make(map[string]bool)
+	for index := range entries {
+		entry := &entries[index]
+		var results, failures []string
+		if entry.parentRequestID == "" && entry.call.RequestKind == "" {
+			for _, id := range entry.toolResults {
+				if !seen[id] {
+					seen[id] = true
+					results = append(results, id)
+				}
+			}
+			failures = slices.DeleteFunc(entry.toolFailures, func(id string) bool { return !slices.Contains(results, id) })
+		}
+		entry.toolResults, entry.toolFailures = results, failures
+		entry.call.ToolResults, entry.call.ToolFailures = len(results), len(failures)
+		if len(results) > 0 {
+			entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolLoop)
+		}
+		if len(failures) > 0 {
+			entry.call.Markers = append(entry.call.Markers, routerreplay.RunMarkerToolFailure)
+		}
+	}
 }
 
 func buildReplayRunCall(record routerreplay.RoutingRecord) routerreplay.RunCall {
 	call := routerreplay.RunCall{
 		RecordID: record.ID, RequestID: record.RequestID, Timestamp: record.Timestamp,
 		DurationMS: record.DurationMS, Recipe: record.Recipe, Entrypoint: record.OriginalModel,
-		Decision: record.Decision, Signals: replayMatchedSignals(record.Signals), Model: record.SelectedModel,
+		Decision: record.Decision, Signals: replayMatchedSignals(record.Signals), Model: replayAnsweringModel(record),
 		Effort: firstNonEmptyString(record.ReasoningEffort, record.ReasoningMode), SelectionMethod: record.SelectionMethod, RequestKind: record.RequestKind,
 		LifecycleState: record.LifecycleState, ResponseStatus: record.ResponseStatus, TerminalReason: record.TerminalReason,
 		PromptTokens: record.PromptTokens, CompletionTokens: record.CompletionTokens,
-		RouterCalls: replayRouterCalls(record), FinalAnswer: replayEndsWithFinalAnswer(record.ToolTrace),
+		RouterCalls: replayRouterCalls(record), FinalAnswer: replayEndsWithFinalAnswer(record),
 		Outcomes: replayReportedOutcomes(record.Outcomes), ImageCount: record.ImageCount,
 	}
 	if record.Agent != nil {
@@ -54,6 +90,9 @@ func buildReplayRunCall(record routerreplay.RoutingRecord) routerreplay.RunCall 
 	}
 	if currency := replayRecordCurrency(record); currency != "" && finiteReplayCost(record.ActualCost) {
 		call.Cost, call.Currency = record.ActualCost, currency
+		if record.CostAccounting != nil {
+			call.PricingSource = record.CostAccounting.PricingSource
+		}
 	}
 	reasons := []string{}
 	if diagnostics := record.RouteDiagnostics; diagnostics != nil {
@@ -78,7 +117,7 @@ func replayRunCallMarkers(record routerreplay.RoutingRecord) []string {
 	// 200 and calls no model.
 	refused := (record.JailbreakDetected || record.PIIDetected) &&
 		(record.SelectionMethod == "fast_response" || record.SelectedModel == "")
-	block := record.PIIBlocked || refused || (guard && record.ResponseStatus >= 400 && record.ResponseStatus < 500)
+	block := record.PIIBlocked || refused || guard && replayClientError(record) || replayRouterRefused(record)
 	failed := !block && (record.LifecycleState == routerreplay.LifecycleFailed || record.ResponseStatus >= 400)
 	requestClass := ""
 	if record.Agent != nil {
@@ -102,6 +141,33 @@ func replayRunCallMarkers(record routerreplay.RoutingRecord) []string {
 		}
 	}
 	return markers
+}
+
+// replayRouterRefused reports a call the Router refused itself: a guard, a
+// fast_response block, a response guard, a rate limit or a spend budget,
+// with a 4xx or, for a stream already under way, its error event.
+func replayRouterRefused(record routerreplay.RoutingRecord) bool {
+	switch record.TerminalReason {
+	case replayTerminalRejected, budgetExceededCode, budgetUnpricedCode:
+		return true
+	}
+	return false
+}
+
+func replayClientError(record routerreplay.RoutingRecord) bool {
+	return record.ResponseStatus >= 400 && record.ResponseStatus < 500
+}
+
+// replayAnsweringModel is the model that answered a call: after a fallback
+// the candidate its audit says succeeded, which an older record does not
+// name as its selected model.
+func replayAnsweringModel(record routerreplay.RoutingRecord) string {
+	for _, outcome := range record.Outcomes {
+		if outcome.Source == fallbackOutcomeSource && outcome.Reason == "succeeded" && outcome.TargetRef != "" {
+			return outcome.TargetRef
+		}
+	}
+	return record.SelectedModel
 }
 
 // replayLooperEscalated reports an escalation answered by a later model than
@@ -174,10 +240,12 @@ func replayNewToolResults(trace *routerreplay.ToolTrace) ([]string, []string) {
 }
 
 // replayEndsWithFinalAnswer reports a response that answered without asking
-// for a tool.
-func replayEndsWithFinalAnswer(trace *routerreplay.ToolTrace) bool {
+// for a tool: from its tool trace, or, where Replay kept none, from the stop
+// reason the digest of its answer records.
+func replayEndsWithFinalAnswer(record routerreplay.RoutingRecord) bool {
+	trace := record.ToolTrace
 	if trace == nil {
-		return false
+		return replayAnswerStopped(record.Outcomes)
 	}
 	answered := false
 	for _, step := range trace.Steps {
@@ -194,18 +262,52 @@ func replayEndsWithFinalAnswer(trace *routerreplay.ToolTrace) bool {
 	return answered
 }
 
+// replayAnswerStopped reports an answer whose model ended the turn itself or
+// reached its output limit, rather than asking for a tool.
+func replayAnswerStopped(outcomes []store.Outcome) bool {
+	for _, outcome := range outcomes {
+		if outcome.Source != primaryResponseOutcomeSource {
+			continue
+		}
+		switch llmprotocol.StopReason(outcome.Metadata[primaryResponseStopReason]) {
+		case llmprotocol.StopEndTurn, llmprotocol.StopSequence, llmprotocol.StopMaxTokens:
+			return true
+		}
+	}
+	return false
+}
+
 // replayReportedOutcomes keeps the outcomes reported through the outcome
-// API, whose verdicts are its own, and leaves out what the Router appends.
+// API and leaves out what the Router appends itself. The API records its own
+// verdicts under a reporter's source; the Router writes under router or the
+// name of the feature, such as a fallback's failed outcome, whose verdict
+// alone would read as reported.
 func replayReportedOutcomes(outcomes []store.Outcome) []store.Outcome {
 	var reported []store.Outcome
 	for _, outcome := range outcomes {
-		switch routerruntime.RouterOutcomeVerdict(outcome.Verdict) {
-		case routerruntime.RouterOutcomeVerdictGoodFit, routerruntime.RouterOutcomeVerdictUnderpowered,
-			routerruntime.RouterOutcomeVerdictOverprovisioned, routerruntime.RouterOutcomeVerdictFailed:
+		if replayReportedSource(outcome.Source) && replayReportedVerdict(outcome.Verdict) {
 			reported = append(reported, outcome)
 		}
 	}
 	return reported
+}
+
+func replayReportedSource(source string) bool {
+	switch routerruntime.RouterOutcomeSource(source) {
+	case routerruntime.RouterOutcomeSourceUser, routerruntime.RouterOutcomeSourceAgent, routerruntime.RouterOutcomeSourceEval,
+		routerruntime.RouterOutcomeSourceOperator, routerruntime.RouterOutcomeSourceProvider:
+		return true
+	}
+	return false
+}
+
+func replayReportedVerdict(verdict string) bool {
+	switch routerruntime.RouterOutcomeVerdict(verdict) {
+	case routerruntime.RouterOutcomeVerdictGoodFit, routerruntime.RouterOutcomeVerdictUnderpowered,
+		routerruntime.RouterOutcomeVerdictOverprovisioned, routerruntime.RouterOutcomeVerdictFailed:
+		return true
+	}
+	return false
 }
 
 // replayMatchedSignals names each matched signal as type:name, sorted.
@@ -228,7 +330,7 @@ type replaySignalFamily struct {
 
 // replaySignalFamilies is a record's matched signals by signal type, as an
 // array so that a scan over the whole history allocates nothing for them.
-func replaySignalFamilies(s routerreplay.Signal) [17]replaySignalFamily {
+func replaySignalFamilies(s routerreplay.Signal) [18]replaySignalFamily {
 	return [...]replaySignalFamily{
 		{"keyword", s.Keyword},
 		{"domain", s.Domain},
@@ -246,6 +348,7 @@ func replaySignalFamilies(s routerreplay.Signal) [17]replaySignalFamily {
 		{"conversation", s.Conversation},
 		{"metadata", s.Metadata},
 		{"input_modality", s.InputModality},
+		{"agent", s.Agent},
 		{"decision", s.Decision},
 	}
 }

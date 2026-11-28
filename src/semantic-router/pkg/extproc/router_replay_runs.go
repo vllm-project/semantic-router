@@ -125,7 +125,7 @@ func (r *OpenAIRouter) queryRouterReplayRuns(ctx context.Context, filters router
 		prompts: make(map[string]string, len(builders)),
 	}
 	for sessionID, builder := range builders {
-		if builder.titlesOnly() {
+		if builder.sidesOnly() {
 			continue
 		}
 		summary, _ := builder.build()

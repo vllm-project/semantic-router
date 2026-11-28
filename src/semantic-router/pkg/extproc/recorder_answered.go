@@ -45,6 +45,10 @@ func (r *OpenAIRouter) failStreamedRouterReplay(ctx *RequestContext, body []byte
 	r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, reason)
 }
 
+// replayTerminalRejected ends the record of a request the Router refused
+// itself.
+const replayTerminalRejected = "request_rejected"
+
 // requestAnswerReason names why the Router answered a request itself with
 // status: a refusal, or a failure of its own for a 5xx. A guard overload is a
 // refusal its client retries, whichever status its protocol carries it in.
@@ -52,7 +56,7 @@ func requestAnswerReason(ctx *RequestContext, status int) string {
 	if status >= http.StatusInternalServerError && (ctx == nil || !ctx.guardOverloadAnswered) {
 		return "request_processing_failed"
 	}
-	return "request_rejected"
+	return replayTerminalRejected
 }
 
 // endStreamRouterReplay ends the record of a stream whose answer the Router

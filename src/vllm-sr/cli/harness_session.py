@@ -165,11 +165,14 @@ def claude_session_args(args: list[str], session: str) -> list[str]:
     return ["--session-id", session]
 
 
-def claude_headers(env: dict[str, str], cwd: Path, session: str) -> str:
+def claude_headers(
+    env: dict[str, str], cwd: Path, value: str, name: str = SESSION_HEADER
+) -> str:
     """ANTHROPIC_CUSTOM_HEADERS: the lines Claude Code started in cwd would send,
-    with this session's header in place of one they hold. Claude Code takes the
-    variable whole from its local, project or user settings, the first that
-    sets it, else from env, and the launch's --settings replaces them all."""
+    with name: value, by default this session's header, in place of one they
+    hold. Claude Code takes the variable whole from its local, project or user
+    settings, the first that sets it, else from env, and the --settings of a
+    launch or a check replaces them all."""
     given = env.get(CLAUDE_HEADERS)
     project = cwd / ".claude"
     for path in (
@@ -181,14 +184,14 @@ def claude_headers(env: dict[str, str], cwd: Path, session: str) -> str:
             settings = hc._settings(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        value = settings.get("env", {}).get(CLAUDE_HEADERS)
-        given = value if isinstance(value, str) else given
+        found = settings.get("env", {}).get(CLAUDE_HEADERS)
+        given = found if isinstance(found, str) else given
     kept = [
         line
         for line in (given or "").splitlines()
-        if line.strip() and line.split(":", 1)[0].strip().lower() != SESSION_HEADER
+        if line.strip() and line.split(":", 1)[0].strip().lower() != name
     ]
-    return "\n".join([*kept, f"{SESSION_HEADER}: {session}"])
+    return "\n".join([*kept, f"{name}: {value}"])
 
 
 def codex_headers(session: str) -> list[str]:

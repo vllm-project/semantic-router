@@ -473,6 +473,17 @@
       "doc": "Response-cache directives for the request, when the plugin's `request_controls` allow them."
     },
     {
+      "name": "x-vsr-probe",
+      "direction": [
+        "request"
+      ],
+      "surface": "control",
+      "sensitivity": "none",
+      "owner": "router_replay",
+      "version": "v0.5",
+      "doc": "Any value marks a check request, such as those `vllm-sr connect --check` sends: Router Replay records it with `request_kind: probe` and leaves a session of only such requests out of the runs list."
+    },
+    {
       "name": "x-vsr-compression-control",
       "direction": [
         "request"

@@ -287,6 +287,18 @@ function plural(count: number, noun: string): string {
   return `${count.toLocaleString('en-US')} ${noun}${count === 1 ? '' : 's'}`
 }
 
+/** The requests that cost nothing because no model answered them, as sentences. */
+export function describeFreeRecords(coverage: InsightsAggregateCostCoverage): string {
+  return (
+    (coverage.refused_records
+      ? ` ${plural(coverage.refused_records, 'request')} refused before any model answered cost nothing.`
+      : '') +
+    (coverage.unanswered_records
+      ? ` ${plural(coverage.unanswered_records, 'request')} no provider answered cost nothing.`
+      : '')
+  )
+}
+
 /** Sentences that state how much of the filtered traffic the estimates cover. */
 export function buildCostCoverageLines(
   coverage: InsightsAggregateCostCoverage,
@@ -353,7 +365,8 @@ export function describeEstimateMethod(
         (coverage.partly_priced_records
           ? `, ${coverage.partly_priced_records.toLocaleString('en-US')} partly`
           : '') +
-        '.',
+        '.' +
+        describeFreeRecords(coverage),
     )
   }
   if (summary.excluded_record_count > 0) {

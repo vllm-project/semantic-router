@@ -65,6 +65,40 @@ func ConfigYAMLHandler(configPath string, readonlyMode bool) http.HandlerFunc {
 	}
 }
 
+// CatalogPricesHandler serves the catalog list price of each model that sets
+// no pricing of its own. The Router's loader reads the config, so the page
+// shows the rates the Router prices requests with.
+func CatalogPricesHandler(configPath string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		data, err := readPersistedDashboardConfig(configPath)
+		if err != nil {
+			log.Printf("Failed to read config: %v", err)
+			http.Error(w, "Failed to read config", http.StatusInternalServerError)
+			return
+		}
+		parsed, err := routerconfig.ParseYAMLBytes(data)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusUnprocessableEntity)
+			return
+		}
+		prices := map[string]routerconfig.ModelPricing{}
+		for name := range parsed.ModelConfig {
+			provenance, priced := parsed.ModelPricingProvenance(name)
+			if pricing, ok := parsed.GetFullModelPricing(name); ok && priced && provenance.CatalogListPrice {
+				prices[name] = pricing
+			}
+		}
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		if err := writeYAMLTaggedJSON(w, map[string]any{"catalog_list_prices": prices}); err != nil {
+			log.Printf("Error encoding catalog prices: %v", err)
+		}
+	}
+}
+
 // UpdateConfigHandler replaces config.yaml with a validated full config payload.
 // The dashboard editor always sends the whole canonical document, so this path
 // intentionally does not deep-merge into any legacy on-disk layout.

@@ -42,6 +42,15 @@ describe('Builder structured field controls', () => {
     expect(markup).not.toContain('<textarea')
   })
 
+  it('names one item of a list field in the singular', () => {
+    const classes = requireField(getSignalFieldSchema('agent'), 'request_classes')
+    const markup = renderToStaticMarkup(
+      createElement(FieldEditor, { schema: classes, value: [], onChange: vi.fn() }),
+    )
+    expect(markup).toContain('Add request class')
+    expect(markup).not.toContain('Add request classe')
+  })
+
   it('renders fixed nested objects with typed inputs', () => {
     const weights = requireField(getAlgorithmFieldSchema('multi_factor'), 'weights')
     const weightsMarkup = renderToStaticMarkup(
