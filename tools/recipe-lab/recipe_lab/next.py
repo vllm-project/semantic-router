@@ -31,8 +31,8 @@ from pathlib import Path
 from typing import Any
 
 from .attribution import ALL_CLASSES
-from .contract import ContractError, ExperimentSpec, dataset_content_hash
 from .casebook import search_cases
+from .contract import ContractError, ExperimentSpec, dataset_content_hash
 from .ledger import Ledger, best_replay
 
 UNTRUSTED_HEADER = (

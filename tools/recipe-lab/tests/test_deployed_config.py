@@ -9,9 +9,8 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from recipe_lab.loop_evidence import digest
-
 from recipe_lab.deployed_config import config_identity
+from recipe_lab.loop_evidence import digest
 
 
 def materialized(tmp_path, *, edit=None, corrupt=None, tracing=None):

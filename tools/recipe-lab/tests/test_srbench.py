@@ -7,7 +7,6 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-
 from recipe_lab.contract import ContractError
 from recipe_lab.srbench import SrbenchCli, SrbenchError, extract_metric, require_metric
 

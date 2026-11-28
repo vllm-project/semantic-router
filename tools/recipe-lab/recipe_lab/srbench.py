@@ -16,8 +16,8 @@ import yaml
 
 from .contract import ContractError
 from .deployed_config import config_identity
-from .report_delivery import snapshot
 from .loop_evidence import check, digest, sha, target
+from .report_delivery import snapshot
 
 
 def encoded(value):

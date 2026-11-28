@@ -1,7 +1,6 @@
 """Exercise the scope and disclosure boundary of the human report."""
 
 import pytest
-
 from recipe_lab.user_report import render_report
 
 CONFIG = "4" * 64
