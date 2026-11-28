@@ -32,6 +32,7 @@ func TestProcessRequestBodySendsRequestsTheEstimatePutsAboveEveryWindow(t *testi
 			router.Classifier = classifier
 
 			request := testNeutralRequest("vllm-sr/auto", "write the file")
+			request.Sampling.MaxOutputTokens = llmprotocol.Int64(128)
 			arguments := `{"content":"` + strings.Repeat("x", 6000) + `"}`
 			request.Messages = append(request.Messages,
 				llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{

@@ -220,18 +220,20 @@ func recordPromptCacheReceipt(
 	ctx.PromptCacheInserted = inserted
 	ctx.PromptCachePreserved = preserved
 	decision := requestDecisionStateKey(ctx)
-	metrics.RecordPluginExecution(
-		config.DecisionPluginPromptCache,
-		decision,
-		action,
-		latency.Seconds(),
-	)
-	logging.ComponentDebugEvent("extproc", "prompt_cache_policy_applied", map[string]interface{}{
-		"request_id": ctx.RequestID,
-		"decision":   decision,
-		"action":     action,
-		"reason":     reason,
-		"inserted":   inserted,
-		"preserved":  preserved,
+	ctx.observeProjection(func() {
+		metrics.RecordPluginExecution(
+			config.DecisionPluginPromptCache,
+			decision,
+			action,
+			latency.Seconds(),
+		)
+		logging.ComponentDebugEvent("extproc", "prompt_cache_policy_applied", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"decision":   decision,
+			"action":     action,
+			"reason":     reason,
+			"inserted":   inserted,
+			"preserved":  preserved,
+		})
 	})
 }

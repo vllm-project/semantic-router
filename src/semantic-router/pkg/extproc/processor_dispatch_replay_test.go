@@ -81,7 +81,7 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 				budget = 12
 				require.Zero(t, calls)
 			} else {
-				require.Equal(t, 3, calls, "selection, preparation and final dispatch must each render")
+				require.Equal(t, 2, calls)
 			}
 			wireBudget := wire["max_tokens"]
 			if wireBudget == nil {
@@ -99,7 +99,15 @@ func TestProviderDispatchReplayPersistsFinalDemand(t *testing.T) {
 			require.Equal(t, model, snapshots[3].Model)
 			require.EqualValues(t, budget, snapshots[3].ReservedOutputTokens)
 			require.True(t, snapshots[3].TotalDemandKnown)
+			admission := record.RouteDiagnostics.FinalAdmission
+			require.NotNil(t, admission)
+			require.Equal(t, model, admission.Model)
+			require.Equal(t, "fits", admission.Verdict)
+			require.EqualValues(t, budget, *admission.ReservedOutputTokens)
 			if !tc.explicit {
+				require.Equal(t, "provider_render", admission.Source)
+				require.Equal(t, 22, admission.PromptTokens)
+				require.NotEqual(t, admission.PromptTokens, snapshots[3].PromptTokens)
 				require.False(t, snapshots[0].TotalDemandKnown, "ingress must retain the original unknown reserve")
 				require.Zero(t, snapshots[0].ReservedOutputTokens)
 			}
@@ -138,7 +146,7 @@ func TestProviderDispatchReplaySurvivesFinalizerFailure(t *testing.T) {
 	calls := 0
 	normalRender := renderMock(t, &calls, 0, 0)
 	r, ctx, model := dispatchReplayFixture(t, false, func(w http.ResponseWriter, req *http.Request) {
-		if calls == 2 {
+		if calls == 1 {
 			calls++
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -148,7 +156,7 @@ func TestProviderDispatchReplaySurvivesFinalizerFailure(t *testing.T) {
 	response, err := r.handleEntrypointModelRouting(ctx.SemanticRequest, "vllm-sr/auto", ctx.VSRSelectedDecision.Name, entropy.ReasoningDecision{}, model, ctx)
 	require.Nil(t, response)
 	require.ErrorIs(t, err, selection.ErrNoEligibleCandidates)
-	require.Equal(t, 3, calls, "failure must occur in the finalizer, after dispatch preparation")
+	require.Equal(t, 2, calls)
 	require.NotEmpty(t, ctx.RouterReplayID, "finalizer failure must not discard the Replay record")
 
 	// Process owns the terminal error transition after the routing caller returns.

@@ -27,6 +27,112 @@ func TestTokenUsageFields(t *testing.T) {
 	}
 }
 
+func TestFinalQuotaChargesRequestAndSelectedModelOnce(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{
+		{Name: "request", RequestsPerUnit: 2, TokensPerUnit: 5, Unit: time.Hour},
+		{Name: "proposal", Match: RuleMatch{Model: "small"}, RequestsPerUnit: 1, Unit: time.Hour},
+		{Name: "alternate", Match: RuleMatch{Model: "wide"}, RequestsPerUnit: 1, TokensPerUnit: 4, Unit: time.Hour},
+	})
+	resolver := NewRateLimitResolver(limiter)
+	request := Context{UserID: "user", Model: "small", TokenCount: 1}
+	reservation, admission := resolver.ReserveLocal(request)
+	if !admission.Allowed {
+		t.Fatalf("proposal denied: %+v", admission)
+	}
+	selected := Context{UserID: "user", Model: "wide", RequestModel: "small", TokenCount: 1}
+	admission, err := resolver.Finalize(selected, reservation)
+	if err != nil || !admission.Allowed {
+		t.Fatalf("selected model quota denied: %+v, %v", admission, err)
+	}
+	resolver.Report(selected, TokenUsage{OutputTokens: 3})
+	probe := request
+	probe.TokenCount = 2
+	admission, err = limiter.Check(probe)
+	if err != nil || admission.Allowed || admission.Limit != 5 {
+		t.Fatalf("response usage was not settled in the original request bucket: %+v, %v", admission, err)
+	}
+	admission, err = limiter.Check(request)
+	if err != nil || !admission.Allowed {
+		t.Fatalf("proposal quota was not released or the request was charged twice: %+v, %v", admission, err)
+	}
+	admission, err = limiter.Check(selected)
+	if err != nil || admission.Allowed {
+		t.Fatalf("selected model quota allowed another request: %+v, %v", admission, err)
+	}
+}
+
+func TestFinalModelDenialRefundsLocalReservations(t *testing.T) {
+	for _, scope := range []string{"rpm", "tpm"} {
+		t.Run(scope, func(t *testing.T) {
+			requestRule := Rule{Name: "request", Unit: time.Hour}
+			switch scope {
+			case "rpm":
+				requestRule.RequestsPerUnit = 1
+			case "tpm":
+				requestRule.TokensPerUnit = 2
+			}
+			limiter := NewLocalLimiter([]Rule{
+				requestRule,
+				{Name: "proposal", Match: RuleMatch{Model: "small"}, RequestsPerUnit: 1, Unit: time.Hour},
+				{Name: "alternate", Match: RuleMatch{Model: "wide"}, TokensPerUnit: 1, Unit: time.Hour},
+			})
+			resolver := NewRateLimitResolver(limiter)
+			proposal := Context{Model: "small", TokenCount: 2}
+			reservation, decision := resolver.ReserveLocal(proposal)
+			if !decision.Allowed {
+				t.Fatalf("proposal denied: %+v", decision)
+			}
+			decision, err := resolver.Finalize(Context{Model: "wide", RequestModel: "small", TokenCount: 2}, reservation)
+			if err != nil || decision.Allowed {
+				t.Fatalf("final model check = %+v, %v", decision, err)
+			}
+			proposal.TokenCount = 1
+			decision, err = limiter.Check(proposal)
+			if err != nil || !decision.Allowed {
+				t.Fatalf("follow-up denied after model quota rejection: %+v, %v", decision, err)
+			}
+			reservation.refund()
+			reservation.refund()
+			probe := proposal
+			probe.TokenCount = 2
+			decision, err = limiter.Check(probe)
+			if err != nil || decision.Allowed {
+				t.Fatalf("repeat refund released another request's charge: %+v, %v", decision, err)
+			}
+		})
+	}
+}
+
+func TestEnvoyKeepsGroupAndModelQuotaDescriptorsTogether(t *testing.T) {
+	provider := &EnvoyRLSProvider{}
+	ctx := Context{UserID: "user", Groups: []string{"group"}, Model: "wide"}
+	descriptors := provider.buildDescriptors(ctx)
+	if len(descriptors) != 2 || len(descriptors[0].GetEntries()) != 2 ||
+		descriptors[0].GetEntries()[1].GetValue() != "wide" ||
+		len(descriptors[1].GetEntries()) != 1 || descriptors[1].GetEntries()[0].GetKey() != "group" {
+		t.Fatalf("rate limit descriptors = %v, want user/model and group together", descriptors)
+	}
+}
+
+func TestExternalQuotaDenialRefundsLocalReservation(t *testing.T) {
+	limiter := NewLocalLimiter([]Rule{{Name: "local", RequestsPerUnit: 1, Unit: time.Hour}})
+	external := &mockProvider{name: "external", decision: &Decision{Allowed: false}}
+	resolver := NewRateLimitResolver(external, limiter)
+	ctx := Context{Model: "small"}
+	reservation, decision := resolver.ReserveLocal(ctx)
+	if !decision.Allowed {
+		t.Fatalf("local precheck was rejected: %+v", decision)
+	}
+	decision, err := resolver.Finalize(ctx, reservation)
+	if err != nil || decision.Allowed {
+		t.Fatalf("external check = %+v, %v", decision, err)
+	}
+	decision, err = limiter.Check(ctx)
+	if err != nil || !decision.Allowed {
+		t.Fatalf("external denial kept local quota: %+v, %v", decision, err)
+	}
+}
+
 // ── ParseUnit ──
 
 func TestParseUnit(t *testing.T) {

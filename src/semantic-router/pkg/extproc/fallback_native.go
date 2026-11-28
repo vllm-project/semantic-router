@@ -71,7 +71,7 @@ func (f *sessionFallback) Next(callCtx context.Context, outcome routing.Outcome)
 	if !nativeFallbackApplies(orch, ctx) {
 		return f.endAfter(failed, outcome), nil
 	}
-	record := f.record(orch)
+	record := ensureFallbackRecord(orch, ctx, f.model())
 	evaluation := orch.EvaluateAttempt(callCtx, record, f.failedAttempt(outcome), fallbackCommitState(ctx))
 	if !evaluation.CanFallback || totalTimeoutSpent(orch, ctx, record) {
 		return f.endAfter(failed, outcome), nil
@@ -251,19 +251,6 @@ func totalTimeoutSpent(orch *fallback.Orchestrator, ctx *RequestContext, record 
 	record.FinalStatus = "total_deadline_exceeded"
 	fallback.CorrelateExecution(record)
 	return true
-}
-
-func (f *sessionFallback) record(orch *fallback.Orchestrator) *fallback.ExecutionRecord {
-	ctx := f.session.ctx
-	if ctx.FallbackRecord == nil {
-		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, ctx.VSRSelectedDecisionName, f.model())
-		ctx.FallbackRecord.SessionID = ctx.SessionID
-		ctx.FallbackRecord.ConversationID = ctx.SemanticRequest.ConversationID
-		if ctx.FallbackRecord.ConversationID == "" && ctx.ResponseObjectState != nil {
-			ctx.FallbackRecord.ConversationID = ctx.ResponseObjectState.ConversationID
-		}
-	}
-	return ctx.FallbackRecord
 }
 
 // failedAttempt describes a failed call as the response-phase fallback

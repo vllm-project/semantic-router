@@ -43,8 +43,7 @@ func (request *preparedProviderRequest) payloadSHA256() string {
 
 // materializePreparedProviderRequest freezes the final provider-bound payload
 // after semantic plugins, protocol projection, and provider adaptation. It is
-// intentionally behavior-neutral: admission will consume this artifact in a
-// later slice, while dispatch already consumes the exact same artifact today.
+// the source for final admission and the Envoy body.
 func (r *OpenAIRouter) materializePreparedProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,

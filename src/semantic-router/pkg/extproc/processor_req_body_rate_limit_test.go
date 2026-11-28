@@ -10,6 +10,7 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 )
@@ -48,6 +49,23 @@ func TestApplyRateLimitEnforcesRequestRulesAndRetainsSettlementContext(t *testin
 	}
 	if second.RateLimitCtx != nil {
 		t.Fatalf("denied request retained settlement context: %+v", second.RateLimitCtx)
+	}
+}
+
+func TestDeferredModelQuotaRefusesCacheHitBeforeRecordingIt(t *testing.T) {
+	router := &OpenAIRouter{RateLimiter: ratelimit.NewRateLimitResolver(ratelimit.NewLocalLimiter([]ratelimit.Rule{{
+		Name: "model", Match: ratelimit.RuleMatch{Model: "wide"}, RequestsPerUnit: 1, Unit: time.Hour,
+	}}))}
+	if response := router.applyRateLimit(&RequestContext{}, "wide"); response != nil {
+		t.Fatalf("first request was rejected: %v", response)
+	}
+	ctx := &RequestContext{CacheSelectedModel: "wide"}
+	if response := router.reserveRateLimit(ctx, "small"); response != nil {
+		t.Fatalf("proposal was rejected: %v", response)
+	}
+	response, done := router.finishExactCacheLookup(ctx, "decision", cache.CacheResult{Found: true}, nil, 0, 0)
+	if !done || response.GetImmediateResponse().GetStatus().GetCode() != 429 || ctx.VSRCacheHit || ctx.RouterReplayID != "" {
+		t.Fatalf("blocked cache hit was recorded or served: %v, done=%v, cache_hit=%v, replay=%q", response, done, ctx.VSRCacheHit, ctx.RouterReplayID)
 	}
 }
 

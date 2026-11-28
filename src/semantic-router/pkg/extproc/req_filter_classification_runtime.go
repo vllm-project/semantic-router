@@ -483,9 +483,6 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	logging.ComponentDebugEvent("extproc", "decision_model_selected", selectionFields)
 	ctx.VSRSelectedModel = selectedModel
 	ctx.VSRSelectionMethod = usedMethod
-	if orch := r.fallbackOrchestratorForContext(ctx); orch != nil && orch.Policy().Enabled {
-		ctx.FallbackRecord = orch.NewExecutionRecord(ctx.RequestID, decisionName, selectedModel)
-	}
 	reasoning = applyReasoningModeFromSelectedModel(selectedModelRef, decisionName, evaluationConfidence, ctx)
 	if reasoning.UseReasoning {
 		if reason := r.unstatedReasoningOffReason(ctx, selectedModelRef.Model); reason != "" {
