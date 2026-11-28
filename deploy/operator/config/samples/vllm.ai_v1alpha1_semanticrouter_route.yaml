@@ -101,25 +101,31 @@ spec:
   # Tools Database
   # ====================
   toolsDb:
-    - name: get_weather
-      description: Get current weather for a location
-      parameters:
-        type: object
-        properties:
-          location:
-            type: string
-            description: City name
-        required: [location]
+    - tool:
+        type: function
+        function:
+          name: get_weather
+          description: Get current weather for a location
+          parameters:
+            type: object
+            properties:
+              location:
+                type: string
+                description: City name
+            required: [location]
 
-    - name: search_docs
-      description: Search documentation
-      parameters:
-        type: object
-        properties:
-          query:
-            type: string
-            description: Search query
-        required: [query]
+    - tool:
+        type: function
+        function:
+          name: search_docs
+          description: Search documentation
+          parameters:
+            type: object
+            properties:
+              query:
+                type: string
+                description: Search query
+            required: [query]
 
   # ====================
   # Autoscaling
