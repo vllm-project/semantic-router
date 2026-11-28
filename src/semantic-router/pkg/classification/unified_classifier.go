@@ -2,8 +2,10 @@ package classification
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +41,8 @@ type UnifiedClassifierStats struct {
 
 // UnifiedBatchResults contains results from all classification tasks.
 type UnifiedBatchResults struct {
+	taskErrors      []error
+	ItemErrors      []error          `json:"-"`
 	IntentResults   []IntentResult   `json:"intent_results"`
 	PIIResults      []PIIResult      `json:"pii_results"`
 	SecurityResults []SecurityResult `json:"security_results"`
@@ -85,6 +89,34 @@ func (uc *UnifiedClassifier) ClassifyBatch(texts []string) (*UnifiedBatchResults
 // ClassifyBatchContext returns an independent inference for every input. The
 // caller's generation lease owns the borrowed recipe classifier.
 func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
+	results, err := uc.classifyBatchTasks(ctx, texts, "all", true)
+	if err != nil {
+		return nil, err
+	}
+	for _, taskErr := range results.taskErrors {
+		if taskErr != nil {
+			return nil, taskErr
+		}
+	}
+	return results, nil
+}
+
+// ClassifyBatchPartialContext preserves one ordered outcome per input. A failed
+// item does not discard successful siblings; setup failures remain batch errors.
+func (uc *UnifiedClassifier) ClassifyBatchPartialContext(ctx context.Context, texts []string) (*UnifiedBatchResults, error) {
+	return uc.ClassifyBatchPartialTaskContext(ctx, texts, "all")
+}
+
+// ClassifyBatchPartialTaskContext returns errors for the requested task for each
+// item; an unrelated unavailable task must not erase a successful result.
+func (uc *UnifiedClassifier) ClassifyBatchPartialTaskContext(ctx context.Context, texts []string, selected string) (*UnifiedBatchResults, error) {
+	return uc.classifyBatchTasks(ctx, texts, selected, false)
+}
+
+func (uc *UnifiedClassifier) classifyBatchTasks(ctx context.Context, texts []string, selected string, legacy bool) (*UnifiedBatchResults, error) {
+	if selected != "all" && selected != "intent" && selected != "pii" && selected != "security" {
+		return nil, binding.ErrInvalidInput
+	}
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("empty text batch")
 	}
@@ -102,8 +134,18 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 	defer leave()
 	results := &UnifiedBatchResults{BatchSize: len(texts), IntentResults: make([]IntentResult, len(texts)), PIIResults: make([]PIIResult, len(texts)), SecurityResults: make([]SecurityResult, len(texts))}
 	errs := make([]error, len(texts)*3)
+	// Preserve the legacy question set: a joint model may change an answer
+	// when its other questions are omitted from a fused request.
 	modelservice.Fan(ctx, len(errs), func(task int) {
 		index := task / 3
+		if err := ctx.Err(); !legacy && err != nil {
+			errs[task] = err
+			return
+		}
+		if !legacy && strings.TrimSpace(texts[index]) == "" {
+			errs[task] = binding.ErrInvalidInput
+			return
+		}
 		switch task % 3 {
 		case 0:
 			results.IntentResults[index], errs[task] = uc.intent(ctx, texts[index])
@@ -113,9 +155,25 @@ func (uc *UnifiedClassifier) ClassifyBatchContext(ctx context.Context, texts []s
 			results.SecurityResults[index], errs[task] = uc.security(ctx, texts[index])
 		}
 	})
-	for _, err := range errs {
-		if err != nil {
-			return nil, err
+	results.taskErrors = errs
+	results.ItemErrors = make([]error, len(texts))
+	for index := range texts {
+		switch selected {
+		case "intent":
+			results.ItemErrors[index] = errs[index*3]
+		case "pii":
+			results.ItemErrors[index] = errs[index*3+1]
+		case "security":
+			results.ItemErrors[index] = errs[index*3+2]
+		default:
+			results.ItemErrors[index] = errors.Join(errs[index*3 : index*3+3]...)
+		}
+	}
+	if legacy {
+		for _, taskErr := range errs {
+			if taskErr != nil {
+				return results, nil
+			}
 		}
 	}
 	uc.updateStats(len(texts), time.Since(started))

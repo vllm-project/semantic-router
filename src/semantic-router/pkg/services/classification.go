@@ -173,7 +173,14 @@ func NewPlaceholderClassificationService() *ClassificationService {
 func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
 	s.runtimeMutex.RLock()
 	defer s.runtimeMutex.RUnlock()
-	start := time.Now()
+	return s.classifyIntent(ctx, req)
+}
+
+// classifyIntent runs while the caller holds the service runtime lease.
+func (s *ClassificationService) classifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	input, err := req.resolveSignalInputWith(s.routingInputSelectorSnapshot())
 	if err != nil {
@@ -183,6 +190,24 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		req.Model,
 	)
 	if err != nil {
+		return nil, err
+	}
+	if req.Input != nil && req.Input.Type == "image" {
+		if classifier == nil {
+			return nil, ErrClassifierUnavailable
+		}
+		if err := classifier.ValidateImageClassification(); err != nil {
+			return nil, err
+		}
+	}
+	return s.classifyResolvedIntent(ctx, req, input, classifier, runtimeConfig, req.Input != nil && req.Input.Type == "image")
+}
+
+// classifyResolvedIntent uses exactly the snapshot admitted by preflight.
+// Callers retain its generation/service lease until this method returns.
+func (s *ClassificationService) classifyResolvedIntent(ctx context.Context, req IntentRequest, input intentSignalInput, classifier *classification.Classifier, runtimeConfig *config.RouterConfig, imageOnly bool) (*IntentResponse, error) {
+	start := time.Now()
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	// Check if classifier is available
@@ -216,10 +241,15 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		input.requestFacts,
 	)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	// Evaluate decision with engine (if decisions are configured)
 	// Pass pre-computed signals to avoid re-evaluation
 	var decisionResult *decision.DecisionResult
 	if classifier.Config != nil && len(classifier.Config.Decisions) > 0 {
+		var err error
 		decisionResult, err = classifier.EvaluateDecisionWithEngine(signals)
 		if err != nil {
 			if !strings.Contains(err.Error(), "no decisions configured") {
@@ -228,14 +258,18 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		}
 	}
 
-	category := resolveIntentCategory(
+	category, inferenceErr := resolveIntentCategoryWithError(
 		ctx,
 		classifier,
 		decisionResult,
 		signals,
 		input.evaluationText,
+		imageOnly,
 	)
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	category.ProcessingTimeMs = time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
@@ -248,6 +282,7 @@ func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRe
 		runtimeConfig,
 	)
 
+	response.inferenceError = inferenceErr
 	return response, nil
 }
 
