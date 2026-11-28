@@ -316,8 +316,8 @@ static_resources:
   - name: {{ model.cluster_name }}_cluster
     connect_timeout: {{ model.reliability.connect_timeout | default('10s', true) }}
     type: {{ model.cluster_type }}
-    {% if model.cluster_type == 'LOGICAL_DNS' %}
-    dns_lookup_family: V4_ONLY
+    {% if model.cluster_type in ['LOGICAL_DNS', 'STRICT_DNS'] %}
+    dns_lookup_family: V4_PREFERRED
     {% endif %}
     {% if model.reliability.lb_policy | default('round_robin') == 'least_request' %}
     lb_policy: LEAST_REQUEST
