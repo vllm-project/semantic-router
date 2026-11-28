@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  fetchBootstrapOpen,
+  onPageReturn,
   formatServerMessage,
   resolvePostAuthTarget,
   sanitizePostAuthTarget,
@@ -68,5 +71,59 @@ describe('post-authentication target', () => {
     expect(settled).toBe(true)
     vi.useRealTimers()
     await expect(settleWithin(undefined, 10)).resolves.toBeUndefined()
+  })
+})
+
+describe('first-admin form freshness', () => {
+  const jsonResponse = (body: unknown, ok = true) =>
+    ({ ok, json: async () => body }) as unknown as Response
+
+  it('reports whether the first-admin form is still open', async () => {
+    const open = vi.fn(async () => jsonResponse({ canRegister: true }))
+    const closed = vi.fn(async () => jsonResponse({ canRegister: false }))
+
+    expect(await fetchBootstrapOpen(open as unknown as typeof fetch)).toBe(true)
+    expect(open).toHaveBeenCalledWith('/api/auth/bootstrap/can-register', { method: 'GET' })
+    expect(await fetchBootstrapOpen(closed as unknown as typeof fetch)).toBe(false)
+  })
+
+  it('returns unknown on server or network errors so a stale check cannot hide the form', async () => {
+    const serverError = vi.fn(async () => jsonResponse({}, false))
+    const networkError = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    expect(await fetchBootstrapOpen(serverError as unknown as typeof fetch)).toBeNull()
+    expect(await fetchBootstrapOpen(networkError as unknown as typeof fetch)).toBeNull()
+  })
+
+  it('rechecks when the window regains focus or the tab becomes visible again', () => {
+    const win = new EventTarget()
+    const doc = Object.assign(new EventTarget(), { hidden: true })
+    const onReturn = vi.fn()
+
+    const stop = onPageReturn(onReturn, win, doc)
+
+    doc.dispatchEvent(new Event('visibilitychange'))
+    expect(onReturn).not.toHaveBeenCalled()
+
+    doc.hidden = false
+    doc.dispatchEvent(new Event('visibilitychange'))
+    win.dispatchEvent(new Event('focus'))
+    expect(onReturn).toHaveBeenCalledTimes(2)
+
+    stop()
+    win.dispatchEvent(new Event('focus'))
+    doc.dispatchEvent(new Event('visibilitychange'))
+    expect(onReturn).toHaveBeenCalledTimes(2)
+  })
+
+  it('moves the login page to sign-in when a recheck or submit finds setup already done', () => {
+    const source = readFileSync(new URL('./LoginPage.tsx', import.meta.url), 'utf8')
+
+    expect(source).toContain('onPageReturn(recheck)')
+    expect(source).toContain('if (!active || open !== false || pendingRef.current) return')
+    expect(source).toContain('response.status === 409 || (await fetchBootstrapOpen()) === false')
+    expect(source.match(/BOOTSTRAP_CLOSED_MESSAGE/g)?.length).toBeGreaterThanOrEqual(3)
   })
 })

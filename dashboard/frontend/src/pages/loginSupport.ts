@@ -76,3 +76,42 @@ export function settleWithin(promise: Promise<unknown> | undefined, ms: number):
     })
   })
 }
+
+/** Shown when the first administrator was created from another window or browser. */
+export const BOOTSTRAP_CLOSED_MESSAGE =
+  'The first admin is already registered. Sign in to continue.'
+
+/**
+ * Asks the backend whether the first-admin form is still open. Returns null when
+ * the answer is unknown (network or server error) so callers can keep what they show.
+ */
+export async function fetchBootstrapOpen(fetchImpl: typeof fetch = fetch): Promise<boolean | null> {
+  try {
+    const response = await fetchImpl('/api/auth/bootstrap/can-register', { method: 'GET' })
+    if (!response.ok) return null
+    const payload = (await response.json()) as { canRegister?: unknown } | null
+    return payload?.canRegister === true
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Calls onReturn when the user comes back to this page: the window regains focus
+ * (another window was in front) or a hidden tab becomes visible. Returns a cleanup.
+ */
+export function onPageReturn(
+  onReturn: () => void,
+  win: Pick<Window, 'addEventListener' | 'removeEventListener'> = window,
+  doc: Pick<Document, 'addEventListener' | 'removeEventListener' | 'hidden'> = document,
+): () => void {
+  const onVisibility = () => {
+    if (!doc.hidden) onReturn()
+  }
+  win.addEventListener('focus', onReturn)
+  doc.addEventListener('visibilitychange', onVisibility)
+  return () => {
+    win.removeEventListener('focus', onReturn)
+    doc.removeEventListener('visibilitychange', onVisibility)
+  }
+}
