@@ -72,6 +72,12 @@ def request_phase(messages: list[dict]) -> str:
     return USER_TURN_PHASE
 
 
+RECEIPTS_WITHHELD = (
+    "Router sent no x-vsr-trace receipts; allow this worker's debug headers "
+    "with global.router.headers.debug"
+)
+
+
 def router_receipts(response_headers: Mapping[str, str] | None) -> dict[str, str]:
     """The Router's receipts in x-vsr-trace: the config hash, inference calls and
     model usage of a config-bound request, the session phase and the
@@ -593,6 +599,11 @@ def chat(
         result["selected_model"] = response.headers.get("x-vsr-selected-model") or model
         result["decision"] = response.headers.get("x-vsr-selected-decision")
         if target.get("config_hash") and result["config_hash"] != target["config_hash"]:
+            if response.headers.get(TRACE_HEADER) is None:
+                # The Router sends x-vsr-trace only to a caller its
+                # global.router.headers.debug allows, so no trace at all means
+                # the receipts were withheld, not that the hash differed.
+                raise CallFailure(RECEIPTS_WITHHELD, result)
             raise CallFailure(
                 "Runtime configuration identity acknowledgement missing or mismatched",
                 result,
