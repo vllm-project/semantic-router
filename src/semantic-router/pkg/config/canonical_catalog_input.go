@@ -129,6 +129,7 @@ func catalogProviderBinding(
 		Name: instanceName, Catalog: providerID, BaseURL: canonicalBackendURL(backend),
 		Credentials: modelcatalog.CredentialsRef{APIKey: backend.APIKey},
 		Headers:     copyStringMap(backend.Headers), APIVersion: backend.APIVersion, ChatPath: backend.ChatPath,
+		Telemetry: instanceTelemetryFromBackendRef(backend),
 	}
 	if auth := backend.Auth; auth != nil {
 		instance.Credentials.APIKeyEnv, instance.Credentials.APIKeyFile = auth.APIKeyEnv, auth.APIKeyFile

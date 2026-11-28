@@ -228,6 +228,18 @@ type ProviderInstance struct {
 	// TLS is how an https instance is verified; nil keeps the system roots
 	// and the endpoint's host.
 	TLS *ProviderTLS `json:"tls,omitempty" yaml:"tls,omitempty"`
+	// Telemetry carries where the instance's serving engine exposes load
+	// metrics from the Router config to its runtime endpoints. Like
+	// AuthPrefixSet it is internal: catalogs never declare it.
+	Telemetry InstanceTelemetry `json:"-" yaml:"-"`
+}
+
+// InstanceTelemetry names a provider instance's serving engine and metrics
+// location. The zero value means the instance reports no telemetry.
+type InstanceTelemetry struct {
+	Engine      string
+	MetricsPort int
+	MetricsPath string
 }
 
 // ProviderTLS verifies an https provider instance against CAFile (else the

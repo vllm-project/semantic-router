@@ -392,6 +392,9 @@ func validateCanonicalProviderModel(
 	if err := validateCanonicalProviderModelMetadata(model); err != nil {
 		return "", err
 	}
+	if err := validateCanonicalBackendTelemetry(model.Name, model.BackendRefs); err != nil {
+		return "", err
+	}
 	return effectiveCanonicalCardID(model), nil
 }
 

@@ -2304,7 +2304,7 @@ class ProviderReliability(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
+    lb_policy: Literal["round_robin", "least_request", "load_aware"] = "round_robin"
     retry_count: Optional[int] = Field(default=None, ge=0, le=5)
     retry_on: Optional[RetryOn] = None
     consecutive_5xx: int = Field(default=0, ge=0)
@@ -2891,6 +2891,15 @@ class ReasoningFamily(BaseModel):
 REMOVED_BACKEND_REF_FIELDS = ("compat_gateway", "openai_compat_gateway")
 
 
+class BackendMetrics(BaseModel):
+    """Where a backend's serving engine exposes metrics (default: its port, /metrics)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    port: Optional[int] = Field(default=None, ge=1, le=65535)
+    path: Optional[str] = Field(default=None, pattern=r"^/[^?# ]*$")
+
+
 class BackendAuth(BaseModel):
     """A backend's credential: the mode (delegated sends the requesting user's
     credential instead of a key, caller the client's own provider login), the
@@ -2967,6 +2976,9 @@ class BackendRef(BaseModel):
     chat_path: Optional[str] = None
     api_key: Optional[str] = None
     tls: Optional[BackendTLS] = None
+    # Serving engine whose load metrics backend telemetry reads.
+    engine: Optional[Literal["vllm", "sglang", "atom", "tensorrt-llm"]] = None
+    metrics: Optional[BackendMetrics] = None
 
     @model_validator(mode="before")
     @classmethod
@@ -2986,6 +2998,12 @@ class BackendRef(BaseModel):
                         "accepted by default, so delete it"
                     )
         return data
+
+    @model_validator(mode="after")
+    def _metrics_require_engine(self) -> "BackendRef":
+        if self.metrics is not None and self.engine is None:
+            raise ValueError("metrics requires engine")
+        return self
 
     def resolve_api_key(self) -> Optional[str]:
         if self.api_key:

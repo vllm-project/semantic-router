@@ -411,6 +411,11 @@ func (m *Manager) compile(a *attemptState, u Update, version uint64) (*Snapshot,
 // persist the record keeps the Router serving the activated snapshot.
 func (m *Manager) activate(write *HistoryWrite, snapshot *Snapshot, record bool) {
 	activatedAt := m.now().UTC()
+	for _, builder := range m.parts {
+		if part, ok := snapshot.Part(builder.Component).(ActivatablePart); ok {
+			part.Activate()
+		}
+	}
 	m.mu.Lock()
 	m.active, m.activatedAt = snapshot, activatedAt
 	m.mu.Unlock()

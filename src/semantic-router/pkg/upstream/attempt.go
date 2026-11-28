@@ -30,6 +30,7 @@ type call struct {
 	policy       Policy
 	rnd          Rand
 	clock        Clock
+	telemetry    TelemetryReader
 	attempts     []Attempt
 	// tried lists the endpoints attempted, which a retry avoids.
 	tried []*endpoint
@@ -52,7 +53,7 @@ func (c *call) try(ctx context.Context) (*Response, *Error) {
 		c.record(nil, start, 0, overflow)
 		return nil, overflow
 	}
-	ep := c.cluster.pickAvoiding(c.tried)
+	ep := c.cluster.pickAvoiding(c.tried, c.telemetry)
 	if ep == nil {
 		release()
 		failure := &Error{Kind: KindNoHealthyUpstream, Cluster: c.cluster.spec.Name}

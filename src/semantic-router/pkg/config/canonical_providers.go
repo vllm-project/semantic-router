@@ -168,6 +168,13 @@ type CanonicalBackendRef struct {
 	// roots, server_name the endpoint's host, and cert_file with key_file
 	// present a client certificate. Verification is never skipped.
 	TLS *DeploymentTLS `yaml:"tls,omitempty"`
+	// Engine names the serving engine behind this backend (vllm, sglang,
+	// atom or tensorrt-llm) so the Router can read its load metrics. An
+	// empty engine leaves the backend without telemetry.
+	Engine string `yaml:"engine,omitempty"`
+	// Metrics overrides where the engine exposes its metrics. It requires
+	// Engine.
+	Metrics *CanonicalBackendMetrics `yaml:"metrics,omitempty"`
 }
 
 func canonicalProviderDefaults(providers CanonicalProviders) CanonicalProviderDefaults {

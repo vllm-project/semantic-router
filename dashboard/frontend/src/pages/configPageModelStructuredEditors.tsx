@@ -9,6 +9,7 @@ import type {
   ModelPricing,
   ProviderReliability,
 } from './configPageSupport'
+import { BACKEND_ENGINES, PROVIDER_LB_POLICIES } from './configPageSupport'
 import { normalizeModelBackendRefs, normalizeModelReliability } from './configPageModelFormSupport'
 
 interface StructuredModelFieldProps {
@@ -44,8 +45,13 @@ function backendRefFromEditor({
   auth_prefix: prefix,
   api_key_env: apiKeyEnv,
   api_key_file: apiKeyFile,
-  ...backendRef
+  ...editedRef
 }: EditableBackendRef): BackendRefEntry {
+  // metrics only says where an engine's metrics are, so clearing the engine
+  // clears them too; the Router refuses metrics without an engine.
+  const { metrics, ...rest } = editedRef
+  const backendRef: typeof rest & Pick<BackendRefEntry, 'metrics'> =
+    rest.engine && metrics ? { ...rest, metrics } : rest
   const auth: NonNullable<BackendRefEntry['auth']> = {}
   if (credential) auth.credential = credential
   if (header?.trim()) auth.header = header.trim()
@@ -67,6 +73,14 @@ const backendRefFields: ObjectEditorField<EditableBackendRef>[] = [
   { key: 'protocol', label: 'Protocol', type: 'select', options: ['http', 'https'] },
   { key: 'weight', label: 'Traffic weight', type: 'number', min: 0, step: 1, placeholder: '1' },
   { key: 'provider', label: 'Provider', placeholder: 'openai' },
+  {
+    key: 'engine',
+    label: 'Serving engine',
+    type: 'select',
+    options: BACKEND_ENGINES,
+    emptyValueLabel: 'None',
+    helpText: 'Lets backend telemetry read the load metrics of this backend.',
+  },
   { key: 'api_version', label: 'API version', placeholder: '2025-03-01' },
   { key: 'chat_path', label: 'Chat path', placeholder: '/chat/completions', fullWidth: true },
   {
@@ -236,7 +250,9 @@ const reliabilityFields: ObjectEditorField<ProviderReliability>[] = [
     key: 'lb_policy',
     label: 'Load balancing',
     type: 'select',
-    options: ['ROUND_ROBIN', 'LEAST_REQUEST', 'RING_HASH', 'MAGLEV'],
+    options: PROVIDER_LB_POLICIES,
+    helpText:
+      'load_aware prefers the replica whose serving engine reports the least load and needs backend telemetry.',
   },
   {
     key: 'retry_count',

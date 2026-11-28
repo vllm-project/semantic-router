@@ -15,6 +15,7 @@ import {
   cn,
 } from '../ui'
 import type { ConnectModelAdvancedValues } from './configPageConnectModelSupport'
+import { PROVIDER_LB_POLICIES, PROVIDER_LB_POLICY_LABELS } from './configPageSupport'
 
 interface Props {
   value: ConnectModelAdvancedValues
@@ -203,10 +204,11 @@ export default function ConfigPageConnectModelAdvanced({
                   onChange={(event) => update('loadBalancing', event.target.value)}
                 >
                   <option value="">Platform default</option>
-                  <option value="ROUND_ROBIN">Round robin</option>
-                  <option value="LEAST_REQUEST">Least requests</option>
-                  <option value="RING_HASH">Ring hash</option>
-                  <option value="MAGLEV">Maglev</option>
+                  {PROVIDER_LB_POLICIES.map((policy) => (
+                    <option key={policy} value={policy}>
+                      {PROVIDER_LB_POLICY_LABELS[policy]}
+                    </option>
+                  ))}
                 </NativeSelect>
               </Field>
               <div className="sm:col-span-2">

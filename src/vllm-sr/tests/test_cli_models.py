@@ -1,6 +1,7 @@
 import importlib
 import sys
 from pathlib import Path
+from typing import Literal, get_args, get_origin
 
 import pytest
 
@@ -313,6 +314,66 @@ def test_custom_evaluation_requires_versioned_namespace():
                 },
             }
         )
+
+
+def _backend_ref(**overrides):
+    backend_ref = importlib.import_module("cli.models").BackendRef
+    ref = {"name": "gpu-a", "endpoint": "10.0.0.1:8000", "provider": "vllm"}
+    ref.update(overrides)
+    return backend_ref.model_validate(ref)
+
+
+def test_backend_ref_accepts_engine_and_metrics():
+    ref = _backend_ref(
+        engine="tensorrt-llm", metrics={"port": 8002, "path": "/metrics"}
+    )
+
+    assert ref.engine == "tensorrt-llm"
+    assert ref.metrics.port == 8002
+    assert ref.model_dump(exclude_none=True)["metrics"] == {
+        "port": 8002,
+        "path": "/metrics",
+    }
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"engine": "triton"},
+        {"metrics": {"port": 9000}},
+        {"engine": "vllm", "metrics": {"port": 70000}},
+        {"engine": "vllm", "metrics": {"path": "metrics"}},
+        {"engine": "vllm", "metrics": {"unknown": 1}},
+    ],
+)
+def test_backend_ref_rejects_invalid_telemetry(overrides):
+    with pytest.raises(ValueError):
+        _backend_ref(**overrides)
+
+
+def test_engine_and_lb_policy_choices_match_the_router_schema():
+    """The CLI accepts exactly the engines and policies the Router does."""
+    definitions = importlib.import_module("cli.config_schema").schema_document()[
+        "$defs"
+    ]
+
+    def choices(model, field):
+        annotation = model.model_fields[field].annotation
+        if get_origin(annotation) is not Literal:
+            annotation = next(
+                arg for arg in get_args(annotation) if get_origin(arg) is Literal
+            )
+        return set(get_args(annotation))
+
+    def schema_choices(definition, field):
+        return set(definitions[definition]["properties"][field]["enum"]) - {""}
+
+    assert choices(models.BackendRef, "engine") == schema_choices(
+        "CanonicalBackendRef", "engine"
+    )
+    assert choices(models.ProviderReliability, "lb_policy") == schema_choices(
+        "ProviderReliability", "lb_policy"
+    )
 
 
 def test_unquoted_measured_at_date_loads_as_the_router_reads_it(tmp_path):
