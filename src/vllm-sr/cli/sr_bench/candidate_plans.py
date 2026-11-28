@@ -37,6 +37,7 @@ def candidate_manifest(baseline, targets, mode="live", name=None, experiment=Non
             "benchmark_weights",
             "cost_policy",
             "output_policy",
+            "limitations",
         )
         if key in source
     }
