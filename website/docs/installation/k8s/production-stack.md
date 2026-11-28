@@ -94,6 +94,11 @@ validated config with `configOverride`, then attach one of the supported
 [agentgateway](agentgateway). Pin chart and image versions for production;
 the development `0.0.0-latest` chart is for testing current main.
 
+When running `make helm-prod` from a source checkout, supply both image tags,
+for example `HELM_SET_VALUES=image.tag=v0.4.0,dashboard.image.tag=v0.4.0`.
+The target checks both tags before contacting Kubernetes. A versioned release
+chart supplies both tags by default.
+
 The upstream
 [Semantic Router integration tutorial](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md)
 can provide additional context, but review its image tags and values against

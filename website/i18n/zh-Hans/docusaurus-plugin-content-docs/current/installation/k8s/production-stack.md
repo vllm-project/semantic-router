@@ -77,6 +77,8 @@ vllm-sr config validate --config config.yaml
 
 使用[配置工作流](../configuration-workflows#helm) 通过 `configOverride` 部署已校验的配置，然后接入受支持的 [Kubernetes 网关](ai-gateway) 之一。生产环境固定 chart 和镜像版本；开发用的 `0.0.0-latest` chart 用于测试当前 main。
 
+从源码运行 `make helm-prod` 时，需指定两个镜像标签，例如 `HELM_SET_VALUES=image.tag=v0.4.0,dashboard.image.tag=v0.4.0`。该目标会在连接 Kubernetes 前检查这两个标签。发行版 chart 默认提供两个标签。
+
 上游 [Semantic Router 集成教程](https://github.com/vllm-project/production-stack/blob/main/tutorials/24-semantic-router-integration.md) 可以提供额外背景，但应用前请对照当前 Production Stack 发行版审阅其镜像标签和 values。
 
 ## 4. 验证两层路由

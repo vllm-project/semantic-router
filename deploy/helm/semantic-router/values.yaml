@@ -164,6 +164,8 @@ safetyGuards:
   # request-time local state. Disable only when accepting replica-local learning
   # divergence or when routing traffic with sticky sessions.
   rejectMultiReplicaLocalLearningState: true
+  # -- Require versioned Router and Dashboard image tags. Enabled by make helm-prod.
+  requirePinnedImages: false
 
 observability:
   alerts:
