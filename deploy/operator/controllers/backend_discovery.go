@@ -40,12 +40,19 @@ import (
 // clusterDNSDomain returns the DNS domain of the cluster the Operator runs
 // in. Kubernetes renders the search list in /etc/resolv.conf as
 // "<namespace>.svc.<cluster-domain>", so the suffix after the first ".svc."
-// of any search entry is the cluster domain (e.g. "name.ns.<domain>"). Falls back to "svc.cluster.local"
-// when the file is missing or contains no usable search entry.
+// of any search entry is the cluster domain (e.g. "cluster.local").
+// Falls back to "cluster.local" when the file is missing or contains no
+// usable search entry.
 func clusterDNSDomain() string {
-	const fallback = "svc.cluster.local"
+	return clusterDNSDomainFromFile("/etc/resolv.conf")
+}
 
-	data, err := os.ReadFile("/etc/resolv.conf")
+// clusterDNSDomainFromFile is clusterDNSDomain with an injectable path so
+// tests can feed synthetic resolv.conf data.
+func clusterDNSDomainFromFile(path string) string {
+	const fallback = "cluster.local"
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return fallback
 	}
@@ -63,6 +70,12 @@ func clusterDNSDomain() string {
 		}
 	}
 	return fallback
+}
+
+// backendServiceFQDN returns the fully qualified DNS name of an in-cluster
+// Service: <name>.<namespace>.svc.<cluster-domain>.
+func backendServiceFQDN(name, namespace, domain string) string {
+	return fmt.Sprintf("%s.%s.svc.%s", name, namespace, domain)
 }
 
 // BackendEndpoint represents a discovered backend endpoint
@@ -125,7 +138,7 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 		logger.Info("InferenceService URL", "url", statusURL)
 	}
 
-	address := fmt.Sprintf("%s.%s.%s", predictorServiceName, namespace, clusterDNSDomain())
+	address := backendServiceFQDN(predictorServiceName, namespace, clusterDNSDomain())
 
 	endpoint := &BackendEndpoint{
 		Address:  address,
@@ -170,7 +183,7 @@ func discoverLlamaStackBackend(ctx context.Context, c client.Client, namespace s
 	}
 
 	port := service.Spec.Ports[0].Port
-	address := fmt.Sprintf("%s.%s.%s", service.Name, namespace, clusterDNSDomain())
+	address := backendServiceFQDN(service.Name, namespace, clusterDNSDomain())
 
 	endpoint := &BackendEndpoint{
 		Address:  address,
@@ -191,7 +204,7 @@ func discoverServiceBackend(ctx context.Context, serviceBackend *vllmv1alpha1.Se
 		namespace = defaultNamespace
 	}
 
-	address := fmt.Sprintf("%s.%s.%s", serviceBackend.Name, namespace, clusterDNSDomain())
+	address := backendServiceFQDN(serviceBackend.Name, namespace, clusterDNSDomain())
 
 	endpoint := &BackendEndpoint{
 		Address:  address,
