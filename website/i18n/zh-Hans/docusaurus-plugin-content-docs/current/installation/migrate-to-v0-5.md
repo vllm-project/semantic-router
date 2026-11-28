@@ -510,6 +510,13 @@ vllm-sr config validate --config config.migrated.yaml
 vllm-sr serve --config config.migrated.yaml
 ```
 
+如果本地 stack 的配置被 Dashboard 修改过，这些修改保存在其当前运行配置 `.vllm-sr/runtime-config.yaml` 中，`vllm-sr serve` 会继续使用这个仍是旧 schema 的文件，并给出警告。若要保留这些修改，请迁移该文件，然后替换当前运行配置：
+
+```bash
+vllm-sr config migrate --config .vllm-sr/runtime-config.yaml --output config.migrated.yaml --force
+vllm-sr serve --config config.migrated.yaml --replace-active-config
+```
+
 ## 预期的行为变化 {#behavior-to-expect}
 
 - **原来属于其他模型的阈值已重新拟合。** 没有 `predicate` 的规则使用回答模型的校准阈值；没有校准阈值的模型使用 0.5，并给出 `uncalibrated_preset` 警告。

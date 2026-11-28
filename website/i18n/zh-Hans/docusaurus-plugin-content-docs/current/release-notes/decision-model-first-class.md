@@ -28,7 +28,7 @@ Router 早已用同一个模型家族，即 System One 决策模型，回答大�
 这是一次破坏性版本。运行一次 `vllm-sr config migrate`，然后检查它打印的说明；[迁移指南](../installation/migrate-to-v0-5)列出了每个已移除的形式、它的加载错误和改写方式。
 
 - **配置 schema v0.5。** `version: v0.3` 在加载时以 `invalid_value` 失败，migrate 写入 `version: v0.5`。不再有顶层 `routing`：路由位于扁平的 `recipes` 中，模型事实位于 `providers.models[]`，默认插件位于 `global.plugins`。
-- **已移除的形式在加载时以一行错误失败**，并由 migrate 改写。唯一的别名是 `decision`，它按 `systemone` 加载并给出警告。
+- **已移除的形式在加载时以一行错误失败**，并由 migrate 改写。仍有两个改名在加载时给出警告：`decision` 按 `systemone` 加载，`router_replay` 插件的 `capture_personal_data` 按其 `prompt_capture` 加载。
 - **已移除的信号类型：** `classifiers`、`preferences`、`embeddings` 和 `kb`（改为 `systemone` 问题；migrate 会删除永远不会匹配的 `kb` 规则，并给出替代它的问题），`reasks` 和 `topic_continuity`（改为 `turn_relation`），`events` 和 `structure`（改为 `keywords`），以及 `actions`（改为一个 `systemone` 问题）。`global.model_catalog.modules.*` 已移除；模块的阈值变为规则的 `predicate`。
 - **已移除的算法：** `prompt`、`router_dc`、`knn`、`kmeans`、`svm` 和 `mlp` 变为 `systemone`；`automix`、`hybrid` 和 `latency_aware` 变为 `multi_factor`；Looper 的 `confidence` 算法和原生 `cascade` 变为 `escalate`。ML 选择器的训练流水线和 Dashboard 的 ML 流水线已移除。
 - **已移除的插件：** `tool_selection`（改为 `tools` 插件的 `select`），`rag`、`memory` 和 `context_compression`（改为 `context` 插件），`hallucination` 和 `response_jailbreak`（改为 `response_guard`），`shadow_dispatch`（改为 `router_replay.shadow`），以及各种缓存别名（改为 `response_cache`）。

@@ -570,6 +570,17 @@ vllm-sr config validate --config config.migrated.yaml
 vllm-sr serve --config config.migrated.yaml
 ```
 
+A local stack whose Dashboard edited the configuration keeps those edits in
+its active runtime configuration, `.vllm-sr/runtime-config.yaml`, and
+`vllm-sr serve` keeps serving that file, still at the old schema, with a
+warning. Migrate that file instead when the edits should stay, then replace
+the active configuration:
+
+```bash
+vllm-sr config migrate --config .vllm-sr/runtime-config.yaml --output config.migrated.yaml --force
+vllm-sr serve --config config.migrated.yaml --replace-active-config
+```
+
 ## Behavior to expect
 
 - **Thresholds were re-fitted** where the old value belonged to another

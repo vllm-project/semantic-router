@@ -133,3 +133,45 @@ recipes:
 		t.Fatalf("migrated:\n%s\nwant the threshold as pii rule personal's predicate", cfg)
 	}
 }
+
+// Decisions that share a plugin configuration through a YAML alias each keep
+// the plugin: the first rewrite does not change what the next use reads.
+func TestMigrateKeepsAPluginSharedThroughAnAlias(t *testing.T) {
+	doc := `version: v0.5
+recipes:
+  - name: default
+    decisions:
+      - name: first
+        plugins:
+          - {type: response_jailbreak, configuration: &guard {enabled: true, action: block}}
+      - name: second
+        plugins:
+          - {type: response_jailbreak, configuration: *guard}
+global:
+  model_catalog:
+    modules:
+      prompt_guard: {on_error: block, on_unscanned: block}
+`
+	migrated, notes, err := migrateConfigForms([]byte(doc), pluginForms)
+	if err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	var out struct {
+		Recipes []struct {
+			Decisions []struct {
+				Plugins []map[string]interface{} `yaml:"plugins"`
+			} `yaml:"decisions"`
+		} `yaml:"recipes"`
+	}
+	if err := yaml.Unmarshal(migrated, &out); err != nil {
+		t.Fatal(err)
+	}
+	for index, decision := range out.Recipes[0].Decisions {
+		if len(decision.Plugins) != 1 || decision.Plugins[0]["type"] != DecisionPluginResponseGuard {
+			t.Fatalf("decision %d plugins = %v, want its response_guard", index, decision.Plugins)
+		}
+	}
+	if noteSaying(notes, migrationChangeCode, "the disabled response_jailbreak plugin is removed") {
+		t.Fatalf("notes = %+v, an enabled plugin was called disabled", notes)
+	}
+}
