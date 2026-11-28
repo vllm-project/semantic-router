@@ -66,7 +66,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"hallucination_span_details":[{"text":"private-canary","explanation":"private-canary","severity":2}],
 		"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"},"idempotency_key":"private-canary"}],
 		"session_policy":{"user_id":"private-canary"},
-		"route_diagnostics":{"selected_model":"model-a","selection_reasoning":"private-canary","annotations":{"note":"private-canary"},"signal_errors":{"signal":"private-canary"}},
+		"route_diagnostics":{"selected_model":"model-a","selection_reasoning":"private-canary","annotations":{"note":"private-canary"},"signal_errors":{"signal":"private-canary"},"signal_deployments":{"systemone:needs_tools":"private-canary"}},
 		"learning":{"adaptation":{"method":"routing_sampling","reason":"private-canary"}}
 	}`)
 

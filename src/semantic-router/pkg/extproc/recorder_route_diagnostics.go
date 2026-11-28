@@ -64,6 +64,7 @@ func buildReplayRouteDiagnostics(
 		RoutingInputStrippedBlocks:     ctx.RoutingInput.StrippedBlocks,
 		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
+		SignalDeployments:              cloneReplayStringMap(ctx.VSRSignalDeployments),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
 		Retention:                      ctx.RetentionOutcome.Clone(),

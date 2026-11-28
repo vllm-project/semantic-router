@@ -10,6 +10,11 @@ var (
 		Name: "sr_systemone_signal_model_calls_total",
 		Help: "Physical inference exchanges used while evaluating System One signals, including transport retries",
 	})
+	// SystemOneSignalFailoverAttempts counts each logical deployment attempt once.
+	SystemOneSignalFailoverAttempts = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "sr_systemone_signal_failover_attempts_total",
+		Help: "Logical deployment attempts for failover-enabled custom System One signals, by deployment, signal stage, role and call outcome",
+	}, []string{"deployment", "stage", "role", "outcome"})
 	SystemOneStageTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "sr_systemone_stage_total",
 		Help: "System One auto stage attempts by configured algorithm, stage, model and outcome",
@@ -57,6 +62,15 @@ func RecordSystemOneSignalCalls(calls int) {
 	if calls > 0 {
 		SystemOneSignalCalls.Add(float64(calls))
 	}
+}
+
+// RecordSystemOneSignalFailoverAttempt records a primary or backup call's outcome.
+func RecordSystemOneSignalFailoverAttempt(deployment, stage string, backup bool, outcome string) {
+	role := "primary"
+	if backup {
+		role = "backup"
+	}
+	SystemOneSignalFailoverAttempts.WithLabelValues(deployment, stage, role, outcome).Inc()
 }
 
 func RecordSystemOneRequest(algorithm, outcome string, seconds float64) {

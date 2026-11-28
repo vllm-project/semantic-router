@@ -92,6 +92,9 @@ func (run *responseGuardRun) replayOutcomes(ctx *RequestContext, now time.Time) 
 		outcome.Verdict = "not_detected"
 		outcome.Metadata["signal"] = signalType
 		outcome.Metadata["stage"] = config.SystemOneStageResponse
+		if deployment := observed.Deployments[key]; deployment != "" {
+			outcome.Metadata["deployment"] = deployment
+		}
 		if action := run.signalAction(signalType); action != "" {
 			outcome.Metadata["action"] = action
 		}

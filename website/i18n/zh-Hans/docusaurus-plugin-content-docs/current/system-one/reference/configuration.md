@@ -57,6 +57,10 @@ global:
 
 每个目标都使用自己的协议、凭据和限制接收规则输入，只应选择允许接收这些输入的部署。规则阈值不会随模型切换而变化，应验证备用模型的分数是否适用于当前判定条件。备用列表仅用于请求阶段或响应阶段的自定义信号求值；应用信号、插件单独读取规则、选择器、评审，以及对外推理和生成后端仍使用原有目标。
 
+对于启用故障切换的信号，Router 会记录每个有效答案实际来自哪个部署，包括主部署直接回答或答案不匹配规则的情况。OpenTelemetry 的 `routing.signal.deployments` 属性是从 `systemone:<rule>` 到部署键的 JSON 映射：请求阶段记录在信号求值 span，响应阶段记录在请求 span。Router Replay 将请求阶段的部署写入 `route_diagnostics.signal_deployments`，将响应阶段的部署写入相应结果的 `metadata.deployment`。没有部署给出有效答案的规则不记录部署。
+
+`sr_systemone_signal_failover_attempts_total` 按 `deployment`、`stage`（`request` 或 `response`）、`role`（`primary` 或 `backup`）和 `outcome` 统计部署尝试次数。例如，主部署返回 HTTP 503 计入 `outcome="unavailable"`，备用部署返回响应则计入其自身的 `outcome="ok"`。该指标按逻辑尝试计数，包括一次批量调用，但不单独统计其中的每条答案或 HTTP 重试；调用成功仍可能缺少某条规则的答案。
+
 ## 信号 {#signals}
 
 `recipes[].signals.systemone` 下的 `systemone` 规则：

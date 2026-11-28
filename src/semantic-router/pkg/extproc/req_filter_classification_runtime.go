@@ -90,6 +90,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	logSignalEvaluationResults(ctx, signalLatency, signals)
 	logSignalPhaseTiming(ctx, signalLatency, signals)
 	observeSignalEvidence(ctx, signalSpan)
+	observeSignalDeployments(signalSpan, ctx.VSRSignalDeployments)
 	observeProjectionResults(ctx, signalSpan)
 	tracing.EndSignalSpan(signalSpan, collectMatchedSignalRules(signals), 0, signalLatency, false)
 	return signals, nil

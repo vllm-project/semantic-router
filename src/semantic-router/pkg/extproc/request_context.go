@@ -376,6 +376,7 @@ type RequestContext struct {
 	VSRProjectionScores       map[string]float64
 	VSRSignalConfidences      map[string]float64
 	VSRSignalValues           map[string]float64
+	VSRSignalDeployments      map[string]string
 	VSRSignalErrors           map[string]string
 	VSRSignalErrorMatches     map[string]bool
 	// VSRGuardOverload are the rules ("type:name") unread on an overloaded

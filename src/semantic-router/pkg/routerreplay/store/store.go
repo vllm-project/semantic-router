@@ -234,6 +234,7 @@ type RouteDiagnostics struct {
 	RequestDemandSnapshots         []RequestDemandSnapshot              `json:"request_demand_snapshots,omitempty"`
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
+	SignalDeployments              map[string]string                    `json:"signal_deployments,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
 	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
 	Retention                      *retention.Outcome                   `json:"retention,omitempty"`
@@ -695,6 +696,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
+	cloned.SignalDeployments = cloneStringMap(value.SignalDeployments)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
 	cloned.Retention = value.Retention.Clone()
 	if value.DecisionRanking != nil {

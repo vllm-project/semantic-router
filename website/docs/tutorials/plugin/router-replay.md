@@ -848,11 +848,14 @@ Each record's `route_diagnostics` explains the route:
 | `decision_ranking` | Every record: the strategy, the winner's tier, whether the pool ranked by confidence and which decision stopped it, the `runner_up` with the key that separated them, and a `reason` with the values compared. It matches the eval API's report. |
 | `prepared_dispatch` | Detail responses only: a versioned receipt for the exact provider-bound body of the primary dispatch, with its wire format, SHA-256 digest and byte length, but no copy of the body. Executor calls and fallback attempts are not part of it. |
 | `looper` | Executor requests that keep an execution trace, such as `escalate`: bounded attempts, token and cost accounting, timings, disposition reasons and the final attempt. |
+| `signal_deployments` | For each answered request-stage custom System One signal with [deployment failover](../../system-one/reference/configuration#decision-deployment-fallbacks), maps `systemone:<rule>` to the deployment that answered. |
 
 - `prepared_dispatch` is derived from content, so responses without
   `replay.detail` omit it.
 - `looper` excludes prompts, tool arguments, credentials and raw errors. Its
   attempt details need `replay.detail`, and any truncation is marked.
+- For a response-stage System One signal, the deployment is in the signal's
+  outcome under `metadata.deployment`. Deployment details require `replay.detail`.
 
 ### Usage in the terminal
 

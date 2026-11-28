@@ -165,6 +165,16 @@ func TestSystemOneSignalFailoverRoutesThroughAttachedRuntime(t *testing.T) {
 			if got := signals.SignalErrors["systemone:needs_tools"]; got != test.signalError {
 				t.Fatalf("signal error = %q, want %q", got, test.signalError)
 			}
+			wantDeployment := "primary"
+			switch {
+			case test.signalError != "":
+				wantDeployment = ""
+			case test.failover:
+				wantDeployment = "cpu-backup"
+			}
+			if got := signals.SignalDeployments["systemone:needs_tools"]; got != wantDeployment {
+				t.Fatalf("answer deployment = %q, want %q", got, wantDeployment)
+			}
 			mu.Lock()
 			asks := slices.Clone(order)
 			view := primaryView
@@ -293,7 +303,7 @@ func TestSystemOneSignalFailoverSharesCallerDeadline(t *testing.T) {
 				if !bounded || !cutoff.Equal(deadline) {
 					t.Fatalf("backup attempt deadline = %v, want original deadline %v", cutoff, deadline)
 				}
-				return modelservice.Response{Model: "backup"}, nil
+				return modelservice.Response{Model: "backup-model"}, nil
 			}))
 			call := &systemOneCall{fallbackChain: []string{"primary", "backup"}, rules: []askedRule{systemOneAsked(config.SystemOneRule{})}}
 			answer, err := c.sendSystemOneFailover(ctx, call, modelservice.Request{State: "x"})
@@ -301,7 +311,7 @@ func TestSystemOneSignalFailoverSharesCallerDeadline(t *testing.T) {
 				if !errors.Is(err, context.Canceled) || !slices.Equal(calls, []string{"primary"}) {
 					t.Fatalf("cancelled caller tried %v and returned %v", calls, err)
 				}
-			} else if err != nil || answer.Model != "backup" || !slices.Equal(calls, []string{"primary", "backup"}) {
+			} else if err != nil || answer.response.Model != "backup-model" || answer.answeredBy != "backup" || !slices.Equal(calls, []string{"primary", "backup"}) {
 				t.Fatalf("attempt timeout should try backup: tried %v, answer %+v, err %v", calls, answer, err)
 			}
 		})

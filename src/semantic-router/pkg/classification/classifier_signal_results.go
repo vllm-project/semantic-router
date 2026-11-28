@@ -73,6 +73,7 @@ type SignalResults struct {
 	SignalConfidences  map[string]float64             // Real confidence scores per signal, e.g. "embedding:ai" → 0.88
 	SignalValues       map[string]float64             // Raw signal values per signal when the evaluator exposes them, e.g. "keyword:many_questions" → 4
 	SignalErrors       map[string]string              // Signal evaluation errors keyed by "type:name"
+	SignalDeployments  map[string]string              // Deployment aliases for usable answers from failover-enabled signals, keyed by "type:name".
 	SignalSpans        map[string][]modelservice.Span // The matched spans of span rules keyed by "type:name"; set at the response stage
 	SignalErrorMatches map[string]bool
 	// ScanCoverage is how much of its input each guard rule that read it in

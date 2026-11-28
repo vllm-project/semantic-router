@@ -93,6 +93,9 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 		metrics.RecordPluginError(config.DecisionPluginResponseGuard, "signal_unavailable")
 	}
 	traceResponseGuard(ctx, run.outcome())
+	if observed := run.observed(); observed != nil {
+		observeSignalDeployments(ctx.RequestSpan, observed.Deployments)
+	}
 	return run
 }
 
