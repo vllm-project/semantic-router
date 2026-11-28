@@ -24,34 +24,42 @@ _HONESTY_FOOTER = (
 )
 
 
+def _cell(text: Any) -> str:
+    """Markdown table cell: a literal pipe would split the column."""
+    return str(text).replace("|", "\\|")
+
+
 def _metrics_line(metrics: dict[str, Any]) -> str:
+    # Units belong to the metric, not to a magnitude guess: a 0.4 s latency
+    # and a 0.4 ratio both render as recorded, so a small value is never
+    # silently rewritten as a percentage.
     if not metrics:
         return "n/a"
-    parts = []
-    for key, value in metrics.items():
-        text = (
-            "n/a"
-            if value is None
-            else (
-                f"{value * 100:.2f}%"
-                if isinstance(value, float) and value <= 1
-                else str(value)
-            )
-        )
-        parts.append(f"{key}={text}")
-    return ", ".join(parts)
+    return ", ".join(
+        f"{key}={'n/a' if value is None else value}" for key, value in metrics.items()
+    )
+
+
+def _reasons_text(record: dict[str, Any]) -> str:
+    """The ledger's own reasons, so an INCONCLUSIVE row keeps its cause."""
+    reasons = record.get("reasons") or []
+    if isinstance(reasons, str):
+        reasons = [reasons]
+    return "; ".join(str(reason) for reason in reasons) if reasons else "-"
 
 
 def render_run_report(records: list[dict[str, Any]]) -> str:
     lines = [
         "# recipe-lab run report",
         "",
-        "| record | round | tier | verdict | metrics | gates | bench_refs |",
-        "|---|---|---|---|---|---|---|",
+        "| record | round | tier | verdict | metrics | gates | bench_refs | reasons |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     inconsistencies: list[str] = []
     hashes = sorted({r.get("dataset_hash") for r in records if r.get("dataset_hash")})
     for record in records:
+        # None means guard results are missing; {} means the spec declared no
+        # guards, which is a valid PASS shape and not an inconsistency.
         gates = record.get("gates")
         gates_text = (
             "-" if not gates else ", ".join(f"{k}={v}" for k, v in gates.items())
@@ -59,14 +67,15 @@ def render_run_report(records: list[dict[str, Any]]) -> str:
         refs = record.get("bench_refs") or []
         lines.append(
             f"| {record.get('record_id', '-')} | {record.get('round')} | {record.get('tier')} | **{record.get('verdict')}** "
-            f"| {_metrics_line(record.get('metrics') or {})} | {gates_text} | {len(refs)} ref(s) |"
+            f"| {_cell(_metrics_line(record.get('metrics') or {}))} | {_cell(gates_text)} "
+            f"| {len(refs)} ref(s) | {_cell(_reasons_text(record))} |"
         )
         if record.get("tier") == "live" and record.get("verdict") != "INCONCLUSIVE":
             # replay-consistency: a decisive live record must carry complete
-            # evidence (gates dict and at least two bench refs)
-            if not gates:
+            # evidence (a gates dict - possibly empty - and two bench refs)
+            if gates is None:
                 inconsistencies.append(
-                    f"round {record.get('round')}: live {record.get('verdict')} without gates"
+                    f"round {record.get('round')}: live {record.get('verdict')} without gate results"
                 )
             if len(refs) < _MIN_LIVE_BENCH_REFS:
                 inconsistencies.append(
