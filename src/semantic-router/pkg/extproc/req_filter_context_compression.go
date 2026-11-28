@@ -220,18 +220,14 @@ func (r *OpenAIRouter) recordCompressionPlan(
 	if !result.Applied {
 		status = string(result.Plan.SkipReason)
 	}
-	metrics.RecordContextCompressionPlan(
-		requestDecisionStateKey(ctx),
-		ctx.ContextCompressionStrategy,
-		"mixed",
-		status,
-		ctx.ContextCompressionTokenSource,
-		result.TokensBefore,
-		result.TokensAfter,
-		len(result.RecoveryKeys),
-		result.Plan.Quality,
-		result.Plan.FallbackReason,
-	)
+	decision, strategy, source := requestDecisionStateKey(ctx), ctx.ContextCompressionStrategy, ctx.ContextCompressionTokenSource
+	ctx.observeProjection(func() {
+		metrics.RecordContextCompressionPlan(
+			decision, strategy, "mixed", status, source,
+			result.TokensBefore, result.TokensAfter, len(result.RecoveryKeys),
+			result.Plan.Quality, result.Plan.FallbackReason,
+		)
+	})
 	savedTokens := max(0, result.TokensBefore-result.TokensAfter)
 	if result.Plan.TokenCounterSource != "utf8_byte_upper_bound" {
 		r.recordContextCompressionCostSavings(ctx, savedTokens)
@@ -291,27 +287,22 @@ func recordContextCompressionApplied(
 	ctx.ContextCompressionFormat = stats.format()
 	ctx.ContextCompressionOmitted = stats.omittedChunks
 	ctx.ContextCompressionSkipReason = ""
-	metrics.RecordContextCompression(
-		stats.beforeTokens,
-		stats.afterTokens,
-		ctx.ContextCompressionFormat,
-	)
-	metrics.RecordPluginExecution(
-		"context_compression",
-		requestDecisionStateKey(ctx),
-		"applied",
-		time.Since(start).Seconds(),
-	)
-	logging.ComponentDebugEvent("extproc", "context_compression_applied", map[string]interface{}{
-		"request_id":     ctx.RequestID,
-		"messages":       stats.appliedMessages,
-		"blocks":         stats.appliedBlocks,
-		"tokens_before":  stats.beforeTokens,
-		"tokens_after":   stats.afterTokens,
-		"tokens_saved":   stats.beforeTokens - stats.afterTokens,
-		"omitted_chunks": stats.omittedChunks,
-		"json_blocks":    stats.jsonBlocks,
-		"rag_skipped":    stats.skippedRAG,
-		"latency_millis": time.Since(start).Milliseconds(),
+	elapsed := time.Since(start)
+	decision, format := requestDecisionStateKey(ctx), ctx.ContextCompressionFormat
+	ctx.observeProjection(func() {
+		metrics.RecordContextCompression(stats.beforeTokens, stats.afterTokens, format)
+		metrics.RecordPluginExecution("context_compression", decision, "applied", elapsed.Seconds())
+		logging.ComponentDebugEvent("extproc", "context_compression_applied", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"messages":       stats.appliedMessages,
+			"blocks":         stats.appliedBlocks,
+			"tokens_before":  stats.beforeTokens,
+			"tokens_after":   stats.afterTokens,
+			"tokens_saved":   stats.beforeTokens - stats.afterTokens,
+			"omitted_chunks": stats.omittedChunks,
+			"json_blocks":    stats.jsonBlocks,
+			"rag_skipped":    stats.skippedRAG,
+			"latency_millis": elapsed.Milliseconds(),
+		})
 	})
 }

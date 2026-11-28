@@ -116,7 +116,7 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 		if err := r.validateModelDemand(r.candidateRequirements(ctx), ref.Model, demand); err != nil {
 			continue
 		}
-		budget := r.contextOverflowInputBudget(ref.Model, demand, cfg)
+		budget, _ := r.contextOverflowInputBudget(ref.Model, demand.MaxOutputTokens, cfg)
 		if budget > available {
 			model, available = ref.Model, budget
 		}
@@ -130,22 +130,28 @@ func (r *OpenAIRouter) prepareDecisionContextOverflow(ctx *RequestContext, origi
 	return nil
 }
 
-func (r *OpenAIRouter) contextOverflowInputBudget(model string, demand selection.CandidateDemand, cfg *config.ContextPluginConfig) int {
+func (r *OpenAIRouter) contextOverflowInputBudget(model string, maxOutput *int64, cfg *config.ContextPluginConfig) (int, error) {
 	params, _ := selection.CandidateModelParams(r.Config.ModelConfig, nil, model)
 	if params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 {
-		return 0
+		return 0, fmt.Errorf("%w: selected model has no usable known input budget for context compression", selection.ErrNoEligibleCandidates)
 	}
 	reserve := params.MaxOutputTokens
-	if demand.MaxOutputTokens != nil {
-		if *demand.MaxOutputTokens <= 0 || *demand.MaxOutputTokens > int64(params.MaxOutputTokens) {
-			return 0
+	if maxOutput != nil {
+		if *maxOutput <= 0 || *maxOutput > int64(params.MaxOutputTokens) {
+			return 0, &selection.RequestBudgetError{
+				Code:    "max_output_tokens_exceeded",
+				Message: fmt.Sprintf("requested output token limit must be between 1 and %d for model %q", params.MaxOutputTokens, model),
+			}
 		}
-		reserve = int(*demand.MaxOutputTokens)
+		reserve = int(*maxOutput)
 	}
 	if cfg.Budget != nil && cfg.Budget.ReserveOutputTokens != nil && !cfg.Budget.ReserveOutputTokens.Auto {
 		reserve = max(reserve, cfg.Budget.ReserveOutputTokens.Value)
 	}
-	return max(0, params.ContextWindowSize-reserve)
+	if reserve >= params.ContextWindowSize {
+		return 0, overflowBudgetError(fmt.Sprintf("The %d-token output reserve leaves no input capacity in the %d-token context window", reserve, params.ContextWindowSize))
+	}
+	return params.ContextWindowSize - reserve, nil
 }
 
 // Repeat the bound after enrichment and deterministic provider preparation.
@@ -158,18 +164,39 @@ func (r *OpenAIRouter) prepareDispatchContextOverflow(ctx *RequestContext, reque
 	if cfg == nil {
 		return nil
 	}
-	available := r.contextOverflowInputBudget(model, selection.DemandForRequest(request), cfg)
-	if available == 0 {
-		if err := r.validateModelDemand(r.candidateRequirements(ctx), model, selection.DemandForRequest(request)); err != nil {
-			return err
+	demand := selection.DemandForRequest(request)
+	available, err := r.contextOverflowInputBudget(model, demand.MaxOutputTokens, cfg)
+	if err != nil {
+		if validationErr := r.validateModelDemand(r.candidateRequirements(ctx), model, demand); validationErr != nil {
+			return validationErr
 		}
-		return fmt.Errorf("%w: selected model has no usable known input budget for context compression", selection.ErrNoEligibleCandidates)
+		return err
 	}
 	return r.applyContextOverflow(ctx, request, cfg, nil, model, available)
 }
 
+func (r *OpenAIRouter) compressAndMaskDispatch(ctx *RequestContext, dispatch *providerDispatch) error {
+	if err := r.prepareDispatchContextOverflow(ctx, ctx.SemanticRequest, dispatch.effectiveBackendModel()); err != nil {
+		return err
+	}
+	return r.maskProviderRequest(ctx, dispatch.logicalModel)
+}
+
 func overflowBudgetError(message string) error {
 	return &selection.RequestBudgetError{Code: "context_length_exceeded", Message: message}
+}
+
+func (ctx *RequestContext) copyDispatchCompression(view *RequestContext) {
+	ctx.ContextRequestIR = view.ContextRequestIR
+	ctx.VSRContextTokenCount, ctx.VSRContextReserveTokens = view.VSRContextTokenCount, view.VSRContextReserveTokens
+	ctx.ContextCompressionApplied = view.ContextCompressionApplied
+	ctx.ContextCompressionBefore, ctx.ContextCompressionAfter = view.ContextCompressionBefore, view.ContextCompressionAfter
+	ctx.ContextCompressionMessages, ctx.ContextCompressionOmitted = view.ContextCompressionMessages, view.ContextCompressionOmitted
+	ctx.ContextCompressionFormat, ctx.ContextCompressionSkipReason = view.ContextCompressionFormat, view.ContextCompressionSkipReason
+	ctx.ContextCompressionStrategy, ctx.ContextCompressionBudgetMode = view.ContextCompressionStrategy, view.ContextCompressionBudgetMode
+	ctx.ContextCompressionTokenSource, ctx.ContextCompressionTrigger = view.ContextCompressionTokenSource, view.ContextCompressionTrigger
+	ctx.ContextCompressionRevision, ctx.ContextCompressionQuality = view.ContextCompressionRevision, view.ContextCompressionQuality
+	ctx.ContextCompressionFallback = view.ContextCompressionFallback
 }
 
 func (r *OpenAIRouter) applyContextOverflow(ctx *RequestContext, request *llmprotocol.Request, cfg *config.ContextPluginConfig, decision *config.Decision, model string, available int) error {
