@@ -110,3 +110,45 @@ def test_service_startup_chooses_shared_home_and_preserves_explicit_value(
     assert observed == [expected]
     assert setup.home() == expected
     assert json.loads((store / "service.json").read_text())["version"] == "sr-bench-1.0"
+
+
+@pytest.mark.parametrize("configured", [None, "HF_HOME", "HF_XET_CACHE"])
+def test_worker_keeps_xet_cache_in_store_unless_operator_chose_one(
+    tmp_path, monkeypatch, configured
+):
+    # The managed worker runs as the host uid with HOME=/, so the Xet default
+    # under ~/.cache is not writable there; Hub downloads would fail (#7376).
+    store = tmp_path / "store"
+    store.mkdir()
+    for name in ("HF_HOME", "HF_XET_CACHE"):
+        monkeypatch.delenv(name, raising=False)
+    if configured:
+        monkeypatch.setenv(configured, str(tmp_path / "operator-hf"))
+    monkeypatch.setattr(setup, "home", lambda: tmp_path / "source-home")
+    original = subprocess.Popen
+    environments = []
+    code = (
+        "import json, sys; from pathlib import Path; "
+        "Path(sys.argv[2]).write_text(json.dumps({'dataset': {'id': 'fixture'}}))"
+    )
+
+    def spawn(command, **kwargs):
+        environments.append(kwargs["env"])
+        return original([sys.executable, "-c", code, *command[-3:]], **kwargs)
+
+    monkeypatch.setattr(runtime.subprocess, "Popen", spawn)
+    dataset = runtime.execute(
+        {"benchmark": "mmlu-pro", "profile": "smoke"},
+        store,
+        lambda phase: None,
+        threading.Event(),
+    )
+    assert dataset == {"id": "fixture"}
+    worker = environments[0]
+    if configured is None:
+        assert worker["HF_XET_CACHE"] == str(store.resolve() / "cache" / "xet")
+        assert "HF_HOME" not in worker
+    else:
+        assert worker[configured] == str(tmp_path / "operator-hf")
+        assert ("HF_XET_CACHE" in worker) == (configured == "HF_XET_CACHE")
+    assert "HF_XET_CACHE" not in os.environ or configured == "HF_XET_CACHE"

@@ -43,6 +43,12 @@ def execute(request, store, progress, stopping):
     environment["PYTHONPATH"] = os.pathsep.join(
         filter(None, [source_root, environment.get("PYTHONPATH")])
     )
+    # Hub files already download into the store (sources.py cache_dir), but the
+    # Xet backend keeps its chunk cache and logs under HF_HOME, which defaults to
+    # ~/.cache. The managed worker runs as the host uid with HOME=/, so keep Xet
+    # state beside the Hub cache unless the operator chose an HF location.
+    if not environment.get("HF_HOME") and not environment.get("HF_XET_CACHE"):
+        environment["HF_XET_CACHE"] = str(Path(store).resolve() / "cache" / "xet")
     environment["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
     environment["GIT_TERMINAL_PROMPT"] = "0"
     with tempfile.TemporaryDirectory(prefix=".prepare-", dir=store) as directory:
