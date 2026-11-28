@@ -74,6 +74,7 @@
             "x-vsr-kv-cache-id",
             "x-vsr-kv-mapper-id",
             "x-vsr-kv-source-pod",
+            "x-vsr-listener",
             "x-vsr-memory",
             "x-vsr-outcome-principal",
             "x-vsr-outcome-source",

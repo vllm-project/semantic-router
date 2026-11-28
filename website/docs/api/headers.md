@@ -237,6 +237,7 @@ Credentials, by name only. None reaches a client, and a provider receives only t
 | Header | Hops | Since | Description |
 | --- | --- | --- | --- |
 | `x-vsr-route-model` | request, provider request | v0.5 | Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own. |
+| `x-vsr-listener` | request | v0.5 | Listener an Envoy gateway received the request on; the generated Envoy listener sets it ahead of ext_proc, replacing a client's value, and the Router applies that listener's `apis`. The standalone gateway ignores it. |
 | `x-vsr-upstream-host` | provider response | v0.5 | Endpoint Envoy reports on the provider response for KV registry writes; removed before the client. |
 | `x-vsr-kv-source-pod` | provider request | v0.4 | Address of the pod that holds the source model's KV cache. |
 | `x-vsr-kv-cache-id` | provider request | v0.4 | Opaque id of the source KV block. |
