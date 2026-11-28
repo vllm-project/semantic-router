@@ -61,6 +61,7 @@ type (
 	Outcome                       = store.Outcome
 	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
 	RequestDemandSnapshot         = store.RequestDemandSnapshot
+	FinalAdmissionDiagnostics     = store.FinalAdmissionDiagnostics
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
 	LooperUsage                   = store.LooperUsage

@@ -125,7 +125,12 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightModel = selectedModel
 	ctx.InflightToken = inflight.Begin(selectedModel)
-	if resp := r.applyRateLimit(ctx, selectedModel); resp != nil {
+	checkRateLimit := r.applyRateLimit
+	if r.RateLimiter != nil && selectedModel != originalModel && ctx.Routing.SelectedRecipe() != nil &&
+		!r.routeExecutesLooper(ctx) && len(ctx.VSREligibleModelRefs) > 1 && !finalModelLocked(ctx) {
+		checkRateLimit = r.reserveRateLimit
+	}
+	if resp := checkRateLimit(ctx, selectedModel); resp != nil {
 		inflight.End(ctx.InflightModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp

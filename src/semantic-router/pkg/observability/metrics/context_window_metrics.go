@@ -9,6 +9,10 @@ import (
 // (count "exact") or with the proxy tokenizer (count "proxy"), and places
 // the count against the window and the band of that kind of count.
 var (
+	finalAdmission = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "llm_final_context_admission_total",
+		Help: "Provider-bound context checks by counting source and verdict.",
+	}, []string{"count", "verdict"})
 	contextWindowChecks = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "llm_context_window_checks_total",
 		Help: "Context window checks decided on the Router's prompt count, once per model and prompt shape of a request, by count (exact or proxy) and verdict (fits, in_band or exceeds).",
@@ -60,4 +64,8 @@ func SetContextWindowTokenizerLoaded(tokenizer string, loaded bool) {
 		value = 1
 	}
 	contextWindowTokenizers.WithLabelValues(tokenizer).Set(value)
+}
+
+func RecordFinalAdmission(source, verdict string) {
+	finalAdmission.WithLabelValues(source, verdict).Inc()
 }
