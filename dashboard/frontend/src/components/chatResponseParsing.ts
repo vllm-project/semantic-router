@@ -130,11 +130,11 @@ export const consumeEventStream = async (
 
     for (const rawLine of lines) {
       const line = rawLine.trim()
-      if (!line.startsWith('data: ')) {
+      if (!line.startsWith('data:')) {
         continue
       }
 
-      const data = line.slice(6).trim()
+      const data = line.slice(5).trim()
       if (!data || data === '[DONE]') {
         continue
       }
