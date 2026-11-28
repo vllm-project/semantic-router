@@ -70,7 +70,7 @@ its own protocol, and Router Replay records the request as refused; see
 | `predicate` | The least probability of `jailbreak`; by default the model's calibrated threshold (0.88 on vela3-fast) at the request stage, else 0.5 |
 | `stage` | `request` (default) or `response`, which reads the model's answer |
 | `input.history` | Also read the earlier user turns |
-| `input.tool_results` | Also read the tool results returned in the current turn. Off by default |
+| `input.tool_results` | Also read the textual tool results the turn's trailing step returned. Off by default |
 | `on_unscanned` | What the rule reports when it cannot read all of its input: `best_effort` (the default), `match`, `no_match` or `unknown` |
 | `min_coverage` | With `best_effort`, the share of the windows, 0 to 1, that must have been read to decide on them; below it the rule is unknown. Off by default |
 | `on_unknown` | Request stage: what the rule reports when its model gives no answer, `match` (the default) or `no_match` |
@@ -79,13 +79,25 @@ its own protocol, and Router Replay records the request as refused; see
 ### What it reads
 
 At the request stage, the question reads the user's text of the current turn:
-the consecutive user and tool messages that end the request, stopping at an
-assistant message. A system message inside the conversation, which Claude Code
-inserts after the user's message or a tool result, does not end the turn. With
-`input.tool_results`, it also reads the textual tool results of the turn,
-where a fetched page or file can carry instructions; without it, the default,
-a turn that holds only tool results gives the rule nothing to read. With
-`input.history`, it also reads the earlier user text. System and developer
+the user message that opened the turn and the user text after it. An assistant
+message that carries a tool call continues the user's turn instead of ending
+it, so the instruction that started a tool cycle stays in the current input
+for every request the cycle makes, and the reasoning and narration items a step
+writes before its function calls belong to that step. An assistant message
+without a tool call is a completed answer, and it remains the boundary between
+turns: the user turn above it, and the tool results that turn left, stay in the
+history. A system message inside the conversation, which Claude Code inserts
+after the user's message or a tool result, does not end the turn either.
+
+With `input.tool_results`, the rule also reads the textual tool results the
+trailing step returned, where a fetched page or file can carry instructions; a
+tool loop then gives the rule those results to read rather than a turn with
+nothing to read. Only that step's results are current evidence: a long cycle
+keeps its earlier results in the history, in order, instead of rescanning every
+output on each request. Without `input.tool_results`, the default, tool results
+are not read. With `input.history`, the rule also reads the earlier user text;
+the history keeps the earlier tool results of a multi-step cycle, but this
+input reads only the user text in it, not those results. System and developer
 instructions and assistant replies are not read as attack evidence. It also
 reads what `global.router.routing_input` removes from the routing text, so a
 fake memory block or runtime-context turn cannot hide an attack.

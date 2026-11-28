@@ -11,40 +11,121 @@ import (
 // and assistant context. It neither rewrites the provider request nor changes
 // other signals' history. Tool results remain untrusted even when their wire
 // protocol represents them inside a user message.
+//
+// A tool cycle is the user turn a tool call continues. Its initiating user
+// message stays current, but only the results the trailing step reads stay
+// current with it: the earlier results of a long cycle are history, so a task
+// with one instruction and a hundred tool calls does not rescan every output
+// on each request. History keeps those earlier results in conversation order,
+// though the jailbreak reading takes only the user text from it, and a
+// completed assistant answer still separates one cycle from the next.
 func extractJailbreakInput(request *llmprotocol.Request) *classification.JailbreakInput {
 	input := &classification.JailbreakInput{}
 	currentStart := currentTurnStart(request.Messages)
+	trailingStart := currentStepStart(request.Messages, currentStart)
 	for index, message := range request.Messages {
-		contents := jailbreakMessageContents(message)
-		if index >= currentStart {
-			input.Current = append(input.Current, contents...)
-		} else {
-			input.History = append(input.History, contents...)
+		switch {
+		case index < currentStart:
+			input.History = append(input.History, jailbreakMessageContents(message)...)
+		case index < trailingStart:
+			// An earlier step of the same cycle: its tool results belong to
+			// history, while the user text it carries keeps stating the
+			// instruction the cycle follows.
+			current, history := cycleStepContents(jailbreakMessageContents(message))
+			input.Current = append(input.Current, current...)
+			input.History = append(input.History, history...)
+		default:
+			input.Current = append(input.Current, jailbreakMessageContents(message)...)
 		}
 	}
 	return input
 }
 
-// currentTurnStart is where the request's current turn starts: the user and
-// tool messages after the last assistant message. A codec may split one wire
-// message into user text and several tool-result messages, so the trailing
-// untrusted group stays together and a sibling tool result cannot disappear
-// merely because include_history is disabled. A system or developer message
-// inside the conversation, which Claude Code inserts where it applies, after
-// the user's message or a tool result, does not end the turn.
-func currentTurnStart(messages []llmprotocol.Message) int {
-	start := len(messages)
-	for index := len(messages) - 1; index >= 0; index-- {
-		role := messages[index].Role
-		if isInstructionRole(role) {
+// currentStepStart is where the trailing step of the current turn begins: the
+// last assistant message of the turn that carries a tool call, whose results
+// the next model step reads. A turn that calls no tool, or whose only step is
+// already the trailing one, keeps every message of the turn current.
+func currentStepStart(messages []llmprotocol.Message, start int) int {
+	for index := len(messages) - 1; index >= start; index-- {
+		if messages[index].Role == llmprotocol.RoleAssistant && isToolCallContinuation(messages[index]) {
+			return index
+		}
+	}
+	return start
+}
+
+// cycleStepContents splits one message of an earlier step of the current tool
+// cycle. Tool results are history; the user text the message carries, such as
+// an instruction stated between two calls, stays current evidence.
+func cycleStepContents(contents []classification.JailbreakContent) (current, history []classification.JailbreakContent) {
+	for _, content := range contents {
+		if content.Role == string(llmprotocol.RoleTool) {
+			history = append(history, content)
 			continue
 		}
-		if role != llmprotocol.RoleUser && role != llmprotocol.RoleTool {
+		current = append(current, content)
+	}
+	return current, history
+}
+
+// currentTurnStart is where the request's current turn starts: the user and
+// tool messages after the last completed assistant turn. A codec may split one
+// wire message into user text and several tool-result messages, so a sibling
+// tool result cannot disappear merely because include_history is disabled. A
+// system or developer message inside the conversation, which Claude Code
+// inserts where it applies, after the user's message or a tool result, does
+// not end the turn. An assistant
+// message carrying a tool call is not a completed assistant turn either: it
+// continues the user's tool cycle, so the user message that initiated the
+// cycle stays in the current turn instead of falling into history. A codec may
+// also emit one tool-call step as several assistant items, such as the
+// Responses reasoning and narration items that precede the function calls.
+// Once the scan reaches a tool call, the earlier assistant items of that same
+// step continue the cycle too, while an assistant step without a tool call
+// remains the delimiter between turns.
+func currentTurnStart(messages []llmprotocol.Message) int {
+	start := len(messages)
+	inToolStep := false
+	for index := len(messages) - 1; index >= 0; index-- {
+		message := messages[index]
+		if isInstructionRole(message.Role) {
+			continue
+		}
+		if message.Role == llmprotocol.RoleAssistant {
+			if isToolCallContinuation(message) {
+				inToolStep = true
+				continue
+			}
+			// The assistant items of a tool-call step all precede its calls on
+			// the wire, so they continue the cycle only while scanning that
+			// step. A completed answer breaks the scan instead.
+			if inToolStep {
+				continue
+			}
+			break
+		}
+		if message.Role != llmprotocol.RoleUser && message.Role != llmprotocol.RoleTool {
 			break
 		}
 		start = index
+		// A user or tool message separates assistant steps, so a tool call
+		// above it belongs to an earlier cycle and cannot continue this one.
+		inToolStep = false
 	}
 	return start
+}
+
+// isToolCallContinuation reports whether an assistant message carries at least
+// one tool call. Text next to a tool call is the model's narration of the
+// call, not a completed answer, so it does not end the turn; an assistant
+// message without a tool call remains the delimiter between turns.
+func isToolCallContinuation(message llmprotocol.Message) bool {
+	for _, content := range message.Content {
+		if content.Kind == llmprotocol.ContentToolCall && content.ToolCall != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func isInstructionRole(role llmprotocol.Role) bool {
