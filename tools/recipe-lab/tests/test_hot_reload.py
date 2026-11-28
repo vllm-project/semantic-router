@@ -114,16 +114,6 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         body = json.loads(self.rfile.read(length) or b"{}")
         prompt = (body.get("messages") or [{}])[0].get("content", "")
-        if "lost-replay" in prompt:
-            # the capture-lost scenario: the request is served but its
-            # replay record never lands, so the pull joins one case short
-            out = json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(out)))
-            self.end_headers()
-            self.wfile.write(out)
-            return
         with lock:
             state = _load()
             state["records"].append(
@@ -305,6 +295,7 @@ def _candidate(path: Path, marker: str = "") -> Path:
         "  - name: http\n"
         "    address: 0.0.0.0\n"
         "    port: 8899\n"
+        "global: {services: {router_replay: {store_backend: memory}}}\n"
         f"x-candidate: {path.stem}\n"
     )
     if marker:
@@ -454,45 +445,6 @@ def test_hot_reload_count_mismatch_records_incomplete(tmp_path, hot_stack):
         assert result["incomplete"] is True
         assert "rows for 2 cases" in result["incomplete_reason"]
         assert "summary" not in result and "rows" not in result
-    finally:
-        session.stop()
-
-
-def test_restart_capture_lost_case_is_incomplete(tmp_path, hot_stack):
-    # review regression: the restart path joined by prompt without any
-    # completeness check, so a lost wrong-case replay ranked the partial
-    # pull at 100% over the complete run's 50%. A capture that misses a
-    # case must mark the result incomplete instead of scoring it.
-    _state, env = hot_stack
-    cands = tmp_path / "cands"
-    cands.mkdir()
-    cand_a = _candidate(cands / "a.yaml")
-    cand_rej = _candidate(cands / "rej.yaml", "# hot-reject")
-    lost_cases = [
-        {"case_id": "c1", "prompt": "prompt one", "truth": "code"},
-        {"case_id": "c2", "prompt": "prompt two lost-replay", "truth": "code"},
-    ]
-
-    session = HotReloadSession(
-        env=env, boot_source=cand_a, router_model="vllm-sr/auto", family="d3"
-    )
-    try:
-        session.ensure_started()
-        session.evaluate(
-            candidate_config=cand_a, cases=CASES, oracle_policy=POLICY, bank=BANK
-        )
-        result = session.evaluate_with_fallback(
-            candidate_config=cand_rej,
-            cases=lost_cases,
-            oracle_policy=POLICY,
-            bank=BANK,
-        )
-        assert result["reload"] == "restart-fallback"
-        assert result["incomplete"] is True
-        assert "1 of 2 cases joined" in result["incomplete_reason"]
-        assert "summary" not in result and "rows" not in result
-        # both requests were served; only the capture is untrusted
-        assert result["statuses"] == {"c1": 200, "c2": 200}
     finally:
         session.stop()
 

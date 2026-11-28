@@ -1,7 +1,11 @@
 # Repository tooling tests that do not require a running Router.
 
 test-calibration: $(HARNESS_VENV_DEPS) ## Test recipe probes and offline tuning tools
+	@if [ ! -x "$(AGENT_VENV)/bin/vllm-sr" ]; then \
+		"$(AGENT_PYTHON)" -m pip install -q -e "$(CURDIR)/src/vllm-sr"; \
+	fi
 	@PYTHONPATH="$(CURDIR)/tools/calibration:$(CURDIR)/tools/calibration/recipe$${PYTHONPATH:+:$${PYTHONPATH}}" \
+		RECIPE_LAB_VLLM_SR_BIN="$(AGENT_VENV)/bin/vllm-sr" \
 		"$(AGENT_PYTHON)" -m pytest tools/calibration/recipe tools/calibration/tuning/tests tools/calibration/systemone_auto/tests tools/recipe-lab/tests --ignore=tools/recipe-lab/tests/integration
 
 PROVIDER_MOCKER_VENV ?= $(CURDIR)/.agent-harness/provider-mocker

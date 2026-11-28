@@ -1,0 +1,17 @@
+{
+  "tool_history_concentrated_on_strong": [
+    "工具回传大量集中到强模型",
+    "工具回合几乎都走强模型",
+    "工具回合集中到强模型",
+    "工具回合仍走强模型",
+    "工具调用集中到强模型"
+  ],
+  "semantic_execution_phase": ["执行阶段"],
+  "long_stream_retry": ["长流反复断开", "流在300秒断开", "300 秒断流"],
+  "active_stream_cutoff": ["活跃流被截断"],
+  "missing_done": ["缺少流结束标记"],
+  "tool_window_expansion": ["扩大工具结果窗口"],
+  "same_backend_different_parameters": ["同一后端不同输出上限"],
+  "strict_failure_native_output_limit": ["严格判卷失败且输出耗尽"],
+  "native_output_limit": ["原生输出耗尽"]
+}

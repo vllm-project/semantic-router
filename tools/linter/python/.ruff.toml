@@ -45,6 +45,13 @@ ignore = [
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
 "tools/recipe-lab/tests/*.py" = ["PLC0415", "PLR2004"]
+# The development-loop modules port the historical implementation faithfully:
+# their deferred imports break import cycles on purpose, and the calibrated
+# thresholds read best inline next to the gates they size.
+"tools/recipe-lab/recipe_lab/{decision_summary,first_tool_action,headroom,improver_eval,objective,planner,planning_replay,planning_space,schedule,search_accounting,search_protocol,signature,skill_replay,speed_draft,target_dev}.py" = [
+  "PLC0415",
+  "PLR2004",
+]
 # The mcq grader keeps an intentional lazy import + module-level cache so the
 # training package stays optional on sys.path.
 "tools/recipe-lab/recipe_lab/bank.py" = ["PLC0415", "PLW0603"]
