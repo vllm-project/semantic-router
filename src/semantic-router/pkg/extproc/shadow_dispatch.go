@@ -231,7 +231,7 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 		engine = nil
 	}
 	cfg := replay.Shadow.WithDefaults()
-	cfg.Capture.Enabled = cfg.Capture.Enabled && replayResponseContentAllowed(ctx)
+	cfg.Capture.Enabled = cfg.Capture.Enabled && replayResponseContentAllowed(ctx) && replay.CapturesResponseText()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
 		routerConfig:         r.Config,
 		engine:               engine,
@@ -273,6 +273,11 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	envelope := ctx.ProtocolEnvelope
 	sourceFormat, requestID := ctx.SourceFormat, ctx.RequestID
 	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
+		// A stored response would keep the prompt at the provider.
+		request.Store, request.AutoStore = nil, nil
+		if target.format == llmprotocol.OpenAIResponsesV1 {
+			request.Store = llmprotocol.Bool(false)
+		}
 		request.Model = target.upstreamModel
 		request.Stream = false
 		request.StreamOptions = llmprotocol.StreamOptions{}
@@ -530,8 +535,10 @@ func (d *shadowDispatcher) enqueueGroup(key string, jobs []*shadowJob, cancel co
 		}
 		defer func() { <-lane.groups }()
 		budget := first.cfg.Budget
-		if (budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil) && !d.admitShadowGroup(jobs, budget) {
-			return
+		if budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil {
+			if jobs = d.admitShadowGroup(jobs, budget); len(jobs) == 0 {
+				return
+			}
 		}
 		var workers sync.WaitGroup
 		for _, job := range jobs {

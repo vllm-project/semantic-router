@@ -82,8 +82,11 @@ its 0.18 accepts every span it returns.
 ### What it reads
 
 The question reads the current user turn, the earlier user turns with
-`input.history`, and the textual tool results with `input.tool_results`;
-tool calls and non-text content are not read. It also reads what
+`input.history`, and the textual tool results with `input.tool_results`,
+including what an Anthropic server tool such as `web_fetch` returned; tool
+calls and non-text content are not read. A fetched PDF or a search result's
+encrypted content reaches the model but not the detector, so it leaves the
+scan incomplete. It also reads what
 `global.router.routing_input` removes from the routing text, so personal data
 cannot hide in a fake memory block.
 

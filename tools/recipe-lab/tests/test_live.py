@@ -247,6 +247,39 @@ def test_live_verdict_missing_measurement_is_inconclusive():
     assert "guard evaluation incomplete" in result["reasons"][0]
 
 
+@pytest.mark.parametrize("failed_arm", ["baseline", "candidate"])
+def test_live_verdict_on_a_run_that_did_not_complete_is_inconclusive(failed_arm):
+    # sr-bench scores a failed run's failed cases as wrong, so a failed
+    # baseline would otherwise read as the candidate's improvement.
+    class FakeCli:
+        def show(self, run_id):
+            return dict(_RUN_DOC)
+
+        def compare(self, base, cand):
+            return {
+                "baseline_status": (
+                    "failed" if failed_arm == "baseline" else "completed"
+                ),
+                "candidate_status": (
+                    "failed" if failed_arm == "candidate" else "completed"
+                ),
+                "baseline": {"capability.score": 0.43},
+                "candidate": {"capability.score": 0.86},
+            }
+
+    result = live_verdict_from_runs(
+        spec=_spec(),
+        cli=FakeCli(),
+        baseline_run_id="run-a",
+        candidate_run_id="run-b",
+        measurements=[
+            {"name": "pii-recall-floor", "candidate": 0.97, "baseline": 0.96}
+        ],
+    )
+    assert result["verdict"] == "INCONCLUSIVE"
+    assert any(f"{failed_arm} run is failed" in r for r in result["reasons"])
+
+
 def test_live_verdict_undeclared_measurement_does_not_veto():
     class FakeCli:
         def show(self, run_id):

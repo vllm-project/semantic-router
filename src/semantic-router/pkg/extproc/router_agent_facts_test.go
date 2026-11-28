@@ -118,3 +118,20 @@ func TestAgentFactsReadCapturedHarnessHeaders(t *testing.T) {
 		})
 	}
 }
+
+// Codex is known by its session-id. A thread-id alone, which any client may
+// send, names the harness Router Replay records for the request, not Codex.
+func TestAgentHarnessNeedsCodexSessionID(t *testing.T) {
+	for _, tc := range []struct {
+		userAgent, want string
+	}{
+		{"", ""},
+		{"opencode/1.18.10", config.AgentHarnessOpenCode},
+		{"Cursor/2.0", config.AgentHarnessCursor},
+	} {
+		ctx := &RequestContext{Headers: map[string]string{"thread-id": "t1", "user-agent": tc.userAgent}}
+		if got := agentHarness(ctx); got != tc.want {
+			t.Fatalf("user agent %q: agent signal harness %q, want %q as Replay records it", tc.userAgent, got, tc.want)
+		}
+	}
+}

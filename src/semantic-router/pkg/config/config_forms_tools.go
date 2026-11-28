@@ -106,8 +106,11 @@ func migrateGlobalTools(m *Migration, at FormMatch) error {
 	if mappingValue(global, "similarity_threshold") != nil {
 		m.Note(at.Path+".similarity_threshold", "an embedding similarity cut has no judge equivalent; fit match.judge.min_score or min_ratio to the decision model if the selections need one")
 	}
-	if mappingValue(global, "advanced_filtering") != nil {
+	if filtering := mappingValue(global, "advanced_filtering"); filtering != nil {
 		m.Note(at.Path+".advanced_filtering", "lexical, tag, category and history scoring are removed; to use another catalog per domain, split the decisions on a domain condition")
+		if mappingValue(filtering, "allow_tools") != nil || mappingValue(filtering, "block_tools") != nil {
+			m.Note(at.Path+".advanced_filtering", "allow_tools and block_tools are removed, and nothing filters the tools selection adds from the catalog; take a blocked tool out of the tools_db catalog, or keep only the allowed tools in it")
+		}
 	}
 	m.Delete(at.Parent, "tools")
 	deleteEmpty(at.Root, "global", "integrations")

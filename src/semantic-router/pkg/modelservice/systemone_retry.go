@@ -21,8 +21,10 @@ type questionFailure struct {
 // failedQuestion reads a failed call's answer: the question a System One API
 // names when it fails a call on it and, in a batch, its entry, as
 // {"error": {"code": "question_failed", "question": "<id>", "state": "<entry>", "question_error": ...}}.
+// The status follows the question's own error, so a 5xx such as the runtime's
+// invalid_model_output still names one question, not the whole call.
 func failedQuestion(status int, body []byte) (questionFailure, bool) {
-	if status < http.StatusBadRequest || status >= http.StatusInternalServerError || status == http.StatusTooManyRequests {
+	if status < http.StatusBadRequest || status == http.StatusTooManyRequests {
 		return questionFailure{}, false
 	}
 	var answer struct {

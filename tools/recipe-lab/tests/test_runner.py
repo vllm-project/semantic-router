@@ -144,6 +144,20 @@ def test_replay_constraint_evidence_flags_violation():
     assert entry["reason"] == "constraint cost-not-worse violated (replay cost proxy)"
 
 
+def test_replay_constraint_evidence_leaves_an_accuracy_floor_unevaluated():
+    # the cost proxy measures no accuracy, so a cheaper candidate is not
+    # judged as violating an accuracy floor
+    floor = _cost_constraint(
+        name="accuracy-not-worse", metric="capability.score", op="gte"
+    )
+    evidence, warning = replay_constraint_evidence(
+        (floor,), candidate_index=0.4, baseline_index=0.8
+    )
+    assert warning is False
+    assert evidence[0]["status"] == "not_evaluated"
+    assert "proxy" not in evidence[0]
+
+
 def test_replay_constraint_evidence_numeric_bound_pass():
     evidence, warning = replay_constraint_evidence(
         (_cost_constraint(bound=12.0),), candidate_index=5.5, baseline_index=None

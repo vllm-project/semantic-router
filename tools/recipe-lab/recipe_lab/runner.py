@@ -71,7 +71,7 @@ from .adapters.router_replay import (
 )
 from .attribution import CaseInput, attribute, summarize
 from .bank import apply_bank
-from .contract import ContractError, OraclePolicy
+from .contract import ContractError, OraclePolicy, _is_cost_metric
 from .verdict import resolve_constraint
 
 
@@ -937,11 +937,13 @@ def replay_constraint_evidence(
     candidate_index: float | None,
     baseline_index: float | None,
 ) -> tuple[list[dict], bool]:
-    """E2: evaluate the declared constraints against the cost proxy.
+    """E2: evaluate the declared cost constraints against the cost proxy.
 
-    Every declared constraint is proxied: the replay tier has exactly one
-    economic measurement (routed_cost_index), so the declared live metric
-    name is preserved for provenance and `proxy` records the substitution.
+    The replay tier has exactly one economic measurement (routed_cost_index),
+    so a constraint on a cost metric is proxied: the declared live metric name
+    is preserved for provenance and `proxy` records the substitution. Any
+    other constraint, such as an accuracy floor, has no replay measurement
+    and stays not_evaluated rather than being judged on cost.
     `bound: "baseline"` resolves against the baseline arm's proxy value
     (None when no baseline config was evaluated -> not_evaluated, never a
     guess). Returns (evidence list, constraint_warning) where the warning
@@ -950,19 +952,21 @@ def replay_constraint_evidence(
     evidence: list[dict] = []
     warning = False
     for constraint in constraints:
-        resolved = resolve_constraint(
-            {
-                "name": constraint.name,
-                "metric": constraint.metric,
-                "op": constraint.op,
-                "bound": constraint.bound,
-                "tolerance_pct": constraint.tolerance_pct,
-                # replay proxy substitution: both arms measured on the proxy
-                "baseline": baseline_index if constraint.bound == "baseline" else None,
-                "candidate": candidate_index,
-                "proxy": COST_PROXY_METRIC,
-            }
-        )
+        raw = {
+            "name": constraint.name,
+            "metric": constraint.metric,
+            "op": constraint.op,
+            "bound": constraint.bound,
+            "tolerance_pct": constraint.tolerance_pct,
+            "baseline": None,
+            "candidate": None,
+        }
+        if _is_cost_metric(constraint.metric):
+            # replay proxy substitution: both arms measured on the proxy
+            raw["candidate"], raw["proxy"] = candidate_index, COST_PROXY_METRIC
+            if constraint.bound == "baseline":
+                raw["baseline"] = baseline_index
+        resolved = resolve_constraint(raw)
         if resolved["status"] == "violated":
             resolved["reason"] = (
                 f"constraint {constraint.name} violated (replay cost proxy)"

@@ -171,3 +171,40 @@ func TestExtractToolResultTextsNilRequest(t *testing.T) {
 		t.Fatalf("extractToolResultTexts(nil) = %#v, want empty extraction", got)
 	}
 }
+
+// An Anthropic server tool's result, such as a fetched page, is tool output
+// the tool_result source reads; its call and the result's metadata are not. A
+// fetched PDF and a search result's encrypted content stay unscanned.
+func TestExtractToolResultTextsReadsServerToolResults(t *testing.T) {
+	call := llmprotocol.Content{Kind: llmprotocol.ContentServerTool, Raw: []byte(`{"type":"server_tool_use","id":"srvtoolu_1","name":"web_fetch","input":{"url":"https://example.invalid"}}`)}
+	for name, test := range map[string]struct {
+		result     string
+		texts      []string
+		incomplete bool
+	}{
+		"fetched text": {
+			result: `{"type":"web_fetch_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"web_fetch_result","url":"https://example.invalid/u/bob","content":{"type":"document","title":"bob@example.com","source":{"type":"text","media_type":"text/plain","data":"owner: alice@example.com"}}}}`,
+			texts:  []string{"owner: alice@example.com", "bob@example.com", "https://example.invalid/u/bob"},
+		},
+		"fetched pdf": {
+			result:     `{"type":"web_fetch_tool_result","tool_use_id":"srvtoolu_1","content":{"type":"web_fetch_result","url":"https://example.invalid/a.pdf","content":{"type":"document","source":{"type":"base64","media_type":"application/pdf","data":"JVBERi0xLjQ="}}}}`,
+			texts:      []string{"https://example.invalid/a.pdf"},
+			incomplete: true,
+		},
+		"search results": {
+			result:     `{"type":"web_search_tool_result","tool_use_id":"srvtoolu_1","content":[{"type":"web_search_result","url":"https://example.invalid","title":"A page","encrypted_content":"EqgfCioIARgBIiQ3"}]}`,
+			incomplete: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			req := &llmprotocol.Request{Messages: []llmprotocol.Message{{
+				Role:    llmprotocol.RoleAssistant,
+				Content: []llmprotocol.Content{call, {Kind: llmprotocol.ContentServerTool, Raw: []byte(test.result)}},
+			}}}
+			got := extractToolResultTexts(req)
+			if got.incomplete != test.incomplete || !reflect.DeepEqual(got.texts, test.texts) {
+				t.Fatalf("extraction = %+v, want texts %q and incomplete %v", got, test.texts, test.incomplete)
+			}
+		})
+	}
+}

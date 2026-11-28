@@ -48,7 +48,9 @@ lists every removed form, its load error and its rewrite.
   `routing`: routing lives in flat `recipes`, model facts on
   `providers.models[]`, and default plugins in `global.plugins`.
 - **Removed forms fail at load with one line**, and migrate rewrites them.
-  The only alias is `decision`, which loads as `systemone` with a warning.
+  Two renames still load with a warning: `decision` loads as `systemone`, and
+  a `router_replay` plugin's `capture_personal_data` loads as its
+  `prompt_capture`.
 - **Removed signal types:** `classifiers`, `preferences`, `embeddings` and `kb`
   (`systemone` questions; migrate drops a `kb` rule, which never matches, and
   names its question), `reasks` and `topic_continuity` (`turn_relation`),

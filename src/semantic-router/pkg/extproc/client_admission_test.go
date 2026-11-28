@@ -331,3 +331,34 @@ func TestSkipProcessingGivesWayToClientKeys(t *testing.T) {
 	})
 	requireRefusal(t, response, 409, refusedSuperseded)
 }
+
+// A model the listener routes to its unserved_models route_to needs the key
+// of the entrypoint it reaches.
+func TestAnUnservedModelNeedsTheKeyOfItsRoute(t *testing.T) {
+	t.Setenv("FAST_KEY", "fast-1")
+	service := clientAuthService(t, &countingResponseStore{MockResponseStore: NewMockResponseStore()}, "FAST_KEY")
+	for authorization, wantRefused := range map[string]bool{"": true, "Bearer fast-1": false} {
+		ctx := routing.WithUnservedModelRoute(routing.WithListenerModels(context.Background(), []string{"company/fast"}), "company/fast")
+		session, err := service.Open(ctx)
+		require.NoError(t, err)
+		header := routing.Header{
+			{Name: ":method", Value: "POST"},
+			{Name: ":path", Value: "/v1/chat/completions"},
+			{Name: "content-type", Value: "application/json"},
+		}
+		if authorization != "" {
+			header = append(header, routing.HeaderField{Name: "authorization", Value: authorization})
+		}
+		_, err = session.RequestHeaders(header, false)
+		require.NoError(t, err)
+		effect, err := session.RequestBody([]byte(`{"model":"gpt-unknown","messages":[{"role":"user","content":"hi"}]}`), true)
+		require.NoError(t, err)
+		if wantRefused {
+			require.NotNil(t, effect.Immediate, "an unserved model reached company/fast without its key")
+			assert.Equal(t, 401, effect.Immediate.Status)
+		} else {
+			assert.Nil(t, effect.Immediate, "the route's key was refused")
+		}
+		session.Close(nil)
+	}
+}

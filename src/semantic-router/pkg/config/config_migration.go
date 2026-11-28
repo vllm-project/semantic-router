@@ -126,6 +126,13 @@ func migrateConfigForms(data []byte, forms []ConfigForm) ([]byte, []ConfigWarnin
 	if root == nil {
 		return data, nil, nil
 	}
+	// Aliases share one node, so rewriting the first use would change what
+	// every later use reads. Each use gets its own copy, as the loader reads
+	// them.
+	if holdsAlias(root) {
+		root = detachedCopy(root)
+		document.Content[0] = root
+	}
 	m := &Migration{root: root}
 	changed := false
 	for _, form := range forms {
@@ -261,4 +268,16 @@ func setValue(node *yaml.Node, key string, value interface{}, remove bool) error
 	}
 	setNode(node, key, &encoded)
 	return nil
+}
+
+func holdsAlias(node *yaml.Node) bool {
+	if node.Kind == yaml.AliasNode {
+		return true
+	}
+	for _, child := range node.Content {
+		if holdsAlias(child) {
+			return true
+		}
+	}
+	return false
 }

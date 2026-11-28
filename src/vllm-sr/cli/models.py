@@ -223,11 +223,12 @@ class ListenerAPI(BaseModel):
     )
     prefix: Optional[str] = Field(
         default=None,
-        pattern=r"^(/[A-Za-z0-9._~-]+)+$",
+        pattern=r"^((/[A-Za-z0-9._~-]+)+)?$",
         description="A path root this API is also served under, as a gateway "
         "registers a provider's endpoints (/anthropic serves "
         "/anthropic/v1/messages as /v1/messages). The upstream request never "
-        "carries it. Omitted, the API is served at its own paths only.",
+        "carries it. Omitted or empty, as the Router reads it, the API is "
+        "served at its own paths only.",
     )
     models: Optional[List[str]] = Field(
         default=None,

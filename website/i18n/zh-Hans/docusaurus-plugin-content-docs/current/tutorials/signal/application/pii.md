@@ -77,7 +77,7 @@ recipes:
 
 ### 读取什么 {#what-it-reads}
 
-问题读取当前用户轮次；设置 `input.history` 时读取之前的用户轮次，设置 `input.tool_results` 时读取文本工具结果；工具调用和非文本内容不会被读取。它还会读取 `global.router.routing_input` 从路由文本中移除的内容，所以个人数据无法藏在伪造的记忆块里。
+问题读取当前用户轮次；设置 `input.history` 时读取之前的用户轮次，设置 `input.tool_results` 时读取文本工具结果，包括 Anthropic 服务端工具（如 `web_fetch`）返回的内容；工具调用和非文本内容不会被读取。抓取到的 PDF 或搜索结果的加密内容会到达模型但不会到达检测器，因此扫描记为不完整。它还会读取 `global.router.routing_input` 从路由文本中移除的内容，所以个人数据无法藏在伪造的记忆块里。
 
 编码智能体的用户轮次带有其运行框架（harness）自身的指令：例如 Claude Code 2.1.317 会在第一条用户消息的提醒中放入一行带邮箱地址的提交尾注（commit trailer）。针对智能体工具返回内容的规则应同时设置 `input.request: false` 和 `input.tool_results: true`，如上面的 `tool_result_pii`，这样它只读取工具结果，不读取当前轮次及 `routing_input` 从中移除的内容。在请求带有工具结果之前，这样的规则不会被询问，也不会匹配。
 

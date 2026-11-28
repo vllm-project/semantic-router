@@ -109,15 +109,24 @@ func estimateCountTokens(request *llmprotocol.Request) int {
 // contentFreeSignalTypes read only the shape and size of a conversation.
 var contentFreeSignalTypes = map[string]bool{config.SignalTypeConversation: true, config.SignalTypeContext: true}
 
-// recipeGuardsContent reports whether a recipe decision could keep this
-// content from the model that last served the session: one that reads content
-// to choose a model or refuse, or one with a plugin, since plugins can mask,
-// strip or answer in place of the backend. count_tokens runs no decision, so
-// such a recipe gets the Router's estimate.
+// recipeGuardsContent reports whether a recipe could keep this content from
+// the model that last served the session: a decision that reads content to
+// choose a model or refuse, or one with a plugin, since plugins can mask,
+// strip or answer in place of the backend, or a plugin of the recipe or
+// global.plugins that does so on every turn. count_tokens runs no decision,
+// so such a recipe gets the Router's estimate.
 func recipeGuardsContent(ctx *RequestContext) bool {
 	recipe := ctx.Routing.SelectedRecipe()
 	if recipe == nil {
 		return false
+	}
+	if masking := config.MaskingPluginOf(recipe.Profile.DefaultPlugins); masking != nil && masking.Enabled {
+		return true
+	}
+	for _, plugin := range recipe.Profile.DefaultPlugins {
+		if plugin.Type == config.DecisionPluginTools || plugin.Type == config.DecisionPluginFastResponse {
+			return true
+		}
 	}
 	for i := range recipe.Profile.Decisions {
 		if len(recipe.Profile.Decisions[i].Plugins) > 0 || ruleReadsContent(recipe.Profile.Decisions[i].Rules) {

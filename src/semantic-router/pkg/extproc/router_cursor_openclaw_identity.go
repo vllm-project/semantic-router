@@ -68,8 +68,8 @@ func openClawSession(ctx *RequestContext) string {
 // reads the whole first user message, with the start of the system
 // instructions, the request's user field and the authenticated tenant, keyed
 // as that fingerprint is. Every call of one conversation resends them; only
-// the hash is kept, and only Replay and tracing read it, never protection or
-// routing. A compaction that rewrites the conversation's opening starts a new
+// the hash is kept, and only Replay, tracing and run budgets read it, never
+// protection or routing. A compaction that rewrites the conversation's opening starts a new
 // id.
 func derivedConversationID(ctx *RequestContext, harness string) string {
 	if ctx == nil || ctx.SemanticRequest == nil {
