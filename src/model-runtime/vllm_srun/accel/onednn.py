@@ -1,12 +1,12 @@
-"""oneDNN's pre-packed FP32 linear: the ``linear`` slot's ``float32-packed`` variant on x86 CPUs.
+"""oneDNN's pre-packed FP32 linear: the ``linear`` slot's ``float32-packed`` CPU variant.
 
-The weight is reordered once, at load. On EPYC its GEMMs are 2.5-4.4x faster
-than ``F.linear`` (MKL) at every batch size and stay within 3.3e-6 of it.
+The weight is reordered once, at load. See ``docs/records/vela2-arm64-packed.md``
+for the ARM64 parity and latency measurements.
 
 Whether a row's result is the same alone or inside a batch depends on the
 oneDNN build, the product shape and the thread count, so ``invariant`` measures
 it on the model's own layers at load instead of assuming it. On the EPYC the
-kernel was first measured on (oneDNN 3.7, the pinned torch 2.10) every batch
+kernel was first measured on (oneDNN 3.7, torch 2.10) every batch
 size agreed; on a Xeon Gold 6530 and a Zen 4 Ryzen with the same build the
 wide-K down-projections did not once a batch held 81 rows or more (1152-to-768
 at 12 and 64 threads, 3072-to-768 at 4 to 16 threads, every count under AVX2),
@@ -14,10 +14,9 @@ while MKL's ``F.linear`` differs below 32 rows; with oneDNN 3.10 (torch 2.11)
 on that Xeon every shape differs between 2-row and 17-row batches at any
 thread count, and a Raptor Lake host on torch 2.14 differs only between a
 single row and any batch. The same ops called directly on a GB10's Grace
-cores (aarch64 wheels of torch 2.10 and 2.11; ``available`` does not admit
-that machine yet, #5437 widens it) agreed at every count from 1 to 20. The
-property is one of the build, the host and the thread count, which is why it
-is probed rather than assumed.
+cores (aarch64 wheels of torch 2.10 and 2.11) agreed at every count from 1 to 20.
+The property is one of the build, the host and the thread count, which is why
+it is probed rather than assumed.
 """
 
 from __future__ import annotations
@@ -40,19 +39,29 @@ PROBE_ROWS = (3, 8, 17, 64, 96, 127, 129, 208, 512)
 
 def available() -> bool:
     """Whether this host and PyTorch build run the packed linear."""
-    if platform.machine().lower() not in ("x86_64", "amd64"):
-        return False
+    return unavailable_reason() is None
+
+
+def unavailable_reason() -> str | None:
+    """Why the packed linear cannot run, or None when it can."""
+    machine = platform.machine()
+    if machine.lower() not in ("x86_64", "amd64", "aarch64", "arm64"):
+        return (
+            f"CPU architecture {machine!r} is unsupported by oneDNN packed linear "
+            "(requires x86-64 or ARM64)"
+        )
     if not torch.backends.mkldnn.is_available():
-        return False
+        return "this PyTorch build lacks oneDNN support for packed linear"
     try:
+        torch.ops.mkldnn._reorder_linear_weight  # noqa: B018 - resolves the op or raises
         torch.ops.mkldnn._linear_pointwise  # noqa: B018 - resolves the op or raises
     except (AttributeError, RuntimeError):
-        return False
-    return True
+        return "this PyTorch build lacks oneDNN packed-linear operators"
+    return None
 
 
 class PackedLinear(nn.Module):
-    """An FP32 ``nn.Linear`` whose weight oneDNN reordered once (x86 CPUs)."""
+    """An FP32 ``nn.Linear`` whose weight oneDNN reordered once."""
 
     packed: torch.Tensor
 

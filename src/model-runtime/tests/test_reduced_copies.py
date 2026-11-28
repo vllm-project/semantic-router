@@ -1,5 +1,7 @@
 """Reduced copies of an encoder's linear layers, which batches that merge requests run."""
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 from torch import nn
@@ -14,6 +16,41 @@ from vllm_srun.engines.native.reduced import (
 from .test_modernbert import CONFIGS, batch, native
 
 CPU = torch.device("cpu")
+
+
+@pytest.mark.parametrize("machine", ["x86_64", "amd64", "aarch64", "arm64"])
+def test_packed_linear_is_available_on_supported_cpus(monkeypatch, machine):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: machine)
+    monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
+    monkeypatch.setattr(
+        onednn.torch.ops,
+        "mkldnn",
+        SimpleNamespace(
+            _reorder_linear_weight=object(),
+            _linear_pointwise=object(),
+        ),
+    )
+    assert onednn.available()
+
+
+@pytest.mark.parametrize("machine", ["x86_64", "aarch64"])
+def test_packed_linear_needs_the_reorder_op(monkeypatch, machine):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: machine)
+    monkeypatch.setattr(onednn.torch.backends.mkldnn, "is_available", lambda: True)
+    monkeypatch.setattr(
+        onednn.torch.ops,
+        "mkldnn",
+        SimpleNamespace(_linear_pointwise=object()),
+    )
+    assert not onednn.available()
+    reason = unavailable("float32-packed", CPU)
+    assert reason is not None and "PyTorch build lacks" in reason
+
+
+def test_packed_linear_reports_an_unsupported_cpu(monkeypatch):
+    monkeypatch.setattr(onednn.platform, "machine", lambda: "ppc64le")
+    reason = unavailable("float32-packed", CPU)
+    assert reason is not None and "CPU architecture 'ppc64le'" in reason
 
 
 def runnable(kind):
