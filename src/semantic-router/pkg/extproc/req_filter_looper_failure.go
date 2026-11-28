@@ -17,6 +17,7 @@ limitations under the License.
 package extproc
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -74,6 +75,13 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 	// with the model's status, as it would without a Looper.
 	if upstream := looper.UpstreamStatus(err); upstream == 429 || upstream >= 500 {
 		status = upstream
+	}
+	// A run whose every hop dispatch refused answers with that refusal, as
+	// the request would without a Looper.
+	var refused *looperHopsRefusedError
+	if errors.As(err, &refused) {
+		reqCtx.ImmediateProtocolError = refused.refusal
+		status, message, reason = 400, refused.refusal.Message, refused.refusal.Code
 	}
 	// A hop or check refused for want of the request's delegated credential
 	// answers the run 401, with the typed error the refusal records.

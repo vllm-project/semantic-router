@@ -122,47 +122,56 @@ spec:
   # ====================
   # Define tools that can be auto-selected based on query
   toolsDb:
-    - name: web_search
-      description: Search the web for current information
-      parameters:
-        type: object
-        properties:
-          query:
-            type: string
-            description: Search query
-          num_results:
-            type: integer
-            description: Number of results to return
-            default: 5
-        required: [query]
+    - tool:
+        type: function
+        function:
+          name: web_search
+          description: Search the web for current information
+          parameters:
+            type: object
+            properties:
+              query:
+                type: string
+                description: Search query
+              num_results:
+                type: integer
+                description: Number of results to return
+                default: 5
+            required: [query]
 
-    - name: code_interpreter
-      description: Execute Python code in a sandbox environment
-      parameters:
-        type: object
-        properties:
-          code:
-            type: string
-            description: Python code to execute
-          timeout:
-            type: integer
-            description: Execution timeout in seconds
-            default: 30
-        required: [code]
+    - tool:
+        type: function
+        function:
+          name: code_interpreter
+          description: Execute Python code in a sandbox environment
+          parameters:
+            type: object
+            properties:
+              code:
+                type: string
+                description: Python code to execute
+              timeout:
+                type: integer
+                description: Execution timeout in seconds
+                default: 30
+            required: [code]
 
-    - name: knowledge_base_search
-      description: Search internal knowledge base for company information
-      parameters:
-        type: object
-        properties:
-          query:
-            type: string
-            description: Search query
-          collection:
-            type: string
-            description: Knowledge base collection name
-            enum: [policies, procedures, technical_docs]
-        required: [query]
+    - tool:
+        type: function
+        function:
+          name: knowledge_base_search
+          description: Search internal knowledge base for company information
+          parameters:
+            type: object
+            properties:
+              query:
+                type: string
+                description: Search query
+              collection:
+                type: string
+                description: Knowledge base collection name
+                enum: [policies, procedures, technical_docs]
+            required: [query]
 
   # ====================
   # Autoscaling
