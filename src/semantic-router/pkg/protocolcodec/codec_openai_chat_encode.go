@@ -9,6 +9,8 @@ import (
 
 func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
 	request, projectionDiagnostics := llmprotocol.ProjectResponsesReasoning(request, llmprotocol.OpenAIChatV1, false)
+	request, placementDiagnostics := llmprotocol.ProjectInstructionsAfterToolResults(request, llmprotocol.OpenAIChatV1)
+	projectionDiagnostics = appendDiagnostics(projectionDiagnostics, placementDiagnostics, policy.Limits.Diagnostics)
 	for _, message := range request.Messages {
 		if err := requireReasoningRepresentation(llmprotocol.OpenAIChatV1, message.Content); err != nil {
 			return nil, projectionDiagnostics, err

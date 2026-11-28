@@ -121,13 +121,14 @@ func TestAddSystemPromptPreservesRawProviderFieldsAndIntegerPrecision(t *testing
 }
 
 // replace takes the place of every instruction the caller sent: each system
-// and developer message, the Responses instructions and a Messages client's
-// system messages inside the conversation, whichever backend the request is
-// sent to.
+// and developer message, leading or later in the conversation, and the
+// Responses instructions, whichever client protocol and backend.
 func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
 	const messagesInConversation = `{"model":"m","max_tokens":16,"system":"CLIENT_TOP","messages":[` +
 		`{"role":"user","content":"hi"},{"role":"assistant","content":"yo"},` +
 		`{"role":"system","content":"CLIENT_LATE"},{"role":"user","content":"again"}]}`
+	const laterTurns = `{"role":"system","content":"CLIENT_TOP"},{"role":"user","content":"hi"},{"role":"assistant","content":"yo"},` +
+		`{"role":"developer","content":"CLIENT_LATE"},{"role":"user","content":"again"}`
 	for _, tc := range []struct {
 		name           string
 		client, target llmprotocol.WireFormat
@@ -152,6 +153,8 @@ func TestSystemPromptReplaceDropsEveryCallerInstruction(t *testing.T) {
 		{"messages client to chat", llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIChatV1, messagesInConversation},
 		{"messages client to responses", llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1, messagesInConversation},
 		{"messages client to messages", llmprotocol.AnthropicMessagesV1, llmprotocol.AnthropicMessagesV1, messagesInConversation},
+		{"later chat message", llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, `{"model":"m","messages":[` + laterTurns + `]}`},
+		{"later responses item", llmprotocol.OpenAIResponsesV1, llmprotocol.AnthropicMessagesV1, `{"model":"m","max_output_tokens":16,"input":[` + laterTurns + `]}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := dispatchWithReplacedSystemPrompt(t, tc.client, tc.target, tc.body)

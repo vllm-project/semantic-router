@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
@@ -25,7 +24,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 		return false, nil
 	}
 
-	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory, state.Input)
+	changed, err := r.prependStoredResponseHistory(request, state.ConversationHistory, state.HasTopLevelInstructions)
 	if err != nil {
 		return false, err
 	}
@@ -42,7 +41,7 @@ func (r *OpenAIRouter) materializeResponseObjectContext(request *llmprotocol.Req
 func (r *OpenAIRouter) prependStoredResponseHistory(
 	request *llmprotocol.Request,
 	stored []*responseapi.StoredResponse,
-	input []responseapi.InputItem,
+	hasTopLevelInstructions bool,
 ) (bool, error) {
 	if len(stored) == 0 {
 		return false, nil
@@ -61,37 +60,34 @@ func (r *OpenAIRouter) prependStoredResponseHistory(
 	if err := llmprotocol.ClaimHistoryToolNames(request, *history); err != nil {
 		return false, err
 	}
-	// The developer and system items of the stored input decode as
-	// instructions, as they do at ingress. In turn order they follow this
-	// request's top-level instructions and precede the developer and system
-	// items of its own input, which decode after them. The earlier request's
-	// top-level instructions are not carried over.
-	at := max(0, len(request.Instructions)-instructionInputItems(input))
-	instructions := slices.Insert(slices.Clone(request.Instructions), at, history.Instructions...)
-	for index := at + len(history.Instructions); index < len(instructions); index++ {
-		instructions[index].Position += len(history.Messages)
+	// The developer and system items at the start of the stored input lead the
+	// request, after this request's top-level instructions, as they did in
+	// their own turn. This request's input follows the stored turns, so the
+	// developer and system items at its start take their place in the
+	// conversation there, as every later one already does. The earlier
+	// request's top-level instructions are not carried over.
+	at := 0
+	if hasTopLevelInstructions {
+		at = min(1, len(request.Instructions))
+	}
+	current := request.Instructions[at:]
+	instructions := append(slices.Clip(request.Instructions[:at]), history.Instructions...)
+	messages := history.Messages
+	if len(messages) == 0 {
+		instructions = append(instructions, current...)
+	} else {
+		for _, instruction := range current {
+			messages = append(messages, llmprotocol.Message{Role: instruction.Role, Content: instruction.Content, Name: instruction.Name})
+		}
 	}
 	continued := *request
-	continued.Messages = slices.Concat(history.Messages, request.Messages)
+	continued.Messages = slices.Concat(messages, request.Messages)
 	if err := llmprotocol.RefuseUnansweredToolCalls(continued); err != nil {
 		return false, err
 	}
 	request.Instructions = instructions
 	request.Messages = continued.Messages
 	return true, nil
-}
-
-// instructionInputItems counts the developer and system messages of a
-// request's input, which the Responses decoder reads as instructions.
-func instructionInputItems(items []responseapi.InputItem) int {
-	count := 0
-	for _, item := range items {
-		role := strings.ToLower(strings.TrimSpace(item.Role))
-		if item.Type == responseapi.ItemTypeMessage && (role == "developer" || role == "system") {
-			count++
-		}
-	}
-	return count
 }
 
 func clearResponseObjectControls(request *llmprotocol.Request) bool {

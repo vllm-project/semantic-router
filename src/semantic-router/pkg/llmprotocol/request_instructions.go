@@ -6,8 +6,8 @@ import "slices"
 // neutral request. insert prepends to the first system block; other modes
 // replace every system and developer block the caller sent with one system
 // block, matching the router's existing system_prompt contract. That includes
-// the system messages an Anthropic Messages client puts inside the
-// conversation.
+// every system and developer message inside the conversation, regardless of
+// the client protocol.
 func SetSystemInstruction(request *Request, text, mode string) bool {
 	if request == nil || text == "" {
 		return false
@@ -32,8 +32,8 @@ func SetSystemInstruction(request *Request, text, mode string) bool {
 
 // withoutCallerInstructions drops the system and developer messages inside
 // the conversation. One that also sets per-message effort keeps that control
-// as an empty system turn, as ProjectSystemMessages does. It builds a
-// new slice, since the request may share its messages with another view.
+// as an empty system turn, as ProjectSystemMessages does. It builds a new
+// slice, since the request may share its messages with another view.
 func withoutCallerInstructions(messages []Message) []Message {
 	if !slices.ContainsFunc(messages, isInstructionMessage) {
 		return messages

@@ -7,10 +7,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-// Chat and Responses decoding read a system or developer message anywhere as
-// an instruction and record how many conversation messages came before it.
-// Encoding still sends every instruction first.
-func TestOpenAIDecodingRecordsWhereEachInstructionWasSent(t *testing.T) {
+// Chat and Responses decoding keep only the leading system and developer
+// messages as instructions. Later ones stay inside the conversation, and
+// encoding preserves that order.
+func TestOpenAIDecodingKeepsLeadingAndLaterInstructions(t *testing.T) {
 	engine := NewBuiltinEngine()
 	for _, test := range []struct {
 		format llmprotocol.WireFormat
@@ -22,7 +22,7 @@ func TestOpenAIDecodingRecordsWhereEachInstructionWasSent(t *testing.T) {
 				{"role":"system","content":"A"},{"role":"developer","content":"B"},
 				{"role":"user","content":"question"},{"role":"system","content":"C"},
 				{"role":"assistant","content":"answer"},{"role":"developer","content":"D"}]}`,
-			[]string{"system", "developer", "system", "developer", "user", "assistant"},
+			[]string{"system", "developer", "user", "system", "assistant", "developer"},
 		},
 		{
 			llmprotocol.OpenAIResponsesV1, `{"model":"m","instructions":"A","input":[
@@ -30,7 +30,7 @@ func TestOpenAIDecodingRecordsWhereEachInstructionWasSent(t *testing.T) {
 				{"role":"system","content":"C"},
 				{"type":"message","role":"assistant","content":[{"type":"output_text","text":"answer"}]},
 				{"role":"developer","content":"D"}]}`,
-			[]string{"developer", "developer", "system", "developer", "user", "assistant"},
+			[]string{"developer", "developer", "user", "system", "assistant", "developer"},
 		},
 	} {
 		request, _, _, err := engine.DecodeRequest(test.format, []byte(test.body))
@@ -41,7 +41,7 @@ func TestOpenAIDecodingRecordsWhereEachInstructionWasSent(t *testing.T) {
 		for _, instruction := range request.Instructions {
 			positions = append(positions, instruction.Position)
 		}
-		if !reflect.DeepEqual(positions, []int{0, 0, 1, 2}) {
+		if !reflect.DeepEqual(positions, []int{0, 0}) {
 			t.Fatalf("%s: instruction positions = %v", test.format, positions)
 		}
 		encoded, err := engine.EncodeRequest(llmprotocol.OpenAIChatV1, request, llmprotocol.Envelope{})
