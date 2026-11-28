@@ -10,10 +10,10 @@ section order (same inputs => byte-identical output):
    names and hashes, budget used / remaining rounds;
 3. ledger tail, best replay-tier candidate (the shared A2 `best_replay`
    selection) and the last live verdict with its reasons;
-4. latest attribution summary - `attribute` writes `summary.json` next to
-   `attribution.jsonl`; `next` resolves the newest ledger record's
-   `attribution_ref` (`<path>@sha256:<hex>`), verifies the artifact hash and
-   only then reads the summary;
+4. latest attribution summary - `next` resolves the newest ledger record's
+   `attribution_ref` (`<path>@sha256:<hex>`), verifies the `attribution.jsonl`
+   hash and derives the summary from those verified rows, so an adjacent
+   `summary.json` can never contradict the cited artifact;
 5. diagnosis highlights (optional `--diagnosis`): dead / rare decisions and
    unreachable threshold sites;
 6. a citable insight-ref for every piece of evidence above (each one is
@@ -30,10 +30,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .attribution import ALL_CLASSES
+from .attribution import ALL_CLASSES, summarize
 from .casebook import search_cases
 from .contract import ContractError, ExperimentSpec, dataset_content_hash
-from .ledger import Ledger, best_replay
+from .ledger import Ledger, best_replay, scoped_records
 
 UNTRUSTED_HEADER = (
     "# recipe-lab knowledge context\n"
@@ -89,10 +89,18 @@ def _record_brief(record: dict[str, Any]) -> str:
 def _contract_summary(spec: ExperimentSpec, records: list[dict[str, Any]]) -> list[str]:
     objective = spec.objective
     lines = ["## Contract summary", ""]
+    # M2: only one of the two improvement bars is declared, and the paired-CI
+    # form is measured in percentage points - printing the unused relative
+    # field would show 0.0 for a spec that asked for min_improvement_pp.
+    if objective.min_improvement_pp is not None:
+        improvement = f"min_improvement_pp={_num(objective.min_improvement_pp)}"
+    else:
+        improvement = f"min_improvement_pct={_num(objective.min_improvement_pct)}"
     lines.append(
         f"- objective: metric_key={objective.metric_key} direction={objective.direction} "
-        f"min_improvement_pct={_num(objective.min_improvement_pct)}"
+        f"{improvement}"
     )
+    lines.append(f"- min_cases: {objective.min_cases}")
     lines.append(f"- replay_metric: {objective.replay_metric}")
     if objective.constraints:
         lines.append("- constraints:")
@@ -217,12 +225,12 @@ def _attribution_section(
     e1 = attribution.get("e1_confusion_top") or []
     lines.append(
         "- E1 confusion pairs (top): "
-        + (pairs(e1, "truth", "matched_decision") if e1 else "none")
+        + (pairs(e1, "expected_decision", "matched_decision") if e1 else "none")
     )
     mm = attribution.get("decision_mismatch_top") or []
     lines.append(
         "- decision_mismatch pairs (top): "
-        + (pairs(mm, "truth", "matched_decision") if mm else "none")
+        + (pairs(mm, "expected_decision", "matched_decision") if mm else "none")
     )
     e2 = attribution.get("e2_deviations_top") or []
     deviations = "; ".join(
@@ -311,7 +319,9 @@ def render_next_context(
     # A2: the best replay candidate is picked by the shared pure selection
     # (highest replay_metric, coverage_warning excluded), not by recency -
     # an earlier candidate with a higher metric must win over a later one.
-    replay_best = best_replay(records, spec.objective.replay_metric)
+    # Only candidates measured on the newest record's dataset and split are
+    # comparable, so the ranking is scoped before it starts.
+    replay_best = best_replay(scoped_records(records), spec.objective.replay_metric)
     lines = [UNTRUSTED_HEADER, *_contract_summary(spec, records)]
     lines += ["", "## Ledger tail (most recent last)", ""]
     for record in records[-tail:]:
@@ -342,8 +352,13 @@ def render_next_context(
 def _load_attribution_summary(
     records: list[dict[str, Any]],
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Resolve the newest attribution_ref, verify the artifact hash (A4
-    identity), then read the summary.json written next to attribution.jsonl."""
+    """Resolve the newest attribution_ref and derive its summary.
+
+    The ref pins the `attribution.jsonl` hash (A4 identity); the summary is
+    recomputed from those verified rows with the same `summarize` that
+    `attribute` uses, so a summary file that disagrees with its artifact can
+    never change this export.
+    """
     ref = next(
         (
             r.get("attribution_ref")
@@ -371,22 +386,28 @@ def _load_attribution_summary(
         raise ContractError(
             f"attribution_ref hash mismatch for {path!r}: ref={expected} file={actual}"
         )
-    summary_path = Path(path).parent / "summary.json"
     try:
-        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        text = Path(path).read_text(encoding="utf-8")
     except OSError as exc:
         raise ContractError(
-            f"attribution summary not found: {summary_path} (attribute writes it next to attribution.jsonl)"
+            f"cannot read attribution artifact {path!r}: {exc}"
         ) from exc
-    except json.JSONDecodeError as exc:
-        raise ContractError(
-            f"attribution summary is not valid JSON: {summary_path} ({exc})"
-        ) from exc
-    if not isinstance(summary, dict):
-        raise ContractError(
-            f"attribution summary must be a JSON object: {summary_path}"
-        )
-    return summary, f"attr:{path}@{expected}"
+    rows: list[dict[str, Any]] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ContractError(
+                f"attribution artifact {path!r} line {number} is not valid JSON: {exc}"
+            ) from exc
+        if not isinstance(row, dict):
+            raise ContractError(
+                f"attribution artifact {path!r} line {number} is not a JSON object"
+            )
+        rows.append(row)
+    return summarize(rows), f"attr:{path}@{expected}"
 
 
 def _load_diagnosis(path: str) -> tuple[dict[str, Any], str]:

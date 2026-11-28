@@ -66,7 +66,23 @@ def test_report_flags_mixed_dataset_hashes():
     assert "sha256:bb" in report
 
 
-def test_promotion_draft_from_pass_record():
+def test_report_keeps_reasons_units_and_unguarded_pass():
+    # review regression: the report dropped the ledger's reasons, rewrote a
+    # 0.4 s latency as 40.00%, and flagged a valid PASS whose spec declared
+    # no guards (an empty gates dict is not missing evidence).
+    unguarded = dict(
+        LIVE,
+        gates={},
+        metrics={"latency_s": 0.4, "accuracy": 0.4},
+        reasons=["candidate metric missing"],
+    )
+    report = render_run_report([unguarded])
+    assert "candidate metric missing" in report
+    assert "latency_s=0.4" in report
+    assert "40.00%" not in report
+    assert "Replay inconsistencies" not in report
+    assert "Replay inconsistencies" in render_run_report([dict(LIVE, gates=None)])
+
     from recipe_lab.report import render_promotion_draft
 
     draft = render_promotion_draft(LIVE)
@@ -97,12 +113,31 @@ def test_next_contract_summary_sections(tmp_path):
     context = render_next_context([REPLAY, LIVE], spec)
     assert "## Contract summary" in context
     assert "- objective: metric_key=capability.score direction=maximize" in context
+    assert "- min_cases: 200" in context  # M2: the effective paired floor
     assert "- replay_metric: routed_accuracy" in context
     assert "- gates:" in context and "pii-recall-floor" in context
     # split names and hashes only; no frozen_test case content
     assert "calib=sha256:" + "1" * 64 in context
     assert "frozen_test=sha256:" + "3" * 64 in context
     assert "- budget: rounds=5 used=2 remaining=3" in context
+
+
+def test_next_contract_summary_shows_the_declared_paired_threshold():
+    # review regression: a spec that declares min_improvement_pp rendered
+    # min_improvement_pct=0.0 and hid the configured bar entirely.
+    raw = dict(VALID_SPLITS_SPEC)
+    raw["objective"] = {
+        "metric_key": "capability.score",
+        "direction": "maximize",
+        "min_improvement_pp": 2,
+        "min_cases": 24,
+        "replay_metric": "routed_accuracy",
+    }
+    spec = ExperimentSpec.from_dict(raw)
+    context = render_next_context([REPLAY, LIVE], spec)
+    assert "min_improvement_pp=2" in context
+    assert "min_improvement_pct" not in context
+    assert "- min_cases: 24" in context
 
 
 def test_next_best_replay_uses_metric_not_recency():
@@ -122,7 +157,45 @@ def test_next_best_replay_uses_metric_not_recency():
     assert "rec-bbbbbbbbbbbb" not in best_section
 
 
-def test_next_best_replay_excludes_flagged_records():
+def test_next_best_replay_is_scoped_to_the_newest_dataset_and_split():
+    # review regression: a mixed ledger let a higher-scoring candidate from
+    # another dataset or split outrank the comparable one.
+    spec = ExperimentSpec.from_dict(VALID_SPLITS_SPEC)
+    good = dict(
+        REPLAY,
+        record_id="rec-cccccccccccc",
+        round=1,
+        split="dev",
+        metrics={"routed_accuracy": 0.8},
+    )
+    other_dataset = dict(
+        REPLAY,
+        record_id="rec-dddddddddddd",
+        round=2,
+        split="dev",
+        metrics={"routed_accuracy": 0.95},
+        dataset_hash="sha256:bb",
+    )
+    other_split = dict(
+        REPLAY,
+        record_id="rec-eeeeeeeeeeee",
+        round=3,
+        split="calib",
+        metrics={"routed_accuracy": 0.9},
+    )
+    current = dict(
+        REPLAY,
+        record_id="rec-ffffffffffff",
+        round=4,
+        split="dev",
+        metrics={"routed_accuracy": 0.7},
+    )
+    context = render_next_context([good, other_dataset, other_split, current], spec)
+    best_section = context.split("## Best replay-tier candidate")[1].split("##")[0]
+    assert "rec-cccccccccccc" in best_section
+    assert "rec-dddddddddddd" not in best_section
+    assert "rec-eeeeeeeeeeee" not in best_section
+
     # A2: coverage_warning records and timeout trials never rank.
     spec = ExperimentSpec.from_dict(VALID_SPLITS_SPEC)
     good = dict(
@@ -149,34 +222,31 @@ def test_next_best_replay_excludes_flagged_records():
     assert "rec-eeeeeeeeeeee" not in best_section
 
 
-ATTR_DIR_SUMMARY = {
-    "total": 5,
-    "answered": 4,
-    "correct": 2,
-    "accuracy": 0.5,
-    "class_counts": {
-        "correct": 2,
-        "E1_signal": 0,
-        "decision_mismatch": 1,
-        "E2_policy": 1,
-        "E3_capability": 0,
-        "suboptimal_routing": 0,
-        "no_evidence": 0,
-        "policy_gap": 1,
+ATTR_ROWS = [
+    {
+        "case_id": "c1",
+        "error_class": "correct",
+        "answer_ok": True,
+        "expected_decision": "math",
+        "matched_decision": "math",
+        "routed": "local/model-math",
+        "expected": "local/model-math",
     },
-    "e1_by_family": {},
-    "e3_by_family": {},
-    "e1_confusion_top": [],
-    "decision_mismatch_top": [
-        {"truth": "math", "matched_decision": "code", "count": 1}
-    ],
-    "e2_deviations_top": [
-        {"routed": "local/model-code", "expected": "local/model-math", "count": 1}
-    ],
-}
+    {
+        "case_id": "c2",
+        "error_class": "decision_mismatch",
+        "answer_ok": False,
+        "expected_decision": "math",
+        "matched_decision": "code",
+        "routed": "local/model-code",
+        "expected": "local/model-math",
+    },
+]
 
+ATTR_BYTES = "".join(json.dumps(row) + "\n" for row in ATTR_ROWS).encode()
 
-ATTR_BYTES = b'{"case_id":"c1"}\n'
+# a summary that contradicts its artifact: `next` must never read it
+TAMPERED_SUMMARY = {"total": 0, "answered": 0, "accuracy": 0.0}
 
 
 def _write_attribution_artifacts(tmp_path) -> str:
@@ -184,7 +254,7 @@ def _write_attribution_artifacts(tmp_path) -> str:
     attr_dir.mkdir()
     (attr_dir / "attribution.jsonl").write_bytes(ATTR_BYTES)
     (attr_dir / "summary.json").write_text(
-        json.dumps(ATTR_DIR_SUMMARY, ensure_ascii=False, sort_keys=True) + "\n",
+        json.dumps(TAMPERED_SUMMARY, ensure_ascii=False, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     return f"{attr_dir / 'attribution.jsonl'}@sha256:{hashlib.sha256(ATTR_BYTES).hexdigest()}"
@@ -332,18 +402,23 @@ def test_next_attribution_hash_mismatch_exits_2(tmp_path, capsys):
     assert "attribution_ref hash mismatch" in capsys.readouterr().err
 
 
-def test_next_missing_summary_json_exits_2(tmp_path, capsys):
+def test_next_derives_the_attribution_summary_from_verified_rows(tmp_path):
+    # review regression: the hash covered attribution.jsonl but `next` read
+    # the adjacent summary.json unverified, so editing only the summary
+    # changed the exported accuracy. The summary is now recomputed from the
+    # hash-verified rows, and a contradictory summary file is ignored.
     from recipe_lab.cli import main
 
     spec_path = _next_spec(tmp_path)
     attr_dir = tmp_path / "attr"
     attr_dir.mkdir()
-    (attr_dir / "attribution.jsonl").write_bytes(ATTR_BYTES)  # no summary.json
+    (attr_dir / "attribution.jsonl").write_bytes(ATTR_BYTES)
     ref = f"{attr_dir / 'attribution.jsonl'}@sha256:{hashlib.sha256(ATTR_BYTES).hexdigest()}"
     ledger = tmp_path / "ledger.jsonl"
     ledger.write_text(
         json.dumps(dict(REPLAY, attribution_ref=ref)) + "\n", encoding="utf-8"
     )
+    first = tmp_path / "ctx1.md"
     assert (
         main(
             [
@@ -353,12 +428,32 @@ def test_next_missing_summary_json_exits_2(tmp_path, capsys):
                 "--ledger",
                 str(ledger),
                 "--output",
-                str(tmp_path / "ctx.md"),
+                str(first),
             ]
         )
-        == 2
+        == 0
     )
-    assert "attribution summary not found" in capsys.readouterr().err
+    without_summary = first.read_text(encoding="utf-8")
+    assert "accuracy: 50.00%" in without_summary  # derived, not read
+    (attr_dir / "summary.json").write_text(
+        json.dumps({"accuracy": 0.0, "total": 0}), encoding="utf-8"
+    )
+    second = tmp_path / "ctx2.md"
+    assert (
+        main(
+            [
+                "next",
+                "--spec",
+                spec_path,
+                "--ledger",
+                str(ledger),
+                "--output",
+                str(second),
+            ]
+        )
+        == 0
+    )
+    assert second.read_text(encoding="utf-8") == without_summary
 
 
 def test_next_diagnosis_sections_and_citable_refs(tmp_path):
@@ -425,6 +520,50 @@ def test_next_without_replay_records(tmp_path):
     spec = ExperimentSpec.from_dict(VALID_SPLITS_SPEC)
     context = render_next_context([LIVE], spec)
     assert "none yet: run the replay tier first" in context
+
+
+def test_provenance_uses_the_shared_eligible_selection(tmp_path):
+    # review regression: provenance had its own ranking that ignored
+    # coverage_warning and compared candidates across datasets.
+    good = dict(
+        REPLAY,
+        record_id="rec-cccccccccccc",
+        round=1,
+        split="dev",
+        metrics={"routed_accuracy": 0.8},
+    )
+    flagged = dict(
+        REPLAY,
+        record_id="rec-dddddddddddd",
+        round=2,
+        split="dev",
+        metrics={"routed_accuracy": 0.99},
+        coverage_warning=True,
+    )
+    other_dataset = dict(
+        REPLAY,
+        record_id="rec-eeeeeeeeeeee",
+        round=3,
+        split="dev",
+        metrics={"routed_accuracy": 0.95},
+        dataset_hash="sha256:bb",
+    )
+    current = dict(
+        REPLAY,
+        record_id="rec-ffffffffffff",
+        round=4,
+        split="dev",
+        metrics={"routed_accuracy": 0.7},
+    )
+    records = [good, flagged, other_dataset, current]
+    ledger = tmp_path / "ledger.jsonl"
+    ledger.write_text(
+        "".join(json.dumps(record) + "\n" for record in records), encoding="utf-8"
+    )
+    manifest = build_run_manifest(str(ledger), records)
+    assert manifest["best_replay_candidate"]["record_id"] == "rec-cccccccccccc"
+    assert manifest["best_replay_candidate"]["ref"] == "c1.yaml"
+    assert manifest["best_replay_candidate"]["score"] == 0.8
 
 
 def test_provenance_manifest_from_ledger(tmp_path):

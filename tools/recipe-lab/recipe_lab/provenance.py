@@ -20,6 +20,9 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .contract import DEFAULT_REPLAY_METRIC
+from .ledger import best_replay, scoped_records
+
 MANIFEST_SCHEMA_VERSION = "v1"
 MANIFEST_KIND = "recipe-lab-run"
 
@@ -53,6 +56,7 @@ def _content_hash(path: Path) -> str:
 def build_run_manifest(
     ledger_path: str,
     records: list[dict[str, Any]],
+    metric_key: str = DEFAULT_REPLAY_METRIC,
 ) -> dict[str, Any]:
     ledger_file = Path(ledger_path)
     rounds = sorted({r.get("round") for r in records})
@@ -61,15 +65,10 @@ def build_run_manifest(
     bench_refs = sorted(
         {ref for r in live_records for ref in (r.get("bench_refs") or [])}
     )
-    best = None
-    for record in records:
-        if record.get("tier") == "replay" and record.get("verdict") == "RANKED":
-            metrics = record.get("metrics") or {}
-            for value in metrics.values():
-                if isinstance(value, (int, float)) and (
-                    best is None or value > best[1]
-                ):
-                    best = (record.get("candidate", {}).get("ref"), float(value))
+    # A2: the manifest names the same best candidate the report and the
+    # agent context rank - the shared pure selection over the newest
+    # dataset/split scope, so a flagged or cross-dataset record cannot win.
+    best = best_replay(scoped_records(records), metric_key)
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "kind": MANIFEST_KIND,
@@ -102,7 +101,13 @@ def build_run_manifest(
             "bench_refs": bench_refs,
         },
         "best_replay_candidate": (
-            None if best is None else {"ref": best[0], "score": best[1]}
+            None
+            if best is None
+            else {
+                "ref": (best.get("candidate") or {}).get("ref"),
+                "score": (best.get("metrics") or {}).get(metric_key),
+                "record_id": best.get("record_id"),
+            }
         ),
     }
 
