@@ -171,9 +171,13 @@ FROM python-base AS torch-cuda
 ARG TARGETARCH
 ARG TORCH_CUDA=torch==2.10.0
 ARG TORCH_CUDA_INDEX=https://download.pytorch.org/whl/cu128
+# cuBLAS 12.8 has no NVFP4 product for GB10 (sm_121), so arm64 takes 12.9.
+# amd64 keeps the wheel's own cuBLAS, which its golden answers were recorded on.
+ARG CUBLAS_ARM64=nvidia-cublas-cu12==12.9.1.4
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev && \
     rm -rf /var/lib/apt/lists/*
 RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
+    if [ "$TARGETARCH" = arm64 ]; then pip install "$CUBLAS_ARM64"; fi && \
     pip install fla-core==0.5.2 packaging && \
     python -c "import torch, fla.ops.gated_delta_rule" && \
     printf '#include <Python.h>\n' | cc -fsyntax-only -x c -I "$(python -c 'import sysconfig; print(sysconfig.get_paths()["include"])')" -
@@ -185,7 +189,8 @@ RUN pip install --index-url "$TORCH_CUDA_INDEX" "$TORCH_CUDA" && \
 # runs on the native engine, so ONNX Runtime (the onnx extra) is not installed.
 # requirements-lock.txt pins every dependency except PyTorch and what only
 # PyTorch requires, which the accelerator stage owns, so every build of a
-# release installs the same versions.
+# release installs the same versions. PyTorch is left out of this install, so
+# pip does not reset what the accelerator stage changed under it.
 FROM torch-${ACCELERATOR} AS runtime
 ARG MODEL_RUNTIME_EXTRAS=multimodal
 RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproject.toml \
@@ -196,7 +201,8 @@ RUN --mount=type=bind,source=src/model-runtime/pyproject.toml,target=/tmp/pyproj
 import sys, tomllib
 project = tomllib.load(open("/tmp/pyproject.toml", "rb"))["project"]
 extras = project.get("optional-dependencies", {})
-print("\n".join(project["dependencies"] + [dep for name in sys.argv[1:] for dep in extras[name]]))
+deps = [dep for dep in project["dependencies"] if not dep.startswith("torch")]
+print("\n".join(deps + [dep for name in sys.argv[1:] for dep in extras[name]]))
 EOF
 RUN --mount=type=bind,source=src/model-runtime,target=/tmp/model-runtime,rw \
     pip install --no-deps /tmp/model-runtime
