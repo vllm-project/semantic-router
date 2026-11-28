@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from cli.commands.common import exit_with_logged_error
+from cli.commands.response_cache import response_cache_group
 from cli.commands.runtime_paths import resolve_state_root_dir
 from cli.commands.runtime_support import apply_container_runtime_override
 from cli.commands.vector_stores import list_vector_stores
@@ -51,6 +52,9 @@ def vector_stores(endpoint: str | None, timeout: int, token_env: str) -> None:
     """List vector stores known to the Router management API."""
 
     list_vector_stores(endpoint=endpoint, timeout=timeout, token_env=token_env)
+
+
+storage.add_command(response_cache_group)
 
 
 @storage.command("rotate")
