@@ -93,20 +93,42 @@ func TestReplayPromptCaptureModesKeepTheirRecords(t *testing.T) {
 	}
 }
 
-// none and raw capture never read a prompt for personal data, even where
-// another policy of the same configuration keeps prompts only once verified
-// and so makes the pii rules ready for it. A verified request still is read.
-func TestReplayNoneAndRawCaptureStartNoPromptRead(t *testing.T) {
+func TestBuildReplayRoutingRecordRequestBodyPolicy(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		mode     string
+		capture  bool
+		wantBody bool
+	}{
+		{"default", "", true, false},
+		{"verified", config.PromptCaptureVerified, true, false},
+		{"raw without request body", config.PromptCaptureRaw, false, false},
+		{"raw with request body", config.PromptCaptureRaw, true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := replayPolicyRequest(t)
+			ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true, PromptCapture: test.mode, CaptureRequestBody: test.capture}
+			record := buildReplayRoutingRecord(ctx, "public-entry", "model", "ordinary")
+			if got := record.RequestBody != ""; got != test.wantBody {
+				t.Fatalf("built request body of %d bytes, want body=%t", len(record.RequestBody), test.wantBody)
+			}
+		})
+	}
+}
+
+func TestReplayStartsPromptReadOnlyForVerifiedRequestCapture(t *testing.T) {
 	const prompt = "Summarize the meeting agenda."
 	for _, test := range []struct {
-		mode string
-		read bool
+		name, mode    string
+		capture, read bool
+		wantPrompt    string
 	}{
-		{config.PromptCaptureNone, false},
-		{config.PromptCaptureRaw, false},
-		{config.PromptCaptureVerified, true},
+		{"none", config.PromptCaptureNone, true, false, ""},
+		{"raw", config.PromptCaptureRaw, true, false, prompt},
+		{"verified", config.PromptCaptureVerified, true, true, prompt},
+		{"verified without request body", config.PromptCaptureVerified, false, false, ""},
 	} {
-		t.Run(test.mode, func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			cfg := &config.RouterConfig{
 				RouterReplay:       config.RouterReplayConfig{StoreBackend: "memory"},
 				IntelligentRouting: config.IntelligentRouting{Signals: config.Signals{PIIRules: []config.PIIRule{{Name: "personal_data"}}}},
@@ -132,7 +154,7 @@ func TestReplayNoneAndRawCaptureStartNoPromptRead(t *testing.T) {
 			}
 			ctx := replayPolicyRequest(t)
 			ctx.Routing.SelectRecipe(cfg.DefaultRecipe())
-			own := replayDecision(map[string]interface{}{"enabled": true, "prompt_capture": test.mode})
+			own := replayDecision(map[string]interface{}{"enabled": true, "prompt_capture": test.mode, "capture_request_body": test.capture})
 			router.applyDecisionResultToContext(&decision.DecisionResult{Decision: own}, ctx)
 			router.startRouterReplay(ctx, "public-entry", "model", own.Name)
 			if test.read {
@@ -150,8 +172,8 @@ func TestReplayNoneAndRawCaptureStartNoPromptRead(t *testing.T) {
 				t.Fatalf("prompt reads asked %d, run %d; want %d", asked.Load(), read.Load(), want)
 			}
 			record, ok := router.ReplayRecorder.GetRecord(ctx.RouterReplayID)
-			if want := map[string]string{config.PromptCaptureNone: "", config.PromptCaptureRaw: prompt, config.PromptCaptureVerified: prompt}[test.mode]; !ok || record.Prompt != want {
-				t.Fatalf("prompt %q, want %q", record.Prompt, want)
+			if !ok || record.Prompt != test.wantPrompt {
+				t.Fatalf("prompt %q, want %q", record.Prompt, test.wantPrompt)
 			}
 		})
 	}
