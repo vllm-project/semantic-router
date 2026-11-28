@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	coreclient "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
@@ -121,12 +123,17 @@ func (r *SemanticRouterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err != nil {
 		return err
 	}
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &vllmv1alpha1.SemanticRouter{}, kservePredictorServiceIndex, kservePredictorServiceNames); err != nil {
+		return fmt.Errorf("failed to index SemanticRouters by KServe predictor Service: %w", err)
+	}
 	r.probeLogs = pods
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&vllmv1alpha1.SemanticRouter{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Service{}).
+		Watches(&corev1.Service{}, handler.EnqueueRequestsFromMapFunc(r.routersForKServePredictorService)).
 		Owns(&corev1.ServiceAccount{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.PersistentVolumeClaim{}).

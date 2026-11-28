@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"math/big"
@@ -379,6 +380,38 @@ func TestListenerServerOptionsLoadTheListenersCertificate(t *testing.T) {
 	spec.TLS = &config.ListenerTLS{CertFile: "missing.crt", KeyFile: "tls.key"}
 	if _, err := listenerServerOptions(cfg, spec); err == nil || !strings.Contains(err.Error(), "tls:") {
 		t.Fatalf("a certificate that cannot load must fail the listener, got %v", err)
+	}
+}
+
+func TestListenerServerOptionsLoadDockerMountedTLSFiles(t *testing.T) {
+	base, certDir, keyDir := t.TempDir(), t.TempDir(), t.TempDir()
+	certPEM, keyPEM := selfSignedPair(t)
+	certFile, keyFile := filepath.Join(certDir, "tls.crt"), filepath.Join(keyDir, "tls.key")
+	if err := os.WriteFile(certFile, certPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keyFile, keyPEM, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	paths, err := json.Marshal(map[string]string{
+		"certs/tls.crt":          certFile,
+		"/original/keys/tls.key": keyFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("VLLM_SR_LISTENER_TLS_PATHS", string(paths))
+	cfg := &config.RouterConfig{ConfigBaseDir: base}
+	spec := config.Listener{TLS: &config.ListenerTLS{
+		CertFile: " certs/tls.crt ",
+		KeyFile:  "/original/keys/tls.key",
+	}}
+	opts, err := listenerServerOptions(cfg, spec)
+	if err != nil {
+		t.Fatalf("the listener must load its pair through the Docker mounts: %v", err)
+	}
+	if opts.TLS == nil || opts.TLS.GetCertificate == nil {
+		t.Fatalf("options = %+v, want TLS", opts)
 	}
 }
 

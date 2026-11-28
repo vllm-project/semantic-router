@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -191,7 +192,10 @@ func listenerServerOptions(cfg *config.RouterConfig, spec config.Listener) (gate
 		opts.IdleTimeout = idle
 	}
 	if spec.TLS != nil {
-		certFile, keyFile := spec.TLS.Files(cfg.ConfigBaseDir)
+		certFile, keyFile, err := listenerTLSFiles(spec.TLS, cfg.ConfigBaseDir)
+		if err != nil {
+			return opts, err
+		}
 		tlsConfig, err := gateway.LoadTLS(certFile, keyFile, certificateReloadLogger(spec.Name))
 		if err != nil {
 			return opts, fmt.Errorf("tls: %w", err)
@@ -199,6 +203,26 @@ func listenerServerOptions(cfg *config.RouterConfig, spec config.Listener) (gate
 		opts.TLS = tlsConfig
 	}
 	return opts, nil
+}
+
+// The Docker launcher maps listener paths to read-only directory mounts.
+// Leave normal path resolution in place for files without a Docker mount.
+func listenerTLSFiles(spec *config.ListenerTLS, baseDir string) (string, string, error) {
+	certFile, keyFile := spec.Files(baseDir)
+	const env = "VLLM_SR_LISTENER_TLS_PATHS"
+	if encoded := os.Getenv(env); encoded != "" {
+		var paths map[string]string
+		if err := json.Unmarshal([]byte(encoded), &paths); err != nil {
+			return "", "", fmt.Errorf("invalid %s: %w", env, err)
+		}
+		if mounted := paths[strings.TrimSpace(spec.CertFile)]; mounted != "" {
+			certFile = mounted
+		}
+		if mounted := paths[strings.TrimSpace(spec.KeyFile)]; mounted != "" {
+			keyFile = mounted
+		}
+	}
+	return certFile, keyFile, nil
 }
 
 func certificateReloadLogger(listener string) func(error) {

@@ -20,6 +20,7 @@ type anthropicStreamEncoder struct {
 	blockStarted   map[streamContentKey]bool
 	blockStopped   map[streamContentKey]bool
 	blockSigned    map[streamContentKey]bool
+	blockRedacted  map[streamContentKey]bool
 	itemBlockKeys  map[int][]streamContentKey
 	activeBlock    streamContentKey
 	hasActiveBlock bool
@@ -38,6 +39,7 @@ func (AnthropicMessagesCodec) NewEncoder(context llmprotocol.StreamContext, poli
 		blockStarted:  make(map[streamContentKey]bool),
 		blockStopped:  make(map[streamContentKey]bool),
 		blockSigned:   make(map[streamContentKey]bool),
+		blockRedacted: make(map[streamContentKey]bool),
 		itemBlockKeys: make(map[int][]streamContentKey),
 	}
 }
@@ -387,6 +389,13 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 			Kind: llmprotocol.ContentReasoning, Signature: wire.ContentBlock.Signature,
 			Reasoning: llmprotocol.ReasoningScopeText,
 		}
+	case "redacted_thinking":
+		// The block carries only opaque data. Signature is the field the
+		// capability gate already treats as untranslatable.
+		event.Content = &llmprotocol.Content{
+			Kind: llmprotocol.ContentReasoning, Signature: wire.ContentBlock.Data,
+			Reasoning: llmprotocol.ReasoningScopeRedacted,
+		}
 	case "text":
 		citations, err := anthropicTextCitations("text", wire.ContentBlock.Citations)
 		if bytes.Equal(bytes.TrimSpace(wire.ContentBlock.Citations), []byte("[]")) {
@@ -612,6 +621,14 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicReasoningDelta(
 	if err != nil {
 		return nil, nil, err
 	}
+	if encoder.blockRedacted[key] {
+		// Redacted blocks carry their opaque data only in the start frame. An
+		// attempt to stream text or a signature into one has no safe rendering.
+		if event.Delta != "" || event.Content != nil && event.Content.Signature != "" {
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_content", "redacted reasoning cannot carry a delta", nil)
+		}
+		return frames, nil, nil
+	}
 	blockIndex := encoder.blockIndexes[key]
 	frames, err = appendAnthropicReasoningText(frames, blockIndex, event.Delta)
 	if err != nil {
@@ -787,6 +804,13 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicItemStart(
 		block.Type, block.Name, block.Input = "tool_use", event.ToolCall.Name, json.RawMessage(`{}`)
 		block.ID = anthropicReplyID(encoder.context.Source, anthropicToolUseIDPrefix, event.ToolCall.ID)
 	case llmprotocol.ContentReasoning:
+		if event.Content != nil && event.Content.Reasoning == llmprotocol.ReasoningScopeRedacted {
+			// Opaque redacted state is carried whole in the start frame; there
+			// is no text or signature delta to follow it.
+			block.Type, block.Data = "redacted_thinking", event.Content.Signature
+			encoder.blockRedacted[key] = true
+			break
+		}
 		signature := ""
 		if event.Content != nil {
 			signature = event.Content.Signature
@@ -859,8 +883,9 @@ func (encoder *anthropicStreamEncoder) stopAnthropicBlock(key streamContentKey) 
 	}
 	var frames [][]byte
 	// A thinking block ends with its signature, empty when the backend gave
-	// none.
-	if encoder.blocks[key] == llmprotocol.ContentReasoning && !encoder.blockSigned[key] {
+	// none. A redacted block already carried its data in the start frame, so
+	// there is no signature delta to append.
+	if encoder.blocks[key] == llmprotocol.ContentReasoning && !encoder.blockSigned[key] && !encoder.blockRedacted[key] {
 		delta := anthropicEventWire{
 			Type: "content_block_delta", Index: anthropicIndex(encoder.blockIndexes[key]),
 			Delta: &anthropicDeltaWire{Type: "signature_delta"},

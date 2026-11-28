@@ -95,6 +95,9 @@ func (r *OpenAIRouter) handleHeldStreamBody(body []byte, endOfStream bool, ctx *
 		r.recordUnreadStream(ctx, responseGuardIncomplete)
 		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
+	// A held stream is still the model's answer arriving: it records TTFT here
+	// too, before the release decides what the client sees.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 	}

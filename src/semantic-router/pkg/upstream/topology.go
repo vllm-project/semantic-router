@@ -87,6 +87,8 @@ type ClusterSpec struct {
 	Outlier *OutlierSpec
 	// HealthCheck enables active health checks; nil disables them.
 	HealthCheck *HealthCheckSpec
+	// preferIPv4 allows IPv6 when a single DNS endpoint has no IPv4 address.
+	preferIPv4 bool
 }
 
 // Breakers are a cluster's circuit-breaker thresholds. Zero fields take

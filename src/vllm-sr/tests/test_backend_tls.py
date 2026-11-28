@@ -249,9 +249,11 @@ def _start(tmp_path, monkeypatch, gateway, document, listeners=LISTENERS):
     )
     commands = []
 
-    def fake_run(cmd, capture_output, text, check, env=None):
+    def fake_run(cmd, capture_output, text, check, env=None, timeout=None):
         commands.append(cmd)
-        return SimpleNamespace(stdout="container-id\n", stderr="")
+        if cmd[1:3] == ["image", "inspect"]:
+            return SimpleNamespace(stdout="\n", stderr="", returncode=0)
+        return SimpleNamespace(stdout="container-id\n", stderr="", returncode=0)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     rc, _, _ = container_cli.container_start_vllm_sr(

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -73,21 +74,23 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 		Kind:    "InferenceService",
 	})
 
-	err := c.Get(ctx, types.NamespacedName{
+	if err := c.Get(ctx, types.NamespacedName{
 		Name:      inferenceServiceName,
 		Namespace: namespace,
-	}, inferenceService)
-	if err != nil {
+	}, inferenceService); err != nil {
 		logger.Error(err, "Failed to get InferenceService", "name", inferenceServiceName, "namespace", namespace)
 		return nil, fmt.Errorf("failed to get InferenceService %s/%s: %w", namespace, inferenceServiceName, err)
 	}
 
-	// Extract predictor service information
-	// KServe creates a predictor service with name: {inference-service-name}-predictor
-	predictorServiceName := fmt.Sprintf("%s-predictor", inferenceServiceName)
-
-	// KServe typically uses port 8443 for HTTPS or 8080 for HTTP
-	port := int32(8443)
+	predictorKey := types.NamespacedName{Name: inferenceServiceName + kservePredictorServiceSuffix, Namespace: namespace}
+	predictor := &corev1.Service{}
+	if err := c.Get(ctx, predictorKey, predictor); err != nil {
+		return nil, fmt.Errorf("failed to get KServe predictor Service %s: %w", predictorKey, err)
+	}
+	port, protocol := kservePredictorPort(predictor)
+	if port == 0 {
+		return nil, fmt.Errorf("KServe predictor Service %s has no HTTP or HTTPS port", predictorKey)
+	}
 
 	// Try to extract URL from status if available
 	statusURL, found, err := unstructured.NestedString(inferenceService.Object, "status", "url")
@@ -95,16 +98,64 @@ func discoverKServeBackend(ctx context.Context, c client.Client, namespace strin
 		logger.Info("InferenceService URL", "url", statusURL)
 	}
 
-	address := fmt.Sprintf("%s.%s.svc.cluster.local", predictorServiceName, namespace)
+	address := fmt.Sprintf("%s.%s.svc.cluster.local", predictor.Name, predictor.Namespace)
 
 	endpoint := &BackendEndpoint{
 		Address:  address,
 		Port:     port,
-		Protocol: "https",
+		Protocol: protocol,
 	}
 
-	logger.Info("Discovered KServe backend", "address", address, "port", port)
+	logger.Info("Discovered KServe backend", "address", address, "port", port, "protocol", protocol)
 	return endpoint, nil
+}
+
+func kservePredictorPort(service *corev1.Service) (int32, string) {
+	var httpPort, fallbackPort int32
+	for _, port := range service.Spec.Ports {
+		if port.Protocol != "" && port.Protocol != corev1.ProtocolTCP {
+			continue
+		}
+		switch kservePortProtocol(port, service.Name) {
+		case "https":
+			// Keep using TLS when the predictor exposes both HTTPS and HTTP.
+			return port.Port, "https"
+		case "http":
+			if httpPort == 0 {
+				httpPort = port.Port
+			}
+		case "":
+			if fallbackPort == 0 {
+				fallbackPort = port.Port
+			}
+		}
+	}
+	if httpPort != 0 {
+		return httpPort, "http"
+	}
+	return fallbackPort, "http"
+}
+
+func kservePortProtocol(port corev1.ServicePort, serviceName string) string {
+	if protocol := ptr.Deref(port.AppProtocol, ""); protocol != "" {
+		return protocol
+	}
+	// KServe uses the Service name for the port when the container declares none.
+	if port.Name != serviceName {
+		prefix, _, _ := strings.Cut(port.Name, "-")
+		switch prefix {
+		case "http", "https", "grpc":
+			return prefix
+		}
+	}
+	switch port.Port {
+	case 443, 8443:
+		return "https"
+	case 80, 8080:
+		return "http"
+	default:
+		return ""
+	}
 }
 
 // discoverLlamaStackBackend discovers backend from Llama Stack services using labels
