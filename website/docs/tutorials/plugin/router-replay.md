@@ -562,13 +562,13 @@ Here `N` is the number of configured models. All integer bounds must be positive
 | `budget.max_response_bytes` | `N × 1048576` | Aggregate response byte budget, divided before dispatch among effective candidates. Minimum `2 × N`: each candidate reserves one byte to detect an oversized response. |
 | `budget.max_estimated_tokens` | — | Optional. Maximum total estimated input and reserved output tokens for the sampled Shadow group. |
 | `budget.max_estimated_cost` | — | Optional. Maximum estimated spend for the sampled Shadow group, in `global.services.budgets.currency` (USD by default). |
-| `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
+| `capture.enabled` | `false` | Store bounded excerpts of candidate text in replay outcomes under `prompt_capture: raw` with `capture_response_body: true`. Otherwise only sizes, token usage, and a SHA-256 are kept. |
 | `forward_headers` | `[]` | Decision header mutations to copy, matched case-insensitively. Credential headers are excluded. |
 | `capture.max_bytes` | `N × 4096` | Aggregate excerpt byte limit, divided among effective candidates. |
 
 For either limit, the Router estimates input tokens and reserves output tokens from the limit sent to the backend. If the outgoing request omits the output limit, the Router uses the model's `max_output_tokens` or, if unset, `global.services.budgets.output_reserve_tokens` (default 4096). The token limit sums both quantities across candidates. The cost limit prices them using each model's rates. A token limit alone requires no pricing.
 
-The Router skips the group if either configured limit is exceeded, a cost-limited candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. When a cost limit is configured, Replay records the estimated cost for attempted calls and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
+The Router skips the group if either configured limit is exceeded, a cost-limited candidate has no compatible price, or a request asks for multiple completions. Replay records why a group was skipped. A candidate that cannot be prepared fails on its own, and the limits apply to the others. When a cost limit is configured, Replay records the estimated cost for attempted calls and prices reported usage when available. Actual charges can differ. Primary requests retain their own run and user budget rules.
 
 The old flat shadow fields are rejected; use the nested structure above.
 
@@ -594,10 +594,12 @@ in one result:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability`, `conversation_state` |
 | `sampled_out` | `sampled_out` |
 
 A request that needs a modality the shadow model's card omits, such as an image sent to a text-only model, skips that candidate with `backend_lacks_capability`. Other eligible candidates still run. A shadow model with no recognized declaration is not gated.
+
+A shadow never writes to the client's own state. A Responses request that names a `conversation` is not shadowed and is dropped with `conversation_state`, because the provider appends every call's items to that conversation, and a Responses shadow is sent with `store: false`.
 
 - **Metrics.** Results and reasons are exported as
   `sr_shadow_dispatch_total{decision,result,reason}`, with

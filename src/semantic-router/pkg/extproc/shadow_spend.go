@@ -17,24 +17,40 @@ type shadowSpend struct {
 	dispatched bool
 }
 
-func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, budget config.ShadowBudgetConfig) bool {
+// admitShadowGroup returns the candidates of a group that run under its
+// budget. A candidate that cannot be prepared fails on its own, as it does
+// without a budget, and the budget is checked over the others.
+func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, budget config.ShadowBudgetConfig) []*shadowJob {
 	if jobs[0].context.Err() != nil {
 		for _, job := range jobs {
 			d.recordUnstarted(job)
 		}
-		return false
+		return nil
 	}
+	prepared := jobs[:0:0]
+	for _, job := range jobs {
+		call, reason, err := d.prepareShadowCall(job)
+		if err != nil {
+			d.record(job, d.failShadow(shadowResult{startedAt: d.now()}, reason, err))
+			continue
+		}
+		job.prepared = call
+		prepared = append(prepared, job)
+	}
+	if !d.withinShadowBudget(prepared, budget) {
+		return nil
+	}
+	return prepared
+}
+
+func (d *shadowDispatcher) withinShadowBudget(jobs []*shadowJob, budget config.ShadowBudgetConfig) bool {
 	var remainingTokens int64
 	if budget.MaxEstimatedTokens != nil {
 		remainingTokens = int64(*budget.MaxEstimatedTokens)
 	}
 	totalCost := 0.0
 	for _, job := range jobs {
-		prepared, reason, err := d.prepareShadowCall(job)
-		if err != nil {
-			d.recordShadowBudgetRefusal(jobs, reason, err)
-			return false
-		}
+		prepared := job.prepared
 		tokens, err := prepared.estimateTokens(job.engine)
 		if err != nil {
 			d.recordShadowBudgetRefusal(jobs, shadowReasonBudgetUnbounded, err)
@@ -51,7 +67,6 @@ func (d *shadowDispatcher) admitShadowGroup(jobs []*shadowJob, budget config.Sha
 			}
 			remainingTokens -= input + tokens.output
 		}
-		job.prepared = prepared
 		if budget.MaxEstimatedCost != nil {
 			spend, ok := estimateShadowSpend(job, tokens)
 			if !ok {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -329,6 +330,7 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 
 	run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
 		ctx.RouterReplayPluginConfig.PromptCapture = config.PromptCaptureRaw
+		ctx.RouterReplayPluginConfig.CaptureResponseBody = true
 	})
 	waitForShadow(t, router)
 
@@ -342,18 +344,21 @@ func TestShadowDispatchCapturesBoundedExcerpt(t *testing.T) {
 }
 
 // Only raw capture keeps generated text, so the shadow's own
-// capture.enabled stores an excerpt of its answer under raw alone:
-// under none and verified the outcome keeps its sizes and hash only.
+// capture.enabled stores an excerpt of its answer under raw alone, and not
+// when capture_response_body keeps response text out of the record: under
+// none and verified the outcome keeps its sizes and hash only.
 func TestShadowDispatchKeepsAnExcerptOnlyUnderRawCapture(t *testing.T) {
 	for _, test := range []struct {
-		mode    string
-		excerpt bool
+		mode         string
+		responseBody bool
+		excerpt      bool
 	}{
-		{config.PromptCaptureNone, false},
-		{config.PromptCaptureVerified, false},
-		{config.PromptCaptureRaw, true},
+		{config.PromptCaptureNone, true, false},
+		{config.PromptCaptureVerified, true, false},
+		{config.PromptCaptureRaw, true, true},
+		{config.PromptCaptureRaw, false, false},
 	} {
-		t.Run(test.mode, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/response_body=%v", test.mode, test.responseBody), func(t *testing.T) {
 			backend := newShadowTestBackend(t)
 			router, primaryModel := newShadowTestRouter(t, backend)
 			cfg := shadowTestPluginConfig()
@@ -361,6 +366,7 @@ func TestShadowDispatchKeepsAnExcerptOnlyUnderRawCapture(t *testing.T) {
 
 			run := runShadowRequest(t, router, primaryModel, cfg, func(ctx *RequestContext) {
 				ctx.RouterReplayPluginConfig.PromptCapture = test.mode
+				ctx.RouterReplayPluginConfig.CaptureResponseBody = test.responseBody
 			})
 			waitForShadow(t, router)
 

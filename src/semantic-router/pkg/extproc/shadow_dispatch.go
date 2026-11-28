@@ -41,11 +41,14 @@ const (
 	shadowVerdictFailed    = "failed"
 	shadowVerdictDropped   = "dropped"
 
-	shadowReasonCompleted            = "completed"
-	shadowReasonSampledOut           = "sampled_out"
-	shadowReasonSameAsPrimary        = "same_as_primary"
-	shadowReasonInternalRequest      = "internal_request"
-	shadowReasonRequestUnavailable   = "request_unavailable"
+	shadowReasonCompleted          = "completed"
+	shadowReasonSampledOut         = "sampled_out"
+	shadowReasonSameAsPrimary      = "same_as_primary"
+	shadowReasonInternalRequest    = "internal_request"
+	shadowReasonRequestUnavailable = "request_unavailable"
+	// A shadow answer never reaches the client's state, and the provider
+	// appends every call's items to the Responses conversation it names.
+	shadowReasonConversationState    = "conversation_state"
 	shadowReasonQueueFull            = "queue_full"
 	shadowReasonReplayQueueFull      = "replay_queue_full"
 	shadowReasonQueueTimeout         = "queue_timeout"
@@ -231,7 +234,7 @@ func (r *OpenAIRouter) dispatchShadowIfConfigured(ctx *RequestContext, dispatch 
 		engine = nil
 	}
 	cfg := replay.Shadow.WithDefaults()
-	cfg.Capture.Enabled = cfg.Capture.Enabled && replayResponseContentAllowed(ctx)
+	cfg.Capture.Enabled = cfg.Capture.Enabled && replayResponseContentAllowed(ctx) && replay.CapturesResponseText()
 	r.ShadowDispatcher.submit(ctx, dispatch, cfg, shadowSubmitDeps{
 		routerConfig:         r.Config,
 		engine:               engine,
@@ -273,6 +276,11 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 	envelope := ctx.ProtocolEnvelope
 	sourceFormat, requestID := ctx.SourceFormat, ctx.RequestID
 	return func(request llmprotocol.Request, target *shadowTarget) ([]byte, error) {
+		// A stored response would keep the prompt at the provider.
+		request.Store, request.AutoStore = nil, nil
+		if target.format == llmprotocol.OpenAIResponsesV1 {
+			request.Store = llmprotocol.Bool(false)
+		}
 		request.Model = target.upstreamModel
 		request.Stream = false
 		request.StreamOptions = llmprotocol.StreamOptions{}
@@ -393,6 +401,9 @@ func (d *shadowDispatcher) submit(
 		return
 	case ctx.SemanticRequest == nil || deps.routerConfig == nil || deps.engine == nil || deps.encode == nil:
 		dropEarly(shadowReasonRequestUnavailable)
+		return
+	case ctx.SemanticRequest.ConversationID != "":
+		dropEarly(shadowReasonConversationState)
 		return
 	}
 	rate := cfg.EffectiveSampleRate()
@@ -530,8 +541,10 @@ func (d *shadowDispatcher) enqueueGroup(key string, jobs []*shadowJob, cancel co
 		}
 		defer func() { <-lane.groups }()
 		budget := first.cfg.Budget
-		if (budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil) && !d.admitShadowGroup(jobs, budget) {
-			return
+		if budget.MaxEstimatedCost != nil || budget.MaxEstimatedTokens != nil {
+			if jobs = d.admitShadowGroup(jobs, budget); len(jobs) == 0 {
+				return
+			}
 		}
 		var workers sync.WaitGroup
 		for _, job := range jobs {

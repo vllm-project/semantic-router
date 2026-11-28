@@ -294,13 +294,15 @@ plugins:
 | `budget.max_response_bytes` | `N × 1048576` | 整组的响应字节预算，在派发前分配给有效候选。最小值为 `2 × N`：每个候选预留一个字节，用于检测超大响应。 |
 | `budget.max_estimated_tokens` | — | 可选。单次抽样的 Shadow 候选组的预估输入与预留输出 token 总量上限。 |
 | `budget.max_estimated_cost` | — | 可选。单次抽样的 Shadow 候选组最高预估费用，币种使用 `global.services.budgets.currency`（默认 USD）。 |
-| `capture.enabled` | `false` | 仅在 `prompt_capture: raw` 下保存候选文本的有上限摘录。关闭时只保留大小、token 用量和 SHA-256。 |
+| `capture.enabled` | `false` | 仅在 `prompt_capture: raw` 且 `capture_response_body: true` 时保存候选文本的有上限摘录。关闭时只保留大小、token 用量和 SHA-256。 |
 | `forward_headers` | `[]` | 允许复制的决策请求头，不区分大小写。凭据头不会转发。 |
 | `capture.max_bytes` | `N × 4096` | 整组的摘录字节上限，分配给有效候选。 |
 
 配置任一上限后，Router 会估算各候选的输入 token，并按发往后端的输出上限预留输出 token。如果出站请求未指定输出上限，依次使用模型的 `max_output_tokens`、`global.services.budgets.output_reserve_tokens`（默认 4096）。Token 上限比较所有候选的预估输入与预留输出之和。费用上限按各模型费率估价。只配置 token 上限时无需费率。
 
-预估 token 或费用超限、启用费用上限且有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。配置费用上限后，Replay 会记录已尝试派发的调用的预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
+预估 token 或费用超限、启用费用上限且有候选缺少同币种价格，或请求一次生成多个答案时，Router 跳过整组并在 Replay 记录原因。无法准备的候选单独记为失败，上限只作用于其余候选。配置费用上限后，Replay 会记录已尝试派发的调用的预估费用，有后端用量时按用量计价。实际费用可能有差异。主请求仍按自己的会话和用户预算规则执行。
+
+shadow 不会写入客户端自己的状态：指定了 `conversation` 的 Responses 请求不会被 shadow，并以 `conversation_state` 丢弃，因为 provider 会把每次调用的条目追加到该 conversation；Responses shadow 以 `store: false` 发送。
 
 旧的扁平影子字段会被拒绝，请使用上面的嵌套结构。
 
@@ -316,7 +318,7 @@ plugins:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`, `credential_unresolved`, `encode_failed`, `timeout`, `queue_timeout`, `canceled`, `router_closing`, `transport_error`, `upstream_status`, `redirect_rejected`, `response_too_large`, `malformed_response` |
-| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability` |
+| `dropped` | `queue_full`, `replay_queue_full`, `same_as_primary`, `internal_request`, `request_unavailable`, `backend_lacks_capability`, `conversation_state` |
 | `sampled_out` | `sampled_out` |
 
 - **指标。**结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，另有 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。

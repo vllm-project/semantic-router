@@ -746,3 +746,63 @@ func TestShadowSpendEstimatesOutputTokens(t *testing.T) {
 		})
 	}
 }
+
+// A candidate that cannot be prepared fails alone under a group budget too,
+// and the budget is checked over the others.
+func TestShadowGroupBudgetIsolatesAnUnpreparedCandidate(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primary := newShadowTestRouter(t, backend)
+	router.Config.ModelConfig["second"] = config.ModelParams{PreferredEndpoints: []string{"no-such-endpoint"}, APIFormat: config.APIFormatOpenAI}
+	cfg := shadowTestPluginConfig()
+	cfg.Models = append(cfg.Models, "second")
+	tokens := 1 << 30
+	cfg.Budget.MaxEstimatedTokens = &tokens
+	run := runShadowRequest(t, router, primary, cfg, func(ctx *RequestContext) {
+		ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(100)
+	})
+	waitForShadow(t, router)
+	verdicts := map[string]string{}
+	for _, outcome := range shadowOutcomes(t, run) {
+		verdicts[outcome.TargetRef] = outcome.Verdict
+	}
+	if verdicts[shadowTestModel] != shadowVerdictCompleted || verdicts["second"] != shadowVerdictFailed {
+		t.Fatalf("verdicts=%v, want the unresolved candidate failed and the other completed", verdicts)
+	}
+	if backend.requestCount() != 1 {
+		t.Fatalf("backend calls=%d, want 1", backend.requestCount())
+	}
+}
+
+// A shadow copy never writes to the client's conversation, and a Responses
+// shadow is not stored at the provider.
+func TestShadowNeverReachesTheClientsConversationState(t *testing.T) {
+	store := true
+	for name, conversation := range map[string]string{"stored": "", "conversation": "conv_live"} {
+		t.Run(name, func(t *testing.T) {
+			backend := newShadowTestBackend(t)
+			chatRouter, _ := newShadowTestRouter(t, backend)
+			router, primary := routingTestRouterForFormat(llmprotocol.OpenAIResponsesV1)
+			router.Config.VLLMEndpoints = append(router.Config.VLLMEndpoints, chatRouter.Config.VLLMEndpoints[len(chatRouter.Config.VLLMEndpoints)-1])
+			router.ShadowDispatcher = chatRouter.ShadowDispatcher
+			router.Config.ModelConfig[shadowTestModel] = config.ModelParams{PreferredEndpoints: []string{"shadow-backend"}, APIFormat: config.APIFormatResponses}
+			run := runShadowRequest(t, router, primary, shadowTestPluginConfig(), func(ctx *RequestContext) {
+				ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
+				ctx.SemanticRequest.ConversationID = conversation
+				ctx.SemanticRequest.Store = &store
+			})
+			waitForShadow(t, router)
+			backend.mu.Lock()
+			bodies := append([][]byte(nil), backend.bodies...)
+			backend.mu.Unlock()
+			if conversation != "" {
+				if len(bodies) != 0 || len(shadowOutcomes(t, run)) != 0 {
+					t.Fatalf("a request naming a conversation was shadowed: %s", bodies)
+				}
+				return
+			}
+			if len(bodies) != 1 || !bytes.Contains(bodies[0], []byte(`"store":false`)) {
+				t.Fatalf("shadow bodies %s, want one with store false", bodies)
+			}
+		})
+	}
+}
