@@ -8,6 +8,7 @@
 | `.claude-plugin/marketplace.json` | A one-plugin marketplace (`vllm-sr`) for installing from this folder. |
 | `hooks/register.ts` | The hooks module: every event is hooked here, and handed to one app module. |
 | `hooks/router.ts`, `escalate.ts`, `output.ts`, `guard.ts`, `check.ts` | The apps. `output.ts` holds redact, shield and the write-back refusal. |
+| `hooks/timing.ts` | Each tool call's timing for Router Replay's run view, sent to `managementUrl`. It is hooked first, so it wraps every app. |
 | `hooks/lib/shell.ts` | Bash read the way it runs: a command split into the commands it runs, and the fixed rules guard always holds. |
 | `hooks/lib/settings.ts`, `hooks/lib/apps.ts` | Options as the engine hands them over (defaults live only in `plugin.json`), and each app's name and look. |
 | `hooks/lib/state.ts`, `hooks/lib/log.ts`, `hooks/lib/labels.ts`, `hooks/lib/env.ts` | The session's decisions, the decision log, the answers given in `/vsr`, and where the log goes (`CLAUDE_CONFIG_DIR` aware). |

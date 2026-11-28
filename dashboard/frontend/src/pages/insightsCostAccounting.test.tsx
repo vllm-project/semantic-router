@@ -6,6 +6,7 @@ import { TooltipProvider } from '../ui'
 import { buildCostBaselineModel, InsightsConfigContext } from './insightsConfigFacts'
 import {
   describeEstimateMethod,
+  describeFreeRecords,
   describeRecordSaving,
   formatSaving,
   savingsReference,
@@ -226,6 +227,26 @@ describe('Insights cost coverage', () => {
     expect(html).not.toContain('Cost vs reference')
     expect(html).not.toContain('Priced: 2 of 5 requests')
     expect(html).not.toContain('text-destructive-foreground')
+  })
+
+  it('counts requests refused before any model answered apart, as free', () => {
+    const refused = {
+      ...aggregate,
+      summary: { ...aggregate.summary, coverage: { ...coverage, refused_records: 3 } },
+    }
+    expect(describeFreeRecords(refused.summary.coverage)).toBe(
+      ' 3 requests refused before any model answered cost nothing.',
+    )
+  })
+
+  it('counts requests no provider answered apart, as free', () => {
+    const down = {
+      ...aggregate,
+      summary: { ...aggregate.summary, coverage: { ...coverage, unanswered_records: 56 } },
+    }
+    expect(describeFreeRecords(down.summary.coverage)).toBe(
+      ' 56 requests no provider answered cost nothing.',
+    )
   })
 
   it('opens the Breakdown on the cards alone', () => {

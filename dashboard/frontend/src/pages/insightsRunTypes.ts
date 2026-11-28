@@ -71,6 +71,29 @@ export interface RunRouterCall {
   unpriced_calls?: number
 }
 
+// A tool call of a call's turn: its name, its arguments when Replay captured
+// them, and its result's status once the agent's next request carried it.
+export interface RunToolCall {
+  name: string
+  id?: string
+  summary?: string
+  arguments?: string
+  status?: 'succeeded' | 'failed' | 'denied' | string
+  // gateway: from the end of the response that asked for the call to the
+  // start of the next request that carried its result, shared by the calls
+  // of one response; plugin: as a harness plugin reported it.
+  timing_source?: 'gateway' | 'plugin' | string
+  requested_at?: string
+  returned_at?: string
+  client_ms?: number
+  started_at?: string
+  ended_at?: string
+  // plugin: when the harness put the call to approval, and the wait from
+  // there to the start where it reports a start after the answer.
+  approval_requested_at?: string
+  approval_ms?: number
+}
+
 export interface RunCall {
   record_id: string
   request_id?: string
@@ -98,6 +121,8 @@ export interface RunCall {
   completion_tokens?: number
   cost?: number
   currency?: string
+  // catalog_list_price when the cost is the catalog's list price estimate.
+  pricing_source?: string
   router_calls?: RunRouterCall[]
   looper_attempts?: number
   tool_results?: number
@@ -105,6 +130,7 @@ export interface RunCall {
   final_answer?: boolean
   outcomes?: RunReportedOutcome[]
   markers?: string[]
+  tool_calls?: RunToolCall[]
   hops?: RunCall[]
 }
 

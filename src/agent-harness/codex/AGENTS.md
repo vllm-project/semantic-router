@@ -4,7 +4,8 @@
   `.agents/plugins/marketplace.json` as `vsr@vllm-sr`. It is a client of a
   decision runtime's public `/v1/decisions` API; it never imports router or
   runtime code, and nothing from `../claude-code`.
-- `hooks/vsr.py` handles both hook events and uses only the Python standard
+- `hooks/vsr.py` handles every hook event, with `hooks/timing.py` for tool
+  timing, and both use only the Python standard
   library, since Codex runs it with the user's `python3`.
 - `hooks/framing.py` is a copy of the Claude Code plugin's questions. Change
   the Claude Code plugin first, then copy the file here; `test_framing_copy.py`

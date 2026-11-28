@@ -25,14 +25,36 @@ type replayRunBuilder struct {
 		recordID string
 		prompt   string
 	}
-	// named is the latest call that named the session, and titles counts
-	// the session-title requests among the calls.
-	named struct {
-		at   time.Time
-		id   string
-		name string
+	// named is the latest name the harness gave the session, a title or a
+	// /rename, and prompted the earliest a main agent's first prompt gave.
+	// sides counts the side requests among the calls, which make no run of
+	// their own: session titles, quota checks, compactions, probes and
+	// reviews.
+	named, prompted replayRunName
+	sides           int
+	// toolReports holds what the harness plugins reported of the run's tool
+	// calls, by tool call id.
+	toolReports map[string]store.ToolEvent
+}
+
+type replayRunName struct {
+	at   time.Time
+	id   string
+	name string
+}
+
+func (n replayRunName) before(other replayRunName) bool {
+	return n.at.Before(other.at) || (n.at.Equal(other.at) && n.id < other.id)
+}
+
+// sessionName is the latest name the harness gave the session, sent before
+// or after the first prompt, else the earliest first prompt that named it: a
+// turn the harness dropped leaves the next prompt a first one too.
+func (b *replayRunBuilder) sessionName() string {
+	if b.named.name != "" {
+		return b.named.name
 	}
-	titles int
+	return b.prompted.name
 }
 
 func newReplayRunBuilder(sessionID string) *replayRunBuilder {
@@ -55,19 +77,33 @@ func (b *replayRunBuilder) add(record routerreplay.RoutingRecord) {
 			(record.Timestamp.Equal(first.at) && record.ID > first.recordID)) {
 		first.at, first.recordID, first.prompt = record.Timestamp, record.ID, looper.WithoutSystemReminders(record.Prompt)
 	}
-	if record.RequestKind == store.RequestKindSessionTitle {
-		b.titles++
+	if record.RequestKind != "" {
+		b.sides++
 	}
-	named := &b.named
-	if record.SessionName != "" && (named.at.Before(record.Timestamp) || (named.at.Equal(record.Timestamp) && named.id < record.ID)) {
-		named.at, named.id, named.name = record.Timestamp, record.ID, record.SessionName
+	b.addName(record)
+}
+
+// addName keeps the latest name the harness gave and the earliest a first
+// prompt gave.
+func (b *replayRunBuilder) addName(record routerreplay.RoutingRecord) {
+	name := replayRunName{at: record.Timestamp, id: record.ID, name: record.SessionName}
+	switch {
+	case name.name == "":
+	case !record.SessionNameFromPrompt:
+		if b.named.before(name) {
+			b.named = name
+		}
+	case b.prompted.name == "" || name.before(b.prompted):
+		b.prompted = name
 	}
 }
 
-// titlesOnly reports a session that only asked for a title: the thread
-// Codex starts to title another, which no field ties to that one.
-func (b *replayRunBuilder) titlesOnly() bool {
-	return b.titles == len(b.entries)
+// sidesOnly reports a session made only of side requests: the thread Codex
+// starts to title another, which no field ties to that one, the quota check
+// Claude Code starts with under a session of its own, or the requests
+// vllm-sr connect --check sends.
+func (b *replayRunBuilder) sidesOnly() bool {
+	return b.sides == len(b.entries)
 }
 
 // build returns the run's summary and its calls in time order, each Looper
@@ -79,17 +115,22 @@ func (b *replayRunBuilder) build() (routerreplay.RunSummary, []routerreplay.RunC
 		}
 		return b.entries[i].call.Timestamp.Before(b.entries[j].call.Timestamp)
 	})
+	countReplayToolResults(b.entries, b.toolReports)
 	entries := b.nestHops()
 	lanes := newReplayRunLanes()
 	calls := make([]routerreplay.RunCall, 0, len(entries))
 	for _, entry := range entries {
 		calls = append(calls, lanes.place(entry))
 	}
+	linkReplayRunTools(entries, calls)
+	joinReplayToolReports(calls, b.toolReports)
 	summary := routerreplay.RunSummary{
-		SessionID: b.sessionID, Name: b.named.name, Prompt: b.firstMain.prompt, Calls: len(calls),
+		SessionID: b.sessionID, Name: b.sessionName(), Prompt: b.firstMain.prompt, Calls: len(calls),
 		Agents: lanes.agents(b.agentCost, calls), Cost: replayRunCost(b.cost, calls),
 		Outcome: replayRunOutcome(entries, calls), Events: replayRunEvents(calls), Models: replayRunModels(calls),
 	}
+	linkReplayRunAgents(summary.Agents, calls)
+	linkReplayOfferedTools(summary.Agents, entries, calls)
 	for _, entry := range entries {
 		if summary.Harness == "" {
 			summary.Harness = entry.agent.Harness
@@ -215,7 +256,8 @@ func (l *replayRunLanes) place(entry replayRunEntry) routerreplay.RunCall {
 	}
 	agent.Calls++
 	agent.LastCallAt = call.Timestamp
-	if call.Model != "" && !slices.Contains(agent.Models, call.Model) {
+	// A side request's model is no model the agent works on.
+	if replayModelAnswered(call) && call.RequestKind == "" && !slices.Contains(agent.Models, call.Model) {
 		agent.Models = append(agent.Models, call.Model)
 	}
 	key := label + "\x00" + call.Entrypoint
@@ -321,6 +363,11 @@ func replayRunEvents(calls []routerreplay.RunCall) map[string]int {
 	var count func(routerreplay.RunCall)
 	count = func(call routerreplay.RunCall) {
 		for _, marker := range call.Markers {
+			// A failed side request, such as Claude Code's quota probe, fails
+			// no turn of the run: its call keeps the marker.
+			if marker == routerreplay.RunMarkerFailure && call.RequestKind != "" {
+				continue
+			}
 			events[marker]++
 		}
 		for _, hop := range call.Hops {
@@ -336,21 +383,28 @@ func replayRunEvents(calls []routerreplay.RunCall) map[string]int {
 	return events
 }
 
-// replayRunModels counts the calls each model answered, Looper hops
-// included, most used first.
+// replayRunModels counts the calls each model answered, most used first. A
+// Looper call counts its hops, which answered it.
 func replayRunModels(calls []routerreplay.RunCall) []routerreplay.AggregateValue {
 	counts := make(map[string]int)
 	var count func(routerreplay.RunCall)
 	count = func(call routerreplay.RunCall) {
-		if call.Model != "" {
-			counts[call.Model]++
-		}
 		for _, hop := range call.Hops {
 			count(hop)
+		}
+		if len(call.Hops) == 0 && replayModelAnswered(call) {
+			counts[call.Model]++
 		}
 	}
 	for _, call := range calls {
 		count(call)
 	}
 	return sortRouterReplayAggregateValues(counts, 0)
+}
+
+// replayModelAnswered reports a call its model answered: one the Router or
+// a provider refused, or that failed before any usage came back, has no
+// answer.
+func replayModelAnswered(call routerreplay.RunCall) bool {
+	return call.Model != "" && (call.LifecycleState != routerreplay.LifecycleFailed || call.CompletionTokens != nil)
 }

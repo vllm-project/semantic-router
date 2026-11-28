@@ -625,7 +625,7 @@ curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
 | `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 | `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session |
 | `GET` | `/api/v1/observability/replays/run?session_id=...` | Read one agent run as a tree of its agents and calls |
-| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label the Dashboard's **Requests** page shows for each |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models with the label the Dashboard's **Requests** page shows for each, no two alike |
 
 The runs list takes the list's filters, `limit` and `offset`; a run reads every
 recipe of its session. See
@@ -790,7 +790,10 @@ questions and selections, `systemone` for remote System One exchanges, and
 `embeddings`, `classify` or `rerank` for other model tasks. These entries include
 `model`, input (`prompt_tokens`) and output (`completion_tokens`) usage. Each
 dispatched task counts once, including fused tasks; result-cache hits, startup,
-warmup and background work do not add request spend. Usage returned with a
+warmup and background work do not add request spend. A call no deployment
+answered, whose connection failed, was reset or timed out before any reply,
+charged nothing and is left out, as a request no provider answered is left
+out of the priced and unpriced counts (`unanswered_records`). Usage returned with a
 failed decision is retained. Aggregate router call spend and coverage include
 these calls even when the request fails. Aggregate savings are net of the
 calls made for the completed requests they compare (below); a record's own
@@ -901,11 +904,13 @@ request lacks pricing.
 | `priced_records` | Records whose every cost has a price. |
 | `partly_priced_records` | Records with some costs priced, such as a Looper request with an unpriced call. |
 | `unpriced_records` | Records with no price at all. |
-| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed or has not finished, which is never fully priced unless it is a stream cut short whose usage is priced (`cost_accounting.partial_usage`), or `price_not_recorded` for a record written before the Router recorded why. |
+| `unpriced_reasons` | The partly priced and unpriced records by the reason of their first missing price, for example `pricing_not_configured`, `no_usage`, `not_completed` for a request that failed after a provider answered or has not finished, which is never fully priced unless the Router refused the answer of a priced call or it is a stream cut short whose usage is priced (`cost_accounting.partial_usage`), or `price_not_recorded` for a record written before the Router recorded why. |
 | `looper_hop_records` | Records of Looper hops, left out of the three counts because the record of the request that made each hop counts its call. |
+| `refused_records` | Records of requests the Router refused, or that ended with a `4xx`, before any model answered them, such as a block, also one a stream carries as an error event under its `200`, or a spend budget's refusal, left out of the three counts because they cost nothing. |
+| `unanswered_records` | Records of requests no provider answered: the upstream connection failed, was reset or timed out before any response (`terminal_reason` `upstream_reset`, `upstream_connect_failure`, `upstream_timeout` and the like, with no usage), left out of the three counts because nothing was charged. A provider's own error reply (`upstream_error_response`), and a stream cut after its `200` began, got a response and stay unpriced. |
 | `list_price_records` | Priced records whose rate is a catalog list price. |
 | `caller_login_records` | Records served on a client's own login, priced or not. |
-| `router_calls`, `unpriced_router_calls` | Calls the Router made itself, and how many have no price. |
+| `router_calls`, `unpriced_router_calls` | Calls the Router made itself, and how many have no price. A call no deployment answered is none. |
 | `baseline_sources` | The records compared with a baseline, by `baseline_source` (`unrecorded` for older records). |
 | `baseline_unavailable` | Priced completed records without a baseline, by why. |
 | `netted_router_calls` | The Router calls netted out of savings, by `kind`. |

@@ -258,3 +258,28 @@ func TestEmbeddingCardAuthPatchesLoad(t *testing.T) {
 		})
 	}
 }
+
+// A form's JSON patch lands in the file's block style: lists of objects as
+// block lists and plain strings unquoted, while a string YAML would read as
+// another type keeps its quotes.
+func TestGlobalPatchIsWrittenInBlockStyle(t *testing.T) {
+	existing := []byte("version: v0.5\nglobal:\n  services:\n    budgets:\n      currency: USD\n")
+	patch := []byte(`{"services":{"budgets":{"unpriced":"allow","note":"true","users":[{"name":"daily","limit":0.75,"match":{"group":"eng"}}]}}}`)
+	merged, err := mergeGlobalOverridePatchYAML(existing, patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `        budgets:
+            currency: USD
+            unpriced: allow
+            note: "true"
+            users:
+                - name: daily
+                  limit: 0.75
+                  match:
+                    group: eng
+`
+	if !strings.Contains(string(merged), want) {
+		t.Fatalf("patch not written in block style:\n%s", merged)
+	}
+}

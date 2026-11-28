@@ -97,6 +97,9 @@ func openFileStore(path string, maxRecords, ttlSeconds int, activate bool) (*Fil
 	return store, nil
 }
 
+// Path is the file the store keeps its records in.
+func (f *FileStore) Path() string { return f.path }
+
 // CommitRetention applies the serving Router's record limit. For a newly
 // prepared store it also starts the writer, so discarding a candidate that
 // opened the file cannot checkpoint its provisional history.

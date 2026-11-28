@@ -35,7 +35,7 @@ func TestSessionNameRoundTripsThroughMemoryAndRedis(t *testing.T) {
 // PostgreSQL keeps the session name with the record's run identity, so a
 // metadata scan reads it with the agent.
 func TestPostgresKeepsTheSessionNameWithTheRunIdentity(t *testing.T) {
-	input := Record{ID: "named", SessionName: "Average helper", Agent: &AgentIdentity{Harness: HarnessClaudeCode}}
+	input := Record{ID: "named", SessionName: "Average helper", SessionNameFromPrompt: true, Agent: &AgentIdentity{Harness: HarnessClaudeCode}}
 	insert, err := newPostgresInsertRecord(input)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestPostgresKeepsTheSessionNameWithTheRunIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if output.SessionName != "Average helper" || output.Agent == nil || output.Agent.Harness != HarnessClaudeCode {
+	if output.SessionName != "Average helper" || !output.SessionNameFromPrompt || output.Agent == nil || output.Agent.Harness != HarnessClaudeCode {
 		t.Fatalf("decoded session name %q, agent %+v", output.SessionName, output.Agent)
 	}
 }

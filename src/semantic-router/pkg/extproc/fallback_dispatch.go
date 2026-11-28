@@ -1187,6 +1187,7 @@ func (r *OpenAIRouter) rollbackFallbackContext(
 	ctx.ResponseGuard = nil
 	ctx.PrimaryOutputDigest = ""
 	ctx.PrimaryOutputChars = 0
+	ctx.PrimaryOutputStop = ""
 	r.updateRouterReplayStatus(ctx, primaryStatusCode, wasStreaming)
 }
 

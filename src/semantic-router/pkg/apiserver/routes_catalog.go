@@ -240,6 +240,19 @@ func apiObservabilityRoutes() []apiRoute {
 			errorResponses(400, 404, 409, 429, 503),
 			jsonBodyFor[RouterOutcomeRequest](),
 		),
+		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityToolEventsPath,
+				Method:      "POST",
+				Description: "Report a harness session's tool calls for Router Replay's run view: each call's tool name, call id, start and end, outcome, and when it was put to approval, never its input or output. Router Replay joins them to the run's tool calls by session and call id.",
+			},
+			routePolicy{Permission: PermLearningIngest, Sensitivity: SensitivityMutation},
+			(*ClassificationAPIServer).handleRouterToolEvents,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "mutation"),
+			jsonResponse[ToolEventsResponse](http.StatusOK, "Successful response"),
+			errorResponses(400, 404, 413, 503),
+			strictJSONBodyWithLimitFor[ToolEventsRequest](toolEventsRequestLimit),
+		),
 	}
 }
 

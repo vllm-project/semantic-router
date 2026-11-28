@@ -1,4 +1,4 @@
 {
   "category": "upstream_unavailable",
-  "code": "stream_terminal_output_mismatch"
+  "code": "invalid_responses_stream_sentinel"
 }

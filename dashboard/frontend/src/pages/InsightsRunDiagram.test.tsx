@@ -197,4 +197,101 @@ describe('run diagram', () => {
     expect(html).toContain('data-legend="failure"')
     expect(html).toMatch(/data-legend="failure"[^]*Failed<\/span>[^]*>1<\/span>/)
   })
+
+  it("lists a block's tool calls with their time and result, and prices a list price", () => {
+    const toolCall: RunCall = {
+      ...failed,
+      request_kind: 'tool turn',
+      cost: 0.002,
+      currency: 'USD',
+      pricing_source: 'catalog_list_price',
+      tool_results: 2,
+      tool_calls: [
+        { name: 'Bash', arguments: 'pytest -q', status: 'succeeded', client_ms: 13_000 },
+        {
+          name: 'Read',
+          summary: 'README.md',
+          status: 'failed',
+          timing_source: 'plugin',
+          started_at: '2026-11-16T09:00:06Z',
+          ended_at: '2026-11-16T09:00:08Z',
+        },
+      ],
+    }
+    const [, subagent] = timeline.lanes
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TooltipProvider>
+          <RunSegmentPanel
+            segment={{ ...subagent.blocks[0], calls: [toolCall, toolCall] }}
+            call={toolCall}
+            onSelectCall={() => undefined}
+          />
+        </TooltipProvider>
+      </MemoryRouter>,
+    )
+    expect(html).toContain('aria-label="Tool calls"')
+    expect(html).toContain('pytest -q')
+    expect(html).toContain('≈13.0s')
+    expect(html).toContain('data-timing="plugin">ran 2.0s</span>')
+    expect(html).toContain('data-status="failed"')
+    expect(html).toContain('tool turn')
+    expect(html).toContain('list price')
+    expect(html).toContain('2 results sent')
+  })
+
+  it("shows a tool's own run and its approval wait apart where a harness plugin reported it", () => {
+    const at = (second: number) =>
+      new Date(Date.parse(failed.timestamp) + second * 1000).toISOString()
+    const plugin = { timing_source: 'plugin', status: 'succeeded' } as const
+    const turn: RunCall = {
+      ...failed,
+      tool_calls: [
+        // Claude Code: started after the person approved it, 5 s after the ask
+        {
+          ...plugin,
+          name: 'Bash',
+          summary: 'touch a.txt',
+          approval_requested_at: at(1),
+          started_at: at(6),
+          ended_at: at(6.4),
+          approval_ms: 5000,
+        },
+        { ...plugin, name: 'Read', summary: 'a.py', started_at: at(1.1), ended_at: at(1.3) },
+        // Codex: its hooks do not say when the person answered
+        {
+          ...plugin,
+          name: 'Bash',
+          summary: 'git push',
+          approval_requested_at: at(1.2),
+          started_at: at(1),
+          ended_at: at(9),
+        },
+        {
+          ...plugin,
+          name: 'Write',
+          summary: 'hosts',
+          status: 'denied',
+          approval_requested_at: at(1),
+          ended_at: at(3),
+        },
+      ],
+    }
+    const [, subagent] = timeline.lanes
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <TooltipProvider>
+          <RunSegmentPanel
+            segment={{ ...subagent.blocks[0], calls: [turn] }}
+            onSelectCall={() => undefined}
+          />
+        </TooltipProvider>
+      </MemoryRouter>,
+    )
+    expect(html).toContain('data-timing="plugin">ran 400ms, waited 5.0s for approval</span>')
+    expect(html).toContain('data-timing="plugin">ran 200ms</span>')
+    expect(html).toContain('data-timing="plugin">ran 8.0s, approval wait included</span>')
+    expect(html).toContain('data-timing="plugin">asked for approval</span><span>refused</span>')
+    expect(html).not.toContain('≈')
+  })
 })

@@ -478,7 +478,7 @@ every recipe.
 | Where | What it sets |
 | --- | --- |
 | `global.services.router_replay` | Shared storage and retention. |
-| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text. |
+| No `router_replay` plugin on any layer | A record of each request's routing data, with no request or response text but the run's name and its tool names. |
 | A `router_replay` plugin in `global.plugins` | Whether capture is on, and the capture defaults. |
 | A recipe's or decision's `router_replay` plugin | Only the fields it sets. `enabled: false` turns capture off there; `enabled: true` opts in when the default is off. |
 
@@ -492,6 +492,13 @@ every recipe.
   and `true` as `raw`, with a warning.
 - **Tool results** stay redacted unless `capture_tool_results: true`, which
   stores them under `prompt_capture: raw` only.
+- **Session names.** A run's name, the harness's title or `/rename`, else a
+  headless run's first prompt cut to 120 characters, is kept whatever
+  `prompt_capture` says; `capture_session_name: false` keeps none.
+- **Tool history.** Each tool call's name and result status, the names of
+  the tools each request offered, and each subagent's kind, are kept without
+  arguments, results, schemas or descriptions whatever `prompt_capture` says;
+  `capture_tool_names: false` keeps none.
 - **Rejected requests** without a selected decision use their recipe's
   capture defaults.
 

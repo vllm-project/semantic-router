@@ -1034,6 +1034,12 @@ tools or error translation.
   `stream_terminal_output_mismatch`. For Responses clients, the Router keeps
   the item-done ciphertext and reuses it in terminal output. Other client
   formats omit it with the reasoning continuity diagnostic.
+- A Responses terminal event whose `output` list is empty ends the stream
+  normally. ChatGPT's Codex backend sends one for a request that carries
+  namespace tools, and the items streamed before it are the answer, so a
+  Responses client gets them in its terminal event. A terminal output that
+  lists some streamed items but not all still fails with
+  `stream_terminal_output_mismatch`.
 - `x-vsr-warnings` and the `client_protocol` and `upstream_protocol` members of
   `x-vsr-trace` expose translation details when applicable. See
   [VSR routing headers](../api/headers).
@@ -1147,10 +1153,16 @@ MCP server's tools arrive in a namespace named `mcp__<server>` by default. The
 Router accepts them, so `multi_agent` no longer needs to be disabled. This was
 checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
 
-- Every backend, a Responses backend included, receives each namespaced tool as
-  one tool named `<namespace>__<name>`, for example `mcp__echo__echo` or
-  `multi_agent_v1__spawn_agent`. The namespace's description precedes the
-  tool's own.
+- Every backend, a compatible Responses backend included, receives each
+  namespaced tool as one tool named `<namespace>__<name>`, for example
+  `mcp__echo__echo` or `multi_agent_v1__spawn_agent`. The namespace's
+  description precedes the tool's own.
+- An OpenAI-hosted Responses backend (provider `openai` at `api.openai.com`,
+  `chatgpt.com` or an Azure OpenAI host) reads namespaces, and receives them as
+  Codex declared them, as it would without the gateway. Its models are trained
+  on that surface: through a flat name, `gpt-6-luna` on a ChatGPT login did not
+  use the `Agent` tool that `vllm-sr connect codex --delegate claude-code`
+  registers, and said the tool was not available.
 - A flat name keeps to 64 characters of letters, digits, `_` and `-`. A longer
   name, or one with other characters, is shortened and made unique with a hash
   of the namespace and name; a call in a later turn maps to the same name.
@@ -1164,7 +1176,7 @@ checked with Codex CLI 0.166.0 on Chat, Responses and Messages backends.
 - The model's calls reach Codex with `namespace` and the tool's own `name`,
   buffered and streamed. Calls in the input history, including history
   retained behind `previous_response_id`, are sent to the backend under the
-  flat name.
+  flat name, or under their namespace to an OpenAI-hosted backend.
 - A custom tool inside a namespace follows the custom-tool rules above, so it
   cannot reach a Messages backend.
 - Tool filters, conversation signals and Router Replay see the flat name.

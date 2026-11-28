@@ -243,6 +243,9 @@ func mergeGlobalOverridePatchYAML(existingData, rawPatch []byte) ([]byte, error)
 	if err != nil {
 		return nil, fmt.Errorf("invalid request body: %w", err)
 	}
+	// The patch arrives as JSON: write its values in the file's block style,
+	// not as JSON's flow lists and quoted strings.
+	clearYAMLStyle(patchRoot)
 
 	existingGlobal := mappingValueNode(root, "global")
 	if existingGlobal == nil {
@@ -258,6 +261,13 @@ func mergeGlobalOverridePatchYAML(existingData, rawPatch []byte) ([]byte, error)
 	}
 
 	return marshalYAMLDocument(existingDoc)
+}
+
+func clearYAMLStyle(node *yaml.Node) {
+	node.Style = 0
+	for _, child := range node.Content {
+		clearYAMLStyle(child)
+	}
 }
 
 // mergeMappingPatch applies src to dst as a JSON merge patch (RFC 7396): a

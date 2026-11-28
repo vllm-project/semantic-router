@@ -131,7 +131,9 @@ func TestReplayRunReturnsTheAgentTree(t *testing.T) {
 	require.Equal(t, map[string]int{"failure": 1, "subagent_start": 2, "switch": 1, "tool_failure": 1, "tool_loop": 1}, summary.Events)
 	require.Len(t, summary.Cost.ByCurrency, 1)
 	require.InDelta(t, 0.013, summary.Cost.ByCurrency[0].Total, 1e-9)
-	require.Equal(t, []routerreplay.AggregateValue{{Name: "small", Value: 4}, {Name: "large", Value: 1}}, summary.Models)
+	// The Looper call counts its hop, which answered it, and the failed call
+	// counts no model.
+	require.Equal(t, []routerreplay.AggregateValue{{Name: "small", Value: 2}, {Name: "large", Value: 1}}, summary.Models)
 
 	var missing map[string]interface{}
 	require.Equal(t, 404, replayAPIJSON(t, router, "/api/v1/observability/replays/run?session_id=nobody", &missing))

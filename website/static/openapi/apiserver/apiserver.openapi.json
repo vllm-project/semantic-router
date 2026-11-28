@@ -22262,6 +22262,9 @@
                           "session_name": {
                             "type": "string"
                           },
+                          "session_name_from_prompt": {
+                            "type": "boolean"
+                          },
                           "session_policy": {
                             "nullable": true,
                             "type": "object",
@@ -22447,6 +22450,13 @@
                               },
                               "flow": {
                                 "type": "string"
+                              },
+                              "offered_tools": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
                               },
                               "stage": {
                                 "type": "string"
@@ -23527,7 +23537,13 @@
                             "priced_records": {
                               "type": "integer"
                             },
+                            "refused_records": {
+                              "type": "integer"
+                            },
                             "router_calls": {
+                              "type": "integer"
+                            },
+                            "unanswered_records": {
                               "type": "integer"
                             },
                             "unpriced_reasons": {
@@ -23549,6 +23565,8 @@
                             "partly_priced_records",
                             "unpriced_records",
                             "looper_hop_records",
+                            "refused_records",
+                            "unanswered_records",
                             "list_price_records",
                             "caller_login_records",
                             "router_calls",
@@ -25248,8 +25266,8 @@
     },
     "/api/v1/observability/replays/models": {
       "get": {
-        "summary": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
-        "description": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id",
+        "summary": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike",
+        "description": "List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike",
         "operationId": "get_api_v1_observability_replays_models",
         "tags": [
           "observability"
@@ -25598,6 +25616,20 @@
                           "model": {
                             "type": "string"
                           },
+                          "offered_tools_added": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "offered_tools_removed": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "outcomes": {
                             "nullable": true,
                             "type": "array",
@@ -25645,6 +25677,9 @@
                             }
                           },
                           "previous_model": {
+                            "type": "string"
+                          },
+                          "pricing_source": {
                             "type": "string"
                           },
                           "prompt_tokens": {
@@ -25736,6 +25771,69 @@
                           "timestamp": {
                             "type": "string",
                             "format": "date-time"
+                          },
+                          "tool_calls": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "approval_ms": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "approval_requested_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "arguments": {
+                                  "type": "string"
+                                },
+                                "client_ms": {
+                                  "nullable": true,
+                                  "type": "integer"
+                                },
+                                "ended_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "requested_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "returned_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "started_at": {
+                                  "nullable": true,
+                                  "type": "string",
+                                  "format": "date-time"
+                                },
+                                "status": {
+                                  "type": "string"
+                                },
+                                "summary": {
+                                  "type": "string"
+                                },
+                                "timing_source": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name"
+                              ]
+                            }
                           },
                           "tool_failures": {
                             "type": "integer"
@@ -25838,10 +25936,26 @@
                                   "type": "string"
                                 }
                               },
+                              "offered_tools": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
                               "parent": {
                                 "type": "string"
                               },
+                              "return_status": {
+                                "type": "string"
+                              },
+                              "returned_to_record_id": {
+                                "type": "string"
+                              },
                               "spawned_after_record_id": {
+                                "type": "string"
+                              },
+                              "task": {
                                 "type": "string"
                               },
                               "type": {
@@ -26574,10 +26688,26 @@
                                     "type": "string"
                                   }
                                 },
+                                "offered_tools": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string"
+                                  }
+                                },
                                 "parent": {
                                   "type": "string"
                                 },
+                                "return_status": {
+                                  "type": "string"
+                                },
+                                "returned_to_record_id": {
+                                  "type": "string"
+                                },
                                 "spawned_after_record_id": {
+                                  "type": "string"
+                                },
+                                "task": {
                                   "type": "string"
                                 },
                                 "type": {
@@ -30010,6 +30140,9 @@
                     "session_name": {
                       "type": "string"
                     },
+                    "session_name_from_prompt": {
+                      "type": "boolean"
+                    },
                     "session_policy": {
                       "nullable": true,
                       "type": "object",
@@ -30195,6 +30328,13 @@
                         },
                         "flow": {
                           "type": "string"
+                        },
+                        "offered_tools": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
                         },
                         "stage": {
                           "type": "string"
@@ -30537,6 +30677,436 @@
           {
             "plugin": "router_replay",
             "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/tool-events": {
+      "post": {
+        "summary": "Report a harness session's tool calls for Router Replay's run view: each call's tool name, call id, start and end, outcome, and when it was put to approval, never its input or output. Router Replay joins them to the run's tool calls by session and call id.",
+        "description": "Report a harness session's tool calls for Router Replay's run view: each call's tool name, call id, start and end, outcome, and when it was put to approval, never its input or output. Router Replay joins them to the run's tool calls by session and call id.",
+        "operationId": "post_api_v1_observability_tool_events",
+        "tags": [
+          "observability"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "accepted"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "description": "application/json request payload. Limit: 65536 bytes.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "approval_requested_at": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "ended_at": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "started_at": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "tool": {
+                          "type": "string"
+                        },
+                        "tool_call_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "tool_call_id",
+                        "tool",
+                        "status"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "harness": {
+                    "type": "string"
+                  },
+                  "session_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "session_id",
+                  "events"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "learning.ingest",
+        "x-vllm-sr-sensitivity": "mutation",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "mutation"
           }
         ],
         "x-vllm-sr-visibility": "primary"

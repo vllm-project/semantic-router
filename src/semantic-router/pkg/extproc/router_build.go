@@ -50,6 +50,7 @@ type routerComponents struct {
 	replayRecorder              *routerreplay.Recorder
 	replayStoreShared           bool
 	replayRecorders             map[string]*routerreplay.Recorder
+	toolEvents                  *store.ToolEventStore
 	shadowDispatcher            *shadowDispatcher
 	modelSelector               *selection.Registry
 	recipeModelSelectors        map[config.RecipeName]*selection.Registry
@@ -320,6 +321,7 @@ func assembleRouterComponents(cfg *config.RouterConfig, pool *binding.Pool, sign
 	components.resources.add(func() error {
 		return closeReplayRecorders(components.replayRecorder, components.replayRecorders, components.replayStoreShared)
 	})
+	components.useReplayToolEvents(cfg)
 	components.shadowDispatcher = newShadowDispatcher()
 	components.resources.add(components.shadowDispatcher.Close)
 	components.buildFallbackRuntime()
@@ -531,6 +533,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		RecipeModelSelectors:        components.recipeModelSelectors,
 		LookupTable:                 components.lookupTable,
 		ReplayRecorders:             components.replayRecorders,
+		toolEvents:                  components.toolEvents,
 		ShadowDispatcher:            components.shadowDispatcher,
 		MemoryStore:                 components.memoryStore,
 		MemoryStatus:                components.memoryStatus,

@@ -73,6 +73,17 @@ describe('run labels', () => {
       }),
     ).toBe('$0.0123')
     expect(formatRunCost({ ...cost, unpriced_records: 2 })).toBe('no price')
+    // One call whose classifier call has no price counts once.
+    expect(
+      unpricedText(
+        runCostView({
+          ...cost,
+          by_currency: [{ currency: 'USD', total: 0.1031, router_call_spend: 0 }],
+          unpriced_records: 1,
+          unpriced_router_calls: 1,
+        }),
+      ),
+    ).toBe('1 unpriced')
   })
 
   it('reads a run in one currency and counts, never adds, what another unit priced', () => {

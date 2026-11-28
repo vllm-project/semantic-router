@@ -13,6 +13,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import click
 import pytest
 import yaml
 from click.testing import CliRunner
@@ -177,6 +178,15 @@ def pi_home(tmp_path, monkeypatch):
     home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def router_answers(monkeypatch):
+    """A Router answers at every configuration's listener, so connect starts none;
+    the tests of starting one say otherwise."""
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"), "_answers", lambda _: True
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -649,6 +659,14 @@ def test_probe_checks_a_plain_reply_then_a_streamed_tool_loop(gateway):
     assert [r.ok for r in failed] == [False]
 
 
+def test_probes_mark_themselves_so_no_run_is_listed_for_them():
+    # Router Replay records a request with x-vsr-probe as a check, and a
+    # session of only checks is no run in Insights
+    for harness in ("claude-code", "codex", "pi"):
+        _, headers, _ = rc._probe_target(harness, "m", "http://gw", "tok")
+        assert headers[rc.PROBE_HEADER] == "connect"
+
+
 def test_probe_refuses_a_200_that_is_not_a_reply(gateway):
     url, _, replies = gateway
     replies["/v1/messages"]["plain"] = {}
@@ -794,6 +812,13 @@ def test_claude_code_sends_the_gateway_hint_headers(tmp_path, gateway, monkeypat
     settings.write_text(json.dumps({"env": env}))
     status = CliRunner().invoke(main, ["connect", "status", "--json"])
     assert "CLAUDE_CODE_GATEWAY_HINT_HEADERS" in status.output
+    # a dry run says what --undo would take back and changes nothing
+    written = settings.read_text()
+    result = CliRunner().invoke(main, ["connect", "claude-code", "--undo", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert f"would restore {settings}" in result.output
+    assert "Dry run: nothing was undone." in result.output
+    assert settings.read_text() == written
     assert CliRunner().invoke(main, ["connect", "claude-code", "--undo"]).exit_code == 0
     assert json.loads(settings.read_text()) == {
         "env": {"CLAUDE_CODE_GATEWAY_HINT_HEADERS": "0"}
@@ -1389,6 +1414,52 @@ def test_cli_reads_the_context_window_from_the_configuration(tmp_path, monkeypat
     assert "not set: small, which vllm-sr/auto can reach, states no" in result.output
 
 
+def test_connect_starts_the_router_only_when_nothing_answers(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda _: None)
+    (tmp_path / "config.yaml").write_text(ROUTER)
+    answering = []
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"),
+        "_answers",
+        lambda _: bool(answering),
+    )
+    # whatever listens on the test's port must not answer the probe
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.connect"), "_probe", lambda *_: None
+    )
+    started = []
+
+    def serve(config):
+        started.append(config)
+
+    monkeypatch.setattr(
+        importlib.import_module("cli.commands.runtime"),
+        "serve",
+        click.Command("serve", params=[click.Option(["--config"])], callback=serve),
+    )
+    args = ["connect", "claude-code", "--no-vsr", "--yes"]
+    result = CliRunner().invoke(main, [*args, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert (
+        "Router: nothing answers at http://localhost:8899; would start it with"
+        " vllm-sr serve --config config.yaml." in result.output
+    )
+    # --no-serve, and a gateway named by --base-url, never start one
+    for extra in (["--no-serve"], ["--base-url", "http://localhost:8899"]):
+        result = CliRunner().invoke(main, [*args, *extra])
+        assert result.exit_code == 0, result.output
+    assert started == []
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert started == ["config.yaml"]
+    # a Router that answers is left alone
+    answering.append(True)
+    assert CliRunner().invoke(main, ["connect", "codex", "--yes"]).exit_code == 0
+    assert started == ["config.yaml"]
+
+
 def test_a_shell_api_key_stays_off_the_gateway_and_is_never_shown(
     tmp_path, gateway, monkeypatch
 ):
@@ -1489,6 +1560,7 @@ def harness_bin(tmp_path, monkeypatch):
             f"json.dump({{'args': args, 'settings': open(given).read() if given else None,"
             " 'catalog': json.load(open(catalog[0])) if catalog else None,"
             f" 'key': os.environ.get('VLLM_SR_API_KEY'), 'cwd': os.getcwd(),"
+            " 'session': os.environ.get('VSR_SESSION_ID'),"
             " 'homes': [os.environ.get('CLAUDE_CONFIG_DIR'), os.environ.get('CODEX_HOME')]"
             f"}}, open({str(record)!r}, 'w'))\n"
             "sys.exit(3)\n"
@@ -1603,6 +1675,8 @@ def test_codex_gets_a_catalog_entry_for_the_gateway_model(
                 **BUNDLED_GPT_55,
                 "slug": "vllm-sr/auto",
                 "display_name": "vllm-sr/auto",
+                "description": "vllm-sr/auto through vLLM Semantic Router, which picks"
+                " the model for each request.",
                 "visibility": "list",
                 "supports_search_tool": False,
                 "apply_patch_tool_type": None,
@@ -1739,13 +1813,15 @@ def test_vsr_sets_up_claude_code_through_its_plugin_command_and_undoes_it(
     assert installs == (
         [] if installed else command._installs("claude", command.VSR_SOURCE)
     )
-    # the gateway routes, so the plugin's router steps aside; the token goes to the credential store
+    # the gateway routes, so the plugin's router steps aside; the token goes to the credential store.
+    # Tool timing goes to the management API, unless the plugin installed is one from before it
     assert claude.inputs == {
         "runtime": "remote",
         "runtimeUrl": url + "/v1/decisions",
         "runtimeModel": "vela3-lite",
         "router": "false",
         "guard": "true",
+        **({} if installed else {"managementUrl": "http://localhost:8080"}),
     }
     assert claude.token == "sk-secret"
     assert "sk-secret" not in (tmp_path / "settings.json").read_text().replace(
@@ -1839,6 +1915,9 @@ def test_vsr_points_the_codex_plugin_at_the_listener_and_keeps_its_other_setting
     result = CliRunner().invoke(main, [*args, "--yes"])
     assert result.exit_code == 0, result.output
     assert "the Codex plugin asks vela3-lite" in result.output
+    # Codex runs no hook a person has not trusted, and connect never trusts one
+    trust = importlib.import_module("cli.commands.connect").CODEX_HOOK_TRUST
+    assert trust in result.output
     assert json.loads(held.read_text()) == {
         "guardReview": 0.8,
         "runtimeUrl": url + "/v1/decisions",
@@ -1869,6 +1948,7 @@ def test_a_codex_plugin_that_does_not_install_is_not_reported_as_set_up(
         in result.output
     )
     assert "the Codex plugin asks" not in result.output
+    assert "trust the vSR hooks" not in result.output
     assert ["codex", "plugin", "add", "vsr@vllm-sr"] not in codex.ran
 
 
@@ -2196,6 +2276,10 @@ def test_codex_catalog_exposes_only_gateway_models(model, review):
     assert [e["slug"] for e in entries] == [model, *([review] if review else [])]
     main = entries[0]
     assert main["visibility"] == "list"
+    # a description of its own, not the base entry's
+    assert main["description"] == (
+        f"{model} through vLLM Semantic Router, which picks the model for each request."
+    )
     assert main["supports_search_tool"] is False
     assert main["context_window"] == main["max_context_window"] == 64000
     assert main["supported_reasoning_levels"] == []
@@ -2619,7 +2703,14 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert ran["args"][:2] == ["-p", rc_prompt("Bash")]
     # each harness is told the name its own shell tool has
     assert "with your Bash tool," in ran["args"][1]
-    assert ran["args"][ran["args"].index("--settings") + 1] == str(settings)
+    # a copy of the settings connect wrote, gone afterwards, that also marks the
+    # run as a check, so Router Replay lists no run for it; the settings Claude
+    # Code uses from now on carry no such mark
+    checked = json.loads(ran["settings"])
+    assert checked["env"]["ANTHROPIC_BASE_URL"] == url
+    assert checked["env"]["ANTHROPIC_CUSTOM_HEADERS"] == "x-vsr-probe: connect"
+    assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
+    assert "ANTHROPIC_CUSTOM_HEADERS" not in json.loads(settings.read_text())["env"]
     assert "Bash(cat vsr-check.txt)" in ran["args"]
     # the file it shows holds a token the prompt does not, so a model cannot
     # answer without running the command
@@ -2629,14 +2720,18 @@ def test_check_runs_claude_code_on_the_settings_connect_wrote(
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
     assert ran["key"] == "sk-secret"  # the harness's own environment, unchanged
 
-    # a dry run checks the settings it would write, and writes none
+    # a dry run checks the settings it would write, and writes none; the mark
+    # joins the custom headers Claude Code sends anyway
     settings.unlink()
+    monkeypatch.setenv("ANTHROPIC_CUSTOM_HEADERS", "x-team: blue")
     result = CliRunner().invoke(
         main, ["connect", "claude-code", "--base-url", url, "--dry-run", "--check"]
     )
     assert result.exit_code == 0, result.output
     ran = json.loads(checked_harness.read_text())
-    assert json.loads(ran["settings"])["env"]["ANTHROPIC_BASE_URL"] == url
+    checked = json.loads(ran["settings"])["env"]
+    assert checked["ANTHROPIC_BASE_URL"] == url
+    assert checked["ANTHROPIC_CUSTOM_HEADERS"] == "x-team: blue\nx-vsr-probe: connect"
     assert not Path(ran["args"][ran["args"].index("--settings") + 1]).exists()
     assert not settings.exists()
 
@@ -3317,6 +3412,8 @@ def test_launch_in_a_new_worktree_branches_from_head_and_tags_every_request(
         assert tag.replace("'", '"') in ran["args"]
         carried = "x-vsr-session-id"
     assert header.endswith(f"requests {carried}: {session}")
+    # the vSR plugin files tool timing under the same session
+    assert ran["session"] == session
     # the docs say where Router Replay files the calls; the header does not
     # guess at the Router's identity settings, given or not
     learning = {"protection": {"identity": {"headers": {"session": "session-id"}}}}
@@ -4428,6 +4525,15 @@ def test_fallback_finding_says_where_to_change_it():
     assert snippet == {"modelRefs": [{"model": "m"}, {"model": "<another model>"}]}
     # a request for a provider model by name takes no decision
     assert _reliability_needs(doc, model="m") == []
+    # a decision that answers itself, such as a block, has no model to fall back
+    # from and needs no fallback
+    block = {"name": "block_marker", "plugins": [{"type": "fast_response"}]}
+    doc["recipes"][0]["decisions"].append(block)
+    assert not [f for f in _reliability_needs(doc) if "block_marker" in f.need]
+    del decision["fallback"]
+    doc["global"]["router"]["fallback"] = {"enabled": False}
+    needs = _reliability_needs(doc)
+    assert needs and not [f for f in needs if "block_marker" in f.need]
 
 
 def test_timeout_finding_reads_the_decision_then_the_model_then_the_listener():
@@ -4505,8 +4611,11 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert "--no-session" in ran["args"] and ran["args"][-1] == rc_prompt("bash")
     # Pi's only tool is bash: a model told of a shell tool answered without it
     assert "with your bash tool," in ran["args"][-1]
-    # the user's own agent directory, with the provider written there
+    # the user's own agent directory, with the provider written there; Pi takes
+    # headers only from that file, which carries no check's mark
     assert ran["agent"] == str(pi_home)
+    written = json.loads((pi_home / "models.json").read_text())
+    assert "headers" not in written["providers"]["vllm-sr"]
     assert ran["stdin_closed"] and not Path(ran["cwd"]).exists()
 
     # a dry run checks the provider it would write, in an agent directory of its own
@@ -4518,6 +4627,8 @@ def test_check_runs_pi_on_the_provider_connect_wrote(
     assert ran["agent"] != str(pi_home) and not Path(ran["agent"]).exists()
     held = json.loads(ran["models"])["providers"]["vllm-sr"]
     assert held["baseUrl"] == url + "/v1" and held["apiKey"] == "$VLLM_SR_API_KEY"
+    # the copy only the check reads marks its run as a check
+    assert held["headers"] == {"x-vsr-probe": "connect"}
     assert not (pi_home / "models.json").exists()
 
     # a refused key is a failed login, with the key hidden
@@ -4710,6 +4821,10 @@ def test_codex_app_check_runs_codex_without_a_profile(
     assert result.exit_code == 0, result.output
     ran = json.loads(checked_harness.read_text())
     assert ran["args"][0] == "exec" and "--profile" not in ran["args"]
+    # the check's run marks itself a check, through Codex's own provider headers
+    marked = 'model_providers.vllm-sr.http_headers.x-vsr-probe="connect"'
+    assert ran["args"][ran["args"].index(marked) - 1] == "-c"
+    assert "x-vsr-probe" not in (tmp_path / "codex" / "config.toml").read_text()
     assert "with your exec_command tool," in ran["args"][-1]
     assert (tmp_path / "codex" / "config.toml").exists()
 

@@ -11,6 +11,7 @@ import { follow, followLater } from './lib/profile'
 import { parseSettings, type Settings } from './lib/settings'
 import { inspectOutput, writeBackOf } from './output'
 import { checkRouterModel, countSpend, routeSpawn, routeStep } from './router'
+import { sendTimings, timeCall, timeCheck, timeRun } from './timing'
 import { askTurn, endTurn, modelPicked, showTurns, startTurn, stepTurn } from './turns'
 import { loadLook, registerCommand, registerView } from './view'
 
@@ -25,6 +26,19 @@ async function inspected($: EngineInterface, e: ToolCallInput, ran: ToolCallResu
 export const register: Register = (on, options) => {
   // One object every hook reads, so applying the listener's profile reaches them all.
   const settings = parseSettings(options)
+
+  // Tool timing is hooked first, around every other hook: the verdict it reads is the final one, and a call settles
+  // for it after the apps below are done with it.
+  on('tool.check', ($, e, next) => timeCheck($, e, next, settings))
+  on('tool.call', ($, e, next) => timeCall($, e, next, settings))
+  on('classic.PostToolUse', async ($, e, next) => {
+    await timeRun($, e, 'succeeded', settings)
+    return next(e)
+  })
+  on('classic.PostToolUseFailure', async ($, e, next) => {
+    await timeRun($, e, 'failed', settings)
+    return next(e)
+  })
 
   on('session.start', async ($, e, next) => {
     await follow($, settings, options)
@@ -60,6 +74,7 @@ export const register: Register = (on, options) => {
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId === undefined) {
+      sendTimings($, settings)
       await releaseEscalation($, e)
       await endTurn($, e)
       await checkTurn($, e, settings)

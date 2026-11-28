@@ -584,6 +584,38 @@ not the optional `source` body field, determines provenance. Use a stable
 Router Learning runtime and the `learning.ingest` permission when bearer auth
 is enabled.
 
+A harness plugin reports the tool calls it ran, so Router Replay's run view can
+show each call's own time instead of the gateway's window:
+
+```bash
+curl -sS http://localhost:8080/api/v1/observability/tool-events \
+  -H "Authorization: Bearer ${VSR_MGMT_TOKEN}" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "harness": "claude-code",
+    "session_id": "0b6f8c2e-3d1a-4f6b-9a57-2c8e4d1f7a90",
+    "events": [{
+      "tool_call_id": "toolu_01A",
+      "tool": "Bash",
+      "status": "succeeded",
+      "approval_requested_at": "2026-11-17T01:00:00.000Z",
+      "started_at": "2026-11-17T01:00:04.500Z",
+      "ended_at": "2026-11-17T01:00:05.250Z"
+    }]
+  }'
+```
+
+`session_id` is the session Replay files the run under, and each event needs
+`tool_call_id`, `tool` and `status` (`succeeded`, `failed`, or `denied` for a
+call refused before it ran). A batch holds at most 64 calls, a body at most
+64 KiB, and a field the request does not define, such as a tool's arguments,
+refuses the batch. The answer is `{"accepted": n}`. Replay keeps at most 5,000
+reported calls, none older than its records' TTL (seven days without one),
+beside the records: in `.vllm-sr/router-tool-events.jsonl` with the file store,
+and in memory, across configuration reloads but not restarts, with the others.
+The `learning.ingest` permission is required when bearer auth is enabled, and a
+Router without Router Replay answers 404.
+
 ## API boundaries
 
 - The management API is an operational surface, not the public inference
@@ -672,12 +704,13 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | --- | --- | --- |
 | `GET` | `/api/v1/observability/classification-metrics` | Get classification metrics and statistics |
 | `POST` | `/api/v1/observability/outcomes` | Submit Router Learning outcome feedback linked to a replay record |
+| `POST` | `/api/v1/observability/tool-events` | Report a harness session's tool calls for Router Replay's run view: each call's tool name, call id, start and end, outcome, and when it was put to approval, never its input or output. Router Replay joins them to the run's tool calls by session and call id. |
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
 | `GET` | `/api/v1/observability/replays/runs` | List agent runs, one summary per session over the filtered records, latest activity first |
 | `GET` | `/api/v1/observability/replays/run` | Read one agent run as a tree: its agents and their calls in time order, with each call's route, cost and outcome |
-| `GET` | `/api/v1/observability/replays/models` | List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id |
+| `GET` | `/api/v1/observability/replays/models` | List the configured models, each with the label Insights shows for it: its catalog display name, else its provider model id, else its configured name where two models would read alike |
 | `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/dataset/judge-tasks` | Build blinded pairwise judge tasks over the shadow comparison dataset |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |

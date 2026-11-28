@@ -1,6 +1,9 @@
 package catalog
 
-import "testing"
+import (
+	"maps"
+	"testing"
+)
 
 // A model reads by the name its card gives, the catalog's or the operator's,
 // else by the card a provider maps its provider model id to, else by that
@@ -34,5 +37,30 @@ func TestEffectiveModelLabel(t *testing.T) {
 		if got := effective.ModelLabel(name); got != want {
 			t.Errorf("ModelLabel(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// Models that would read alike, such as several on one provider model id,
+// read by their configured names, and no two models share a label.
+func TestEffectiveModelLabelsNeverCollide(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective, err := registry.Compile(CompileInput{
+		Providers: []ProviderInstance{{Name: "lab", Catalog: "vllm", BaseURL: "http://127.0.0.1:8000/v1"}},
+		Models: []ModelAlias{
+			{Name: "qwen-msg", Catalog: "qwen-msg", Providers: []ModelProviderBinding{{Name: "lab", ModelID: "qwen36"}}},
+			{Name: "qwen-small", Catalog: "qwen-small", Providers: []ModelProviderBinding{{Name: "lab", ModelID: "qwen36"}}},
+			{Name: "catalog-backed", Catalog: "qwen/qwen3.6-35b-a3b", Providers: []ModelProviderBinding{{Name: "lab", ModelID: "qwen36"}}},
+		},
+		ModelCards: []ModelCardOverlay{{Name: "qwen-msg"}, {Name: "qwen-small"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"qwen-msg": "qwen-msg", "qwen-small": "qwen-small", "catalog-backed": "Qwen3.6 35B A3B"}
+	if got := effective.ModelLabels(); !maps.Equal(got, want) {
+		t.Fatalf("ModelLabels() = %v, want %v", got, want)
 	}
 }

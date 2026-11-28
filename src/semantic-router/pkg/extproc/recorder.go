@@ -141,6 +141,8 @@ func (r *OpenAIRouter) startRouterReplay(
 	applyReplayPrivacyEvidence(ctx, &record, !ctx.RouterReplayContentOmitted)
 	headerSession := r.populateReplayIdentity(&record, ctx) || ctx.SessionProvenance == SessionProvenanceHeader
 	applyReplayRunParent(&record, ctx.replayRunParent)
+	linkReplayTitleThread(&record, ctx, prompt)
+	applyReplayFirstPromptName(&record, ctx, prompt)
 	applyReplayReviewSession(&record, headerSession)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
@@ -165,6 +167,10 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 		cfg = r.Config.RouterLearning.Protection
 	}
 	record.Agent = harnessRunAgent(ctx, cfg)
+	if record.Agent != nil && ctx.RouterReplayPluginConfig != nil && !ctx.RouterReplayPluginConfig.KeepsToolNames() {
+		// A subagent's kind is part of the tool history the policy keeps.
+		record.Agent.Kind = ""
+	}
 	identity, ok := r.protectionIdentity(ctx, cfg)
 	if !ok {
 		// Protection keys no state for the call, but the harness still names
@@ -317,7 +323,7 @@ func buildReplayRoutingRecord(
 	}
 	record.RequestKind, record.Review = replayApprovalReview(ctx)
 	sessionKind, sessionName := replaySessionNaming(ctx)
-	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind), sessionName
+	record.RequestKind, record.SessionName = firstNonEmptyString(record.RequestKind, sessionKind, replaySideRequestKind(ctx)), sessionName
 	record.ThreadID, record.TurnID, record.ParentTurnID = ctx.AgentTurn.ThreadID, ctx.AgentTurn.TurnID, ctx.AgentTurn.ParentTurnID
 	record.ImageCount, record.HistoryImageCount = requestImageCounts(ctx.SemanticRequest)
 	// The sanitiser drops tool-result payloads unless the route captures tool
@@ -564,7 +570,16 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	if isFinal {
 		attachPrimaryOutputDigest(ctx, recorder)
 	}
-	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); replayResponseContentAllowed(ctx) && responseTrace != nil {
+	// A capture that keeps no text keeps the response's tool calls by name.
+	responseTrace := buildReplayResponseToolTrace(ctx, responseBody)
+	switch {
+	case replayResponseContentAllowed(ctx):
+	case replayKeepsToolNames(ctx):
+		responseTrace = routerreplay.ToolTraceStructure(responseTrace)
+	default:
+		responseTrace = nil
+	}
+	if responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
 		}
@@ -629,6 +644,11 @@ func (r *OpenAIRouter) writeRouterReplayUsageCost(ctx *RequestContext, usage rou
 // hashing a stored body on one side and a decoded answer on the other.
 const primaryResponseOutcomeSource = "primary_response"
 
+// primaryResponseStopReason is the metadata key of the stop reason the
+// answer ended with, such as end_turn or tool_call: a run reads a final
+// answer from it where Replay keeps no tool trace.
+const primaryResponseStopReason = "stop_reason"
+
 // recordPrimaryOutputDigest hashes what the selected model answered, using the
 // same contract a shadow arm is hashed under: the assistant text of the decoded
 // response, never the encoded protocol body, which carries a JSON envelope, a
@@ -648,6 +668,7 @@ func recordPrimaryOutputDigest(ctx *RequestContext, response *llmprotocol.Respon
 	sum := sha256.Sum256([]byte(text))
 	ctx.PrimaryOutputDigest = hex.EncodeToString(sum[:])
 	ctx.PrimaryOutputChars = utf8.RuneCountInString(text)
+	ctx.PrimaryOutputStop = response.StopReason
 }
 
 // attachPrimaryOutputDigest persists the digest captured before the response
@@ -666,6 +687,9 @@ func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recor
 			"response_sha256": ctx.PrimaryOutputDigest,
 			"response_chars":  strconv.Itoa(ctx.PrimaryOutputChars),
 		},
+	}
+	if ctx.PrimaryOutputStop != "" {
+		outcome.Metadata[primaryResponseStopReason] = string(ctx.PrimaryOutputStop)
 	}
 	if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
 		logging.ComponentErrorEvent("extproc", "primary_output_digest_persist_failed", map[string]interface{}{

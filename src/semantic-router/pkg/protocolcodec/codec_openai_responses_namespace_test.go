@@ -516,3 +516,32 @@ func TestResponsesNamespaceSurvivesAPublicResponseRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(frames), `"namespace":"mcp__echo"`)
 }
+
+// A backend that reads namespaces, such as OpenAI-hosted Responses, receives
+// each namespaced tool and history call as its client declared them, with the
+// namespace's description apart from each tool's.
+func TestResponsesNamespaceToolsReachANamespaceBackendAsDeclared(t *testing.T) {
+	engine := NewBuiltinEngine()
+	request, envelope, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(codexNamespaceRequest))
+	require.NoError(t, err)
+	request.KeepToolNamespaces = true
+	encoded, err := engine.EncodeRequest(llmprotocol.OpenAIResponsesV1, request, envelope)
+	require.NoError(t, err)
+	var body struct {
+		Input []map[string]any `json:"input"`
+		Tools json.RawMessage  `json:"tools"`
+	}
+	require.NoError(t, json.Unmarshal(encoded.Body, &body))
+	require.JSONEq(t, `[
+		{"type":"function","name":"exec_command","description":"Run a command.","strict":false,"parameters":{"type":"object"}},
+		{"type":"namespace","name":"multi_agent_v1","description":"Tools for spawning and managing sub-agents.","tools":[
+			{"type":"function","name":"spawn_agent","description":"Start a child.","strict":false,"parameters":{"type":"object"}}
+		]},
+		{"type":"namespace","name":"mcp__echo","description":"Tools in the mcp__echo namespace.","tools":[
+			{"type":"function","name":"echo","description":"Echo the text.","strict":false,"parameters":{"type":"object"}},
+			{"type":"custom","name":"raw_echo","description":"Echo free-form input."}
+		]}
+	]`, string(body.Tools))
+	call := body.Input[1]
+	require.Equal(t, []any{"function_call", "mcp__echo", "echo"}, []any{call["type"], call["namespace"], call["name"]})
+}

@@ -85,6 +85,7 @@
             "x-vsr-memory",
             "x-vsr-outcome-principal",
             "x-vsr-outcome-source",
+            "x-vsr-probe",
             "x-vsr-protection-release",
             "x-vsr-replay-id",
             "x-vsr-response-path",
