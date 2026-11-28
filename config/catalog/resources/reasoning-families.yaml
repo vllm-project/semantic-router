@@ -321,3 +321,10 @@
   default: medium
   modes: [enabled]
   default_mode: enabled
+- id: gemini-4-four-level-high
+  type: reasoning_effort
+  parameter: reasoning_effort
+  levels: [low, medium, high, xhigh]
+  default: high
+  modes: [enabled]
+  default_mode: enabled

@@ -71,9 +71,10 @@ inventory:
           - deepseek/deepseek-r1
       - publisher: Google
         representative_models:
-          - google/gemini-3.8-flash
-          - google/gemini-3.7-flash
-          - google/gemini-3.6-flash
+          - google/gemini-4-argon
+          - google/gemini-4-carbon
+          - google/gemini-4-hydrogen
+          - google/gemini-4-neon
       - publisher: IBM / Granite
         representative_models:
           - ibm/granite-4.2-30b

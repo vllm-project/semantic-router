@@ -40,6 +40,57 @@ recipes:
 
 目录为每张卡收录五条已发布的评测。Astra 和 Sol 的记录来自 `xhigh`，Terra 的记录来自 `high`；分数不会复制到其他档位。只有同一评测条件下可比模型数量足够时，结果才会进入 Model Hub 的公开对比。
 
+## Gemini 4
+
+`gemini` Provider 通过 [Chat Completions](https://aistudio.google.com/docs/openai#thinking)
+将以下规范模型卡映射到 Google 的精确 API ID：
+
+| Catalog ID | API 模型 ID | 推理档位 | 默认值 | 已收录 AA 成绩的档位 |
+| --- | --- | --- | --- | --- |
+| `google/gemini-4-argon` | `gemini-4-argon` | `low`、`medium`、`high` | `medium` | `high` |
+| `google/gemini-4-carbon` | `gemini-4-carbon` | `low`、`medium`、`high` | `medium` | `high` |
+| `google/gemini-4-hydrogen` | `gemini-4-hydrogen` | `low`、`medium`、`high`、`xhigh` | `high` | `xhigh` |
+| `google/gemini-4-neon` | `gemini-4-neon` | `low`、`medium`、`high`、`xhigh` | `high` | `xhigh` |
+
+```yaml
+version: v0.5
+providers:
+  models:
+    - name: neon
+      catalog: google/gemini-4-neon
+      backend_refs:
+        - name: primary
+          provider: gemini
+          auth: {api_key_env: GEMINI_API_KEY}
+recipes:
+  - name: default
+    decisions:
+      - name: neon_deep
+        priority: 1
+        rules:
+          operator: AND
+          conditions: []
+        modelRefs:
+          - model: neon
+            use_reasoning: true
+            reasoning_effort: xhigh
+```
+
+Router 将选定档位作为顶层 `reasoning_effort` 发送。
+Gemini 4 [不支持关闭 thinking](https://aistudio.google.com/docs/thinking#thinking-levels)。
+目录仅暴露原生档位；兼容 API 中映射到 `low` 的 `minimal` 别名不是独立可选档位。
+模型卡记录统一的 1,048,576 token 上下文和 65,536 token 输出上限。
+Argon/Carbon 的单次前台非流式调用上限为 32,768 tokens；流式调用及 Hydrogen/Neon
+支持 65,536 tokens。详见 Google 的[上下文与输出限制](https://aistudio.google.com/docs/thinking#token-limits)。
+long decode 是单独的 API 功能。
+
+每张卡在上表指定档位收录五项 [Artificial Analysis](https://artificialanalysis.ai/methodology/intelligence-benchmarking)
+公开评测：GDP.pdf All-pass、Terminal-Bench 4.0 pass@1、AA-Briefcase v1.1 Elo
+（含 95% 区间）、AA-Omniscience v1.1 Accuracy、Net Score 与 Hallucination Rate，以及完整 1,000 题
+（含 272 道图像题）、无工具的 HLE-Diamond pass@1。记录保留原始指标、harness 和查阅日期。
+这些独立版本不替换 Intelligence 1.0 的组成项，其他档位继续保留证据缺失状态；
+公开成绩属于导入的第三方评测，不是 Router 本地复测。
+
 ## Muse Wonder 和 Muse Ember
 
 将 `meta/muse-wonder-1.0` 或 `meta/muse-ember-1.0` 绑定到 `meta` Provider。

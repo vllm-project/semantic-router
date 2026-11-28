@@ -96,6 +96,16 @@ describe('model hub inventory support', () => {
 })
 
 describe('model hub presentation support', () => {
+  it('orders Gemini 4 by official GA dates ahead of earlier Gemini releases', () => {
+    const rows = modelHubRows(catalog, filters({ query: 'gemini', sort: 'released' }))
+    expect(rows.slice(0, 4).map((row) => [row.model.id, row.model.released_at])).toEqual([
+      ['google/gemini-4-neon', '2026-11-18'],
+      ['google/gemini-4-hydrogen', '2026-11-12'],
+      ['google/gemini-4-carbon', '2026-11-10'],
+      ['google/gemini-4-argon', '2026-10-13'],
+    ])
+  })
+
   it('sorts catalog properties without turning the hub into a composite ranking', () => {
     const byContext = modelHubRows(catalog, filters({ sort: 'context' }))
     expect(byContext[0].model.limits?.context_window_size ?? 0).toBeGreaterThanOrEqual(
@@ -143,6 +153,24 @@ describe('model hub presentation support', () => {
 })
 
 describe('model hub benchmark evidence', () => {
+  it('includes Gemini 4 in the existing public AA GDP.pdf comparison', () => {
+    const records = modelHubPublicEvaluations(catalog).filter(
+      (evaluation) =>
+        evaluation.benchmark === 'artificial-analysis/gdp-pdf@1.0.0' &&
+        evaluation.benchmark_profile === 'published-standard' &&
+        evaluation.metrics.all_pass !== undefined,
+    )
+    expect(records.map((evaluation) => evaluation.model)).toEqual(
+      expect.arrayContaining([
+        'google/gemini-3.8-flash',
+        'google/gemini-4-argon',
+        'google/gemini-4-carbon',
+        'google/gemini-4-hydrogen',
+        'google/gemini-4-neon',
+      ]),
+    )
+  })
+
   it('does not use August GameBench models to qualify November Astra and Sol scores', () => {
     const gameBench = catalog.evaluations.filter(
       (row) => row.benchmark === 'duellab/gamebench@2.0.0',

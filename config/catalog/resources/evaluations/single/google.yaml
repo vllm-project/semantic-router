@@ -1,3 +1,623 @@
+- id: independent/gemini-4-argon-high-gdp-pdf@1.0.0
+  model: google/gemini-4-argon
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Argon (High)
+    source_model_slug: gemini-4-argon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    document_preparation: LiteParse 2.5.0 with English OCR; complete extracted text and page images when
+      context and payload limits permit
+    max_turns: 1
+    judge: GPT-5.6 Luna (medium)
+    grading: Each rubric criterion judged independently; all criteria must pass
+  metrics:
+    all_pass: 0.218
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-argon
+    redistributable: true
+- id: independent/gemini-4-argon-high-terminal-bench@4.0.0
+  model: google/gemini-4-argon
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Argon (High)
+    source_model_slug: gemini-4-argon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: mini-swe-agent
+    harness_version: not disclosed
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    task_resources: Upstream task timeouts and sandbox resources
+    agent_config: Interactive mini config and prompts; native bash tool
+    context_compaction: false
+  metrics:
+    resolved: 0.570707070707071
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-argon
+    redistributable: true
+- id: independent/gemini-4-argon-high-briefcase@1.1.0
+  model: google/gemini-4-argon
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Argon (High)
+    source_model_slug: gemini-4-argon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: Stirrup
+    harness_version: not disclosed
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    grading: Rubric, analytical quality, and presentation; Crowd-BT Elo fitting
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+    judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
+      matches
+  metrics:
+    elo: 1484.19
+    elo_lower: 1475.15
+    elo_upper: 1493.71
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-argon
+    redistributable: true
+- id: independent/gemini-4-argon-high-omniscience@1.1.0
+  model: google/gemini-4-argon
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Argon (High)
+    source_model_slug: gemini-4-argon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+    grading: CORRECT, INCORRECT, PARTIAL_ANSWER, or NOT_ATTEMPTED
+  metrics:
+    accuracy: 0.483
+    net_score: 46.1
+    hallucination_rate: 0.0425531914893617
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-argon
+    redistributable: true
+- id: independent/gemini-4-argon-high-hle-diamond@1.0.0
+  model: google/gemini-4-argon
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Argon (High)
+    source_model_slug: gemini-4-argon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    prompts: Official HLE system prompt and judge prompt/response format
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.567
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-argon
+    redistributable: true
+- id: independent/gemini-4-carbon-high-gdp-pdf@1.0.0
+  model: google/gemini-4-carbon
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Carbon (High)
+    source_model_slug: gemini-4-carbon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    document_preparation: LiteParse 2.5.0 with English OCR; complete extracted text and page images when
+      context and payload limits permit
+    max_turns: 1
+    judge: GPT-5.6 Luna (medium)
+    grading: Each rubric criterion judged independently; all criteria must pass
+  metrics:
+    all_pass: 0.284
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-carbon
+    redistributable: true
+- id: independent/gemini-4-carbon-high-terminal-bench@4.0.0
+  model: google/gemini-4-carbon
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Carbon (High)
+    source_model_slug: gemini-4-carbon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: mini-swe-agent
+    harness_version: not disclosed
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    task_resources: Upstream task timeouts and sandbox resources
+    agent_config: Interactive mini config and prompts; native bash tool
+    context_compaction: false
+  metrics:
+    resolved: 0.651515151515151
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-carbon
+    redistributable: true
+- id: independent/gemini-4-carbon-high-briefcase@1.1.0
+  model: google/gemini-4-carbon
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Carbon (High)
+    source_model_slug: gemini-4-carbon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: Stirrup
+    harness_version: not disclosed
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    grading: Rubric, analytical quality, and presentation; Crowd-BT Elo fitting
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+    judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
+      matches
+  metrics:
+    elo: 1610.63
+    elo_lower: 1600.75
+    elo_upper: 1621.24
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-carbon
+    redistributable: true
+- id: independent/gemini-4-carbon-high-omniscience@1.1.0
+  model: google/gemini-4-carbon
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Carbon (High)
+    source_model_slug: gemini-4-carbon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+    grading: CORRECT, INCORRECT, PARTIAL_ANSWER, or NOT_ATTEMPTED
+  metrics:
+    accuracy: 0.5826666666666667
+    net_score: 53.5
+    hallucination_rate: 0.11421725239616613
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-carbon
+    redistributable: true
+- id: independent/gemini-4-carbon-high-hle-diamond@1.0.0
+  model: google/gemini-4-carbon
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: high
+  subject:
+    source_model: Gemini 4 Carbon (High)
+    source_model_slug: gemini-4-carbon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    prompts: Official HLE system prompt and judge prompt/response format
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.691
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-carbon
+    redistributable: true
+- id: independent/gemini-4-hydrogen-xhigh-gdp-pdf@1.0.0
+  model: google/gemini-4-hydrogen
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Hydrogen (Xhigh)
+    source_model_slug: gemini-4-hydrogen
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    document_preparation: LiteParse 2.5.0 with English OCR; complete extracted text and page images when
+      context and payload limits permit
+    max_turns: 1
+    judge: GPT-5.6 Luna (medium)
+    grading: Each rubric criterion judged independently; all criteria must pass
+  metrics:
+    all_pass: 0.276
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-hydrogen
+    redistributable: true
+- id: independent/gemini-4-hydrogen-xhigh-terminal-bench@4.0.0
+  model: google/gemini-4-hydrogen
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Hydrogen (Xhigh)
+    source_model_slug: gemini-4-hydrogen
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: mini-swe-agent
+    harness_version: not disclosed
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    task_resources: Upstream task timeouts and sandbox resources
+    agent_config: Interactive mini config and prompts; native bash tool
+    context_compaction: false
+  metrics:
+    resolved: 0.535353535353535
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-hydrogen
+    redistributable: true
+- id: independent/gemini-4-hydrogen-xhigh-briefcase@1.1.0
+  model: google/gemini-4-hydrogen
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Hydrogen (Xhigh)
+    source_model_slug: gemini-4-hydrogen
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: Stirrup
+    harness_version: not disclosed
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    grading: Rubric, analytical quality, and presentation; Crowd-BT Elo fitting
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+    judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
+      matches
+  metrics:
+    elo: 1568.48
+    elo_lower: 1557.9
+    elo_upper: 1579.19
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-hydrogen
+    redistributable: true
+- id: independent/gemini-4-hydrogen-xhigh-omniscience@1.1.0
+  model: google/gemini-4-hydrogen
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Hydrogen (Xhigh)
+    source_model_slug: gemini-4-hydrogen
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+    grading: CORRECT, INCORRECT, PARTIAL_ANSWER, or NOT_ATTEMPTED
+  metrics:
+    accuracy: 0.5046666666666667
+    net_score: 46.266666666666666
+    hallucination_rate: 0.0847913862718708
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-hydrogen
+    redistributable: true
+- id: independent/gemini-4-hydrogen-xhigh-hle-diamond@1.0.0
+  model: google/gemini-4-hydrogen
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Hydrogen (Xhigh)
+    source_model_slug: gemini-4-hydrogen
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    prompts: Official HLE system prompt and judge prompt/response format
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.588
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-hydrogen
+    redistributable: true
+- id: independent/gemini-4-neon-xhigh-gdp-pdf@1.0.0
+  model: google/gemini-4-neon
+  benchmark: artificial-analysis/gdp-pdf@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Neon (Xhigh)
+    source_model_slug: gemini-4-neon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    task_count: 100
+    repeats: 5
+    tool_policy: no_tools
+    document_preparation: LiteParse 2.5.0 with English OCR; complete extracted text and page images when
+      context and payload limits permit
+    max_turns: 1
+    judge: GPT-5.6 Luna (medium)
+    grading: Each rubric criterion judged independently; all criteria must pass
+  metrics:
+    all_pass: 0.28
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-neon
+    redistributable: true
+- id: independent/gemini-4-neon-xhigh-terminal-bench@4.0.0
+  model: google/gemini-4-neon
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Neon (Xhigh)
+    source_model_slug: gemini-4-neon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: mini-swe-agent
+    harness_version: not disclosed
+    task_count: 66
+    repeats: 3
+    scoring: pass@1
+    max_steps: 500
+    task_resources: Upstream task timeouts and sandbox resources
+    agent_config: Interactive mini config and prompts; native bash tool
+    context_compaction: false
+  metrics:
+    resolved: 0.636363636363636
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-neon
+    redistributable: true
+- id: independent/gemini-4-neon-xhigh-briefcase@1.1.0
+  model: google/gemini-4-neon
+  benchmark: artificial-analysis/briefcase@1.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Neon (Xhigh)
+    source_model_slug: gemini-4-neon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    agent_harness: Stirrup
+    harness_version: not disclosed
+    sandbox: E2B
+    task_count: 91
+    scenario_count: 4
+    task_execution: Independent run per task
+    max_turns: 500
+    internet_access: false
+    grading: Rubric, analytical quality, and presentation; Crowd-BT Elo fitting
+    confidence_interval: 0.95
+    rubric_judge_panel:
+    - Claude Opus 4.8 (max)
+    - GPT-5.5 (high)
+    - Gemini 3.1 Pro Preview (high)
+    pairwise_judge_panel:
+    - Claude Opus 5 (high)
+    - GPT-5.6 Sol (medium)
+    - Gemini 3.8 Flash (high)
+    judge_selection: One judge sampled per verdict from the respective panel, balanced across checks and
+      matches
+  metrics:
+    elo: 1698.69
+    elo_lower: 1687.24
+    elo_upper: 1709.65
+  status: available
+  observed_at: 2026-11-21
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-neon
+    redistributable: true
+- id: independent/gemini-4-neon-xhigh-omniscience@1.1.0
+  model: google/gemini-4-neon
+  benchmark: artificial-analysis/omniscience@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Neon (Xhigh)
+    source_model_slug: gemini-4-neon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 3000
+    topic_count: 42
+    judge: GPT-5.6 Luna (medium)
+    grading: CORRECT, INCORRECT, PARTIAL_ANSWER, or NOT_ATTEMPTED
+  metrics:
+    accuracy: 0.6046666666666667
+    net_score: 54.766666666666666
+    hallucination_rate: 0.14418212478920742
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-neon
+    redistributable: true
+- id: independent/gemini-4-neon-xhigh-hle-diamond@1.0.0
+  model: google/gemini-4-neon
+  benchmark: cais/hle-diamond@1.0.0
+  benchmark_profile: independent-full-1000-no-tools
+  reasoning_effort: xhigh
+  subject:
+    source_model: Gemini 4 Neon (Xhigh)
+    source_model_slug: gemini-4-neon
+    run_kind: independent
+    methodology_source: https://artificialanalysis.ai/methodology/intelligence-benchmarking
+    implementation: Artificial Analysis
+    sample_count: 1000
+    reasoning_questions: 500
+    knowledge_questions: 500
+    image_questions: 272
+    input_modalities:
+    - text
+    - image
+    tool_policy: no_tools
+    repeats: 1
+    scoring: pass@1
+    prompts: Official HLE system prompt and judge prompt/response format
+    judge: GPT-5.6 Luna (medium)
+  metrics:
+    accuracy: 0.713
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/gemini-4-neon
+    redistributable: true
 - id: independent/gemini-3-6-flash-critpt@1.0.0
   model: google/gemini-3.6-flash
   benchmark: artificial-analysis/critpt@1.0.0

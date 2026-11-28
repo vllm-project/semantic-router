@@ -209,6 +209,7 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         for benchmark_id in (
             "artificial-analysis/gdpval-aa@2.0.0",
             "artificial-analysis/briefcase@1.0.0",
+            "artificial-analysis/briefcase@1.1.0",
         ):
             elo = next(
                 metric
