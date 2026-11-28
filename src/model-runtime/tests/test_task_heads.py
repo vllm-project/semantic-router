@@ -245,6 +245,9 @@ def test_inputs_fail_in_place_and_requests_fail_whole(client):
         {"max_tokens": 1 << 20},
         {"overflow": "sideways"},
         {"threshold": 2},
+        {"overflow": "window", "window": {"tokens": True, "overlap": 0}},
+        {"overflow": "window", "window": {"tokens": 32, "overlap": 1.5}},
+        {"overflow": "window", "window": {"tokens": 32, "overlap": "8"}},
     ):
         response = client.post(
             "/v1/classify",
