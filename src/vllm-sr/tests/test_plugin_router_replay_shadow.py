@@ -86,6 +86,7 @@ class TestRouterReplayShadowConfig:
             ("execution", "max_concurrency"),
             ("execution", "max_queue_size"),
             ("budget", "max_response_bytes"),
+            ("budget", "max_estimated_tokens"),
             ("capture", "max_bytes"),
         ],
     )
@@ -96,6 +97,17 @@ class TestRouterReplayShadowConfig:
         for value in [None, 2.0, 17]:
             cfg = RouterReplayShadowConfig(models=["m"], **{section: {field: value}})
             assert getattr(getattr(cfg, section), field) == value
+
+    def test_estimated_token_budget_integer_range(self):
+        limit = 9_007_199_254_740_991
+        cfg = RouterReplayShadowConfig(
+            models=["m"], budget={"max_estimated_tokens": limit}
+        )
+        assert cfg.budget.max_estimated_tokens == limit
+        with pytest.raises(PydanticValidationError, match="max_estimated_tokens"):
+            RouterReplayShadowConfig(
+                models=["m"], budget={"max_estimated_tokens": limit + 1}
+            )
 
     def test_estimated_cost_budget(self):
         cfg = RouterReplayShadowConfig(

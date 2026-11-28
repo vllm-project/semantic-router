@@ -153,7 +153,7 @@ Chat Completions 客户端可以用 `store: true` 要求提供方保存补全，
 去掉 `store` 发送这类请求，并在 `x-vsr-warnings` 中为 `store` 报告 `dropped` 诊断。
 Chat Completions 和 Responses 后端仍按客户端发送的原样收到 `store`。
 
-Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入中的 developer 和 system 项按轮次顺序作为指令重放：位于当前请求的顶层 `instructions` 之后，并位于当前请求自身输入中的 developer 和 system 项之前。之前请求的顶层 `instructions` 不会沿用。
+Responses 客户端仍可以与 Chat Completions 或 Messages 后端一起使用 `previous_response_id`。Router 检索并物化保留的历史，移除 Router 拥有的对象控制，然后按所选后端格式编码无状态请求。存储输入开头的 developer 和 system 项作为首部指令重放，位于当前请求的顶层 `instructions` 之后。当前输入接在历史之后，其中的 developer 和 system 项保留在对话中的位置。之前请求的顶层 `instructions` 不会沿用。
 
 Router 不保存 Conversations 对象，既无法加载会话中的项，也无法把响应加入会话。指定 `conversation`
 的请求（无论是 ID 还是对象）在到达任何后端之前就会以 `400` `unsupported_conversation` 失败，
@@ -247,6 +247,18 @@ providers:
 `backend_refs`，因此只要其中任何一个拒绝某个控制，就应列出它。若要为决策路由到的每个模型移除某个控制，请改为在该决策的
 [`request_params`](../tutorials/plugin/request-params) `blocked_params` 中列出它。
 
+### 对话中的 system 和 developer 消息 {#system-and-developer-messages-inside-the-conversation}
+
+首个对话消息之前的 system 和 developer 消息作为首部指令：Chat Completions 和 Responses 后端先收到它们，
+Messages 后端在 `system` 中收到它们。后续指令保留在客户端发送的位置，不受客户端协议影响。
+
+- Chat Completions 和 Responses 后端在原位置收到 system 或 developer 消息。
+- Messages 后端在原位置收到 system 消息。
+- 无论客户端使用哪种协议，夹在工具调用和结果之间的 system 或 developer 消息，发往 Chat Completions 或 Messages 后端时都会移到结果之后，让工具结果紧跟调用；同协议请求也一样。
+  `x-vsr-warnings` 为 Responses 客户端的 `input`、Chat 或 Messages 客户端的 `messages` 报告 `approximated` 诊断。
+  Responses 后端保留原顺序；启用 `messages[].role` 后，指令会先移到结果之后再转为用户文本，并同时报告移位和角色转换两条诊断。
+- 空指令文本在 `messages[].role` 投影中不会生成用户轮次。Chat 和 Responses 客户端的空指令发往 Messages 后端时会被忽略，与空的顶层指令一致；消息上的 `output_config.effort` 控制仍保留。被 `messages[].role` 忽略的指令不会产生移位警告。Messages 请求重编码后若没有剩余消息，会以 `anthropic_messages_required` 拒绝。
+
 ### 聊天模板拒绝的 system 消息 {#system-messages-a-chat-template-refuses}
 
 一个请求可以携带多条 system 和 developer 消息：Chat Completions 客户端可能为每条指令单独发送一条 system 消息，
@@ -263,11 +275,11 @@ global:
 ```
 
 - **开头只有一条 system 消息。** Chat 后端把对话开头的 system 和 developer 消息合并为一条 system 消息收到，各段文本按原顺序排列，之间以空行分隔：Chat 请求开头的 system 和 developer 消息，或 Responses 请求的 `instructions` 及开头的 developer 和 system 输入项。`cache_control` 边界保留在设置它的文本末尾。只有一条开头 system 消息的请求原样到达后端。
-- **后续消息作为用户文本。** 对话中间的 system 或 developer 消息在原位置以用户文本到达 Chat 后端：并入紧邻其前的用户轮次；位于 assistant 轮次或工具结果之后时，则成为单独的用户轮次。Messages 请求 `messages` 中的 system 消息以同样方式到达 Responses 后端。
+- **后续消息作为用户文本。** 无论客户端使用哪种协议，对话中间的 system 或 developer 消息都在原位置以用户文本到达 Chat 和 Responses 后端：并入紧邻其前的用户轮次；位于 assistant 轮次或工具结果之后时，则成为单独的用户轮次。夹在工具调用和结果之间的指令先移到结果之后。
 - **会报告。** `x-vsr-warnings` 会为 `messages[].role` 报告一条 `approximated` 诊断。
-- **其他后端不受影响。** Messages 后端按原样收到这些消息；Responses 后端收到的 Chat 或 Responses 客户端的 system 和 developer 消息保持各自的角色。
+- **其他后端不合并首部指令。** Responses 后端保留每条首部指令的角色，Messages 后端在 `system` 中收到它们。无论是否启用该选项，Messages 后端都在对话中以 system 消息收到后续指令。
 
-不启用该选项时，每条 system 和 developer 消息都以其原有角色到达后端。
+不启用该选项时，Chat 和 Responses 后端保留每条 system 和 developer 消息的角色和位置，只有上文所述的工具调用范围内的指令会移动。
 
 ### 后端丢弃的 developer 消息 {#developer-messages-a-backend-drops}
 

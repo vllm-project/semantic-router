@@ -41,6 +41,7 @@ func TestCapabilityNamesAndParserStayClosed(t *testing.T) {
 		CapabilityMatchedStopSequence,
 		CapabilityImageGeneration,
 		CapabilitySamplingMinP, CapabilitySamplingLogitBias, CapabilityRepetitionPenalty, CapabilityCacheIsolation,
+		CapabilitySpeechGeneration,
 	)
 	names := all.Names()
 	seen := make(map[string]struct{}, len(names))
@@ -120,6 +121,26 @@ func TestValidateContentClosesReasoningScope(t *testing.T) {
 	}}
 	if err := ValidateRequest(request, DefaultPolicy().Limits); err == nil {
 		t.Fatal("reasoning scope on text content was accepted")
+	}
+}
+
+func TestValidateContentClosesRedactedReasoning(t *testing.T) {
+	valid := validSemanticRequest()
+	valid.Messages[0].Content = []Content{{
+		Kind: ContentReasoning, Signature: "opaque", Reasoning: ReasoningScopeRedacted,
+	}}
+	if err := ValidateRequest(valid, DefaultPolicy().Limits); err != nil {
+		t.Fatalf("valid redacted reasoning: %v", err)
+	}
+	for _, invalid := range []Content{
+		{Kind: ContentReasoning, Reasoning: ReasoningScopeRedacted},                                    // no opaque payload
+		{Kind: ContentReasoning, Signature: "opaque", Text: "text", Reasoning: ReasoningScopeRedacted}, // display text
+	} {
+		request := validSemanticRequest()
+		request.Messages[0].Content = []Content{invalid}
+		if err := ValidateRequest(request, DefaultPolicy().Limits); err == nil {
+			t.Fatalf("invalid redacted reasoning accepted: %+v", invalid)
+		}
 	}
 }
 

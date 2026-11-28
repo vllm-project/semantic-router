@@ -2,6 +2,7 @@ package classification
 
 import (
 	"container/list"
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -18,13 +19,14 @@ import (
 // user turn a tool loop answers stays the request's current user turn until
 // the user writes again, and a rule that reads the earlier turns reads them
 // all again. A long input's windows would then be read again on every turn,
-// for seconds a turn. A window's answers depend on nothing but what its call
-// sends (the window, the request's images and videos, the questions and the
+// for seconds a turn. For deployments without auth, client certificates or
+// forwarded request headers, a window's answers depend on what its call sends
+// (the window, the request's images and videos, the questions and the
 // deployment's model), so the classifier keeps the answers of the request
 // stage's windows for a while, and a window read again in that time takes
 // them instead of a call: the rule still reads every window of its input,
-// each once. A window's key holds a hash of all the text before it as well
-// as its own, so a request finds a window's answers only when its input is
+// each once. A window's key hashes the text and named part boundaries, so a
+// request finds a window's answers only when its input is
 // the same up to the window's end: the answers kept for one conversation
 // never tell another request anything, not even by how fast it is routed.
 
@@ -51,9 +53,10 @@ type windowVerdicts struct {
 }
 
 type keptWindowEntry struct {
-	key      windowVerdictKey
-	response modelservice.Response
-	expires  time.Time
+	key         windowVerdictKey
+	response    modelservice.Response
+	expires     time.Time
+	sharedUntil time.Time
 }
 
 // get returns the answers kept for key, and keeps them windowVerdictTTL
@@ -101,14 +104,31 @@ func (v *windowVerdicts) put(key windowVerdictKey, response modelservice.Respons
 
 // keptWindow returns the answers an earlier request's read of the same input
 // gave a window call, and marks the window reused.
-func (c *Classifier) keptWindow(call *systemOneCall) (modelservice.Response, bool) {
-	if call.verdict == nil {
+func (c *Classifier) keptWindow(ctx context.Context, call *systemOneCall) (modelservice.Response, bool) {
+	if !c.windowVerdictCurrent(call) {
 		return modelservice.Response{}, false
 	}
 	response, ok := c.windowVerdicts.get(*call.verdict)
 	if !ok {
-		return modelservice.Response{}, false
+		if c.sharedVerdicts != nil {
+			metrics.RecordGuardVerdictStoreOp("local", "miss")
+		}
+		var expires time.Time
+		response, expires, ok = c.sharedVerdicts.get(ctx, *call.verdict)
+		if !ok || !c.windowVerdictCurrent(call) {
+			return modelservice.Response{}, false
+		}
+		if !keptAnswers(call, response) || !restoreWindowSpans(call, response) {
+			metrics.RecordGuardVerdictStoreOp("get", "invalid")
+			return modelservice.Response{}, false
+		}
+		metrics.RecordGuardVerdictStoreOp("get", "hit")
+		c.windowVerdicts.put(*call.verdict, response)
+		c.windowVerdicts.published(*call.verdict, expires)
+	} else if c.sharedVerdicts != nil {
+		metrics.RecordGuardVerdictStoreOp("local", "hit")
 	}
+	c.sharedVerdicts.touch(&c.windowVerdicts, *call.verdict, response)
 	call.scan.mu.Lock()
 	call.scan.reused[call.window] = true
 	call.scan.mu.Unlock()
@@ -118,14 +138,29 @@ func (c *Classifier) keptWindow(call *systemOneCall) (modelservice.Response, boo
 
 // keepWindow keeps the answers of a window call the deployment read, when
 // they may be kept (keptAnswers).
-func (c *Classifier) keepWindow(call *systemOneCall, response modelservice.Response, err error) {
+func (c *Classifier) keepWindow(ctx context.Context, call *systemOneCall, response modelservice.Response, err error) {
 	if err != nil {
 		return
 	}
 	metrics.RecordSignalScanWindow(call.deployment, "read")
-	if call.verdict != nil && keptAnswers(call, response) {
+	if c.windowVerdictCurrent(call) && keptAnswers(call, response) {
 		c.windowVerdicts.put(*call.verdict, response)
+		expires := c.sharedVerdicts.put(ctx, *call.verdict, response)
+		c.windowVerdicts.published(*call.verdict, expires)
 	}
+}
+
+// Reads and publications may run after a queued window's pool has changed.
+// Even a return to the original dtype cannot validate an intervening result.
+func (c *Classifier) windowVerdictCurrent(call *systemOneCall) bool {
+	if call.verdict == nil {
+		return false
+	}
+	if call.scan.verdicts == nil || call.scan.verdicts.precisionEpoch == 0 {
+		return true
+	}
+	card, ok := c.models.runtime.CurrentDeploymentCard(call.deployment)
+	return ok && card.PrecisionEpoch == call.scan.verdicts.precisionEpoch
 }
 
 // verdictKey keys a window of the scan in windowVerdicts, nil when the scan
@@ -173,8 +208,15 @@ func cloneWindowResponse(response modelservice.Response) modelservice.Response {
 // scan of the response stage keeps nothing: it reads an answer that is new
 // on every request.
 type scanVerdictKeys struct {
-	seed   [sha256.Size]byte
-	blocks [][sha256.Size]byte
+	seed           [sha256.Size]byte
+	blocks         [][sha256.Size]byte
+	parts          []verdictPart
+	precisionEpoch uint64
+}
+
+type verdictPart struct {
+	name       string
+	start, end int
 }
 
 func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
@@ -183,7 +225,7 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 			return nil
 		}
 	}
-	window := scan.windowState("")
+	window := scan.windowState(scanWindow{})
 	window.MaxTokens = c.Config.ModelDeployments[scan.deployment].ScanBudget()
 	window.Questions = callQuestions(scan.rules)
 	sent, err := json.Marshal(window)
@@ -191,15 +233,23 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 		return nil
 	}
 	seed := sha256.New()
-	declared := c.Config.ModelDeployments[scan.deployment]
-	model := []string{scan.deployment, declared.Artifact, declared.Revision}
-	if card, ok := c.decisionTaskCard(scan.deployment); ok {
-		model = append(model, card.Repo, card.Revision, card.ModelSHA256)
+	model, ok := c.windowModelIdentity(scan.deployment)
+	if !ok {
+		return nil
 	}
-	for _, field := range append(model, string(sent)) {
+	for _, field := range append(model.fields, string(sent)) {
 		writeVerdictField(seed, field)
 	}
-	keys := &scanVerdictKeys{}
+	keys := &scanVerdictKeys{precisionEpoch: model.precisionEpoch}
+	if parts := scan.whole.Parts; parts != nil {
+		writeVerdictField(seed, "named parts")
+		offset := 0
+		for _, name := range scanPartNames(parts) {
+			end := offset + len(parts[name])
+			keys.parts = append(keys.parts, verdictPart{name: name, start: offset, end: end})
+			offset = end + len(scanPartSeparator)
+		}
+	}
 	seed.Sum(keys.seed[:0])
 	chain := keys.seed
 	for from := 0; from+windowVerdictBlock <= len(scan.text); from += windowVerdictBlock {
@@ -213,7 +263,8 @@ func (c *Classifier) newScanVerdictKeys(scan *guardScan) *scanVerdictKeys {
 }
 
 // key is the key of the window of text from start to end: the hash of the
-// text before end, the seed included, and the window's bounds.
+// text and named part boundaries through end, the seed included, and the
+// window's bounds.
 func (keys *scanVerdictKeys) key(text string, start, end int) windowVerdictKey {
 	chain, from := keys.seed, 0
 	if blocks := end / windowVerdictBlock; blocks > 0 {
@@ -222,13 +273,24 @@ func (keys *scanVerdictKeys) key(text string, start, end int) windowVerdictKey {
 	hash := sha256.New()
 	_, _ = hash.Write(chain[:])
 	_, _ = io.WriteString(hash, text[from:end])
+	for _, part := range keys.parts {
+		if part.start >= end {
+			break
+		}
+		writeVerdictField(hash, part.name)
+		writeVerdictBounds(hash, part.start, min(part.end, end))
+	}
+	writeVerdictBounds(hash, start, end)
+	var key windowVerdictKey
+	hash.Sum(key[:0])
+	return key
+}
+
+func writeVerdictBounds(hash io.Writer, start, end int) {
 	var bounds [16]byte
 	binary.LittleEndian.PutUint64(bounds[:8], uint64(start)) //nolint:gosec // a byte offset, never negative
 	binary.LittleEndian.PutUint64(bounds[8:], uint64(end))   //nolint:gosec // a byte offset, never negative
 	_, _ = hash.Write(bounds[:])
-	var key windowVerdictKey
-	hash.Sum(key[:0])
-	return key
 }
 
 // writeVerdictField writes field to hash after its length, so no two lists

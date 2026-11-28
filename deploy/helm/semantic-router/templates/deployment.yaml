@@ -49,6 +49,7 @@
 {{- end }}
 {{- $standalone := eq (include "semantic-router.gatewayMode" .) "standalone" -}}
 {{- $tlsSecret := dig "tls" "secretName" "" (.Values.gateway | default (dict)) -}}
+{{- $extprocGRPCTLS := and (not $standalone) (eq (include "semantic-router.extprocGRPCTLS" .) "true") -}}
 {{- $listeners := list -}}
 {{- $primary := dict -}}
 {{- if $standalone -}}
@@ -225,6 +226,12 @@ spec:
             path: /ready
             port: {{ $primary.portName }}
             scheme: {{ upper $primary.scheme }}
+          {{- else if $extprocGRPCTLS }}
+          # kubelet's native gRPC probe is plaintext, and a TLS ext_proc
+          # listener refuses it, which fails the startup check until the
+          # container is killed. Verify the port accepts connections instead.
+          tcpSocket:
+            port: {{ .Values.service.grpc.targetPort }}
           {{- else }}
           grpc:
             port: {{ .Values.service.grpc.targetPort }}
@@ -256,6 +263,11 @@ spec:
             path: /ready
             port: {{ $primary.portName }}
             scheme: {{ upper $primary.scheme }}
+          {{- else if $extprocGRPCTLS }}
+          # A TLS ext_proc listener refuses the plaintext native gRPC check,
+          # which would keep the Pod unready for Service traffic.
+          tcpSocket:
+            port: {{ .Values.service.grpc.targetPort }}
           {{- else }}
           grpc:
             port: {{ .Values.service.grpc.targetPort }}

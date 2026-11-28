@@ -21,6 +21,7 @@ import (
 type ChatUsageStreamFilter struct {
 	framer          sseFramer
 	stripUsage      bool
+	publicModel     string
 	seenFinish      map[int]bool
 	frames          int
 	pendingTerminal []byte
@@ -37,12 +38,15 @@ type ChatUsageStreamFilter struct {
 	// releaseHeldToolFrames sends them verbatim when the call finishes as
 	// sent, and repairHeldToolCalls closes them when the stream ends without
 	// one.
-	heldFrames      [][]byte
-	heldFirst       []byte
-	heldOrder       []heldChatToolKey
-	heldCalls       map[heldChatToolKey]*heldChatToolCall
-	maximumDepth    int
-	heldAtReadStart int
+	heldFrames   [][]byte
+	heldFirst    []byte
+	heldOrder    []heldChatToolKey
+	heldCalls    map[heldChatToolKey]*heldChatToolCall
+	maximumDepth int
+	// The public filter can release its hold before the codec rejects the
+	// same read. Keep the prior frames available until the caller decides
+	// which output to send.
+	heldBeforeRead [][]byte
 }
 
 // heldChatFinish holds a frame that ends the choice for its tool calls and the
@@ -56,6 +60,14 @@ type heldChatFinish struct {
 type chatFrameEvidence struct {
 	toolCallFinish bool   // the frame ends choice 0 for its tool calls
 	outputTokens   *int64 // the completion tokens of the frame's usage
+}
+
+// SetPublicModel configures the virtual model identity presented downstream.
+// When non-empty, matching SSE frames have their "model" field rewritten.
+func (filter *ChatUsageStreamFilter) SetPublicModel(model string) {
+	if filter != nil {
+		filter.publicModel = model
+	}
 }
 
 // heldChatToolCall accumulates one streamed tool call's identity and argument
@@ -115,7 +127,7 @@ func (filter *ChatUsageStreamFilter) Push(chunk []byte) ([]byte, error) {
 	if filter.finalized {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorConflict, "stream_terminal", "stream is already finalized", nil)
 	}
-	filter.heldAtReadStart = len(filter.heldFrames)
+	filter.heldBeforeRead = filter.heldFrames
 	frames, err := filter.framer.Push(chunk)
 	if err != nil {
 		return nil, filter.poison(err)
@@ -181,7 +193,7 @@ func (filter *ChatUsageStreamFilter) filterFrames(frames [][]byte) ([]byte, erro
 			evidence = &chatFrameEvidence{}
 		}
 		filtered, keep, hasData, terminal, choices, err := filterChatUsageFrame(
-			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, evidence,
+			frame, filter.framer.limit, first, filter.stripUsage, filter.seenFinish, filter.publicModel, evidence,
 		)
 		filter.frames++
 		if errors.Is(err, errChatUpstreamErrorFrame) {
@@ -353,7 +365,6 @@ func (filter *ChatUsageStreamFilter) releaseHeldToolFrames() [][]byte {
 	filter.heldFirst = nil
 	filter.heldCalls = nil
 	filter.heldOrder = nil
-	filter.heldAtReadStart = 0
 	return frames
 }
 
@@ -369,11 +380,8 @@ func (filter *ChatUsageStreamFilter) ReleaseHeldForAbort() []byte {
 	if filter == nil {
 		return nil
 	}
-	boundary := filter.heldAtReadStart
-	var prefix [][]byte
-	if boundary > 0 && boundary <= len(filter.heldFrames) {
-		prefix = filter.heldFrames[:boundary]
-	}
+	prefix := filter.heldBeforeRead
+	filter.heldBeforeRead = nil
 	filter.releaseHeldToolFrames()
 	return bytes.Join(prefix, nil)
 }
@@ -579,7 +587,7 @@ func chatUsageCompletionTokens(raw json.RawMessage) *int64 {
 }
 
 func filterChatUsageFrame(
-	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, evidence *chatFrameEvidence,
+	frame []byte, limit int, first, stripUsage bool, seenFinish map[int]bool, publicModel string, evidence *chatFrameEvidence,
 ) ([]byte, bool, bool, bool, []json.RawMessage, error) {
 	parsed, err := parseSSEFrameAtPosition(frame, limit, first)
 	if err != nil {
@@ -601,6 +609,17 @@ func filterChatUsageFrame(
 	changed, err := deleteChatServerMembers(object)
 	if err != nil {
 		return nil, false, true, false, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_chat_stream", "Chat stream choices are invalid", err)
+	}
+	if publicModel != "" {
+		if rawModel, ok := object["model"]; ok && !bytes.Equal(bytes.TrimSpace(rawModel), []byte("null")) {
+			var currentModel string
+			if unmarshalErr := json.Unmarshal(rawModel, &currentModel); unmarshalErr == nil && currentModel != publicModel {
+				if encoded, marshalErr := json.Marshal(publicModel); marshalErr == nil {
+					object["model"] = encoded
+					changed = true
+				}
+			}
+		}
 	}
 	if _, present := object["provider"]; present {
 		delete(object, "provider")

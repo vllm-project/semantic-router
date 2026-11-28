@@ -6,9 +6,11 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
+data plane, the Images API for image generation, and the Speech API for
+text-to-speech. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
-The response is translated back to the client's original format.
+Chat, Responses, Messages and Images responses are translated back to the client's
+original format. A Speech response is the backend's audio bytes, forwarded unchanged.
 
 ```text
 client endpoint -> client codec -> routing -> backend codec -> model endpoint
@@ -33,6 +35,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
 | OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
+| OpenAI Speech | `POST /v1/audio/speech` | Supported | Not supported | Routed on the input text to a model with `api_format: speech`. The audio bytes are forwarded unchanged. See [Speech API](../api/router#speech-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -64,6 +67,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
 | `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
+| `speech` | OpenAI Speech | `/v1/audio/speech` | Speaks the input text. `stream: true` and `stream_format` are rejected. The response is the backend's audio, not a JSON completion, so response policy, the response cache, token limits and cost estimates do not apply. Request-text checks still run, on `input` only: `instructions`, `ref_text` and the other fields are forwarded unchecked. A model that cannot speak fails closed with `unsupported_capability`. |
 
 These fields are easy to confuse:
 
@@ -204,7 +208,7 @@ instead of being silently dropped.
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
-| Multiple response candidates | Supported | Not supported | Not supported |
+| Multiple response candidates (`n` above 1) | Buffered only. A streamed request fails with `stream_multiple_choices` before dispatch, unless `request_params` `max_n: 1` lowers it to one choice | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
@@ -332,14 +336,6 @@ the answer. Such a request that sets `stop_sequences` therefore reaches the
 backend with the model's reasoning off; see
 [Model reasoning](model-reasoning#turn-reasoning-off-for-requests-with-stop-sequences).
 
-A `system` message inside `messages`, such as the environment section and the
-file-change notices Claude Code inserts during a session, reaches these
-backends as a system message in the same place. Listing `messages[].role`
-sends it as user text in that place instead, for chat templates that accept a
-system message only first; see
-[System messages a chat template refuses](#system-messages-a-chat-template-refuses).
-Messages backends receive the message in place either way.
-
 Replies reach these clients in the shape an `anthropic` backend gives them:
 
 - **Thinking signatures.** Every thinking block carries a `signature`, empty
@@ -383,6 +379,36 @@ global:
     allow_request_extension_fields:
       - vllm_xargs
 ```
+
+### System and developer messages inside the conversation
+
+System and developer messages before the first conversation message lead
+the request: Chat Completions and Responses backends receive them first, and
+a Messages backend receives them in `system`. A later one stays where the
+client put it, whichever client protocol sent it. Claude Code inserts one
+for its environment section and its file-change notices, and Chat and
+Responses clients send one when an instruction changes during a session.
+
+- Chat Completions and Responses backends receive it as a system or
+  developer message in the same place.
+- A Messages backend receives it as a system message in the same place.
+- A system or developer message between a tool call and its output moves
+  after the output for a Chat Completions or Messages backend, whichever
+  client protocol sent it. This also applies to same-format requests. The
+  backend needs the output right after the call. `x-vsr-warnings` reports an
+  `approximated` diagnostic for `input` on Responses clients and `messages`
+  on Chat or Messages clients. A Responses backend keeps the original order
+  unless `messages[].role` converts the instruction to user text; that
+  projection moves it after the output and reports both diagnostics.
+- Empty instruction text creates no user turn under `messages[].role`.
+  Chat and Responses clients' empty instructions are omitted for Messages
+  backends, just like empty top-level instructions. A per-message
+  `output_config.effort` control is retained. Instructions omitted by
+  `messages[].role` produce no placement warning. Re-encoding a Messages
+  request with no messages left fails with `anthropic_messages_required`.
+
+For templates that accept one system message, only first, see
+[System messages a chat template refuses](#system-messages-a-chat-template-refuses).
 
 ### Files a model can't read
 
@@ -539,18 +565,20 @@ global:
   end of the text that set it. A request with one leading system message
   reaches the backend unchanged.
 - **Later messages as user text.** A system or developer message inside the
-  conversation reaches a Chat backend as user text in the same place: it joins
-  the user turn right before it, or becomes a user turn of its own after an
-  assistant turn or a tool result. A Messages request's system messages inside
-  `messages` reach Responses backends the same way.
+  conversation reaches Chat and Responses backends as user text in the same
+  place, whichever client protocol sent it: it joins the user turn right before
+  it, or becomes a user turn of its own after an assistant turn or a tool
+  result. One between a tool call and its results first moves after the results.
 - **Reported.** `x-vsr-warnings` reports one `approximated` diagnostic for
   `messages[].role`.
-- **Other backends are unaffected.** Messages backends receive the messages
-  as sent, and Responses backends receive a Chat or Responses client's system
-  and developer messages in their own roles.
+- **Leading instructions on other backends are not merged.** Responses
+  backends keep each leading instruction's role, and Messages backends receive
+  them in `system`. Messages backends receive later instructions as system
+  messages inside the conversation, with or without the opt-in.
 
-Without the opt-in, every system and developer message reaches the backend in
-its own role.
+Without the opt-in, Chat and Responses backends receive each system and
+developer message in its own role and position, except for instructions moved
+out of a tool call's span as described above.
 
 ### Developer messages a backend drops
 
@@ -677,9 +705,10 @@ request without `store` and reports a `dropped` diagnostic for `store` in
   with a Chat Completions or Messages backend. The Router retrieves and
   materializes the retained history, removes Router-owned object controls,
   then encodes the stateless request in the selected backend format. The
-  developer and system items of the stored input come back as instructions in
-  turn order: after the current request's top-level `instructions` and before
-  the developer and system items of its own input. The earlier request's
+  developer and system items at the start of the stored input come back as
+  instructions, after the current request's top-level `instructions`. The
+  current input follows the stored turns, so its developer and system items
+  stay in their place there, at its start or later. The earlier request's
   top-level `instructions` are not carried over.
 - **Conversations.** The Router keeps no Conversations objects, so it can
   neither load a conversation's items nor add a response to them. A request
@@ -1009,9 +1038,19 @@ tools or error translation.
 - When the output limit ends a streamed tool call inside its arguments, or
   right after its name with none, the Router passes the partial call on with
   the limit stop, as the providers do: `max_tokens` for Messages, `length` for
-  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
-  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
-  response is not cached, stored, or kept as the replay response body.
+  Chat, and `incomplete` with `max_output_tokens` for Responses. For
+  Chat-to-Responses streaming only, a function call confirmed to have finished
+  normally with omitted, empty, or whitespace-only arguments is normalized to
+  `{}`. The joined argument deltas, arguments-done event, completed item, and
+  terminal output agree; whitespace-only argument prefixes are held until an
+  object follows or the call finishes. This is a wire-level guarantee, not tool
+  schema validation: required-field validation remains with the tool consumer.
+  A wire `arguments: null` can be a streaming placeholder: later object argument
+  text is accepted, but a normally finished call with only null and no non-whitespace
+  argument text is rejected. Arrays, other non-objects, and malformed non-empty JSON
+  still end the stream with `invalid_stream_tool_arguments`; other translation
+  directions retain their existing validation. A cut response is not cached,
+  stored, or kept as the replay response body.
 - A Responses reasoning item can carry different non-empty `encrypted_content`
   strings in `response.output_item.done` and the corresponding output item in
   `response.completed` or `response.incomplete`. The Router accepts this

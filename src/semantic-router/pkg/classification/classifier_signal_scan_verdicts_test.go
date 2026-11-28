@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/serving"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
 )
 
@@ -47,29 +48,26 @@ func TestAToolLoopReadsAnUnchangedLongTurnOnce(t *testing.T) {
 	}
 }
 
-// A rule that reads the earlier turns reads a conversation that grows at its
-// end, so a new turn reads only the windows past what the turn before read
-// whole: the last window of the earlier text, which now ends elsewhere, and
-// the new text.
-func TestAGrowingConversationReadsOnlyItsNewWindows(t *testing.T) {
+// Text that moves from the current user turn to history has a different
+// provenance. Verdicts from the earlier request cannot answer the new scan.
+func TestAGrowingConversationRereadsTextThatBecameHistory(t *testing.T) {
 	classifier, fake := refusingGuardClassifier(t, 20*time.Second, "          input: {history: true}\n", time.Millisecond)
 	first := scanProse(30_000)
 	evaluateTurnAfter(classifier, nil, first)
-	before := guardStates(fake)
+	read := len(guardStates(fake))
 
-	results := evaluateTurnAfter(classifier, []string{first}, "And the minutes of the week after?")
-	again := guardStates(fake)[len(before):]
-	if len(again) == 0 || len(again) > 2 || guarded(results) || results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
+	second := "And the minutes of the week after?"
+	results := evaluateTurnAfter(classifier, []string{first}, second)
+	again := len(guardStates(fake)) - read
+	if again < read || guarded(results) || results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
 		t.Fatalf("the second turn read %d windows (the first read %d), guarded %t, coverage %v",
-			len(again), len(before), guarded(results), results.ScanCoverage)
+			again, read, guarded(results), results.ScanCoverage)
 	}
-	for _, state := range again {
-		if slices.Contains(before, state) {
-			t.Fatalf("the second turn read a window the first turn read: %.80q", state)
-		}
-	}
-	if !strings.HasSuffix(again[len(again)-1], "And the minutes of the week after?") && !strings.HasSuffix(again[0], "And the minutes of the week after?") {
-		t.Fatal("the second turn did not read its new text")
+
+	results = evaluateTurnAfter(classifier, []string{first, second}, "Include the totals for the month.")
+	fresh := len(guardStates(fake)) - read - again
+	if fresh == 0 || fresh > 2 || guarded(results) || results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
+		t.Fatalf("the third turn read %d fresh windows, guarded %t, coverage %v", fresh, guarded(results), results.ScanCoverage)
 	}
 }
 
@@ -121,8 +119,20 @@ func TestAWindowKeyHoldsTheTextBeforeIt(t *testing.T) {
 	otherModel := scanOf(prose + "\n\nfirst ending")
 	otherModel.deployment = "secondary"
 	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
-	if *otherModel.verdictKey(window) == key {
-		t.Fatal("another deployment gave the same key")
+	if otherModel.verdicts != nil {
+		t.Fatal("an undeclared deployment must not retain window verdicts")
+	}
+	classifier.Config.ModelDeployments["secondary"] = classifier.Config.ModelDeployments["primary"]
+	otherModel.verdicts = classifier.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts != nil {
+		t.Fatal("an attached deployment without observed precision must not retain window verdicts")
+	}
+	// Observe exactly the same model under the second declaration.
+	card, _ := classifier.models.runtime.CurrentDeploymentCard("primary")
+	second := &Classifier{Config: classifier.Config, models: &classifierModelRuntime{runtime: serving.New(&cardServices{card: card}, nil)}}
+	otherModel.verdicts = second.newScanVerdictKeys(otherModel)
+	if otherModel.verdicts == nil || *otherModel.verdictKey(window) == key {
+		t.Fatal("another observed deployment must have its own key")
 	}
 }
 
@@ -180,4 +190,65 @@ func jailbreakAsked(t *testing.T, classifier *Classifier) askedRule {
 	}
 	t.Fatal("no prompt_attack rule")
 	return askedRule{}
+}
+
+func TestToolProvenanceScopesWindowVerdictReuse(t *testing.T) {
+	classifier, _ := refusingGuardClassifier(t, 20*time.Second, "          input: {tool_results: true}\n", time.Millisecond)
+	id := jailbreakAsked(t, classifier).questionID()
+	decider := newFakeDecider(map[string]modelservice.Answer{
+		id: {
+			Type: "choice", Choice: "benign", InputCoverage: "complete",
+			Probabilities: map[string]float64{"benign": 0.99, "jailbreak": 0.01},
+		},
+	})
+	classifier.SetDecisionDecider(decider)
+	jailbreakCalls := func() int {
+		count := 0
+		for _, request := range decider.asked {
+			if slices.ContainsFunc(request.Questions, func(question modelservice.Question) bool {
+				return question.ID == id
+			}) {
+				count++
+			}
+		}
+		return count
+	}
+	const separator = "\n\n"
+	originalToolText := strings.TrimSpace(scanProse(9_000))
+	movedText := "The north stockroom contains notebooks."
+	requestText := strings.TrimSpace(scanProse(5_000)) + " Please list the stockroom totals."
+	evaluate := func(toolText, userText string) int {
+		t.Helper()
+		before := jailbreakCalls()
+		results := classifier.evaluateAllSignalsWithContext(SignalEvaluationInput{
+			Text: userText, CurrentUserText: userText, RequestFacts: RequestFacts{
+				Context: t.Context(), JailbreakInput: &JailbreakInput{Current: []JailbreakContent{
+					{Role: "tool", Text: toolText}, {Role: "user", Text: userText},
+				}},
+			},
+		}, classifier.Config.Decisions, true)
+		if results.ScanCoverage["jailbreak:prompt_attack"] != scanCoverageFull {
+			t.Fatalf("scan coverage = %v, want full", results.ScanCoverage)
+		}
+		return jailbreakCalls() - before
+	}
+
+	initial := evaluate(originalToolText, movedText+separator+requestText)
+	if initial < 3 {
+		t.Fatalf("initial model reads = %d, want a multi-window scan", initial)
+	}
+	updatedToolText := originalToolText + separator + movedText
+	changed := evaluate(updatedToolText, requestText)
+	repeated := evaluate(updatedToolText, requestText)
+	extended := evaluate(updatedToolText, requestText+separator+"Include the supply room.")
+	t.Logf("initial = %d, changed boundary = %d, identical = %d, extended prefix = %d model requests", initial, changed, repeated, extended)
+	if changed == 0 || changed >= initial {
+		t.Errorf("changed role boundary = %d fresh reads, want fresh affected windows and reuse of the unchanged named prefix", changed)
+	}
+	if repeated != 0 {
+		t.Errorf("identical named input = %d fresh reads, want complete reuse", repeated)
+	}
+	if extended < 1 || extended >= initial {
+		t.Errorf("extended named input = %d fresh reads, want only the windows whose prefix or bounds changed", extended)
+	}
 }

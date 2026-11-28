@@ -248,6 +248,8 @@ type ShadowExecutionConfig struct {
 // ShadowBudgetConfig applies to one sampled request, across all candidates.
 type ShadowBudgetConfig struct {
 	MaxResponseBytes *int `json:"max_response_bytes,omitempty" yaml:"max_response_bytes,omitempty" jsonschema:"nullable"`
+	// MaxEstimatedTokens bounds the estimated input and reserved output across the group.
+	MaxEstimatedTokens *int `json:"max_estimated_tokens,omitempty" yaml:"max_estimated_tokens,omitempty" jsonschema:"nullable,minimum=1,maximum=9007199254740991"`
 	// MaxEstimatedCost admits a sampled group in the configured budget currency.
 	MaxEstimatedCost *float64 `json:"max_estimated_cost,omitempty" yaml:"max_estimated_cost,omitempty" jsonschema:"nullable,exclusiveMinimum=0"`
 }

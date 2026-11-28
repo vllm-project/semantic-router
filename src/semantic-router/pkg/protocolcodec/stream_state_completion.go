@@ -1,8 +1,10 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"strings"
 
@@ -193,6 +195,11 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
 			return nil, err
 		}
+		if state.normalizesEmptyChatToolArguments(event, kind) && strings.TrimSpace(string(arguments)) == "" && event.ToolCall.Arguments == "{}" {
+			// The decoder normalized held whitespace; the encoder still has the
+			// original fragments, none of which it exposed as argument deltas.
+			arguments = nil
+		}
 		if len(arguments) > 0 && string(arguments) != event.ToolCall.Arguments {
 			// A stream that ends mid-call closes the members the model finished:
 			// the final arguments replace the streamed fragments when they are
@@ -208,20 +215,73 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmpr
 		}
 		arguments = []byte(event.ToolCall.Arguments)
 	}
+	// Only Chat-to-Responses completed function calls have this wire policy.
+	// The Chat decoder supplies the confirmed stop after any trailing usage,
+	// so an output-limit cut never becomes a successful empty-object call.
+	if state.normalizesEmptyChatToolArguments(event, kind) && strings.TrimSpace(string(arguments)) == "" {
+		if err := state.validateStreamToolArgumentAppend(nil, "{}"); err != nil {
+			return nil, err
+		}
+		return []byte("{}"), nil
+	}
 	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		if !isTruncatedJSONObject(arguments, state.policy.Limits.JSONDepth) {
-			return nil, nonObjectToolArgumentsError()
+			return nil, nonObjectToolArgumentsErrorWithShape(arguments)
 		}
 		// The output limit can cut a call mid-arguments, and Anthropic and OpenAI
 		// then send the partial call with a max_tokens or length stop. Its stop
 		// reason arrives after the item ends, so the terminal event decides.
 		state.cutToolArguments = true
+		state.cutToolArgumentsEvidence = toolArgumentsEvidence(arguments)
 	}
 	return arguments, nil
 }
 
-func nonObjectToolArgumentsError() error {
-	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
+func (state *streamState) normalizesEmptyChatToolArguments(event llmprotocol.Event, kind llmprotocol.ToolKind) bool {
+	return state.context.Source == llmprotocol.OpenAIChatV1 && state.context.Target == llmprotocol.OpenAIResponsesV1 && kind == "" &&
+		(event.StopReason == llmprotocol.StopToolCall || event.StopReason == llmprotocol.StopEndTurn || event.StopReason == llmprotocol.StopSequence)
+}
+
+// nonObjectToolArgumentsErrorWithCause rejects a completed tool call whose
+// arguments are not a JSON object. The cause never reaches the client frame;
+// it is the diagnostic the stream-failure log keeps.
+func nonObjectToolArgumentsErrorWithCause(cause error) error {
+	return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", cause)
+}
+
+// nonObjectToolArgumentsErrorWithShape describes what was rejected without
+// recording it: tool arguments can carry file contents, commands or user data
+// headed to a tool, so the failure keeps their length and shape only, matching
+// the stream-failure logging contract that keeps payloads out of the log. The
+// cause never reaches the client frame; it tells a model-generation anomaly
+// (prose, leaked markup) from a codec splice one (a JSON fragment).
+func nonObjectToolArgumentsErrorWithShape(arguments []byte) error {
+	return nonObjectToolArgumentsErrorWithCause(toolArgumentsEvidence(arguments))
+}
+
+// toolArgumentsEvidence names rejected arguments by length and shape only.
+func toolArgumentsEvidence(arguments []byte) error {
+	return llmprotocol.ErrorDiagnostic(fmt.Sprintf("arguments length %d, shape %s", len(arguments), toolArgumentsShape(arguments)))
+}
+
+// toolArgumentsShape classifies the first non-space byte of the rejected
+// arguments, which separates the likely origins without retaining the text.
+func toolArgumentsShape(arguments []byte) string {
+	trimmed := bytes.TrimLeft(arguments, " \t\r\n")
+	if len(trimmed) == 0 {
+		return "empty"
+	}
+	switch trimmed[0] {
+	case '{':
+		return "object fragment"
+	case '[':
+		return "array fragment"
+	case '"', '\'':
+		return "quoted text"
+	case '<':
+		return "markup"
+	}
+	return "plain text"
 }
 
 func (state *streamState) markItemComplete(itemIndex int) {
@@ -292,7 +352,7 @@ func (state *streamState) validateCompletedEvent(event llmprotocol.Event) (llmpr
 		return llmprotocol.Event{}, err
 	}
 	if state.cutToolArguments && state.stop != llmprotocol.StopMaxTokens {
-		return llmprotocol.Event{}, nonObjectToolArgumentsError()
+		return llmprotocol.Event{}, nonObjectToolArgumentsErrorWithCause(state.cutToolArgumentsEvidence)
 	}
 	event, err := validateCompletedStopReason(event)
 	if err != nil {

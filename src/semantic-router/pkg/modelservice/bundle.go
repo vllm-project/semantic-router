@@ -177,6 +177,15 @@ func InBundle(ctx context.Context) bool {
 	return bundleFrom(ctx) != nil
 }
 
+type ownDecisionDeadlineKey struct{}
+
+// WithOwnDecisionDeadline makes a decision caller stop at its own deadline
+// even when its shared exchange continues for longer-lived callers. A
+// failover attempt needs the remaining caller budget for another deployment.
+func WithOwnDecisionDeadline(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ownDecisionDeadlineKey{}, true)
+}
+
 // participantOf returns the declared participant whose context ctx is, or
 // nil for an undeclared one.
 func (b *Bundle) participantOf(ctx context.Context) *participant {
@@ -447,15 +456,15 @@ func (c *bundleCall) wait() error {
 }
 
 // waitCarrier waits for a sent call until the exchange that carries it ends,
-// or until its caller gives up on it: a caller whose context is cancelled,
-// rather than past its deadline, waits no longer.
+// or until its caller gives up on it: a cancelled caller, or one that set
+// WithOwnDecisionDeadline and reached its deadline, waits no longer.
 func (c *bundleCall) waitCarrier() error {
 	select {
 	case <-c.done:
 		return c.answered()
 	case <-c.carrier.Done():
 	case <-c.ctx.Done():
-		if errors.Is(c.ctx.Err(), context.Canceled) {
+		if errors.Is(c.ctx.Err(), context.Canceled) || c.ctx.Value(ownDecisionDeadlineKey{}) == true {
 			return c.ctx.Err()
 		}
 		select {

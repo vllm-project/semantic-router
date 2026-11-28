@@ -150,6 +150,9 @@ func (req IntentRequest) resolveSignalInputWith(selector *routinginput.Selector)
 			input.requestFacts.InputModality.TextContentCount = 1
 		}
 		input.semanticRequest = req.neutralSelectionRequest(fallbackText(rawText, useTopLevelTextFallback))
+		// invalid_tool_call is computed from the same neutral request the
+		// data plane reads, so a preview matches live routing.
+		input.conversationFacts.InvalidToolCalls = classification.InvalidRecentToolCalls(input.semanticRequest)
 		return input, nil
 	}
 

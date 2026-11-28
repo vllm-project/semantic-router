@@ -327,6 +327,7 @@ def _execute_serve(
                 platform=platform,
                 recipe_env_bindings=recipe_env_bindings,
                 replace_active_config=replace_active_config,
+                gateway=resolved_gateway,
                 minimal=minimal,
                 readonly=readonly,
                 engine=engine,

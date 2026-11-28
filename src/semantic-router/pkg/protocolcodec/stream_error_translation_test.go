@@ -135,7 +135,8 @@ func assertIncompleteStreamFailure(
 		t.Fatal(err)
 	}
 	if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed ||
-		events[0].Error == nil || events[0].Error.Code != "stream_incomplete" {
+		events[0].Error == nil || events[0].Error.Code != "stream_incomplete" ||
+		events[0].Error.ProviderFramed {
 		t.Fatalf("incomplete stream terminal = %+v", events)
 	}
 	wireCode := "stream_incomplete"
@@ -263,6 +264,7 @@ func assertAuthenticationFailureEvent(
 	t.Helper()
 	if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed || events[0].Error == nil ||
 		events[0].Failure != failure ||
+		!events[0].Error.ProviderFramed ||
 		events[0].Error.Category != llmprotocol.ErrorAuthentication ||
 		events[0].Error.Code != "authentication_error" ||
 		events[0].Error.Message != "API key is invalid." || events[0].Error.Parameter != parameter {

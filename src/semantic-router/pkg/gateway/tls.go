@@ -3,6 +3,7 @@ package gateway
 import (
 	"crypto/tls"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -39,14 +40,9 @@ type keyPair struct {
 
 	mu         sync.Mutex
 	current    *tls.Certificate
-	attempted  [2]fileStamp
+	attempted  [2]os.FileInfo
 	unreadable bool
 	checked    time.Time
-}
-
-type fileStamp struct {
-	modTime time.Time
-	size    int64
 }
 
 func (p *keyPair) certificate(*tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -69,7 +65,7 @@ func (p *keyPair) reloadIfChanged() {
 		return
 	}
 	p.unreadable = false
-	if stamp == p.attempted {
+	if sameTLSFiles(stamp, p.attempted) {
 		return
 	}
 	p.attempted = stamp
@@ -85,16 +81,31 @@ func (p *keyPair) load() error {
 	return nil
 }
 
-func (p *keyPair) stamp() ([2]fileStamp, error) {
-	var stamp [2]fileStamp
+func (p *keyPair) stamp() ([2]os.FileInfo, error) {
+	var stamp [2]os.FileInfo
 	for i, name := range []string{p.certFile, p.keyFile} {
 		info, err := os.Stat(name)
 		if err != nil {
 			return stamp, err
 		}
-		stamp[i] = fileStamp{modTime: info.ModTime(), size: info.Size()}
+		// Windows loads identity on the first SameFile call. Capture it
+		// while the path still names this version of the file.
+		if runtime.GOOS == "windows" {
+			_ = os.SameFile(info, info)
+		}
+		stamp[i] = info
 	}
 	return stamp, nil
+}
+
+func sameTLSFiles(current, previous [2]os.FileInfo) bool {
+	for i, file := range current {
+		old := previous[i]
+		if file.Size() != old.Size() || !file.ModTime().Equal(old.ModTime()) || !os.SameFile(file, old) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *keyPair) report(err error) {

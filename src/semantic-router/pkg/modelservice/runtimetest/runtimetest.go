@@ -52,6 +52,7 @@ type Model struct {
 	Joint          bool
 	MaxInputTokens int
 	Device         string
+	Dtype          string
 	// MaxNumSeqs and MaxNumBatchedTokens replace the card's default batch
 	// limits when set.
 	MaxNumSeqs          int
@@ -108,10 +109,23 @@ func New(models ...Model) *Runtime {
 		if model.Device == "" {
 			model.Device = "cpu"
 		}
+		if model.Dtype == "" {
+			model.Dtype = "float32"
+		}
 		r.models[model.ID] = model
 		r.ready[model.ID] = true
 	}
 	return r
+}
+
+// SetDtype changes the precision a served model reports without changing its weights.
+func (r *Runtime) SetDtype(id, dtype string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if model, ok := r.models[id]; ok {
+		model.Dtype = dtype
+		r.models[id] = model
+	}
 }
 
 // SetReady changes one model's readiness and clears a load failure.
@@ -350,7 +364,7 @@ func (r *Runtime) listModels(w http.ResponseWriter, _ *http.Request) {
 
 func (r *Runtime) card(model Model, ready bool) api.ModelCard {
 	sha := strings.Repeat("0", 64-len(model.ID)%64) + strings.Repeat("a", len(model.ID)%64)
-	device, dtype, numerics := model.Device, "float32", api.ModelCardNumericsExact
+	device, dtype, numerics := model.Device, model.Dtype, api.ModelCardNumericsExact
 	args := api.EngineArgs{MaxNumSeqs: 8192, MaxNumBatchedTokens: 65536, BatchWindowMs: 2, Dtype: api.Auto}
 	if model.MaxNumSeqs != 0 {
 		args.MaxNumSeqs = model.MaxNumSeqs

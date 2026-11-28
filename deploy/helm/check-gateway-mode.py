@@ -138,6 +138,47 @@ def check_extproc(chart: str) -> None:
     assert service_ports(documents, f"{ROUTER}-headless") == {"grpc": (50051, 50051)}
 
 
+def check_extproc_grpc_tls(chart: str) -> None:
+    # kubelet's native gRPC probe speaks plaintext, so a TLS ext_proc listener
+    # refuses it: the startup check fails until the container is killed, and a
+    # readiness check keeps the Pod out of Service traffic. The Operator
+    # answers the same listener with a TCP probe.
+    container = router_container(
+        render(chart, {"args": ["--secure=true"]}, "gateway.mode=extproc")
+    )
+    assert probe_targets(container) == {
+        "startupProbe": {"tcpSocket": {"port": 50051}},
+        "livenessProbe": {"tcpSocket": {"port": 50051}},
+        "readinessProbe": {"tcpSocket": {"port": 50051}},
+    }, probe_targets(container)
+
+    # The Router's own flag syntax and last-value-wins behavior apply, and a
+    # bare "--" ends its arguments.
+    for args, expected in (
+        (["--secure=false"], "grpc"),
+        (["--secure=true"], "tcpSocket"),
+        (["--secure=true", "--secure=false"], "grpc"),
+        (["--secure=false", "--secure=true"], "tcpSocket"),
+        (["--secure"], "tcpSocket"),
+        (["-secure=true"], "tcpSocket"),
+        (["--secure=1"], "tcpSocket"),
+        (["--secure=0"], "grpc"),
+        (["--", "--secure=true"], "grpc"),
+        (["--secure=true", "--"], "tcpSocket"),
+    ):
+        container = router_container(
+            render(chart, {"args": args}, "gateway.mode=extproc")
+        )
+        got = next(iter(probe_targets(container)["startupProbe"]))
+        assert got == expected, (args, got, expected)
+
+    # A standalone Router answers HTTP, so ext_proc TLS changes nothing there.
+    container = router_container(render(chart, {"args": ["--secure=true"]}))
+    assert probe_targets(container)["startupProbe"] == {
+        "httpGet": {"path": "/ready", "port": "http-8899", "scheme": "HTTP"}
+    }, probe_targets(container)
+
+
 def check_listener_ports_fail_closed(chart: str) -> None:
     def config_with(*listeners: dict) -> dict:
         return {"config": {"listeners": list(listeners)}}
@@ -296,6 +337,7 @@ def check_config_override_version(chart: str) -> None:
 CHECKS = (
     check_standalone_default,
     check_extproc,
+    check_extproc_grpc_tls,
     check_listener_ports_fail_closed,
     check_listener_tls,
     check_cli_kubernetes_values,

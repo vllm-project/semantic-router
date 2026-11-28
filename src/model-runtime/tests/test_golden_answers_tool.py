@@ -417,6 +417,92 @@ def test_auto_serves_fp32_where_the_bf16_answers_are_not_deterministic(
         runtime.stop()
 
 
+def zentorch_linear(monkeypatch):
+    """zentorch's linear slot usable on this host, with its ops faked by ``F.linear``."""
+    from types import SimpleNamespace
+
+    import torch.nn.functional as F
+    from vllm_srun.accel import zentorch
+
+    monkeypatch.setattr(
+        zentorch,
+        "_ops",
+        lambda: SimpleNamespace(
+            zentorch_weight_prepack_for_linear=lambda weight: weight.clone(),
+            zentorch_linear_unary=lambda x, w, b, is_weight_prepacked: F.linear(
+                x, w, b
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        zentorch, "_CACHE", {"available": True, "slots": frozenset({"linear"})}
+    )
+    monkeypatch.setattr(zentorch, "measured", lambda: True)
+    monkeypatch.setenv("VLLM_SRUN_ZENTORCH", "1")
+
+
+@pytest.mark.parametrize("named", [True, False])
+def test_auto_keeps_zentorch_at_bf16_only_where_the_class_references_name_it(
+    d3_package, monkeypatch, tmp_path, named
+):
+    """A BF16 reference holds one GEMM order: zentorch's linear runs at BF16 against the key naming it, else exact kernels against the plain key."""
+    key = "cpu:fixture"
+    monkeypatch.setattr(CPUAccelerator, "golden_reference", lambda self, device: key)
+    monkeypatch.setattr("vllm_srun.accel.cpu.native_bf16", lambda: True)
+    zentorch_linear(monkeypatch)
+    library = argparse.Namespace(__version__="2.14.1.0")
+    monkeypatch.setitem(sys.modules, "zentorch", library)
+    fp32 = recorder.answers(recording_args(), str(d3_package), None)
+    exact = recorder.answers(recording_args("bfloat16"), str(d3_package), None)
+    args = recording_args()
+    args.cpu_bf16 = True
+    approximate = recorder.answers(args, str(d3_package), None)
+    # Recorded under the key naming the kernel only, never as the generic baseline.
+    tagged = f"{key}:zentorch@bfloat16"
+    assert set(approximate["golden_answers"]) == {tagged}
+    # With the kernel library's version: a new one can sum in another order.
+    assert approximate["kernels"] == {"zentorch": "2.14.1.0"}
+    path = tmp_path / "goldens.json"
+    recorder.record(path, [exact, approximate])
+    table = next(iter(json.loads(path.read_text()).values()))
+    assert table["kernels"] == {tagged: {"zentorch": "2.14.1.0"}}
+    expected = {
+        "cpu": fp32["golden_answers"]["cpu"],
+        # Each key's references pass only the kernels they were recorded with.
+        f"{key}@bfloat16": (
+            shifted(exact["golden_answers"][f"{key}@bfloat16"])
+            if named
+            else exact["golden_answers"][f"{key}@bfloat16"]
+        ),
+    }
+    if named:
+        expected[tagged] = approximate["golden_answers"][tagged]
+    golden = Decision3Family.golden
+    monkeypatch.setattr(
+        Decision3Family,
+        "golden",
+        lambda self, package: [
+            {**request, "expected": expected} for request in golden(self, package)
+        ],
+    )
+    runtime = Runtime(
+        ServeConfig(models=(ModelConfig(model=str(d3_package), device="cpu"),))
+    )
+    try:
+        runtime.load()
+        served = runtime.lookup(None)
+        assert served.health.golden.status == "matched"
+        assert served.health.golden.reference == (
+            tagged if named else f"{key}@bfloat16"
+        )
+        assert served.card([])["dtype"].startswith("bf16/")
+        assert served.bf16_refused is None
+        kernels = served.model.engine_model.kernels.describe()
+        assert (kernels["linear"] == "zentorch") is named
+    finally:
+        runtime.stop()
+
+
 def test_family_sweep_skips_the_unserved_image_package(monkeypatch):
     served = argparse.Namespace(repo_id="vllm-sr/vela3-fast", revision="r1")
     unserved = argparse.Namespace(repo_id="vllm-sr/vela3-fast-vision", revision="r2")

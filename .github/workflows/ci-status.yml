@@ -15,16 +15,58 @@ permissions:
   contents: read
 
 jobs:
+  publish-pr:
+    name: Publish Pull Request qualification status
+    if: >-
+      github.event_name == 'workflow_run'
+      && github.event.workflow_run.path == '.github/workflows/pr.yml'
+      && github.event.workflow_run.event == 'pull_request'
+    # A Pull Request event already identifies the qualification run. Use the
+    # same lock as Community recovery and /ci run before resolving its identity.
+    concurrency:
+      group: ci-status-${{ github.event.workflow_run.id }}
+      cancel-in-progress: false
+      queue: max
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      checks: write
+      statuses: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Check out the trusted status publisher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Resolve the current qualification run
+        id: qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/pr_ci_status.py --resolve-event --event "$GITHUB_EVENT_PATH" --output "$GITHUB_OUTPUT"
+      - name: Reconcile the current run and update PR guidance
+        if: >-
+          steps.qualification.outputs.mode == 'publish'
+          && steps.qualification.outputs.run_id == format('{0}', github.event.workflow_run.id)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QUALIFICATION_RUN_ID: ${{ steps.qualification.outputs.run_id }}
+          STATUS_MODE: ${{ steps.qualification.outputs.mode }}
+        run: python3 tools/ci/pr_ci_status.py --event "$GITHUB_EVENT_PATH" --run-id "$QUALIFICATION_RUN_ID" --mode "$STATUS_MODE"
+
   resolve:
     name: Resolve qualification identity
     # Only successful PR-related Community completions can restore a pending Gate.
     if: >-
       (github.event_name == 'workflow_run'
-        && (github.event.workflow_run.path != '.github/workflows/community.yml'
-          || (github.event.action == 'completed'
-            && github.event.workflow_run.conclusion == 'success'
-            && (github.event.workflow_run.event == 'pull_request'
-              || github.event.workflow_run.event == 'pull_request_review'))))
+        && github.event.workflow_run.path == '.github/workflows/community.yml'
+        && github.event.action == 'completed'
+        && github.event.workflow_run.conclusion == 'success'
+        && (github.event.workflow_run.event == 'pull_request'
+          || github.event.workflow_run.event == 'pull_request_review'))
       || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5

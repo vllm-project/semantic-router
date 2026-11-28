@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from cli.bootstrap import is_setup_mode_config
+from cli.commands.runtime_observability import runtime_tracing_disabled
 from cli.commands.runtime_paths import (
     _runtime_config_filename,
     materialize_runtime_config,
@@ -123,12 +124,17 @@ def local_stack() -> LocalStack | None:
 
 
 def stack_document(stack: LocalStack, config_path: Path) -> str:
-    """The source file as `vllm-sr serve` would hand it to this stack's Router."""
+    """The source file as `vllm-sr serve` would hand it to this stack's Router.
+
+    Tracing stays off where serve turned it off for a stack without the local
+    collector, so an unrelated change is not refused as a tracing change.
+    """
 
     return build_effective_config_bytes(
         config_path,
         stack.algorithm,
         is_setup_mode_config(config_path),
+        enable_observability=not runtime_tracing_disabled(stack.runtime_config()),
     ).decode("utf-8")
 
 
