@@ -1190,6 +1190,9 @@
     },
     "CanonicalRouterGlobal": {
       "properties": {
+        "entrypoints_only": {
+          "type": "boolean"
+        },
         "enabled": {
           "type": "boolean"
         },

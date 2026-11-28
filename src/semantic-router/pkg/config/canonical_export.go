@@ -115,6 +115,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ConfigSource:      normalizedConfigSource(cfg.ConfigSource),
 			Strategy:          cfg.RoutingDefaults.Strategy,
 			ListBackendModels: cfg.ListBackendModels,
+			EntrypointsOnly:   cfg.EntrypointsOnly,
 			ClearRouteCache:   cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
 				Enabled:    cfg.StreamedBodyMode,

@@ -2310,6 +2310,7 @@ global:
     config_source: file
     strategy: priority
     list_backend_models: true
+    entrypoints_only: false
     clear_route_cache: true
     # Standalone mode: how long, in seconds, the listeners let the requests in
     # flight finish once the Router begins to shut down (25 when unset, at most
