@@ -80,6 +80,18 @@ from pathlib import Path
 from typing import Any
 
 from . import abba
+from .adapters.router_replay import (
+    ReplayFetchError,
+    fetch_replays,
+    session_rows_for_run,
+)
+from .agentic import (
+    AgenticGateResult,
+    SwitchEvidence,
+    agentic_cost_summary,
+    agentic_gate_results,
+    replay_switch_evidence,
+)
 from .contract import (
     Constraint,
     ContractError,
@@ -88,7 +100,9 @@ from .contract import (
     ExperimentSpec,
     Gate,
     References,
+    Workload,
 )
+from .session_attribution import analyze_sessions
 from .srbench import SrbenchCli, extract_metric_values
 from .verdict import (
     GuardResult,
@@ -97,10 +111,96 @@ from .verdict import (
     evidence_quality_reasons,
 )
 
+_MEASUREMENT_KEYS = ("name", "candidate", "baseline")
 # An AB/BA pair always carries exactly two arms' metrics.
 PAIRED_ARM_COUNT = 2
+# AG1: conversation-scoped Router protection engages for session-aware
+# targets; an agentic workload runs every arm in this mode.
+SESSION_AWARE_MODE = "session_aware"
 
-_MEASUREMENT_KEYS = ("name", "candidate", "baseline")
+
+def _agentic_harness_ready(cli: SrbenchCli, workload: Workload) -> None:
+    """AG1: an agentic workload needs its benchmark harness installed.
+
+    `vllm-sr benchmark setup --benchmark <name>` (without --install)
+    inspects prerequisites without touching the environment; a missing
+    harness is a contract error naming the install command, never a
+    silent mid-run failure.
+    """
+    response = cli.run_command(["setup", "--benchmark", workload.benchmark])
+    benchmarks = response.get("benchmarks") if isinstance(response, dict) else None
+    entry = next(
+        (
+            item
+            for item in benchmarks or []
+            if isinstance(item, dict) and item.get("benchmark") == workload.benchmark
+        ),
+        None,
+    )
+    if entry is None or entry.get("installed") is not True:
+        raise ContractError(
+            f"benchmark harness {workload.benchmark!r} is not installed; run "
+            f"`vllm-sr benchmark setup --benchmark {workload.benchmark} --install` first"
+        )
+
+
+def _continuity_rows(comparison: Any, rep: int) -> list[dict[str, Any]]:
+    """AG1: the candidate arm's per-target continuity from a compare payload.
+
+    The compare payload's `candidate_targets` entries mirror the run
+    report's per-target summary sections, `continuity` included - read
+    verbatim, never recomputed.
+    """
+    sections = (
+        comparison.get("candidate_targets") if isinstance(comparison, dict) else None
+    )
+    rows: list[dict[str, Any]] = []
+    for entry in sections or []:
+        if isinstance(entry, dict) and isinstance(entry.get("continuity"), dict):
+            rows.append(
+                {
+                    "repetition": rep,
+                    "target_id": entry.get("id"),
+                    "continuity": entry["continuity"],
+                }
+            )
+    return rows
+
+
+def _arm_continuity(
+    targets: Any, *, routing_arm: bool, selected_id: str | None = None
+) -> dict[str, Any] | None:
+    """AG7: one arm's continuity section from its target summaries.
+
+    Same arm pinning as `_arm_accuracy`: the baseline arm is the target
+    compare named, the candidate arm is the `mom` target (else the last
+    target carrying a continuity section).
+    """
+    if not isinstance(targets, list):
+        return None
+    entries = [t for t in targets if isinstance(t, dict)]
+
+    def _section(entry: dict) -> dict[str, Any] | None:
+        continuity = entry.get("continuity")
+        return continuity if isinstance(continuity, dict) else None
+
+    if isinstance(selected_id, str):
+        for entry in entries:
+            if entry.get("id") == selected_id:
+                section = _section(entry)
+                if section is not None:
+                    return section
+    if routing_arm:
+        for entry in entries:
+            if entry.get("kind") == "mom":
+                section = _section(entry)
+                if section is not None:
+                    return section
+    for entry in reversed(entries):
+        section = _section(entry)
+        if section is not None:
+            return section
+    return None
 
 
 def measurements_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -130,9 +230,13 @@ def measurements_from_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             value = row.get(key)
             if value is None:
                 continue
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
                 raise ContractError(
-                    f"guard measurement row {index}: {key} must be a number or null"
+                    f"guard measurement row {index}: {key} must be a finite number or null"
                 )
         validated.append({key: row.get(key) for key in _MEASUREMENT_KEYS})
     return validated
@@ -489,7 +593,7 @@ def _evidence_entry(
     percentage ceilings and land in `incomplete_reasons` (INCONCLUSIVE).
     `finish_reason_length_rate` is reference only and never gated.
     """
-    entry: dict[str, float | None] = dict.fromkeys(_EVIDENCE_RATE_KEYS)
+    entry: dict[str, float | None] = dict.fromkeys(_EVIDENCE_RATE_KEYS, None)
     if rates is not None:
         entry.update({key: rates.get(key) for key in _EVIDENCE_RATE_KEYS})
     incomplete.extend(
@@ -551,6 +655,14 @@ def reference_metric_values(
                     values[role] = found[0]
                 break
     return values
+
+
+def _reference_constraint_metrics(constraints: Sequence[Constraint]) -> set[str]:
+    return {
+        c.metric
+        for c in constraints
+        if isinstance(c.bound, str) and c.bound.startswith("ref:")
+    }
 
 
 def arm_cost(
@@ -713,6 +825,7 @@ def require_run_datasets(
     cli: SrbenchCli,
     runs: list[tuple[str, str]],
     workload_split: str,
+    workload: Workload | None = None,
 ) -> None:
     """M1: every cited run must have scored the contract's own frozen split.
 
@@ -723,7 +836,7 @@ def require_run_datasets(
     when the run document exposes no dataset identity at all: a verdict
     citing evidence it cannot bind to the contract is never written down.
     """
-    expected = spec.workload.live_dataset_hash(workload_split)
+    expected = (workload or spec.workload).live_dataset_hash(workload_split)
     for role, run_id in runs:
         actual = run_dataset_hash(cli, run_id)
         if actual is None:
@@ -738,6 +851,42 @@ def require_run_datasets(
             )
 
 
+def candidate_config_hash_from_run(cli: SrbenchCli, run_id: str) -> str:
+    """Y4: the frozen config hash of the MoM target that served `run_id`.
+
+    The run document's manifest embeds the registered target documents
+    verbatim (R2), so the `config_hash` a live MoM target was registered
+    with is what actually served the run. Any mismatch between a run's
+    MoM targets, or a target without a frozen hash, is a ContractError -
+    a verdict that cannot name the config it graded is never written.
+    """
+    doc = cli.show(run_id)
+    manifest = doc.get("manifest") if isinstance(doc, dict) else None
+    entries = manifest.get("targets") if isinstance(manifest, dict) else None
+    if not isinstance(entries, list) or not entries:
+        raise ContractError(
+            f"candidate run {run_id} exposes no frozen targets in its run "
+            "document; cannot bind the verdict to a candidate config"
+        )
+    mom = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict) and entry.get("kind") == "mom"
+    ]
+    if not mom or any(not entry.get("config_hash") for entry in mom):
+        raise ContractError(
+            f"candidate run {run_id} served no live MoM target with a frozen "
+            "config_hash; cannot bind the verdict to a candidate config"
+        )
+    hashes = sorted({str(entry["config_hash"]) for entry in mom})
+    if len(hashes) > 1:
+        raise ContractError(
+            f"candidate run {run_id} served targets with conflicting config "
+            f"hashes: {hashes}; the candidate arm must be one config"
+        )
+    return "sha256:" + hashes[0]
+
+
 def live_verdict_from_runs(
     *,
     spec: ExperimentSpec,
@@ -747,6 +896,7 @@ def live_verdict_from_runs(
     measurements: list[dict[str, Any]],
     incomplete_reasons: list[str] | None = None,
     workload_split: str = "dev",
+    workload: Workload | None = None,
 ) -> dict[str, Any]:
     """Compare two sr-bench runs and decide the live-tier verdict (A3).
 
@@ -767,11 +917,13 @@ def live_verdict_from_runs(
     """
     # M1: both runs must have scored the contract's own frozen split, else
     # the verdict would cite evidence from a different question set.
+    workload = workload or spec.workload
     require_run_datasets(
         spec,
         cli,
         [("baseline", baseline_run_id), ("candidate", candidate_run_id)],
         workload_split,
+        workload,
     )
     comparison = cli.compare(baseline_run_id, candidate_run_id)
     incomplete = list(incomplete_reasons or [])
@@ -815,12 +967,29 @@ def live_verdict_from_runs(
     reference_values = reference_metric_values(
         base_targets, spec.references, spec.objective.metric_key
     )
+    reference_metrics = {"strong": {}, "weak": {}}
+    for metric in _reference_constraint_metrics(spec.objective.constraints):
+        for role, value in reference_metric_values(
+            base_targets, spec.references, metric
+        ).items():
+            reference_metrics[role][metric] = value
     pareto = pareto_rows(base_targets, cand_targets, spec.references, spec.cost_basis)
 
     guards, undeclared = resolve_gates(spec.gates, measurements)
     constraint_evidence = _constraint_evidence(
         comparison, list(spec.objective.constraints), incomplete
     )
+    # Retrospective reports supply continuity but no run-bound router replay.
+    # Each replay-dependent gate therefore remains unevaluated on this path.
+    agentic_gates = []
+    if workload.kind == "agentic":
+        agentic_gates = agentic_gate_results(
+            workload.resolved_agentic_gates(),
+            candidate_continuity=_arm_continuity(cand_targets, routing_arm=True),
+            baseline_continuity=_arm_continuity(
+                base_targets, routing_arm=False, selected_id=selected
+            ),
+        )
     verdict = evaluate_verdict(
         baseline_metric=baseline_metric,
         candidate_metric=candidate_metric,
@@ -832,7 +1001,8 @@ def live_verdict_from_runs(
         stats=stats,
         min_cases=spec.objective.min_cases,
         min_improvement_pp=spec.objective.min_improvement_pp,
-        references=reference_values,
+        references=reference_metrics,
+        agentic_gates=agentic_gates,
     )
     reasons = list(verdict.reasons)
     if undeclared:
@@ -857,11 +1027,26 @@ def live_verdict_from_runs(
         "constraints": verdict.constraints,
         "undeclared_measurements": undeclared,
         "bench_refs": [baseline_run_id, candidate_run_id],
+        # Y4: the frozen config hash of the MoM target that served the
+        # candidate run, so the ledger's candidate names the config graded.
+        "config_sha256": candidate_config_hash_from_run(cli, candidate_run_id),
         "paired": stats.to_dict() if stats else None,
         "evidence_quality": evidence,
         "references": reference_values,
         "pareto": pareto,
     }
+    if agentic_gates:
+        result["agentic"] = {
+            "workload": workload.name,
+            "benchmark": workload.benchmark,
+            "gates": {
+                g.name: (
+                    "pass" if g.passed else ("fail" if g.evaluated else "incomplete")
+                )
+                for g in agentic_gates
+            },
+            "gates_detail": [g.to_dict() for g in agentic_gates],
+        }
     if not spec.gates:
         result["gates_note"] = "no guard declared"
     return result
@@ -903,6 +1088,8 @@ def _submit_baseline_manifest(
     manifest_source: str | Path,
     work_dir: Path,
     workload_split: str,
+    agentic: bool = False,
+    workload: Workload | None = None,
 ) -> str:
     """R2: turn a caller manifest into the completed AB/BA baseline run.
 
@@ -945,11 +1132,22 @@ def _submit_baseline_manifest(
                 "cannot construct the single-model baseline arm"
             )
         raw["targets"] = [match, *targets]
+    if agentic:
+        # AG1: every subject arm (MoM router target and single-model arm
+        # alike) runs session-aware so the agentic comparison is fair.
+        raw["targets"] = [
+            (
+                {**entry, "session_mode": SESSION_AWARE_MODE}
+                if isinstance(entry, dict)
+                else entry
+            )
+            for entry in raw["targets"]
+        ]
     dataset = raw.get("dataset")
     if isinstance(dataset, dict) and dataset.get("sha256"):
         # X3: bound via the split's srbench_dataset hash when declared,
         # else the legacy cases hash.
-        expected = spec.workload.live_dataset_hash(workload_split)
+        expected = (workload or spec.workload).live_dataset_hash(workload_split)
         actual = _dataset_identity(dataset.get("sha256"))
         if actual != expected:
             raise ContractError(
@@ -974,6 +1172,84 @@ def _submit_baseline_manifest(
     return run_id
 
 
+def _arm_replay_rows(
+    endpoint: str | None,
+    run_id: str | None,
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    """One MoM arm run's session rows from its arm router (Z4).
+
+    Fetches the arm router's replay records and filters them to the run's
+    session identities. Returns (rows, note): a missing endpoint or run id
+    means no evidence was requested ((None, None)); a failed fetch
+    returns (None, reason) so the gates stay unevaluated, never a pass.
+    """
+    if not endpoint or not run_id:
+        return None, None
+    try:
+        records = fetch_replays(endpoint)
+    except ReplayFetchError as exc:
+        return None, f"replay fetch from {endpoint} failed: {exc}"
+    return session_rows_for_run(records, run_id), None
+
+
+def _replay_echo(entry: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Provenance of the replay rows one gate side consumed (Z4).
+
+    The result names the run and endpoint the rows were pulled from and
+    how many rows entered the judgment; a failed fetch keeps its note.
+    """
+    if entry is None:
+        return None
+    echo: dict[str, Any] = {
+        "run_id": entry["run_id"],
+        "endpoint": entry["endpoint"],
+        "rows": len(entry["rows"]) if entry["rows"] is not None else None,
+    }
+    if entry.get("note"):
+        echo["note"] = entry["note"]
+    return echo
+
+
+def _trial_replay(
+    supplied: Sequence[dict[str, Any]] | None,
+    fetched: dict[str, Any] | None,
+    run_id: str,
+    repetitions: int,
+) -> dict[str, Any] | None:
+    if supplied is None:
+        return fetched
+    if repetitions == 1:
+        rows = list(supplied)
+    else:
+        # Imported replay files may contain several runs. Never use a later
+        # run's evidence to fill an earlier run's missing observation.
+        prefix = run_id + "-"
+        rows = [
+            row
+            for row in supplied
+            if isinstance(row.get("session"), dict)
+            and any(
+                str(row["session"].get(key, "")).startswith(prefix)
+                for key in ("session_id", "conversation_id")
+            )
+        ]
+        if not rows:
+            return fetched
+    return {"run_id": run_id, "endpoint": None, "rows": rows, "note": None}
+
+
+def _deciding_gate(gates: Sequence[AgenticGateResult]) -> AgenticGateResult:
+    """A hard ceiling applies to each measured pair, including AB and BA."""
+
+    def severity(gate: AgenticGateResult) -> tuple[int, float]:
+        if not gate.evaluated:
+            return (1, 0.0)
+        excess = gate.value - gate.bound
+        return (2 if excess > 0 else 0, excess)
+
+    return max(gates, key=severity)
+
+
 def verify_live(
     *,
     spec: ExperimentSpec,
@@ -987,6 +1263,11 @@ def verify_live(
     workload_split: str = "dev",
     run_cache: str | Path | None = None,
     baseline_manifest: str | Path | None = None,
+    workload: Workload | None = None,
+    replay_rows: Sequence[dict[str, Any]] | None = None,
+    baseline_replay_rows: Sequence[dict[str, Any]] | None = None,
+    candidate_management_endpoint: str | None = None,
+    baseline_management_endpoint: str | None = None,
 ) -> dict[str, Any]:
     """Drive sr-bench for one candidate and decide the live verdict (I).
 
@@ -1017,7 +1298,9 @@ def verify_live(
     `pareto` for the report.
 
     `targets` are the registered sr-bench MoM target ids the router is
-    serving the candidate config on. The preview run is diagnostic only:
+    serving the candidate config on. Each must be registered with a frozen
+    `config_hash` and all must agree (Y4): the result's `config_sha256`
+    names the config the verdict graded. The preview run is diagnostic only:
     a failed preview is recorded in the reasons but does not fail the
     verdict (it produces no quality numbers anyway).
 
@@ -1026,6 +1309,27 @@ def verify_live(
     required. A manifest without a single-model target gets the spec's
     strong reference injected as the S arm before submission, so a plain
     MoM router manifest can seed the AB/BA protocol directly.
+
+    AG7: an agentic workload also carries the stability hard gates. Switch
+    evidence comes from the pairs' continuity sections; the rejected /
+    interrupted evidence needs router replay records - `replay_rows` /
+    `baseline_replay_rows` carry them (session attribution's
+    attribute-session judgment runs over them verbatim), and gates without
+    their evidence stay unevaluated (INCONCLUSIVE, never a pass). The
+    result's `agentic` block records the gate outcomes and the pairs'
+    actual-vs-cache-neutral cost side by side.
+
+    Z4: when the replay rows are not provided, an agentic verify pulls
+    them itself - after each completed MoM arm run, the arm's router
+    management endpoint (`candidate_management_endpoint` /
+    `baseline_management_endpoint`) is fetched and filtered to that run's
+    session identities (`<run_id>-<digest>` per task, sr-bench engine), so
+    each gate judges matching continuity and replay from each pair.
+    Single-model reference arms never pass a
+    router and have no replays: comparisons whose baseline side is not a
+    comparable router config declare a numeric ceiling for
+    `max_tool_loop_interrupted` instead of the `baseline` pin. A failed
+    fetch is a diagnostic - the gates stay unevaluated, never a pass.
     """
     if repetitions < 1:
         raise ContractError("verify needs at least one repetition")
@@ -1033,11 +1337,68 @@ def verify_live(
         raise ContractError(
             "verify needs exactly one of baseline_run_id or baseline_manifest"
         )
+    # AG1: an agentic workload runs every arm session-aware. The harness
+    # check comes first (nothing is spent on an uninstalled benchmark);
+    # then the MoM candidate targets must already be registered with
+    # session_mode: session_aware - candidate plans inherit their targets
+    # from the sr-bench registry, so a late manifest patch cannot fix them.
+    workload = workload or spec.workload
+    agentic = workload.kind == "agentic"
+    if agentic:
+        _agentic_harness_ready(cli, workload)
+    # Y4: the candidate arms' MoM targets must be registered with a frozen
+    # config hash, and all of them must agree - the ledger's candidate then
+    # names the exact config the verdict graded. Fail fast, before any run.
+    registry = {
+        entry.get("id"): entry for entry in cli.targets() if isinstance(entry, dict)
+    }
+    config_hashes: list[str] = []
+    for target_id in targets:
+        entry = registry.get(target_id)
+        if entry is None:
+            raise ContractError(
+                f"candidate target {target_id!r} is not registered in sr-bench; "
+                "the verify arms cannot bind to a frozen config"
+            )
+        target_hash = entry.get("config_hash")
+        if not target_hash:
+            raise ContractError(
+                f"candidate target {target_id!r} carries no frozen config_hash; "
+                "re-register it as a live MoM target so the verdict can name "
+                "the config it graded"
+            )
+        config_hashes.append("sha256:" + str(target_hash))
+    if len(set(config_hashes)) != 1:
+        raise ContractError(
+            f"candidate targets disagree on config_hash: {sorted(set(config_hashes))}; "
+            "the candidate arm must be one config"
+        )
+    config_sha256 = config_hashes[0]
+    if agentic:
+        # AG1: candidate plans inherit their targets from the sr-bench
+        # registry, so a late manifest patch cannot make them session-aware -
+        # the registered MoM targets must already carry session_mode.
+        for target_id in targets:
+            if (registry.get(target_id) or {}).get(
+                "session_mode"
+            ) != SESSION_AWARE_MODE:
+                raise ContractError(
+                    f"agentic verify needs session-aware arms: candidate target "
+                    f"{target_id!r} is registered without session_mode: "
+                    f"{SESSION_AWARE_MODE}; re-register it so conversation-scoped "
+                    "protection engages during evaluation"
+                )
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     if baseline_manifest is not None:
         baseline_run_id = _submit_baseline_manifest(
-            spec, cli, baseline_manifest, work_dir, workload_split
+            spec,
+            cli,
+            baseline_manifest,
+            work_dir,
+            workload_split,
+            agentic=agentic,
+            workload=workload,
         )
 
     baseline_doc = cli.show(baseline_run_id)
@@ -1055,6 +1416,16 @@ def verify_live(
         raise ContractError(
             f"baseline run {baseline_run_id} does not expose its frozen manifest"
         )
+    if agentic and not all(
+        entry.get("session_mode") == SESSION_AWARE_MODE
+        for entry in manifest.get("targets", [])
+        if isinstance(entry, dict)
+    ):
+        raise ContractError(
+            f"agentic verify needs session-aware arms: baseline run "
+            f"{baseline_run_id} carries targets without session_mode: "
+            f"{SESSION_AWARE_MODE}; submit a session-aware baseline manifest"
+        )
     manifest_path = work_dir / "baseline-manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -1063,7 +1434,7 @@ def verify_live(
     # bound via the split's srbench_dataset hash when declared, else the
     # legacy cases hash).
     actual = _doc_dataset_identity(baseline_doc, "baseline", baseline_run_id)
-    expected = spec.workload.live_dataset_hash(workload_split)
+    expected = workload.live_dataset_hash(workload_split)
     if actual is None:
         raise ContractError(
             f"baseline run {baseline_run_id} exposes no dataset sha256; "
@@ -1100,6 +1471,9 @@ def verify_live(
 
     # AB/BA pairs: both arms live, alternating execution order per repetition
     trials: dict[int, dict[str, Any]] = {}
+    # Z4: per-arm-run replay evidence ({run_id, endpoint, rows, note}),
+    # keyed by repetition and role for the stability gates.
+    arm_replays: dict[tuple[int, str], dict[str, Any]] = {}
     for label, rep in abba.schedule(repetitions):
         arm = trials.setdefault(rep, {})
         if label == abba.BASELINE:
@@ -1108,16 +1482,43 @@ def verify_live(
             run = cli.candidate_plan(baseline_run_id, targets=targets, mode="live")
         arm[label] = {"run_id": run.get("id"), "status": run.get("status")}
         bench_refs.append(run.get("id"))
+        # Z4: after each completed MoM arm run, pull the run's replay
+        # records from the arm's router so the agentic stability gates
+        # judge the run's own session evidence.
+        if agentic and run.get("status") == "completed":
+            endpoint = (
+                candidate_management_endpoint
+                if label == abba.CANDIDATE
+                else baseline_management_endpoint
+            )
+            if endpoint:
+                arm_rows, note = _arm_replay_rows(endpoint, run.get("id"))
+                if note:
+                    diagnostics.append(f"pair {rep} {label} arm: {note}")
+                arm_replays[(rep, label)] = {
+                    "run_id": run.get("id"),
+                    "endpoint": endpoint,
+                    "rows": arm_rows,
+                    "note": note,
+                }
 
     # per-pair compare + metric/constraint pairing
     metric_key = spec.objective.metric_key
     rows: list[dict[str, Any]] = []
     pair_stats: list[PairedStats] = []
+    # AG1: the candidate arm's per-target continuity, one row per
+    # completed pair and target.
+    continuity_rows: list[dict[str, Any]] = []
     pair_evidence: list[
         tuple[tuple[float | None, float | None], tuple[float | None, float | None]]
     ] = []
     # M4: the last completed pair's target sections feed the Pareto table.
     last_sections: tuple[Any, Any] | None = None
+    # AG7: keep the cost, stability outcomes and run identities per pair.
+    pair_comparisons: list[Any] = []
+    trial_gates: list[list[AgenticGateResult]] = []
+    trial_stability: list[dict[str, Any]] = []
+    trial_switches: list[SwitchEvidence] = []
     constraint_values: dict[str, list[tuple[float | None, float | None]]] = {
         constraint.name: [] for constraint in spec.objective.constraints
     }
@@ -1165,6 +1566,7 @@ def verify_live(
             if isinstance(comparison, dict)
             else None
         )
+        pair_comparisons.append(comparison)
         pair_evidence.append(
             (
                 arm_evidence_quality(
@@ -1176,6 +1578,56 @@ def verify_live(
             )
         )
         last_sections = (base_sec, cand_sec)
+        if agentic:
+            base_entry = _trial_replay(
+                baseline_replay_rows,
+                arm_replays.get((rep, abba.BASELINE)),
+                base_run["run_id"],
+                repetitions,
+            )
+            cand_entry = _trial_replay(
+                replay_rows,
+                arm_replays.get((rep, abba.CANDIDATE)),
+                cand_run["run_id"],
+                repetitions,
+            )
+            base_rows = base_entry["rows"] if base_entry else None
+            cand_rows = cand_entry["rows"] if cand_entry else None
+            switches = replay_switch_evidence(cand_rows)
+            if switches is not None:
+                trial_switches.append(switches)
+            gates = agentic_gate_results(
+                workload.resolved_agentic_gates(),
+                candidate_continuity=_arm_continuity(cand_sec, routing_arm=True),
+                baseline_continuity=_arm_continuity(
+                    base_sec, routing_arm=False, selected_id=selected
+                ),
+                candidate_events=(
+                    analyze_sessions(cand_rows)["event_counts"]
+                    if cand_rows is not None
+                    else None
+                ),
+                baseline_events=(
+                    analyze_sessions(base_rows)["event_counts"]
+                    if base_rows is not None
+                    else None
+                ),
+                candidate_switches=switches,
+            )
+            trial_gates.append(gates)
+            trial_stability.append(
+                {
+                    "repetition": rep,
+                    "baseline_run_id": base_run["run_id"],
+                    "candidate_run_id": cand_run["run_id"],
+                    "replay_evidence": {
+                        "baseline": _replay_echo(base_entry),
+                        "candidate": _replay_echo(cand_entry),
+                    },
+                    "gates_detail": [gate.to_dict() for gate in gates],
+                }
+            )
+        continuity_rows.extend(_continuity_rows(comparison, rep))
         baseline_value, candidate_value = _pair_metrics(
             comparison, metric_key, incomplete
         )
@@ -1233,6 +1685,7 @@ def verify_live(
     # run is incomplete evidence, never a zero.
     references_evidence: dict[str, Any] = {}
     reference_values: dict[str, float | None] = {}
+    reference_metrics = {"strong": {}, "weak": {}}
     ref_rows: list[dict[str, Any]] = []
     if spec.references is not None:
         cache = _load_run_cache(run_cache)
@@ -1311,6 +1764,11 @@ def verify_live(
                 )
                 values = extract_metric_values(entry, metric_key) if entry else []
                 reference_values[role] = values[0] if values else None
+                for key in _reference_constraint_metrics(spec.objective.constraints):
+                    measured = extract_metric_values(entry, key) if entry else []
+                    reference_metrics[role][key] = (
+                        measured[0] if len(measured) == 1 else None
+                    )
                 cost, note = arm_cost(entry, spec.cost_basis) if entry else (None, None)
                 references_evidence[role].update(
                     {
@@ -1363,6 +1821,23 @@ def verify_live(
     pareto.extend(ref_rows)
 
     guards, undeclared = resolve_gates(spec.gates, measurements)
+    agentic_gates: list[AgenticGateResult] = []
+    candidate_switches = None
+    if agentic:
+        if trial_gates:
+            agentic_gates = [
+                _deciding_gate(group) for group in zip(*trial_gates, strict=False)
+            ]
+        else:
+            agentic_gates = agentic_gate_results(
+                workload.resolved_agentic_gates(), candidate_continuity=None
+            )
+        if trial_switches and len(trial_switches) == repetitions:
+            candidate_switches = SwitchEvidence(
+                tool_loop_switches=sum(s.tool_loop_switches for s in trial_switches),
+                decision_drift=sum(s.decision_drift for s in trial_switches),
+                sessions=sum(s.sessions for s in trial_switches),
+            )
     # M2: the pairs' statistics merge conservatively and drive the paired
     # decision (min_cases reads the distinct-case count, not the sum over
     # repeated runs - see _merge_paired_stats).
@@ -1378,9 +1853,25 @@ def verify_live(
         stats=stats,
         min_cases=spec.objective.min_cases,
         min_improvement_pp=spec.objective.min_improvement_pp,
-        references=reference_values,
+        references=reference_metrics,
+        agentic_gates=agentic_gates,
     )
     reasons = list(verdict.reasons)
+    # Z5: an exceeded decision-drift ceiling is a threshold-calibration
+    # signal - the drift transfer is in-design (#5567), so the remedy is
+    # recalibrating the drift threshold from the tool-loop phase's score
+    # distribution, not chasing a routing regression.
+    if any(
+        gate.name == "max_decision_drift_switches_per_task"
+        and gate.evaluated
+        and not gate.passed
+        for gate in agentic_gates
+    ):
+        reasons.append(
+            "decision-drift switch ceiling exceeded: recalibrate the drift "
+            "threshold from the tool-loop phase score distribution "
+            "(recipe-lab propose-calibrated)"
+        )
     reasons.extend(diagnostics)
     if undeclared:
         reasons.append(
@@ -1404,6 +1895,9 @@ def verify_live(
         "constraints": verdict.constraints,
         "undeclared_measurements": undeclared,
         "bench_refs": bench_refs,
+        # Y4: the frozen config hash of the MoM targets the candidate arms
+        # ran on, so the ledger's candidate names the config graded.
+        "config_sha256": config_sha256,
         # R2: the resolved baseline run id (either --baseline-run-id or the run
         # submitted from --baseline-manifest), so the CLI ledger can cite it.
         "baseline_run_id": baseline_run_id,
@@ -1415,6 +1909,45 @@ def verify_live(
         "references": references_evidence,
         "pareto": pareto,
     }
+    if agentic:
+        # AG1: the candidate arm's continuity evidence (switch counts,
+        # per-phase switches, switched/unswitched accuracy) rides the
+        # result and the ledger's `agentic` field. AG7 adds the stability
+        # gate outcomes and the side-by-side cost summary (actual vs
+        # cache-neutral spend, from the pairs' compare payloads).
+        result["agentic"] = {
+            "workload": workload.name,
+            "benchmark": workload.benchmark,
+            "continuity": continuity_rows,
+            "gates": {
+                g.name: (
+                    "pass"
+                    if g.passed
+                    else ("incomplete" if not g.evaluated else "fail")
+                )
+                for g in agentic_gates
+            },
+            "gates_detail": [g.to_dict() for g in agentic_gates],
+            "stability_by_repetition": trial_stability,
+            "replay_evidence": (
+                trial_stability[0]["replay_evidence"]
+                if repetitions == 1 and trial_stability
+                else {"baseline": None, "candidate": None}
+            ),
+            # Z5: the candidate arm's replay switch classification by cause
+            # (None when no replay rows reached the judgment).
+            "switch_evidence": (
+                {
+                    "tool_loop_switches": candidate_switches.tool_loop_switches,
+                    "decision_drift": candidate_switches.decision_drift,
+                    "sessions": candidate_switches.sessions,
+                    "unprotected": candidate_switches.unprotected,
+                }
+                if candidate_switches is not None
+                else None
+            ),
+            "cost": agentic_cost_summary(pair_comparisons),
+        }
     if not spec.gates:
         result["gates_note"] = "no guard declared"
     return result

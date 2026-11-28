@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from ..contract import ContractError
+from ..session_cases import request_phase_of
 
 REPLAYS_PATH = "/api/v1/observability/replays"
 
@@ -92,6 +93,29 @@ def _get_json(url: str, timeout: float, api_key_env: str | None) -> Any:
         raise ReplayFetchError(f"cannot reach management API at {url}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ReplayFetchError(f"management API returned non-JSON body: {url}") from exc
+
+
+def fetch_config_hash(
+    management_url: str,
+    *,
+    timeout: float = 30.0,
+    api_key_env: str | None = None,
+) -> dict[str, Any]:
+    """GET /api/v1/config/hash - the router's config activation document.
+
+    Returns the response verbatim (`source_config_hash` / `generated_runtime_hash`
+    / `active_runtime_hash` / `activation_status`); callers decide which fields
+    bind. `source_config_hash` is the sha256 of the config document's raw bytes,
+    so a local file can be compared against it byte-for-byte.
+    """
+    payload = _get_json(
+        management_url.rstrip("/") + "/api/v1/config/hash", timeout, api_key_env
+    )
+    if not isinstance(payload, dict):
+        raise ReplayFetchError(
+            f"config hash endpoint did not return a JSON object: {management_url}"
+        )
+    return payload
 
 
 def fetch_replays(
@@ -150,6 +174,9 @@ class CaseJoin:
     case_id: str
     prompt: str
     truth: str
+    # Router label (category) for category-keyed oracle mappings; empty for
+    # legacy label-truth case lists (F1).
+    category: str = ""
 
 
 def load_cases(path: str | Path) -> list[CaseJoin]:
@@ -174,9 +201,17 @@ def load_cases(path: str | Path) -> list[CaseJoin]:
                     raise ContractError(
                         f"cases line {lineno}: {name} must be a non-empty string"
                     )
+            category = raw.get("category", "")
+            if not isinstance(category, str):
+                raise ContractError(
+                    f"cases line {lineno}: category must be a string when present"
+                )
             cases.append(
                 CaseJoin(
-                    case_id=raw["case_id"], prompt=raw["prompt"], truth=raw["truth"]
+                    case_id=raw["case_id"],
+                    prompt=raw["prompt"],
+                    truth=raw["truth"],
+                    category=category,
                 )
             )
     return cases
@@ -188,6 +223,133 @@ def _record_field(record: dict, *names: str) -> Any:
         if name in record and record[name] is not None:
             return record[name]
     return None
+
+
+def _record_evidence(record: dict[str, Any]) -> dict[str, Any]:
+    """The record-side tail every attribution row carries.
+
+    Session evidence (conversation_id / turn_index / session_action /
+    selection_reasoning) is carried through verbatim when the record has
+    it; missing fields stay absent so single-turn records keep their
+    shape. The record timeline (record_ts) and lifecycle evidence
+    (lifecycle_state / terminal_reason / response_status) are carried the
+    same way: session attribution orders one user turn's fan-out requests
+    by record_ts, and a lifecycle_state=failed record is the direct
+    evidence of an interrupted tool loop (requires the rejection-recording
+    router fix).
+    """
+    evidence: dict[str, Any] = {}
+    record_ts = _record_field(record, "timestamp", "Timestamp")
+    if record_ts is not None:
+        evidence["record_ts"] = str(record_ts)
+    lifecycle_state = _record_field(record, "lifecycle_state", "LifecycleState")
+    if lifecycle_state:
+        evidence["lifecycle_state"] = str(lifecycle_state)
+    terminal_reason = _record_field(record, "terminal_reason", "TerminalReason")
+    if terminal_reason:
+        evidence["terminal_reason"] = str(terminal_reason)
+    response_status = _record_field(record, "response_status", "ResponseStatus")
+    if response_status is not None:
+        evidence["response_status"] = response_status
+    session_evidence = {
+        "conversation_id": _record_field(record, "conversation_id", "ConversationID"),
+        "session_id": _record_field(record, "session_id", "SessionID"),
+        "turn_index": _record_field(record, "turn_index", "TurnIndex"),
+        "session_action": _record_field(record, "session_action", "SessionAction"),
+        "selection_reasoning": _record_field(
+            record, "selection_reasoning", "SelectionReasoning"
+        ),
+    }
+    if any(value is not None for value in session_evidence.values()):
+        evidence["session"] = {
+            k: v for k, v in session_evidence.items() if v is not None
+        }
+    return evidence
+
+
+def _record_in_run(record: dict[str, Any], run_id: str) -> bool:
+    """Whether one replay record belongs to an sr-bench run.
+
+    Session-aware runs send one identity pair per task:
+    session_id = conversation_id = `<run_id>-<digest([case, target])[:24]>`
+    (src/vllm-sr/cli/sr_bench/engine.py), so the run-id prefix identifies
+    the run's records without recomputing any digest. Run ids are unique
+    per run, and one run's task identities only extend the prefix.
+    """
+    prefix = f"{run_id}-"
+    return any(
+        isinstance(value, str) and value.startswith(prefix)
+        for value in (
+            _record_field(record, "conversation_id", "ConversationID"),
+            _record_field(record, "session_id", "SessionID"),
+        )
+    )
+
+
+def session_rows_for_run(
+    records: list[dict[str, Any]], run_id: str
+) -> list[dict[str, Any]]:
+    """Session-attribution rows of one sr-bench arm run (Z4).
+
+    verify_live judges an agentic arm over the run's own replay records:
+    this filter keeps the records whose session identity carries the
+    run-id prefix (other traffic on the same router stays out) and rows
+    keep the shape session attribution judges - routed model, request id,
+    timeline / lifecycle / session evidence. No case join: the agentic
+    stability gates count session events, not graded answers. Z5: the
+    record's session-policy protection trace (`decision_drift` / `phase`)
+    rides beside the session evidence so the switch gates can split the
+    switches by cause; records without a trace keep their shape.
+    """
+    rows: list[dict[str, Any]] = []
+    for record in records:
+        if not _record_in_run(record, run_id):
+            continue
+        session_policy = _record_field(record, "session_policy", "SessionPolicy")
+        row: dict[str, Any] = {
+            "routed": _record_field(record, "selected_model", "SelectedModel") or "",
+            "request_id": str(_record_field(record, "request_id", "RequestID") or ""),
+            **_record_evidence(record),
+        }
+        if isinstance(session_policy, dict):
+            row["session_policy"] = session_policy
+        rows.append(row)
+    return rows
+
+
+def _record_phase(record: dict) -> str | None:
+    """AG4: the arriving request's session phase, derived from the recorded
+    request body's messages (the record carries no phase of its own; the
+    rule mirrors the Router's tool-loop classification)."""
+    body = _record_field(record, "request_body", "RequestBody")
+    if isinstance(body, str):
+        try:
+            body = json.loads(body)
+        except json.JSONDecodeError:
+            body = None
+    if not isinstance(body, dict):
+        return None
+    messages = body.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+    return request_phase_of(messages)
+
+
+def _row_extras(record: dict) -> dict[str, Any]:
+    """AG4 evidence shared by the labeled and unlabeled row shapes: the
+    session phase, the client agent marker (when the router records one) and
+    the verbatim session-policy block (identity status included)."""
+    extras: dict[str, Any] = {}
+    phase = _record_phase(record)
+    if phase is not None:
+        extras["phase"] = phase
+    agent_id = _record_field(record, "agent_id", "AgentID")
+    if agent_id:
+        extras["agent_id"] = str(agent_id)
+    policy = _record_field(record, "session_policy", "SessionPolicy")
+    if isinstance(policy, dict):
+        extras["session_policy"] = policy
+    return extras
 
 
 def _case_row(record: dict[str, Any], case: CaseJoin, *, family: str) -> dict[str, Any]:
@@ -203,6 +365,7 @@ def _case_row(record: dict[str, Any], case: CaseJoin, *, family: str) -> dict[st
     row = {
         "case_id": case.case_id,
         "truth": case.truth,
+        "category": case.category,
         "matched_decision": decision,
         "routed": selected,
         "family": family,
@@ -215,29 +378,8 @@ def _case_row(record: dict[str, Any], case: CaseJoin, *, family: str) -> dict[st
         or {},
         "decision_tier": _record_field(record, "decision_tier", "DecisionTier"),
     }
-    record_ts = _record_field(record, "timestamp", "Timestamp")
-    if record_ts is not None:
-        row["record_ts"] = str(record_ts)
-    lifecycle_state = _record_field(record, "lifecycle_state", "LifecycleState")
-    if lifecycle_state:
-        row["lifecycle_state"] = str(lifecycle_state)
-    terminal_reason = _record_field(record, "terminal_reason", "TerminalReason")
-    if terminal_reason:
-        row["terminal_reason"] = str(terminal_reason)
-    response_status = _record_field(record, "response_status", "ResponseStatus")
-    if response_status is not None:
-        row["response_status"] = response_status
-    session_evidence = {
-        "conversation_id": _record_field(record, "conversation_id", "ConversationID"),
-        "session_id": _record_field(record, "session_id", "SessionID"),
-        "turn_index": _record_field(record, "turn_index", "TurnIndex"),
-        "session_action": _record_field(record, "session_action", "SessionAction"),
-        "selection_reasoning": _record_field(
-            record, "selection_reasoning", "SelectionReasoning"
-        ),
-    }
-    if any(value is not None for value in session_evidence.values()):
-        row["session"] = {k: v for k, v in session_evidence.items() if v is not None}
+    row.update(_record_evidence(record))
+    row.update(_row_extras(record))
     return row
 
 
@@ -279,7 +421,7 @@ def records_to_cases_by_request_id(
     """H: exact request-id join for the hot-reload replay tier.
 
     One router process serves many candidates, so records are separated by
-    the `x-request-id` the runner sent (`rl-<candidate tag>-<case_id>`,
+    the `x-request-id` the runner sent (`rl-<request_tag>-<case_id>`,
     verified to surface verbatim in the record's `request_id`). Rows keep
     the same shape as the prompt join. Callers assert one row per case
     (count check) before trusting the metrics.
@@ -305,31 +447,97 @@ def records_to_rows(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     One row per record, including records without a prompt: coverage and
     distribution diagnostics want every request, not only labeled ones.
-    Never raises on skip reasons; callers that need the labeled join should
-    use records_to_cases instead.
+    Rows carry the same session / lifecycle / timeline evidence as the
+    labeled join (session attribution and the AG3 route-replay tier order
+    conversations by them). Never raises on skip reasons; callers that need
+    the labeled join should use records_to_cases instead.
     """
     rows: list[dict[str, Any]] = []
     for record in records:
         prompt = _record_field(record, "prompt", "Prompt")
-        rows.append(
-            {
-                "request_id": str(
-                    _record_field(record, "request_id", "RequestID") or ""
-                ),
-                "matched_decision": _record_field(record, "decision", "Decision") or "",
-                "routed": _record_field(record, "selected_model", "SelectedModel")
-                or "",
-                "prompt": prompt if isinstance(prompt, str) else "",
-                "signal_values": _record_field(record, "signal_values", "SignalValues")
-                or {},
-                "signal_confidences": _record_field(
-                    record, "signal_confidences", "SignalConfidences"
-                )
-                or {},
-                "decision_tier": _record_field(record, "decision_tier", "DecisionTier"),
+        row = {
+            "request_id": str(_record_field(record, "request_id", "RequestID") or ""),
+            "matched_decision": _record_field(record, "decision", "Decision") or "",
+            "routed": _record_field(record, "selected_model", "SelectedModel") or "",
+            "prompt": prompt if isinstance(prompt, str) else "",
+            "signal_values": _record_field(record, "signal_values", "SignalValues")
+            or {},
+            "signal_confidences": _record_field(
+                record, "signal_confidences", "SignalConfidences"
+            )
+            or {},
+            "decision_tier": _record_field(record, "decision_tier", "DecisionTier"),
+        }
+        record_ts = _record_field(record, "timestamp", "Timestamp")
+        if record_ts is not None:
+            row["record_ts"] = str(record_ts)
+        lifecycle_state = _record_field(record, "lifecycle_state", "LifecycleState")
+        if lifecycle_state:
+            row["lifecycle_state"] = str(lifecycle_state)
+        terminal_reason = _record_field(record, "terminal_reason", "TerminalReason")
+        if terminal_reason:
+            row["terminal_reason"] = str(terminal_reason)
+        session_evidence = {
+            "conversation_id": _record_field(
+                record, "conversation_id", "ConversationID"
+            ),
+            "session_id": _record_field(record, "session_id", "SessionID"),
+            "turn_index": _record_field(record, "turn_index", "TurnIndex"),
+            "session_action": _record_field(record, "session_action", "SessionAction"),
+            "selection_reasoning": _record_field(
+                record, "selection_reasoning", "SelectionReasoning"
+            ),
+        }
+        if any(value is not None for value in session_evidence.values()):
+            row["session"] = {
+                k: v for k, v in session_evidence.items() if v is not None
             }
-        )
+        row.update(_row_extras(record))
+        rows.append(row)
     return rows
+
+
+def routing_shares_from_replays(
+    records: list[dict[str, Any]],
+    task_prompts: set[str],
+) -> tuple[dict[str, float] | None, dict[str, int]]:
+    """One router arm's routing distribution from its replay records.
+
+    The model-eval verify driver's evidence: the generation records carry
+    no responding model, so the candidate router's own replay store is the
+    routing observation. A record joins the arm when its prompt is one the
+    arm sent - the verify candidate arm is the only traffic that sends the
+    task prompts on that router. Failed records are evidence of an
+    interrupted request, not a routing decision, and stay out of numerator
+    and denominator; records without a selected model are reported in the
+    stats but not counted. No countable record -> (None, stats): the
+    distribution is unknown, never guessed.
+    """
+    stats: dict[str, int] = {
+        "matched": 0,
+        "failed": 0,
+        "no_model": 0,
+        "total": len(records),
+    }
+    counts: dict[str, int] = {}
+    for record in records:
+        prompt = _record_field(record, "prompt", "Prompt")
+        if not isinstance(prompt, str) or prompt not in task_prompts:
+            continue
+        stats["matched"] += 1
+        state = str(_record_field(record, "lifecycle_state", "LifecycleState") or "")
+        if state == "failed":
+            stats["failed"] += 1
+            continue
+        selected = _record_field(record, "selected_model", "SelectedModel")
+        if not isinstance(selected, str) or not selected.strip():
+            stats["no_model"] += 1
+            continue
+        counts[selected] = counts.get(selected, 0) + 1
+    if not counts:
+        return None, stats
+    total = sum(counts.values())
+    return {model: count / total for model, count in sorted(counts.items())}, stats
 
 
 def records_to_cases(

@@ -89,6 +89,47 @@ def test_bool_round_rejected(tmp_path):
         ledger.append(base_record(round=True))
 
 
+def test_final_flag_roundtrip_and_live_only(tmp_path):
+    # Y4: `final` marks the promotion record the bundle reads - absent by
+    # default, bool-validated, and a live-tier-only claim
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path)
+    stored = ledger.append(live_record(final=True))
+    assert stored["final"] is True
+    assert Ledger(path).read()[0]["final"] is True
+    # default: no final key on an ordinary record
+    assert "final" not in ledger.append(live_record())
+    # a replay record can never be the promotion record
+    with pytest.raises(ContractError, match="final is a live-tier promotion flag"):
+        ledger.append(base_record(final=True))
+    with pytest.raises(ContractError, match="final must be a boolean"):
+        ledger.append(live_record(final="yes"))
+
+
+def test_agentic_continuity_roundtrip_and_mapping_validation(tmp_path):
+    # AG1: agentic workloads record the candidate arm's continuity sections
+    # in the `agentic` field; absent by default, mapping-validated
+    path = tmp_path / "ledger.jsonl"
+    ledger = Ledger(path)
+    agentic = {
+        "workload": "agentic",
+        "benchmark": "terminal-bench-2.1",
+        "continuity": [
+            {
+                "repetition": 0,
+                "target_id": "mom-router",
+                "continuity": {"session_mode": "session_aware", "model_switches": 0},
+            }
+        ],
+    }
+    stored = ledger.append(live_record(agentic=agentic))
+    assert stored["agentic"] == agentic
+    assert Ledger(path).read()[0]["agentic"] == agentic
+    assert "agentic" not in ledger.append(live_record())
+    with pytest.raises(ContractError, match="agentic must be a mapping"):
+        ledger.append(live_record(agentic=[1, 2]))
+
+
 def test_filter_and_top_replay(tmp_path):
     path = tmp_path / "ledger.jsonl"
     ledger = Ledger(path)
@@ -204,6 +245,44 @@ def test_append_fails_when_the_writer_lock_cannot_be_taken(tmp_path):
         if line.strip()
     ]
     assert len(rows) == 1  # the failed append stored nothing
+
+
+# ---- route_replay: gate-violated routing evidence never ranks ----
+
+
+def route_replay_record(**overrides) -> dict:
+    record = base_record(
+        tier="route_replay",
+        metrics={},
+        gates={"agentic-tool-loop-coverage": "fail"},
+    )
+    record.update(overrides)
+    return record
+
+
+def test_gate_violated_route_replay_record_roundtrip_and_never_ranks(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.jsonl")
+    stored = ledger.append(
+        route_replay_record(
+            reasons=[
+                "agentic stability gate exceeded "
+                "(agentic-tool-loop-coverage: 1 > bound 0)"
+            ],
+            coverage_warning=True,
+            status="gate-violated",
+        )
+    )
+    assert stored["status"] == "gate-violated"
+    ledger.append(base_record(metrics={"capability.score": 0.9}))
+    best = ledger.top_replay("capability.score")
+    assert best is not None and best["tier"] == "replay"
+    assert best["metrics"]["capability.score"] == 0.9
+
+
+def test_route_replay_rejects_unknown_status(tmp_path):
+    ledger = Ledger(tmp_path / "ledger.jsonl")
+    with pytest.raises(ContractError, match="status must be"):
+        ledger.append(route_replay_record(status="crashed"))
 
 
 # ---- B: split field on ledger records ----

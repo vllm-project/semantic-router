@@ -18,6 +18,9 @@ recipe-lab = "recipe_lab.cli:main"
 [tool.setuptools.packages.find]
 include = ["recipe_lab*"]
 
+[tool.setuptools.package-data]
+recipe_lab = ["cases.json", "locales/*/*.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

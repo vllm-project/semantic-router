@@ -7,7 +7,6 @@ import urllib.error
 from unittest import mock
 
 import pytest
-from recipe_lab import cli
 from recipe_lab.adapters.router_replay import (
     fetch_replays,
     load_cases,
@@ -18,14 +17,18 @@ from recipe_lab.adapters.router_replay import (
 from recipe_lab.contract import ContractError
 
 
-def fake_record(request_id: str, prompt: str, decision: str, selected: str) -> dict:
-    return {
+def fake_record(
+    request_id: str, prompt: str, decision: str, selected: str, **extra
+) -> dict:
+    record = {
         "request_id": request_id,
         "decision": decision,
         "selected_model": selected,
         "prompt": prompt,
         "signals": {"decision": ["depth"]},
     }
+    record.update(extra)
+    return record
 
 
 def evidence_record(request_id: str, prompt: str, decision: str, selected: str) -> dict:
@@ -50,11 +53,13 @@ CASES = [
         "case_id": "c1",
         "prompt": "What is the capital of France?",
         "truth": "local_standard",
+        "category": "",
     },
     {
         "case_id": "c2",
         "prompt": "Analyse quicksort vs mergesort from first principles.",
         "truth": "cloud_frontier_reasoning",
+        "category": "",
     },
 ]
 
@@ -219,6 +224,64 @@ def test_fetch_replays_halves_page_on_http_413():
     assert "limit=25&offset=0" in requested[1]
 
 
+def test_record_to_case_carries_timeline_and_lifecycle():
+    by_prompt = {c["prompt"]: type("C", (), c) for c in CASES}
+    record = fake_record(
+        "r1",
+        "What is the capital of France?",
+        "local_standard",
+        "local/private-qwen",
+        timestamp="2026-10-28T10:00:00Z",
+        lifecycle_state="completed",
+    )
+    row, state = record_to_case(record, by_prompt)
+    assert state == "matched"
+    assert row["record_ts"] == "2026-10-28T10:00:00Z"
+    assert row["lifecycle_state"] == "completed"
+    assert "terminal_reason" not in row  # absent fields keep the row shape
+    # an older record wire without these fields still produces a plain row
+    row_plain, _ = record_to_case(
+        fake_record(
+            "r2",
+            "What is the capital of France?",
+            "local_standard",
+            "local/private-qwen",
+        ),
+        by_prompt,
+    )
+    assert "record_ts" not in row_plain and "lifecycle_state" not in row_plain
+
+
+def test_records_to_cases_keeps_failed_records():
+    # one prompt, one 503 rejection then a successful retry: the failed
+    # record is the interruption evidence and must not be deduped away.
+    records = [
+        fake_record(
+            "r1",
+            "What is the capital of France?",
+            "local_standard",
+            "",
+            timestamp="2026-10-28T10:00:00Z",
+            lifecycle_state="failed",
+            terminal_reason="selection_rejected",
+            response_status=503,
+        ),
+        fake_record(
+            "r2",
+            "What is the capital of France?",
+            "local_standard",
+            "local/private-qwen",
+            timestamp="2026-10-28T10:00:01Z",
+        ),
+    ]
+    rows, stats = records_to_cases(records, [type("C", (), c) for c in CASES])
+    assert len(rows) == 2
+    assert rows[0]["lifecycle_state"] == "failed"
+    assert rows[0]["routed"] == ""  # a rejection carries no routed model
+    assert rows[1]["routed"] == "local/private-qwen"
+    assert stats["duplicate_prompt"] == 0
+
+
 def test_load_cases_rejects_missing_truth(tmp_path):
     path = tmp_path / "cases.jsonl"
     path.write_text(json.dumps({"case_id": "c1", "prompt": "p"}), encoding="utf-8")
@@ -228,6 +291,8 @@ def test_load_cases_rejects_missing_truth(tmp_path):
 
 def test_collect_replays_unlabeled_cli(tmp_path, monkeypatch):
     # --unlabeled skips the join and writes one raw row per record
+    from recipe_lab import cli
+
     out = tmp_path / "rows.jsonl"
     monkeypatch.setattr(
         cli, "fetch_replays", lambda *a, **k: [evidence_record("r1", "p1", "d", "m")]
@@ -250,6 +315,9 @@ def test_collect_replays_unlabeled_cli(tmp_path, monkeypatch):
 
 
 def test_collect_replays_flag_rules(capsys):
+    from recipe_lab import cli
+
+    # CLI contract errors print to stderr and exit 2 (exit-code contract)
     with pytest.raises(SystemExit) as exc:
         cli.main(
             [
@@ -264,11 +332,13 @@ def test_collect_replays_flag_rules(capsys):
             ]
         )
     assert exc.value.code == 2
-    assert "mutually exclusive" in capsys.readouterr().err
+    assert "--unlabeled and --cases are mutually exclusive" in capsys.readouterr().err
+
     with pytest.raises(SystemExit) as exc:
         cli.main(["collect-replays", "--url", "http://x", "--output", "o.jsonl"])
     assert exc.value.code == 2
-    assert "one of --cases" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "one of --cases" in err and "is required" in err
 
 
 def test_fetch_replays_parses_list():

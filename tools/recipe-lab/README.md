@@ -29,14 +29,23 @@ pip install -e '.[dev]'
 | `split` | deterministic group-wise calib / dev / frozen_test split (B) |
 | `collect-replays` | pull `router_replay` records from the router management API and join them against the labeled case list (`--unlabeled` emits raw diagnostic rows) |
 | `attribute` | run the E1 / decision_mismatch / E2 / E3 misroute attribution over labeled records |
+| `attribute-session` | session-aware agentic attribution: lane_flap / tool_loop_interrupted / selection_failed (sub-issue 6 P2) |
 | `bank` | build / apply the per-case, per-model answer bank |
 | `propose-thresholds` | bounded single-signal threshold perturbations over a base config |
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
+| `diagnose` | label-free distribution diagnosis over unlabeled replay rows: dead/rare decisions, signal distributions, unreachable threshold sites (D) |
+| `propose-calibrated` | rule threshold candidates at observed distribution quantiles, each sidecar citing its diagnosis (D) |
+| `suggest-depth` | propose a Speed depth cutoff from a captured parent, its direct fast backend and one graded development run |
 | `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
 | `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
-| `cases-to-srbench` | render the labeled case list as an sr-bench dataset; the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
+| `cases` | case-file utilities; `to-srbench` renders the labeled case list as an sr-bench dataset, and the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
 | `verify` | drive sr-bench end to end for one candidate: Preview routing, `--repetitions` AB/BA pairs, per-pair compare and the shared three-state verdict (I) |
 | `live-verdict` | compare two already-recorded sr-bench runs -> PASS / FAIL / INCONCLUSIVE with guard floors from `spec.gates` (A3) |
+| `profile-agentic` | AG5: aggregate per-model single-target sr-bench run reports into the agentic profile (recipe-lab-agentic-profile-v1) |
+| `bootstrap-agentic` | AG5: generate an agentic candidate from the agent recipe template, the profile and the client identity contract, with per-lane evidence in a sidecar |
+| `propose-session-policy` | AG6: cause-keyed one-variable session-protection candidates from a diagnosis or route-replay summary; drift releases and rejected selections come back as handoffs, not knobs |
+| `run-agentic` | AG2: drive a real agent client (headless Claude Code) over a task file through one target, one session per task |
+| `judge-agentic` | AG2: judge a run-agentic directory with the SWE-bench official harness -> sr-bench-shaped per-task results |
 
 Worked examples with a runnable spec and records live in
 [`examples/`](examples/):
@@ -143,6 +152,71 @@ unverifiable references are rejected (exit 2):
   the file bytes
 - `diag:<path>@sha256:<hex>#<anchor>`: a diagnosis artifact anchored at a
   location inside the file
+
+## Diagnosis and distribution calibration (D)
+
+Two label-free commands turn unlabeled traffic into a proposal basis:
+
+- **`diagnose`** runs three checks over `collect-replays --unlabeled` rows:
+  dead decisions (never matched) and rare decisions (hit but below the
+  `--rare-pct` traffic share; `--expect-rare` whitelists legitimately rare
+  decisions such as security containment - reported, never warned), per-signal
+  quantiles / histogram / range utilization (`--utilization-warn` flags an
+  under-used range, `--min-sample` warns about small samples), and rule
+  predicate sites no traffic ever satisfies (unreachable). It writes
+  `diagnosis.json` (`recipe-lab-diagnosis-v1`, input-hashed, byte-stable -
+  the `next --diagnosis` input) and `diagnosis.md`. The diagnosis reads one
+  recipe of the canonical v0.5 document and records it as `inputs.recipe`;
+  a document with several recipes takes `--recipe <name>` or
+  `--public-model <name>` to name the one to diagnose.
+- **`propose-calibrated`** reads one signal's observed distribution from
+  `diagnosis.json` and proposes rule threshold candidates at chosen quantiles
+  (`--quantiles`) or at a target traffic share (`--target-share`, quantile
+  `1 - share`). It delegates to the rule-level proposer, so sites sharing
+  (signal, op, value) move together, inside the recipe the diagnosis names.
+  Each sidecar cites the diagnosis it came
+  from; a diagnosis whose config hash does not match `--base-config` is
+  rejected (exit 2). `--from` restricts the move to sites currently at that
+  value (the BUG-3 `2.5 -> 1.75` calibration).
+
+```bash
+recipe-lab collect-replays --url http://127.0.0.1:8080 --unlabeled --output raw.jsonl
+recipe-lab diagnose --records raw.jsonl --config config.yaml --output-dir diag/ \
+  --expect-rare local_security_containment,local_privacy_policy
+recipe-lab propose-calibrated --diagnosis diag/diagnosis.json \
+  --base-config config.yaml --signal difficulty --quantiles 0.75 --output-dir cands/
+```
+
+## Speed depth proposal
+
+`recipe-lab suggest-depth` reads one completed sr-bench development run that
+contains the captured Speed parent (`capture_recipe: true`) and its direct
+fast backend, compares the first comparable opening request of each case,
+previews the parent's routing natively (`vllm-sr route preview`), and moves
+the observed cutoff below the lowest protected reasoning score:
+
+```bash
+recipe-lab suggest-depth --workspace "$WORK" --config "$PARENT_YAML" \
+  --public-model "$PUBLIC" --strong "$STRONG" --fast "$FAST" \
+  --dev-run "$DEV_RUN" --parent-target "$PARENT_TARGET" \
+  --fast-target "$FAST_TARGET" --endpoint "$PARENT_ORIGIN" \
+  --out "$WORK/candidate.yaml"
+```
+
+`--deployed-config` binds the materialized runtime YAML and its adjacent
+`*.provenance.json` instead of the authored parent; `--signal` selects the
+SystemOne signal (default `depth`); `--vllm-sr` overrides the CLI binary.
+The `recipe-lab-sr-bench-depth-v1` receipt reports `status` (`proposed` /
+`keep-parent` / `inconclusive`), the `observations` with their per-case
+`role` (`move` / `protect` / `skip`) and both finish reasons, `before` /
+`after` / `candidate` / `candidate_sha256` when a threshold separates the
+observations, and the identity fields (`dev_run`, `parent_target`,
+`fast_target`, `parent_sha256`, `deployed_source_sha256`,
+`parent_runtime_hash`, `output_policy`). Candidates are published through
+the shared atomic writer; the saved receipt never changes shape even when
+Markdown delivery fails. A slower or unsuccessful fast case protects its
+score - no proposal without separating evidence, and the returned candidate
+is a development proposal that still has to earn a live verdict.
 
 ## Record format (attribution input)
 
@@ -264,6 +338,48 @@ support a keep-or-rollback decision:
    under `<workspace>/sr-bench`. Exit codes follow the verdict: 0 PASS,
    1 FAIL, 2 INCONCLUSIVE.
 
+## Reports and context
+
+Reports, the provenance manifest and promotion drafts replay from the ledger
+alone - the same ledger renders byte-identically, and a ledger mixing dataset
+hashes carries a loud "not directly comparable" warning:
+
+```bash
+# run report (ledger-only replay)
+recipe-lab report --ledger ledger.jsonl --output report.md
+
+# provenance manifest: recipe-lab-run-v1, aligned with the upstream schemas
+recipe-lab provenance --ledger ledger.jsonl --output manifest.json
+
+# promotion draft from the latest PASS live record (a draft, never a merge)
+recipe-lab record-draft --ledger ledger.jsonl --output promotion-draft.md
+
+# next-round context for an agent (same input -> byte-identical output)
+recipe-lab next --spec spec.yaml --ledger ledger.jsonl \
+  --symptom timeout --output next-context.md
+```
+
+`next` opens with an untrusted-reference-material header, summarizes the
+contract (objective, constraints, gates, split identities, budget left), the
+ledger tail, the best replay candidate (A2: ranked by the shared
+`best_replay` selection, matching `ledger top`), the last live verdict and
+the latest attribution summary (read through the hash-verified
+`attribution_ref`), each with a citable `--insight-refs` string. Optional
+`--diagnosis` and `--symptom` inputs join diagnosis highlights and casebook
+references - casebook entries are repository reference material, never
+measurements of this run. Frozen-test case content is never exported.
+
+## Agent-driven loop
+
+The [recipe-lab-loop skill](../../agent/skills/recipe-lab-loop/SKILL.md)
+packages this workflow for coding agents: read the evidence (`next`), propose
+one candidate, evaluate, record the verdict. A candidate the agent authored
+itself is submitted like any proposer output - pass the config through
+`--candidates` (a directory, a comma-separated list, or a single path) with
+`--proposer agent:<id>` (lowercase `[a-z0-9._-]`, e.g. `agent:claude-loop`);
+the tag is recorded verbatim in the ledger provenance and is filterable in
+`ledger show`.
+
 ## Scope of this slice
 
 This slice owns the replay tier and the live tier: contracts
@@ -278,6 +394,11 @@ context export and provenance manifests arrive with
 ```bash
 pytest
 ```
+
+`examples/smoke/calibration-smoke.sh` is fully offline (no GPU, no router):
+it walks the synthetic pilot rows through `diagnose` ->
+`propose-calibrated` and asserts the candidate matches the BUG-3 golden
+result; the same flow is a unit test (`tests/test_calibration_smoke.py`).
 
 `tests/native_srbench_run.py` is opt-in: it drives `score-candidate` through
 the installed `recipe-lab` executable against the real sr-bench worker with
