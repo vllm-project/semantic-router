@@ -488,7 +488,8 @@ def plan(manifest, *, policy=None):
                 t["kind"] == "single" and t["model"] not in t["prices"]
             ):
                 raise ValueError(
-                    "require_priced needs known prices for every target; use explicit capability_only to omit cost claims"
+                    f"Target {t['id']} has no prices, so the USD budget cannot be applied. "
+                    "Run quality only (cost_policy: capability_only), or add prices to the target."
                 )
             if t["kind"] == "mom" and (
                 not isinstance(t.get("max_inference_calls"), int)
