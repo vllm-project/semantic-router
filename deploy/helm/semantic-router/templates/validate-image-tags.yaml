@@ -1,0 +1,9 @@
+{{- if get (.Values.safetyGuards | default dict) "requirePinnedImages" -}}
+{{- $tags := dict "image.tag" (.Values.image.tag | default .Chart.AppVersion) "dashboard.image.tag" (.Values.dashboard.image.tag | default .Chart.AppVersion) -}}
+{{- range $field, $value := $tags -}}
+{{- $tag := toString ($value | default "") -}}
+{{- if or (eq (lower $tag) "latest") (not (regexMatch "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$" $tag)) -}}
+{{- fail (printf "production requires pinned Router and Dashboard image tags (%s resolves to %q); set both with HELM_SET_VALUES=image.tag=<router-version>,dashboard.image.tag=<dashboard-version> or use a versioned release chart" $field $tag) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

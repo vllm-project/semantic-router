@@ -283,6 +283,7 @@ the locked chart dependencies.
 | response-api-redis.architecture | string | `"standalone"` |  |
 | response-api-redis.auth.enabled | bool | `false` |  |
 | safetyGuards.rejectMultiReplicaLocalLearningState | bool | `true` | Reject multi-replica router deployments when config enables Router Learning request-time local state. Disable only when accepting replica-local learning divergence or using sticky routing. |
+| safetyGuards.requirePinnedImages | bool | `false` | Require versioned Router and Dashboard image tags. `make helm-prod` enables this guard. |
 | securityContext.allowPrivilegeEscalation | bool | `false` | Allow privilege escalation |
 | securityContext.runAsNonRoot | bool | `false` | Run as non-root user |
 | semantic-cache-milvus.cluster.enabled | bool | `false` |  |

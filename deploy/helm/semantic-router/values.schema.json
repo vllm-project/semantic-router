@@ -139,6 +139,10 @@
         "rejectMultiReplicaLocalLearningState": {
           "type": "boolean",
           "description": "Reject multi-replica router renders when active config enables Router Learning request-time local state."
+        },
+        "requirePinnedImages": {
+          "type": "boolean",
+          "description": "Require effective Router and Dashboard image tags to be valid tags other than latest."
         }
       }
     },

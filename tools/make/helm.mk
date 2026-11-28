@@ -176,6 +176,7 @@ helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_key_secret.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_grafana_live.py -v
 	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_fetch_dependencies.py -v
+	@"$(AGENT_PYTHON)" -m unittest discover -s deploy/helm -p test_production_images.py -v
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards
@@ -264,7 +265,7 @@ helm-install: _check-k8s
 		exit 1; \
 	fi
 	@echo "$(BLUE)[INFO]$(NC) Ensuring namespace $(HELM_NAMESPACE) exists..."
-	@kubectl get namespace $(HELM_NAMESPACE) &>/dev/null || kubectl create namespace $(HELM_NAMESPACE)
+	@kubectl get namespace $(HELM_NAMESPACE) >/dev/null 2>&1 || kubectl create namespace $(HELM_NAMESPACE)
 	@helm install $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
@@ -372,7 +373,12 @@ helm-dev:
 helm-prod: ## Deploy with production configuration
 helm-prod:
 	@$(LOG_TARGET)
-	@$(MAKE) helm-install HELM_VALUES_FILE=$(HELM_CHART_PATH)/values-prod.yaml
+	@set -e; \
+	values="$(HELM_CHART_PATH)/values-prod.yaml"; \
+	overrides="$(HELM_SET_VALUES)"; \
+	overrides="$${overrides:+$$overrides,}safetyGuards.requirePinnedImages=true"; \
+	$(MAKE) helm-template HELM_VALUES_FILE="$$values" HELM_SET_VALUES="$$overrides" >/dev/null; \
+	$(MAKE) helm-install HELM_VALUES_FILE="$$values" HELM_SET_VALUES="$$overrides"
 
 helm-values: ## Show computed Helm values
 helm-values:
@@ -459,7 +465,7 @@ helm-reinstall:
 
 # Internal helper target to check if Kubernetes is available
 _check-k8s:
-	@if ! kubectl cluster-info &>/dev/null; then \
+	@if ! kubectl cluster-info >/dev/null 2>&1; then \
 		echo "$(RED)[ERROR]$(NC) Kubernetes cluster is not accessible"; \
 		echo "$(BLUE)[INFO]$(NC) Please ensure your Kubernetes cluster is running:"; \
 		echo "  - For local development: minikube start / kind create cluster / docker desktop"; \
