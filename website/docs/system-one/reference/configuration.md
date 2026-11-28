@@ -73,6 +73,22 @@ response-stage evaluation of custom signals. Application signals, standalone
 plugin reads, selectors, judges, and public inference and generation backends
 keep their configured targets.
 
+For each usable answer from a failover-enabled signal, the Router records the
+deployment key that answered, including when the primary answered or the
+answer did not match. OpenTelemetry's `routing.signal.deployments` attribute
+is a JSON map from `systemone:<rule>` to deployment key, on the signal evaluation
+span for request-stage answers and the request span for response-stage answers.
+Router Replay stores request-stage answers in `route_diagnostics.signal_deployments`
+and response-stage answers in the corresponding outcome's `metadata.deployment`.
+If no deployment answered a rule, it has no deployment entry.
+
+`sr_systemone_signal_failover_attempts_total` counts deployment attempts with
+`deployment`, `stage` (`request` or `response`), `role` (`primary` or `backup`),
+and `outcome` labels. For example, a primary returning HTTP 503 increments
+`outcome="unavailable"`, and a backup returning a response increments its own
+`outcome="ok"`. The counter records logical attempts, not HTTP retries or
+individual answers within a batch; a successful call can still omit a rule's answer.
+
 ## Signals
 
 A `systemone` rule, under `recipes[].signals.systemone`:

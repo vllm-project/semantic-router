@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -21,6 +22,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
+
+// Record only configured signal keys and deployment aliases, not model
+// response metadata or request content. JSON preserves the key-to-alias pairing.
+func observeSignalDeployments(span trace.Span, deployments map[string]string) {
+	if span == nil || !span.IsRecording() || len(deployments) == 0 {
+		return
+	}
+	encoded, _ := json.Marshal(deployments)
+	span.SetAttributes(attribute.String("routing.signal.deployments", string(encoded)))
+}
 
 func observeRoutingIdentity(ctx *RequestContext, entrypoint string) {
 	entrypoint = strings.TrimSpace(entrypoint)

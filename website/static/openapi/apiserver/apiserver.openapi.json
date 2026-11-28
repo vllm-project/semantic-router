@@ -22234,6 +22234,13 @@
                               "session_reason": {
                                 "type": "string"
                               },
+                              "signal_deployments": {
+                                "nullable": true,
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
                               "signal_errors": {
                                 "nullable": true,
                                 "type": "object",
@@ -29981,6 +29988,13 @@
                         },
                         "session_reason": {
                           "type": "string"
+                        },
+                        "signal_deployments": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
                         },
                         "signal_errors": {
                           "nullable": true,

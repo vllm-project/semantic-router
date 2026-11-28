@@ -514,7 +514,9 @@ func (c *Classifier) windowReaders(ctx context.Context, scans []*guardScan) ([]f
 				if slots != nil {
 					slots <- struct{}{}
 				}
-				response, latency, err = c.sendCall(readCtx, call)
+				var result systemOneCallResult
+				result, latency, err = c.sendCall(readCtx, call)
+				response = result.response
 				if slots != nil {
 					<-slots
 				}

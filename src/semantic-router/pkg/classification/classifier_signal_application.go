@@ -253,7 +253,7 @@ func (c *Classifier) EvaluateResponseSignals(ctx context.Context, input Response
 	c.askSystemOneRules(ctx, results, &sync.Mutex{}, rules, input.reading())
 	signal := &ResponseSignal{
 		Matched: map[string][]string{}, Reported: map[string][]string{}, Confidences: results.SignalConfidences,
-		Values: results.SignalValues, Errors: results.SignalErrors, Spans: results.SignalSpans,
+		Values: results.SignalValues, Errors: results.SignalErrors, Deployments: results.SignalDeployments, Spans: results.SignalSpans,
 	}
 	for _, asked := range rules {
 		if matched := results.matchedRulesOf(asked.signalType); matched != nil && len(*matched) > 0 {

@@ -451,9 +451,11 @@ make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
 | `decision_ranking` | 每条记录都有：策略、胜出者的层级、候选池是否按置信度排序以及由哪个决策终止、`runner_up` 及区分两者的键，以及列出比较值的 `reason`。它与 eval API 的报告一致。 |
 | `prepared_dispatch` | 仅在详情响应中：主请求派发时发往提供方的确切请求体的带版本回执，包含其线格式、SHA-256 摘要和字节长度，但不含请求体副本。执行器调用和回退尝试不属于它。 |
 | `looper` | 保留执行轨迹的执行器请求，例如 `escalate`：有上限的尝试、token 和成本统计、耗时、处置原因和最终尝试。 |
+| `signal_deployments` | 对于启用了[部署故障切换](../../system-one/reference/configuration#decision-deployment-fallbacks)且已收到答案的请求阶段自定义 System One 信号，将 `systemone:<rule>` 映射到实际应答的部署。 |
 
 - `prepared_dispatch` 来源于内容，因此没有 `replay.detail` 的响应会省略它。
 - `looper` 不包含提示词、工具参数、凭据和原始错误。它的尝试详情需要 `replay.detail`，任何截断都会被标注。
+- 响应阶段 System One 信号的应答部署记录在该信号结果的 `metadata.deployment` 中。查看部署详情需要 `replay.detail`。
 
 完整的决策片段见
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml)。

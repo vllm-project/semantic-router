@@ -33,13 +33,14 @@ type ResponseConditions struct {
 // as the request stage keys its signals ("<type>:<rule>"): the matched
 // references of each type and those its matched-rule header lists
 // (SignalResults.ReportedMatches), each rule's value, confidence or failure,
-// and the spans of the span rules that matched.
+// deployments that answered failover-enabled rules, and spans that matched.
 type ResponseSignal struct {
 	Matched     map[string][]string
 	Reported    map[string][]string
 	Confidences map[string]float64
 	Values      map[string]float64
 	Errors      map[string]string
+	Deployments map[string]string
 	Spans       map[string][]modelservice.Span
 }
 
@@ -110,6 +111,7 @@ func newResponseSignal() *ResponseSignal {
 		Confidences: map[string]float64{},
 		Values:      map[string]float64{},
 		Errors:      map[string]string{},
+		Deployments: map[string]string{},
 		Spans:       map[string][]modelservice.Span{},
 	}
 }
@@ -124,6 +126,7 @@ func (s *ResponseSignal) merge(other *ResponseSignal) {
 	maps.Copy(s.Confidences, other.Confidences)
 	maps.Copy(s.Values, other.Values)
 	maps.Copy(s.Errors, other.Errors)
+	maps.Copy(s.Deployments, other.Deployments)
 	maps.Copy(s.Spans, other.Spans)
 }
 

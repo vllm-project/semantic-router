@@ -8,26 +8,33 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelservice"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // sendSystemOneFailover tries the deployments in order under one caller
 // budget. Each deployment reads its own view of the same source state.
 // Attempt failures are not signal failures until the chain gives up.
-func (c *Classifier) sendSystemOneFailover(ctx context.Context, call *systemOneCall, request modelservice.Request) (modelservice.Response, error) {
+func (c *Classifier) sendSystemOneFailover(ctx context.Context, call *systemOneCall, request modelservice.Request) (systemOneCallResult, error) {
 	ctx, cancel := decisionFailoverContext(ctx, call.rules)
 	defer cancel()
 	var response modelservice.Response
 	var err error
 	for i, deployment := range call.fallbackChain {
 		if stopped := ctx.Err(); stopped != nil {
-			return modelservice.Response{}, stopped
+			return systemOneCallResult{}, stopped
 		}
 		response, err = c.sendFailoverAttempt(ctx, deployment, call, request, i > 0)
+		if !answersGivenUp(ctx) {
+			metrics.RecordSystemOneSignalFailoverAttempt(deployment, call.rules[0].rule.EffectiveStage(), i > 0, modelservice.ErrorReason(err))
+		}
+		if err == nil {
+			return systemOneCallResult{response: response, answeredBy: deployment}, nil
+		}
 		if !modelservice.CanFailOverDecision(err) {
-			return response, err
+			break
 		}
 	}
-	return response, err
+	return systemOneCallResult{response: response}, err
 }
 
 // A rule timeout bounds the whole chain; the enclosing stage or request may

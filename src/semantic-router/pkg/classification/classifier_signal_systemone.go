@@ -320,6 +320,11 @@ type systemOneCall struct {
 	verdict *windowVerdictKey
 }
 
+type systemOneCallResult struct {
+	response   modelservice.Response
+	answeredBy string // Configured deployment that returned a failover-enabled response.
+}
+
 // systemOneCalls groups rules by the deployment that answers them and the
 // state they read, in rule order: every rule of a stage goes to its
 // deployment in one call, a batch with an entry per state when it reads
@@ -531,21 +536,21 @@ func (c *Classifier) askCall(
 	call *systemOneCall,
 	observe func(modelservice.Response, error),
 ) {
-	response, latency, err := c.sendCall(ctx, call)
+	result, latency, err := c.sendCall(ctx, call)
 	mu.Lock()
 	defer mu.Unlock()
 	if observe != nil {
-		observe(response, err)
+		observe(result.response, err)
 	}
 	if modelservice.SignalsAbandoned(ctx) {
 		return
 	}
-	c.applyCall(results, call, response, err, latency)
+	c.applyCall(results, call, result, err, latency)
 }
 
 // sendCall asks one call's questions and returns the answers, how long the
 // call took, and why there are none.
-func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelservice.Response, float64, error) {
+func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (systemOneCallResult, float64, error) {
 	deployment, rules := call.deployment, call.rules
 	// The deployment's scan budget keeps a stage's questions to it in one
 	// call: a full-coverage rule reads its input whole, up to the budget, and
@@ -554,30 +559,31 @@ func (c *Classifier) sendCall(ctx context.Context, call *systemOneCall) (modelse
 	request.MaxTokens = c.Config.ModelDeployments[deployment].ScanBudget()
 	request.Questions = callQuestions(rules)
 	started := time.Now()
-	response, waited, err := c.sendSystemOneQuestions(ctx, call, request)
+	result, waited, err := c.sendSystemOneQuestions(ctx, call, request)
 	if waited && call.scan != nil {
 		call.scan.markWaited(err == nil)
 	}
 	if err != nil && !answersGivenUp(ctx) && !call.reread {
 		modelservice.RecordUnknown(deployment, modelservice.ErrorReason(err), len(rules))
 	}
-	return response, time.Since(started).Seconds(), err
+	return result, time.Since(started).Seconds(), err
 }
 
-func (c *Classifier) sendSystemOneQuestions(ctx context.Context, call *systemOneCall, request modelservice.Request) (modelservice.Response, bool, error) {
+func (c *Classifier) sendSystemOneQuestions(ctx context.Context, call *systemOneCall, request modelservice.Request) (systemOneCallResult, bool, error) {
 	if len(call.fallbackChain) > 0 {
-		response, err := c.sendSystemOneFailover(ctx, call, request)
-		return response, false, err
+		result, err := c.sendSystemOneFailover(ctx, call, request)
+		return result, false, err
 	}
 	deployment := call.deployment
 	remote := c.Config.IsSystemOneDeployment(deployment)
 	// Each attempt has the rules' timeout of its own: a request that waits
 	// for capacity (on_signal_overload) waits within the stage's deadline.
-	return c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
+	response, waited, err := c.askUntilCapacity(ctx, deployment, func(asking context.Context) (modelservice.Response, error) {
 		callCtx, cancel := systemOneCallContext(asking, call.rules, remote, c.Config.ModelDeployments[deployment].CallTimeout())
 		defer cancel()
 		return c.askDecisionDeployment(callCtx, deployment, request)
 	})
+	return systemOneCallResult{response: response}, waited, err
 }
 
 func (c *Classifier) askDecisionDeployment(ctx context.Context, deployment string, request modelservice.Request) (modelservice.Response, error) {
@@ -603,9 +609,12 @@ func answersGivenUp(ctx context.Context) bool {
 }
 
 // applyCall applies each rule's answer in one call's response to results.
-func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, response modelservice.Response, err error, latency float64) {
+func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, result systemOneCallResult, err error, latency float64) {
 	deployment := call.deployment
-	recordPrivacyEvidence(results, call, response, err)
+	if result.answeredBy != "" {
+		deployment = result.answeredBy
+	}
+	recordPrivacyEvidence(results, call, result.response, err)
 	for _, asked := range call.rules {
 		rule := asked.rule
 		key := signalConfidenceKey(asked.signalType, rule.Name)
@@ -616,7 +625,7 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			c.applyFailClosed(results, asked, deployment, modelservice.ErrorReason(err))
 			continue
 		}
-		answer, ok := response.Answers[asked.questionID()]
+		answer, ok := result.response.Answers[asked.questionID()]
 		// A full-coverage rule reads its whole input, and only an answer that
 		// attests complete coverage proves it did. The card-backed path
 		// derives that requirement in ExecuteQuestions, but a direct decider
@@ -650,6 +659,12 @@ func (c *Classifier) applyCall(results *SignalResults, call *systemOneCall, resp
 			continue
 		}
 		c.applyRuleAnswer(results, asked, answer)
+		if result.answeredBy != "" {
+			if results.SignalDeployments == nil {
+				results.SignalDeployments = make(map[string]string)
+			}
+			results.SignalDeployments[key] = result.answeredBy
+		}
 	}
 }
 

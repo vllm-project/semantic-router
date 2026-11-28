@@ -159,6 +159,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
+	ctx.VSRSignalDeployments = cloneReplayStringMap(signals.SignalDeployments)
 	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRScanCoverage = cloneReplayStringMap(signals.ScanCoverage)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
