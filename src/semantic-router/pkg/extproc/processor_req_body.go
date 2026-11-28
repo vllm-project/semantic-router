@@ -86,7 +86,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	if err != nil {
 		return nil, err
 	}
-	captureRequestDemand(ctx, requestDemandStagePostContext, request, decisionState.selectedModel)
+	r.captureRequestDemand(ctx, requestDemandStagePostContext, request, decisionState.selectedModel)
 	return r.handleModelRoutingWithPersonalizedCache(
 		request,
 		originalModel,
@@ -130,7 +130,7 @@ func (r *OpenAIRouter) handleModelRouting(request *llmprotocol.Request, original
 			"decision":   decisionName,
 		})
 	}
-	captureRequestDemand(ctx, requestDemandStagePostToolPolicy, request, selectedModel)
+	r.captureRequestDemand(ctx, requestDemandStagePostToolPolicy, request, selectedModel)
 	isEntrypoint := ctx.Routing.SelectedRecipe() != nil
 	executesLooper := r.routeExecutesLooper(ctx)
 	if !isEntrypoint && !executesLooper && !r.usesExternalGatewayDispatch(originalModel) {
