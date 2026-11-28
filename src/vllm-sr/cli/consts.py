@@ -33,9 +33,11 @@ def image_tag_for_cli_build(
     """Run the images published from this build's commit.
 
     A development package records its main commit, whose images main publishes
-    before the package. The moving `latest` images can already reject the
-    config this CLI writes, so only a source checkout, which records no commit,
-    follows them.
+    before the package, and an install from a git checkout records the
+    checked-out commit. The moving `latest` images can already reject the
+    config this CLI writes, so only a build that records no commit -- an
+    editable install, which runs the images its checkout builds locally, or
+    one without git metadata -- follows them.
     """
     tag = image_tag_for_cli_version(cli_version, released)
     if tag == "latest" and source_revision:

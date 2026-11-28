@@ -20,6 +20,7 @@ from check_cli_wheel import check_wheel  # noqa: E402
 from prepare_dev_package import (  # noqa: E402
     development_epoch,
     prepare_version,
+    record_checkout_revision,
     record_source_revision,
 )
 from validate_workflows import load_workflows, needs  # noqa: E402
@@ -111,6 +112,68 @@ class DevelopmentVersionTests(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 record_source_revision(project, COMMIT)
+
+
+class SourceInstallRevisionTests(unittest.TestCase):
+    """A non-editable install from a git checkout runs that commit's images."""
+
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.build_lib = self.root / "build"
+        (self.build_lib / "cli").mkdir(parents=True)
+        self.module = self.build_lib / "cli" / "source_revision.py"
+        shutil.copy(REPO_ROOT / "src/vllm-sr/cli/source_revision.py", self.module)
+        self.source = self.module.read_text(encoding="utf-8")
+
+    def checkout(self) -> tuple[Path, str]:
+        repository = self.root / "checkout"
+        repository.mkdir()
+
+        def git(*args: str) -> str:
+            return subprocess.run(
+                ["git", *args],
+                capture_output=True,
+                check=True,
+                cwd=repository,
+                text=True,
+            ).stdout.strip()
+
+        git("init", "-q")
+        (repository / "README.md").write_text("checkout\n", encoding="utf-8")
+        git("add", "README.md")
+        git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", ".")
+        return repository, git("rev-parse", "HEAD")
+
+    def test_records_the_checked_out_commit_in_the_build_output(self) -> None:
+        repository, commit = self.checkout()
+        checkout_module = REPO_ROOT / "src/vllm-sr/cli/source_revision.py"
+        before = checkout_module.read_text(encoding="utf-8")
+
+        record_checkout_revision(self.build_lib, repository)
+
+        self.assertEqual(
+            self.module.read_text(encoding="utf-8"),
+            self.source.replace(
+                'SOURCE_REVISION = ""', f'SOURCE_REVISION = "{commit}"'
+            ),
+        )
+        self.assertEqual(checkout_module.read_text(encoding="utf-8"), before)
+
+    def test_a_tree_without_git_metadata_records_nothing(self) -> None:
+        record_checkout_revision(self.build_lib, self.root / "sdist")
+
+        self.assertEqual(self.module.read_text(encoding="utf-8"), self.source)
+
+    def test_keeps_the_commit_a_package_build_already_recorded(self) -> None:
+        repository, _ = self.checkout()
+        record_source_revision(self.build_lib, COMMIT)
+        recorded = self.module.read_text(encoding="utf-8")
+
+        record_checkout_revision(self.build_lib, repository)
+
+        self.assertEqual(self.module.read_text(encoding="utf-8"), recorded)
 
 
 class PythonPublisherContractTests(unittest.TestCase):

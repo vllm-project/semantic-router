@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import runpy
 from pathlib import Path
 from shutil import copy2
 
@@ -19,6 +20,8 @@ REPOSITORY_RELEASES = (
     PROJECT_ROOT.parent / "model-runtime/vllm_srun/registry" / RELEASE_FILENAME
 )
 PROPOSAL_ASSET_PATHS = ("fragments/algorithm/selection/latency-aware.yaml",)
+REPOSITORY_ROOT = PROJECT_ROOT.parents[1]
+REVISION_RECORDER = REPOSITORY_ROOT / "tools" / "ci" / "prepare_dev_package.py"
 
 
 def release_source() -> Path:
@@ -59,6 +62,18 @@ def stage_proposal_assets(destination_root: Path) -> None:
         copy2(proposal_asset_source(relative), destination)
 
 
+def record_checkout_revision(build_lib: Path) -> None:
+    """Record a git checkout's commit in the build output, not the worktree.
+
+    The CLI then runs the images main published for that commit instead of
+    the moving `latest` ones. An sdist carries neither the recorder nor `.git`.
+    """
+
+    if REVISION_RECORDER.is_file():
+        record = runpy.run_path(str(REVISION_RECORDER))["record_checkout_revision"]
+        record(build_lib, REPOSITORY_ROOT)
+
+
 class BuildPy(build_py):
     """Copy canonical generated artifacts into build output, never the worktree."""
 
@@ -69,6 +84,10 @@ class BuildPy(build_py):
         copy2(schema_source(), destination)
         copy2(release_source(), destination.with_name(RELEASE_FILENAME))
         stage_proposal_assets(Path(self.build_lib) / "cli" / "proposal_assets")
+        # An editable install runs the checkout's own modules and keeps
+        # following `latest`, the tag its local image builds use.
+        if not getattr(self, "editable_mode", False):
+            record_checkout_revision(Path(self.build_lib))
 
     def get_outputs(self, include_bytecode: bool = True) -> list[str]:
         outputs = super().get_outputs(include_bytecode=include_bytecode)

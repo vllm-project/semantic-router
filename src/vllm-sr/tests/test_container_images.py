@@ -643,3 +643,24 @@ def test_get_runtime_images_leaves_nonofficial_router_override_unchanged_on_amd(
         ("router:custom", "never"),
         ("base:latest", "never"),
     ]
+
+
+def test_a_non_editable_source_build_records_its_checkout_commit(monkeypatch, tmp_path):
+    pytest.importorskip("setuptools")
+    import build_support
+
+    recorded = []
+    monkeypatch.setattr(build_support.build_py, "run", lambda self: None)
+    monkeypatch.setattr(build_support, "copy2", lambda *_: None)
+    monkeypatch.setattr(build_support, "stage_proposal_assets", lambda *_: None)
+    monkeypatch.setattr(build_support, "record_checkout_revision", recorded.append)
+    command = build_support.BuildPy.__new__(build_support.BuildPy)
+    command.build_lib = str(tmp_path)
+
+    command.editable_mode = True
+    command.run()
+    assert recorded == []
+
+    command.editable_mode = False
+    command.run()
+    assert recorded == [tmp_path]
