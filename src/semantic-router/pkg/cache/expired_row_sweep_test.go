@@ -43,6 +43,16 @@ func TestExpiredRowSweeperRepeatsUntilStopped(t *testing.T) {
 	assert.Equal(t, stopped, passes.Load())
 }
 
+func TestExpiredRowSweeperContinuesAfterPassError(t *testing.T) {
+	var passes atomic.Int32
+	sweeper := startExpiredRowSweeper(5*time.Millisecond, func(context.Context) error {
+		passes.Add(1)
+		return context.DeadlineExceeded
+	})
+	require.Eventually(t, func() bool { return passes.Load() >= 2 }, time.Second, time.Millisecond)
+	sweeper.stop()
+}
+
 func TestExpiredRowSweeperStopCancelsInFlightPass(t *testing.T) {
 	started := make(chan struct{})
 	passErr := make(chan error, 1)

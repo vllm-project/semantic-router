@@ -3,6 +3,8 @@ package cache
 import (
 	"context"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
@@ -40,7 +42,9 @@ func startExpiredRowSweeper(interval time.Duration, sweep func(context.Context) 
 				return
 			case <-ticker.C:
 				passCtx, cancelPass := context.WithTimeout(ctx, expiredRowSweepTimeout)
-				_ = sweep(passCtx)
+				if err := sweep(passCtx); err != nil {
+					logging.Warnf("expiredRowSweeper: pass failed or timed out: %v", err)
+				}
 				cancelPass()
 			}
 		}
