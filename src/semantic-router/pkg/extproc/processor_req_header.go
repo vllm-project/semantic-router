@@ -25,6 +25,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// and an entrypoint's client keys, so a restricted listener and a
 	// configuration with client keys do not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil && !r.clientKeysRequired())
+	clientTarget := path
 	// A path under a listener's API prefix is read as the API's own path.
 	if canonical := r.Config.APIRequestTarget(path); canonical != path {
 		ctx.Headers[":path"] = canonical
@@ -76,6 +77,8 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 		}
+		// No later reply sets a provider path for a skipped request.
+		forwardAPIPath(mutation, clientTarget, path)
 		response := newContinueRequestHeadersResponse(mutation)
 		if requestCarriesHeader(v, headers.VSRRouteModel) {
 			// A caller-supplied route key may have selected a provider route
@@ -109,7 +112,23 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
 	}
+	// The request-body reply sets the provider's path over this one. Setting
+	// it here too keeps the prefix from the upstream whichever reply follows.
+	forwardAPIPath(mutation, clientTarget, path)
 	return newContinueRequestHeadersResponse(mutation), nil
+}
+
+// forwardAPIPath makes a request-header reply forward the API's own path when
+// the client sent it under a listener's API prefix. The request-body reply
+// sets the provider's path, but a reply that sets none would leave the
+// gateway forwarding the prefix, which no provider serves.
+func forwardAPIPath(mutation *ext_proc.HeaderMutation, clientTarget, apiTarget string) {
+	if apiTarget == clientTarget {
+		return
+	}
+	mutation.SetHeaders = append(mutation.SetHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
+		Key: ":path", RawValue: []byte(apiTarget),
+	}})
 }
 
 func startRequestHeaderSpan(

@@ -168,6 +168,7 @@ class ServeSessionMixin:
         ensure_models_dir: bool = False,
         skip_processing: bool = False,
         looper: bool = False,
+        listener_apis: dict[str, object] | None = None,
         arguments: tuple[str, ...] = (),
     ):
         """Start one background serve session and clean it up automatically."""
@@ -179,6 +180,7 @@ class ServeSessionMixin:
             managed_storage=managed_storage,
             skip_processing=skip_processing,
             looper=looper,
+            listener_apis=listener_apis,
         )
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
