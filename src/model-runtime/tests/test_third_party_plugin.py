@@ -972,3 +972,92 @@ def test_stop_waits_for_a_load_in_flight_within_its_timeout(
     finally:
         release_load.set()
         runtime.stop()
+
+
+def test_runtime_stop_stops_model_when_load_finishes_after_shutdown(
+    example_plugin, keyword_package, monkeypatch
+):
+    from vllm_srun.runtime import ServedModel
+
+    load_completed = threading.Event()
+    release_loader = threading.Event()
+    stop_called = threading.Event()
+
+    original_load = ServedModel.load
+    original_stop = ServedModel.stop
+
+    def controlled_load(self):
+        # Run the real model loading and initialization.
+        original_load(self)
+
+        # The model is fully loaded, but _load_all() hasn't returned
+        # from served.load(), so self._loading still references it.
+        load_completed.set()
+
+        if not release_loader.wait(timeout=15):
+            raise TimeoutError("test did not release loader")
+
+    def observed_stop(self, timeout=10):
+        stop_called.set()
+        return original_stop(self, timeout)
+
+    monkeypatch.setattr(ServedModel, "load", controlled_load)
+    monkeypatch.setattr(ServedModel, "stop", observed_stop)
+
+    runtime = Runtime(
+        ServeConfig(
+            models=(
+                ModelConfig(
+                    model=str(keyword_package),
+                    name="keywords",
+                    device="cpu",
+                    engine="example_counts",
+                ),
+            ),
+        )
+    )
+
+    try:
+        runtime.start(background=True)
+
+        assert load_completed.wait(timeout=15), "model did not finish loading"
+
+        served = runtime.served[0]
+
+        assert served.model is not None, "model was not fully initialized"
+        assert served.scheduler is not None, "scheduler was not initialized"
+
+        # Loader is deliberately paused after successful load, while
+        # Runtime._loading still points to this model.
+        abandoned = runtime.stop(timeout=0.1)
+
+        assert abandoned == ["keywords: its load has not finished"]
+
+        # Runtime.stop() skipped the model because it considered it loading.
+        assert not stop_called.is_set(), "Runtime.stop() unexpectedly stopped the model"
+
+        # Now let _load_all() continue and exit.
+        release_loader.set()
+
+        assert runtime._thread is not None
+        runtime._thread.join(timeout=10)
+
+        assert not runtime._thread.is_alive(), "loader did not finish"
+
+        # The loader must release the model after shutdown.
+        assert stop_called.is_set(), (
+            "Model load completed successfully during shutdown, "
+            "but ServedModel.stop() was never called"
+        )
+
+        assert served.model is None, "model was not released after shutdown"
+        assert served.scheduler is None, "scheduler was not released after shutdown"
+
+    finally:
+        release_loader.set()
+
+        # Ensure the runtime is fully stopped after the test.
+        runtime.stop(timeout=10)
+
+        if runtime._thread is not None:
+            runtime._thread.join(timeout=10)
