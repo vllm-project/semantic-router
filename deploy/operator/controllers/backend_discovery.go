@@ -40,10 +40,10 @@ import (
 // clusterDNSDomain returns the DNS domain of the cluster the Operator runs
 // in. Kubernetes renders the search list in /etc/resolv.conf as
 // "<namespace>.svc.<cluster-domain>", so the suffix after the first ".svc."
-// of any search entry is the cluster domain. Falls back to "cluster.local"
+// of any search entry is the cluster domain (e.g. "name.ns.<domain>"). Falls back to "svc.cluster.local"
 // when the file is missing or contains no usable search entry.
 func clusterDNSDomain() string {
-	const fallback = "cluster.local"
+	const fallback = "svc.cluster.local"
 
 	data, err := os.ReadFile("/etc/resolv.conf")
 	if err != nil {
