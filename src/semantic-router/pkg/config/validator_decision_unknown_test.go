@@ -51,15 +51,64 @@ func TestParseYAMLBytesRejectsOnUnknownOnErrorConflict(t *testing.T) {
 	}
 }
 
-func TestUnguardedSystemOneConditions(t *testing.T) {
+func TestUnguardedConditions(t *testing.T) {
 	rules := RuleNode{Operator: "AND", Conditions: []RuleNode{
 		{Type: SignalTypeSystemOne, Name: "risk", Label: "RISKY"},
 		{Type: SignalTypeSystemOne, Name: "safe", Label: "SAFE", OnError: "match"},
 		{Operator: "OR", Conditions: []RuleNode{{Type: SignalTypeSystemOne, Name: "nested"}}},
 		{Type: SignalTypeKeyword, Name: "kw"},
 	}}
-	got := unguardedSystemOneConditions(&rules)
-	if len(got) != 2 || got[0] != "risk" || got[1] != "nested" {
+	if got := unguardedConditionNames(&RouterConfig{}, &rules); strings.Join(got, ",") != "risk,nested" {
 		t.Fatalf("unguarded = %v", got)
 	}
+}
+
+func TestUnguardedRemoteConditions(t *testing.T) {
+	rules := RuleNode{Operator: "OR", Conditions: []RuleNode{
+		{Type: SignalTypeDomain, Name: "math"},
+		{Type: SignalTypeComplexity, Name: "hard"},
+		{Type: SignalTypePII, Name: "pii"},
+		{Type: SignalTypeJailbreak, Name: "guard"},
+		{Type: SignalTypeSafety, Name: "unsafe"},
+		{Type: SignalTypeSafety, Name: "local"},
+		{Type: SignalTypeSafety, Name: "inline"},
+	}}
+	cfg := &RouterConfig{}
+	cfg.Categories = []Category{{Name: "math"}}
+	cfg.ComplexityRules = []ComplexityRule{{Name: "hard"}}
+	cfg.PIIRules = []PIIRule{{Name: "pii"}}
+	cfg.JailbreakRules = []JailbreakRule{{Name: "guard"}}
+	cfg.SafetyRules = []SafetyRule{{Name: "unsafe"}, {Name: "local", Deployment: "local"}, {Name: "inline", Deployment: "remote"}}
+	cfg.ModelDeployments = map[string]ModelDeployment{
+		"remote": {Provider: SystemOneProvider},
+		"local":  {Provider: ModelRuntimeProvider},
+	}
+	cfg.GlobalModelBindings = map[string]ModelBinding{
+		SignalTypeDomain:     {Deployment: "remote"},
+		SignalTypeComplexity: {Deployment: "remote"},
+		SignalTypePII:        {Deployment: "remote"},
+		SignalTypeJailbreak:  {Deployment: "remote"},
+		SignalTypeSafety:     {Deployment: "remote"},
+	}
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,hard,unsafe,inline" {
+		t.Fatalf("unguarded = %v", got)
+	}
+	cfg.GlobalModelBindings = map[string]ModelBinding{SignalTypeSafety: {Deployment: "local"}}
+	cfg.ModelBindings = map[string]ModelBinding{SignalTypeDomain: {Deployment: "remote"}}
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "math,inline" {
+		t.Fatalf("unguarded with a recipe binding = %v", got)
+	}
+	cfg.ModelBindings = nil
+	cfg.GlobalModelBindings = nil
+	if got := unguardedConditionNames(cfg, &rules); strings.Join(got, ",") != "inline" {
+		t.Fatalf("unguarded without remote bindings = %v", got)
+	}
+}
+
+func unguardedConditionNames(cfg *RouterConfig, rules *RuleNode) []string {
+	var names []string
+	for _, node := range unguardedConditions(cfg, rules) {
+		names = append(names, node.Name)
+	}
+	return names
 }
