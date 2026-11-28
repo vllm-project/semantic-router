@@ -159,6 +159,38 @@ def test_the_budget_stays_within_free_device_memory():
     assert [forward.tokens for forward in chosen.forwards] == [4096, 8192, 16_384]
 
 
+def run_with_samples(model, clock, reads):
+    """Calibrate with 16 GiB free and a probe that, per timed forward, reports the peak or nothing."""
+
+    def memory():
+        answers = iter(reads)
+        return 16 * GIB, lambda: model.peak if next(answers) else None
+
+    return calibration.calibrate(model, lambda work: work(), 32_768, memory, clock)
+
+
+@pytest.mark.parametrize("reads", [(True, False), (False, True)])
+def test_a_missing_memory_sample_keeps_the_peak_and_the_memory_cap(reads):
+    clock = Clock()
+    model = TimedModel(clock, overhead=0.02, per_token=2e-6, bytes_per_token=1 << 20)
+    chosen = run_with_samples(model, clock, reads)
+    assert [forward.peak_bytes for forward in chosen.forwards] == [
+        4 * GIB,
+        8 * GIB,
+        16 * GIB,
+    ]
+    assert chosen.memory_cap == chosen.max_num_batched_tokens == 8192
+
+
+def test_no_memory_samples_leave_no_peak_and_no_memory_cap():
+    clock = Clock()
+    model = TimedModel(clock, overhead=0.02, per_token=2e-6, bytes_per_token=1 << 20)
+    chosen = run_with_samples(model, clock, (False, False))
+    assert [forward.peak_bytes for forward in chosen.forwards] == [None] * 4
+    assert chosen.memory_cap is None
+    assert chosen.max_num_batched_tokens == 32_768
+
+
 def test_a_model_without_calibration_rows_keeps_its_class_limits():
     class Silent:
         def calibration_items(self, rows, row_tokens):
