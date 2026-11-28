@@ -197,6 +197,27 @@ def agreement_lines(
     return lines, disagreements
 
 
+def corrected_reference(
+    records: dict[int, dict], human_labels: dict[int, str]
+) -> dict[int, str]:
+    """Build the human-corrected reference label for each judged row.
+
+    Uses the human label where the spot-check collected one, and the judge's
+    strict label everywhere else. This is the reference adaamko asked for in
+    the #3198 thread: the spot-check corrects the rows it covers, and the
+    judge's own label stands in for the rest, since it already tested as the
+    more accurate of the two (see the human review numbers above).
+
+    Args:
+        records: Judgment records by row id.
+        human_labels: Human label per row id, from a filled-in review sheet.
+
+    Returns:
+        Reference label name per judged row id.
+    """
+    return {i: human_labels.get(i, records[i]["label"]) for i in records}
+
+
 def model_lines(
     preds: dict[str, list[str]],
     pairs,
@@ -341,6 +362,7 @@ def build_report_lines(
     preds: dict[str, list[str]],
     pairs=DEFAULT_COMPARE,
     human: HumanReview | None = None,
+    human_labels: dict[int, str] | None = None,
     rejudged: Records | None = None,
     show: int = 40,
 ) -> list[str]:
@@ -353,6 +375,9 @@ def build_report_lines(
         preds: Predicted label names per model name; may be empty.
         pairs: Model pairs for the McNemar tests.
         human: Result of a human spot-check, or None.
+        human_labels: The human spot-check's raw labels by row id, or None. Adds
+            a "corrected" view to the paired tests: the human label where one was
+            collected, the judge's strict label elsewhere.
         rejudged: Self-consistency records of that split, by row id, or None.
         show: How many disagreements to list.
 
@@ -368,6 +393,9 @@ def build_report_lines(
             "strict": [records[i]["label"] for i in ids],
             "inclusive": [inclusive_label(records[i]) for i in ids],
         }
+        if human_labels:
+            corrected = corrected_reference(records, human_labels)
+            views["corrected"] = [corrected[i] for i in ids]
         lines += model_lines(preds, pairs, views, ids)
     if human is not None:
         lines += human_lines(human)
