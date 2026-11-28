@@ -60,6 +60,29 @@ MAX_RULES_BYTES = 256 << 10
 # The line Copilot CLI ends a shell result with. Only this exact shape is set aside, so
 # output cannot pass its own text off as the footer to keep it from being read.
 FOOTER = re.compile(r"\n?<shellId: \d+ completed with exit code -?\d+>\s*\Z")
+# How far past MAX_CHARS the cut may grow to finish the line it lands in.
+LINE_LOOKAHEAD = 200
+
+
+def write_json_atomic(path: Path, data: dict[str, object]) -> None:
+    """Write `data` to `path` as one atomic replace, so two hook processes writing the
+    same file at once can never interleave into a corrupt one; whichever finishes last
+    simply wins. Raises the way `Path.write_text` does; callers already suppress OSError.
+    """
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data))
+    os.replace(tmp, path)
+
+
+def read_cut(text: str, limit: int) -> int:
+    """Where the decision model's read of `text` ends: `limit` itself, or on to the next
+    line break within LINE_LOOKAHEAD past it, so a value such as an email address that
+    would straddle `limit` is read whole rather than split between what the model checks
+    and what goes to Copilot CLI unchecked."""
+    if len(text) <= limit:
+        return limit
+    newline = text.find("\n", limit, limit + LINE_LOOKAHEAD)
+    return newline + 1 if newline != -1 else limit
 
 
 def fits(value: object, default: object) -> bool:
@@ -190,15 +213,14 @@ def listener_profile(opts: dict, home: Path, timeout: float = 1.5) -> tuple[dict
         pass
     rules = known or NO_RULES
     with contextlib.suppress(OSError):
-        kept.write_text(
-            json.dumps(
-                {
-                    "url": key,
-                    "at": time.time(),
-                    "profile": profile,
-                    "rules": {**slots, key: rules},
-                }
-            )
+        write_json_atomic(
+            kept,
+            {
+                "url": key,
+                "at": time.time(),
+                "profile": profile,
+                "rules": {**slots, key: rules},
+            },
         )
     return profile, rules
 
@@ -208,7 +230,7 @@ def read_listing_again(opts: dict) -> None:
     kept = Path(opts["home"]) / "vsr-listener.json"
     with contextlib.suppress(OSError, ValueError, TypeError):
         held = json.loads(kept.read_text())
-        kept.write_text(json.dumps({**held, "at": 0}))
+        write_json_atomic(kept, {**held, "at": 0})
 
 
 def hash32(text: str) -> str:
@@ -582,8 +604,9 @@ def output(event: dict, opts: dict) -> dict:
         found = []
     # The decision model reads the output as the rules read it, so neither hides part of a
     # value the other would have found whole; both finds are hidden at once below.
-    read, rest = text[:MAX_CHARS], text[MAX_CHARS:]
-    # Whether any question read the output: past MAX_CHARS it then went to Copilot CLI unchecked.
+    cut = read_cut(text, MAX_CHARS)
+    read, rest = text[:cut], text[cut:]
+    # Whether any question read the output: past the cut it then went to Copilot CLI unchecked.
     checked = False
     # Both questions go out at once, so the output waits for the slower one, not for the two.
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -641,7 +664,7 @@ def output(event: dict, opts: dict) -> dict:
             lines.append(f"{MARK} shield skipped · {failed(error)} · {source}")
     if rest and checked:
         lines.append(
-            f"{MARK} read the first {MAX_CHARS:,} of {len(text):,} characters; the rest went unchecked"
+            f"{MARK} read the first {cut:,} of {len(text):,} characters; the rest went unchecked"
         )
     reply: dict = {}
     if lines:

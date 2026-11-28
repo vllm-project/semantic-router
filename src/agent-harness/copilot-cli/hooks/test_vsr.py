@@ -271,6 +271,27 @@ class HooksTest(unittest.TestCase):
             self.assertEqual(run("post", event, self.env), {})
         self.assertEqual(self.runtime.seen, [])
 
+    def test_read_cut_extends_to_the_next_line_break_within_reach(self) -> None:
+        self.assertEqual(vsr.read_cut("short", 100), 100)
+        # a line break just past the limit pulls the cut forward to finish that line
+        past = "x" * 20 + "\n" + "y" * 20
+        self.assertEqual(vsr.read_cut(past, 10), 21)
+        # a line break too far past the limit is not worth growing the cut for
+        far = "x" * 20 + ("y" * 500) + "\n" + "z" * 20
+        self.assertEqual(vsr.read_cut(far, 10), 10)
+        # no line break at all after the limit falls back to the limit itself
+        self.assertEqual(vsr.read_cut("x" * 500, 10), 10)
+
+    def test_a_value_that_straddles_the_cut_is_read_whole_not_split(self) -> None:
+        # Built so a raw MAX_CHARS cut would land exactly at the start of the email,
+        # excluding it from the decision model's read entirely rather than redacting it.
+        prefix = "x" * (vsr.MAX_CHARS - 10)
+        line = "contact: mina.park@example.com"
+        text = f"{prefix}\n{line}\nmore after"
+        run("post", bash("cat notes.txt", text), self.env)
+        redact_request = next(s for s in self.runtime.seen if "pii" in s["questions"])
+        self.assertIn("mina.park@example.com", redact_request["state"])
+
     def test_spans_are_placed_as_the_claude_code_plugin_places_them(self):
         wrong = {**span("PERSON", "x Mina Park", "Mina Park"), "start": 0, "end": 9}
         for text, found, hidden in [
@@ -456,6 +477,34 @@ class RedirectSafetyTest(unittest.TestCase):
         source = Path(vsr.__file__).read_text()
         self.assertNotIn("urllib.request.urlopen(", source)
         self.assertEqual(source.count("NO_REDIRECTS.open("), 3)
+
+
+class AtomicWriteTest(unittest.TestCase):
+    def setUp(self):
+        self.home = Path(self.id().replace(".", "_"))
+        self.home.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, self.home, True)
+
+    def test_a_write_lands_whole_and_leaves_no_temp_file_behind(self) -> None:
+        target = self.home / "vsr-listener.json"
+        vsr.write_json_atomic(target, {"at": 1, "profile": {"guard": True}})
+        self.assertEqual(
+            json.loads(target.read_text()), {"at": 1, "profile": {"guard": True}}
+        )
+        vsr.write_json_atomic(target, {"at": 2, "profile": {}})
+        self.assertEqual(json.loads(target.read_text()), {"at": 2, "profile": {}})
+        self.assertEqual(list(self.home.iterdir()), [target])
+
+    def test_two_writers_never_leave_an_interleaved_file(self) -> None:
+        # Two processes writing vsr-listener.json at once each get their own temp name
+        # (keyed by pid), so one write's bytes can never land inside the other's.
+        target = self.home / "vsr-listener.json"
+        with mock.patch("os.getpid", return_value=111):
+            vsr.write_json_atomic(target, {"at": 1})
+        with mock.patch("os.getpid", return_value=222):
+            vsr.write_json_atomic(target, {"at": 2})
+        self.assertEqual(json.loads(target.read_text()), {"at": 2})
+        self.assertEqual(list(self.home.iterdir()), [target])
 
 
 PROD = {
