@@ -510,6 +510,10 @@ type RequestContext struct {
 	// ListenerModels, when set, are the only request models the listener the
 	// client request arrived on accepts.
 	ListenerModels routing.ListenerModels
+	// GatewayListener is the listener an Envoy gateway received the request
+	// on, from x-vsr-listener on the ext_proc stream; empty when it names
+	// none, and always empty for an in-process session.
+	GatewayListener string
 	// UnservedModelRoute, when set, is the model a request naming a model
 	// the listener does not accept or the Router does not serve is routed
 	// as, and RequestedModel the name such a request gave.

@@ -310,10 +310,8 @@ func (s nativeServing) Pin(_ context.Context, listener string) (gateway.Serving,
 }
 
 func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
-	for _, listener := range cfg.Listeners {
-		if listener.Name == name {
-			return listener.ClientKeys()
-		}
+	if listener, ok := cfg.ListenerByName(name); ok {
+		return listener.ClientKeys()
 	}
 	return nil
 }
@@ -323,18 +321,16 @@ func listenerAPIKeys(cfg *config.RouterConfig, name string) []string {
 // that names no apis serves the default APIs on every path, as before apis.
 func applyListenerAPIs(serving *gateway.Serving, cfg *config.RouterConfig, name string) {
 	serving.ListsLLM = true
-	for _, listener := range cfg.Listeners {
-		if listener.Name != name {
-			continue
-		}
-		serving.Models, _ = listener.LLMModels()
-		serving.ListsLLM = servesAnyLLM(listener)
-		serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
-		serving.APIPath = listener.APIPath
-		serving.Gate = listenerGate(listener)
-		serving.UnservedRoute = listenerUnservedRoute(listener)
+	listener, ok := cfg.ListenerByName(name)
+	if !ok {
 		return
 	}
+	serving.Models, _ = listener.LLMModels()
+	serving.ListsLLM = servesAnyLLM(listener)
+	serving.ListsSystemOne = listener.Serves(apiregistry.SystemOne)
+	serving.APIPath = listener.APIPath
+	serving.Gate = listener.PathGrant
+	serving.UnservedRoute = listenerUnservedRoute(listener)
 }
 
 func servesAnyLLM(listener config.Listener) bool {
@@ -344,34 +340,6 @@ func servesAnyLLM(listener config.Listener) bool {
 		}
 	}
 	return false
-}
-
-// listenerGate answers which models a listener accepts on a request path.
-// With apis, a path of an API it does not serve, or of no API, answers 404
-// with a detail naming the listener and the APIs it serves.
-func listenerGate(listener config.Listener) func(string) ([]string, string, bool) {
-	refuse := func(path string) ([]string, string, bool) {
-		return nil, fmt.Sprintf("listener %q does not serve %s; it serves %s", listener.Name, path,
-			strings.Join(listener.ServedAPIs(), ", ")), false
-	}
-	return func(path string) ([]string, string, bool) {
-		api, isAPI := apiregistry.ForPath(path)
-		if !isAPI {
-			if listener.APIs == nil {
-				return nil, "", true
-			}
-			return refuse(path)
-		}
-		entry, served := listener.API(api.Name)
-		if !served {
-			if listener.APIs == nil && api.Name == apiregistry.SystemOne {
-				// The System One API answers its own 404 there, as before.
-				return nil, "", true
-			}
-			return refuse(path)
-		}
-		return entry.Models, "", true
-	}
 }
 
 // listenerUnservedRoute is the model a request on a path is routed as when
@@ -394,17 +362,15 @@ func listenerUnservedRoute(listener config.Listener) func(string) string {
 // listenerIdentityTrust is the identity trust of the named listener in cfg,
 // which config validation has already checked.
 func listenerIdentityTrust(cfg *config.RouterConfig, name string) gateway.IdentityTrust {
-	for _, listener := range cfg.Listeners {
-		if listener.Name != name || listener.Identity == nil {
-			continue
-		}
-		peers, err := listener.Identity.PeerPrefixes()
-		if err != nil {
-			return gateway.IdentityTrust{}
-		}
-		return gateway.IdentityTrust{Headers: listener.Identity.TrustHeaders, Peers: peers}
+	listener, ok := cfg.ListenerByName(name)
+	if !ok || listener.Identity == nil {
+		return gateway.IdentityTrust{}
 	}
-	return gateway.IdentityTrust{}
+	peers, err := listener.Identity.PeerPrefixes()
+	if err != nil {
+		return gateway.IdentityTrust{}
+	}
+	return gateway.IdentityTrust{Headers: listener.Identity.TrustHeaders, Peers: peers}
 }
 
 // upstreamPart makes the upstream layer part of every configuration snapshot,
