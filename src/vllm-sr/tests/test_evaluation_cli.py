@@ -62,8 +62,9 @@ def test_catalog_and_clean_command_surface():
     assert result.exit_code == 0, result.output
     catalog = json.loads(result.output)
     assert catalog["version"] == "sr-bench-1.0"
-    assert len(catalog["benchmarks"]) == 9
+    assert len(catalog["benchmarks"]) == 10
     assert "tau3" in {b["id"] for b in catalog["benchmarks"]}
+    assert "agent-session-replay" in {b["id"] for b in catalog["benchmarks"]}
     assert "tau2" not in {b["id"] for b in catalog["benchmarks"]}
     assert set(benchmark.commands) == {
         "catalog",

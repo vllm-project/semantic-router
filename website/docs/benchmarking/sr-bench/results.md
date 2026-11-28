@@ -93,6 +93,18 @@ sr-bench requests the Router's `x-vsr-trace` to read its session policy phase:
 | `router` | The trace contained `session_phase`. An unsupported nonempty Router phase is stored as `unknown`. |
 | `request` | The trace had none, so sr-bench derived `tool_loop` or `user_turn` from the latest messages. |
 
+A replay benchmark that resends a recorded session also stores each turn's
+recorded label as `fixture_phase` on the subject call receipt; when present, it
+outranks the observed phase in `model_switches_by_phase`, so an
+`agent-session-replay` run buckets its switches under the fixture's `user_turn`,
+`tool_loop` and `follow_up` turns.
+
+The recorded replay continues after an output-limit response because later turns
+use recorded messages rather than the generated answer. Each call and turn keeps
+its completion status. A replay with any truncated output retains
+`quality_failure: output_limit` and an incorrect outcome. Call, cost and time
+budgets, cancellation, and transport failures still stop the replay.
+
 ### Provider cache reads
 
 Provider cache fields keep their presence separately from their numeric
