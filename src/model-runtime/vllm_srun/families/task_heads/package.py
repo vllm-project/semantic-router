@@ -105,10 +105,24 @@ def labels_of(config: dict[str, Any]) -> tuple[str, ...]:
     id2label = config.get("id2label")
     if not isinstance(id2label, dict) or not id2label:
         raise PackageError("config.json declares no labels")
-    try:
-        indexed = {int(key): str(value) for key, value in id2label.items()}
-    except ValueError as exc:
-        raise PackageError("config.json id2label keys must be integers") from exc
+    indexed: dict[int, str] = {}
+    for key, value in id2label.items():
+        if not isinstance(key, str):
+            raise PackageError("config.json id2label keys must be canonical integers")
+
+        try:
+            index = int(key)
+        except ValueError as exc:
+            raise PackageError("config.json id2label keys must be integers") from exc
+
+        if str(index) != key:
+            raise PackageError("config.json id2label keys must be canonical integers")
+
+        if index in indexed:
+            raise PackageError("config.json id2label contains duplicate indices")
+
+        indexed[index] = str(value)
+
     if sorted(indexed) != list(range(len(indexed))):
         raise PackageError("config.json id2label must cover 0..n-1")
     return tuple(indexed[index] for index in range(len(indexed)))
