@@ -49,6 +49,8 @@ const (
 	// (/v1/images/generations), used to sink responses hosted image_generation
 	// requests to diffusion backends.
 	APIFormatImages = string(apiregistry.Images)
+	// APIFormatVideos selects the OpenAI Videos job dialect (/v1/videos).
+	APIFormatVideos = string(apiregistry.Videos)
 	// APIFormatSpeech selects the OpenAI Speech API dialect
 	// (POST /v1/audio/speech) served by TTS backends such as vLLM-Omni.
 	APIFormatSpeech = string(apiregistry.Speech)

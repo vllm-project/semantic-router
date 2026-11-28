@@ -15,6 +15,7 @@ API_NAMES = (
     "responses",
     "messages",
     "images",
+    "videos",
     "speech",
     "systemone",
 )
@@ -25,6 +26,7 @@ DEFAULT_LISTENER_APIS = (
     "responses",
     "messages",
     "images",
+    "videos",
     "speech",
 )
 # Each API's schema IDs; the first is an upstream's default, except systemone's.
@@ -33,6 +35,7 @@ SCHEMAS = {
     "responses": ("openai/v1",),
     "messages": ("anthropic/2023-06-01",),
     "images": ("openai/v1",),
+    "videos": ("openai/v1",),
     "speech": ("openai/v1",),
     "systemone": ("vllm-sr/5.0", "vllm-sr/4.0", "systemone/0.2"),
 }
@@ -54,6 +57,7 @@ PATTERNS = {
     "responses": r"^(/v1/responses(/[^/]+(/input_items)?)?|/openai/responses|/openai/v1/responses)$",
     "messages": r"^/v1/messages(/count_tokens)?$",
     "images": r"^/v1/images/generations$",
+    "videos": r"^/v1/videos(/[^/]+(/content)?)?$",
     "speech": r"^/v1/audio/speech$",
     "systemone": r"^/v1/(systemone(/batch|/models)?|decisions)$",
 }

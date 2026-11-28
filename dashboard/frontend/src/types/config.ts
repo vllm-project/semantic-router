@@ -159,6 +159,7 @@ export type APIName =
   | 'responses'
   | 'messages'
   | 'images'
+  | 'videos'
   | 'speech'
   | 'systemone'
 export type APIAlias = 'openai' | 'anthropic'

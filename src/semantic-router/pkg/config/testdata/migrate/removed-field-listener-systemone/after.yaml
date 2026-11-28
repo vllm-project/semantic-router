@@ -9,6 +9,7 @@ listeners:
       responses: {}
       messages: {}
       images: {}
+      videos: {}
       speech: {}
       systemone:
         schema: vllm-sr/4.0

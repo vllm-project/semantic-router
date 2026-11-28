@@ -40,7 +40,7 @@ type CanonicalProviderModel struct {
 	Pricing         ModelPricing          `yaml:"pricing,omitempty"`
 	Reliability     ProviderReliability   `yaml:"reliability,omitempty"`
 	// APIFormat is the API the model's backends serve, by API name:
-	// chat_completions (the default), responses, messages, images, speech or
+	// chat_completions (the default), responses, messages, images, videos, speech or
 	// systemone. openai and anthropic are accepted as aliases of
 	// chat_completions and messages.
 	APIFormat string `yaml:"api_format,omitempty"`

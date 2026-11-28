@@ -48,6 +48,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	if second != nil {
 		semanticResponse, completionLatency = second, time.Since(ctx.StartTime)
 	}
+	if ctx.SourceFormat == llmprotocol.OpenAIVideosV1 {
+		if stampVideoResponse(ctx, semanticResponse) || ctx.videosCreate {
+			ctx.ResponseBodyNeedsRewrite = true
+		}
+	}
 	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	// Same-format Chat usually forwards upstream bytes. When codec translation

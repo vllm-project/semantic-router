@@ -938,6 +938,7 @@ def test_listener_apis_are_named_by_the_api_registry():
         "responses",
         "messages",
         "images",
+        "videos",
         "speech",
     )
     for models in ([], [""], [" padded "], ["one", "one"]):

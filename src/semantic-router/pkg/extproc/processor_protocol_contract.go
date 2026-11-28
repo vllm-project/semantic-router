@@ -450,6 +450,8 @@ func requestWireProtocol(format llmprotocol.WireFormat) string {
 		return "anthropic/messages@1"
 	case llmprotocol.OpenAIImagesV1:
 		return "openai/images@1"
+	case llmprotocol.OpenAIVideosV1:
+		return "openai/videos@1"
 	case llmprotocol.OpenAISpeechV1:
 		return "openai/audio-speech@1"
 	default:

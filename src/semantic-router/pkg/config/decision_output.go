@@ -108,6 +108,12 @@ func (o *DecisionOutput) GeneratesImages() bool {
 	return o.Includes(OutputKindImage) && o.EffectiveAction() == OutputActionGenerate
 }
 
+// GeneratesVideos reports whether the contract's answers are a generated
+// video, which the hosted video_generation operation produces.
+func (o *DecisionOutput) GeneratesVideos() bool {
+	return o.Includes(OutputKindVideo) && o.EffectiveAction() == OutputActionGenerate
+}
+
 // ImageOnly reports whether the contract's answers are a generated image and
 // nothing else.
 func (o *DecisionOutput) ImageOnly() bool {
@@ -140,9 +146,11 @@ func (o *DecisionOutput) requiredCapabilities() []string {
 		case OutputKindAudio:
 			required = append(required, "audio_output")
 		case OutputKindVideo:
-			required = append(required, "video_output")
 			if edit {
+				required = append(required, "video_output")
 				required = append(required, "video_input")
+			} else {
+				required = append(required, "video_generation")
 			}
 		}
 	}
@@ -160,7 +168,7 @@ func (o *DecisionOutput) missingCodec() string {
 			return "the image edit codec"
 		case kind == OutputKindAudio:
 			return "the audio output codec"
-		case kind == OutputKindVideo:
+		case kind == OutputKindVideo && edit:
 			return "the video codec"
 		}
 	}

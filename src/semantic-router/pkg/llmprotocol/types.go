@@ -28,6 +28,9 @@ const (
 	// to /v1/images/generations, and the generated image is decoded back into
 	// the protocol-neutral GeneratedImage output item.
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
+	// OpenAIVideosV1 is the OpenAI Videos job API: a create returns a job,
+	// status and content reads follow its id, and delete removes it.
+	OpenAIVideosV1 WireFormat = "openai.videos.v1"
 	// OpenAISpeechV1 is the OpenAI Speech API dialect (POST /v1/audio/speech)
 	// served by TTS backends such as vLLM-Omni. It is a sink dialect: the
 	// router reads the input text and forwards the other request fields, and
@@ -85,6 +88,9 @@ const (
 	// image supplied as model input, while this kind preserves the lifecycle of
 	// a model-hosted image generation tool.
 	ContentGeneratedImage ContentKind = "generated_image"
+	// ContentGeneratedVideo represents one hosted video job or finished
+	// artifact. It is distinct from ContentVideo, which is supplied media.
+	ContentGeneratedVideo ContentKind = "generated_video"
 	// ContentServerTool is a call or a result of a tool the provider runs
 	// itself, such as Anthropic's web search. Raw holds the block as the
 	// provider wrote it, which only the same wire format can carry.
@@ -116,6 +122,7 @@ type Content struct {
 	ToolCall       *ToolCall
 	ToolResult     *ToolResult
 	GeneratedImage *GeneratedImage
+	GeneratedVideo *GeneratedVideo
 	Signature      string
 	Reasoning      ReasoningScope
 	// ReasoningDetail is a typed continuity block, distinct from display text.
@@ -330,6 +337,7 @@ type Request struct {
 	Messages        []Message
 	Tools           []Tool
 	ImageGeneration *ImageGenerationOptions
+	VideoGeneration *VideoGenerationOptions
 	// SpeechGeneration is set for a Speech API request. Its presence requires
 	// CapabilitySpeechGeneration. The text to speak is the last user message.
 	SpeechGeneration  *SpeechGenerationOptions

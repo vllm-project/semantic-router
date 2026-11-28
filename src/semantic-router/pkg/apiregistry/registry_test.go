@@ -78,20 +78,22 @@ func TestTheVendorNamesAreAliases(t *testing.T) {
 	if Canonical("responses") != "responses" {
 		t.Fatal("a canonical name is its own canonical name")
 	}
-	if _, err := Resolve("realtime"); err == nil || !strings.Contains(err.Error(), "chat_completions, responses, messages, images, speech, systemone") {
+	if _, err := Resolve("realtime"); err == nil || !strings.Contains(err.Error(), "chat_completions, responses, messages, images, videos, speech, systemone") {
 		t.Fatalf("an unknown api: %v", err)
 	}
 }
 
 func TestPathsBelongToOneAPI(t *testing.T) {
 	for path, want := range map[string]Name{
-		"/v1/chat/completions":      ChatCompletions,
-		"/v1/responses/resp_1":      Responses,
-		"/v1/messages/count_tokens": Messages,
-		"/v1/images/generations":    Images,
-		"/v1/audio/speech":          Speech,
-		"/v1/systemone/batch":       SystemOne,
-		"/v1/decisions":             SystemOne,
+		"/v1/chat/completions":       ChatCompletions,
+		"/v1/responses/resp_1":       Responses,
+		"/v1/messages/count_tokens":  Messages,
+		"/v1/images/generations":     Images,
+		"/v1/videos":                 Videos,
+		"/v1/videos/video-route:job": Videos,
+		"/v1/audio/speech":           Speech,
+		"/v1/systemone/batch":        SystemOne,
+		"/v1/decisions":              SystemOne,
 	} {
 		api, ok := ForPath(path)
 		if !ok || api.Name != want {
@@ -109,6 +111,7 @@ func TestPathsIncludeTheAzureForms(t *testing.T) {
 		"/openai/v1/responses":                              Responses,
 		"/v1/messages/count_tokens":                         Messages,
 		"/v1/images/generations/":                           Images,
+		"/v1/videos/video-route:job":                        Videos,
 		"/v1/audio/speech/":                                 Speech,
 		"/v1/systemone/batch":                               SystemOne,
 		"/v1/decisions":                                     SystemOne,

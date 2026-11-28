@@ -157,6 +157,11 @@ type RequestContext struct {
 	// reply's Content-Encoding. The response-body phase decodes a gzip reply
 	// before any phase reads it.
 	UpstreamResponseGzip bool
+	// Video state is derived only from the public Videos path and its encoded id.
+	videosCreate     bool
+	videosRoute      string
+	videosProviderID string
+	videosContent    bool
 
 	// ToolResultFailed is a request-scoped fact: the live semantic request
 	// carries a structured tool-result failure (ToolResult.IsError=true).
