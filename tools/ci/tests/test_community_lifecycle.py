@@ -1206,6 +1206,94 @@ class PullRequestReconciliationTests(unittest.TestCase):
                 )
                 self.assertIn(("GET", f"repos/{self.REPO}/issues/5"), client.requests)
 
+    def reconcile_previously_admitted(self, issue_labels):
+        """Reconcile a merge-ready PR whose linked issue changed, then sweep again.
+
+        The first pass follows an earlier successful Community run; the second is
+        the hourly sweep over the labels the first pass wrote.
+        """
+
+        pull_request = self.pull_request(
+            state="open",
+            labels=labels("pr/merge-ready", "wg/mom-routing"),
+            user={"type": "User", "login": "contributor"},
+            signals={
+                "review_decision": "APPROVED",
+                "merge_state": "CLEAN",
+                "checks_state": "SUCCESS",
+            },
+        )
+        issue = {**self.accepted_issue(), "labels": labels(*issue_labels)}
+        client = FakePullRequestApi([pull_request], [issue])
+        rosters = {
+            "wg/mom-routing": ("old-lead",),
+            "wg/evaluation-quality": ("new-lead",),
+        }
+        with mock.patch.dict(community_reviewers.WORKGROUP_REVIEWERS, rosters):
+            community_lifecycle_github.sync_pull_request_event(
+                client,
+                {
+                    "repository": {"full_name": self.REPO},
+                    "workflow_run": {
+                        "event": "pull_request",
+                        "conclusion": "success",
+                        "pull_requests": [{"number": 7}],
+                    },
+                },
+            )
+            first = (set(client.added), set(client.removed), list(client.review_posts))
+            current = {item["name"] for item in pull_request["labels"]}
+            pull_request["labels"] = labels(
+                *sorted((current - client.removed) | client.added)
+            )
+            client.added.clear()
+            client.removed.clear()
+            client.review_posts.clear()
+            client.review_removals.clear()
+            client.comment_posts.clear()
+            client.comment_edits.clear()
+
+            community_lifecycle_github.sync_pull_request(client, self.REPO, 7)
+
+        self.assertEqual(client.added, set())
+        self.assertEqual(client.removed, set())
+        self.assertEqual(client.review_posts, [])
+        self.assertEqual(client.review_removals, [])
+        self.assertEqual(client.comment_posts, [])
+        self.assertEqual(client.comment_edits, [])
+        return first, {item["name"] for item in pull_request["labels"]}
+
+    def test_reconciliation_blocks_on_current_admission_not_older_success(
+        self,
+    ) -> None:
+        for name, issue_labels in (
+            ("unaccepted", ("needs-acceptance", "wg/mom-routing")),
+            ("missing owner", ("accepted",)),
+            (
+                "ambiguous owner",
+                ("accepted", "wg/mom-routing", "wg/evaluation-quality"),
+            ),
+        ):
+            with self.subTest(name):
+                (added, removed, posts), final = self.reconcile_previously_admitted(
+                    issue_labels
+                )
+
+                self.assertEqual(added, {"pr/blocked"})
+                self.assertEqual(removed, {"pr/merge-ready", "wg/mom-routing"})
+                self.assertEqual(posts, [])
+                self.assertEqual(final, {"pr/blocked"})
+
+    def test_reconciliation_moves_ownership_to_the_current_owner(self) -> None:
+        (added, removed, posts), final = self.reconcile_previously_admitted(
+            ("accepted", "wg/evaluation-quality")
+        )
+
+        self.assertEqual(added, {"wg/evaluation-quality"})
+        self.assertEqual(removed, {"wg/mom-routing"})
+        self.assertEqual(posts, [(7, "new-lead")])
+        self.assertEqual(final, {"pr/merge-ready", "wg/evaluation-quality"})
+
     def test_release_blocker_label_follows_the_linked_issue(self) -> None:
         blocker = community_lifecycle_github.RELEASE_BLOCKER
         signals = {
