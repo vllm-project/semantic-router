@@ -86,6 +86,18 @@ func (c *RouterConfig) LayerPlugins() error {
 	return nil
 }
 
+// effectiveDecisionPlugins are the plugins a decision runs: its recipe's
+// defaults layered with the ones it declares. A native decision keeps only its
+// own. The loader and the validation that reads a decision's plugins both read
+// them here, so neither sees a plugin the other cannot.
+func effectiveDecisionPlugins(defaults []DecisionPlugin, decision Decision) ([]DecisionPlugin, error) {
+	declared := decision.DeclaredPlugins()
+	if decision.Algorithm.IsNative() {
+		return declared, nil
+	}
+	return layerPlugins(defaults, declared)
+}
+
 // layerPlugins returns base with each plugin of over merged into the base
 // plugin of the same type, or appended after them.
 func layerPlugins(base, over []DecisionPlugin) ([]DecisionPlugin, error) {

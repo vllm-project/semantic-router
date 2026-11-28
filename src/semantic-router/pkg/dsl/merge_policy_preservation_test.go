@@ -10,6 +10,8 @@ import (
 func TestDSLMergePreservesDecisionFieldsTheDSLCannotExpress(t *testing.T) {
 	base := []byte(`version: v0.5
 providers:
+  defaults:
+    model: model-a
   models:
     - name: model-a
       backend_refs: [{name: fake-a, endpoint: 127.0.0.1:8000, protocol: http}]
