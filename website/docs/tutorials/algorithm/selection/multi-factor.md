@@ -221,6 +221,53 @@ candidate that served the session's earlier turns:
   reuse, and never outweighs a clear quality, cost or SLO difference.
 - **Lexicographic order holds.** The bonus applies only within the final band.
 
+## Candidate estimates (observe only)
+
+`estimates` asks the decision model, for each candidate within the SLO
+ceilings, how likely it is to answer the request and how long its answer will
+be. It is the first step of
+[CONCUR strategy routing](../../../proposals/concur-strategy-routing). In
+`observe` mode, the only mode, the estimates are recorded and the selection,
+its scores and its objective stages are unchanged.
+
+```yaml
+multi_factor:
+  estimates:
+    mode: observe
+    # deployment: estimator   # defaults to the decision model
+    # timeout_ms: 1000
+```
+
+The model answers two zero-shot presets about each candidate:
+
+| Preset | Type | Recorded as |
+| --- | --- | --- |
+| `candidate_success` | Yes/no | `success_probability`, the probability of yes |
+| `output_length` | Choice of four bands | `expected_output_tokens` |
+
+- **Exact candidates.** Each candidate is its own state, described by its
+  model, description, adapter and reasoning setting, so two reasoning efforts
+  of one model are estimated separately. All states go in one call.
+- **Expected output tokens.** The bands stand for 128, 640, 2,560 and 8,192
+  tokens. Each is capped at the candidate's output capacity (the request's
+  output budget, the provider-rendered budget or the model's
+  `max_output_tokens`, whichever is lowest), then weighted by its probability.
+- **Estimated cost.** The request's input tokens and the expected output tokens
+  at the model's configured rates. A model without rates has no estimated cost.
+- **Not calibrated.** `success_probability` is the model's own answer, and
+  `calibrated` stays `false`.
+
+`timeout_ms` bounds the whole call; the estimates are asked before the
+objective runs, so they add up to that much latency to the request. A
+candidate whose answer is late is recorded as `deadline_exceeded`, and one the
+model could not answer as `unavailable` with its reason. Neither fails the
+request.
+
+The estimates are saved under `route_diagnostics.selection_trace.estimates`
+and returned by Preview, beside the stages of a lexicographic objective. A
+weighted objective records a trace that holds only the estimates. The
+deployment that answers them must answer yes/no and choice questions.
+
 ## Parameters
 
 | Parameter | Default | Meaning |
@@ -236,6 +283,9 @@ candidate that served the session's earlier turns:
 | `latency_percentile` | `95` | Observed latency percentile, from 1 to 100 |
 | `latency_metric` | TPOT, then TTFT | Compare `ttft` or `tpot` consistently across candidates |
 | `on_no_candidates` | `cheapest` | `cheapest`, `first`, or `fail` |
+| `estimates.mode` | Off | `observe`: record candidate estimates without changing the selection |
+| `estimates.deployment` | Decision model | Deployment that answers the estimates |
+| `estimates.timeout_ms` | `1000`, or a `systemone` deployment's own | Bound on the estimate call, up to `60000` |
 
 Latency and load observations are local to each Router process. Replicas may
 therefore make different choices. Use shared telemetry or an infrastructure

@@ -1,5 +1,10 @@
 package config
 
+import (
+	"strings"
+	"time"
+)
+
 // ModelSelectionConfig turns on the decisions' selection algorithms; each
 // decision's algorithm block configures its own.
 type ModelSelectionConfig struct {
@@ -72,6 +77,9 @@ type MultiFactorSelectionConfig struct {
 	Weights   *MultiFactorWeightsConfig   `yaml:"weights,omitempty"`
 	SLO       *MultiFactorSLOConfig       `yaml:"slo,omitempty"`
 	Quality   *QualityEvidenceConfig      `yaml:"quality,omitempty"`
+	// Estimates asks, per request, how likely each candidate is to answer
+	// correctly and how long its answer will be. Omitted, nothing is asked.
+	Estimates *MultiFactorEstimatesConfig `yaml:"estimates,omitempty"`
 
 	// ExpectedOutputTokens is a cost forecast, not a generation limit.
 	ExpectedOutputTokens *int `yaml:"expected_output_tokens,omitempty" jsonschema:"minimum=1"`
@@ -111,6 +119,37 @@ const (
 	MultiFactorFactorCost    = "cost"
 	MultiFactorFactorLoad    = "load"
 )
+
+// MultiFactorEstimatesModeObserve records the candidate estimates in Router
+// Replay's selection_trace and leaves the selection unchanged.
+const MultiFactorEstimatesModeObserve = "observe"
+
+// MultiFactorEstimatesConfig turns on per-request candidate estimates: one
+// System One call asks the candidate_success and output_length presets about
+// each candidate within the SLO ceilings, one state per candidate, so a
+// candidate's estimate never depends on the others. Without a Deployment the
+// decision model answers. Observe is the only mode: the estimates are
+// recorded, and a missing or late answer marks that candidate's estimate
+// unavailable without failing the request.
+type MultiFactorEstimatesConfig struct {
+	Mode       string `yaml:"mode" jsonschema:"required,enum=observe"`
+	Deployment string `yaml:"deployment,omitempty"`
+	TimeoutMs  int    `yaml:"timeout_ms,omitempty"`
+}
+
+// EffectiveTimeout is the estimate call's deadline.
+func (c MultiFactorEstimatesConfig) EffectiveTimeout() time.Duration {
+	return systemOneTimeout(c.TimeoutMs)
+}
+
+// MultiFactorEstimates returns the candidate estimates a multi_factor
+// algorithm turns on, nil when it turns none on.
+func (a *AlgorithmConfig) MultiFactorEstimates() *MultiFactorEstimatesConfig {
+	if a == nil || a.MultiFactor == nil || !strings.EqualFold(strings.TrimSpace(a.Type), DecisionAlgorithmMultiFactor) {
+		return nil
+	}
+	return a.MultiFactor.Estimates
+}
 
 // MultiFactorObjectiveConfig chooses how factor utilities are compared. The
 // weighted strategy uses Weights. Lexicographic compares priorities in order,

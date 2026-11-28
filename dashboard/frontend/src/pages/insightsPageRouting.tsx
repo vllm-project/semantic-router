@@ -117,18 +117,17 @@ export function buildRoutingExplanationSections(record: InsightsRecord): ViewSec
   const sections: ViewSection[] = []
   const diagnostics = record.route_diagnostics
   if (diagnostics?.selection_trace) {
+    const trace = diagnostics.selection_trace
     sections.push({
       title: 'Selection Stages',
       fields: [
         {
-          label: 'Recorded objective filtering',
+          label:
+            trace.stages === undefined && trace.final_survivors === undefined
+              ? 'Recorded candidate estimates'
+              : 'Recorded objective filtering',
           fullWidth: true,
-          value: (
-            <InsightsSelectionTrace
-              trace={diagnostics.selection_trace}
-              selectedModel={record.selected_model}
-            />
-          ),
+          value: <InsightsSelectionTrace trace={trace} selectedModel={record.selected_model} />,
         },
       ],
     })

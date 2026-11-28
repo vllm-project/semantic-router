@@ -160,6 +160,15 @@ var catalog = []Preset{
 		ID: AnswerCheck, Type: Noul, Stage: StageResponse, Full: true, Input: Input{Answer: true},
 		Instructions: "Does the answer correctly and completely answer the request?",
 	},
+	{
+		ID: CandidateSuccess, Type: Noul, Stage: StageRequest, Input: Input{Candidate: true},
+		Instructions: "Will the candidate model, as described, answer this request correctly and completely?",
+	},
+	{
+		ID: OutputLength, Type: Choice, Stage: StageRequest, Input: Input{Candidate: true},
+		Instructions: "How many tokens will the candidate model, as described, write to answer this request, counting any reasoning it writes before the answer?",
+		Options:      outputLengthOptions(),
+	},
 }
 
 func jailbreak(stage string, input Input) Preset {

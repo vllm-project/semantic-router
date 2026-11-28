@@ -46,11 +46,22 @@ func validateSystemOneContracts(cfg *RouterConfig) (err error) {
 }
 
 // validateDecisionSystemOneQuestions checks the deployment that answers a
-// decision's own System One question: the systemone selector's choice, or a
-// Chat escalation's answer_check (yes/no) or refusal (choice).
+// decision's own System One question: the systemone selector's choice, a
+// Chat escalation's answer_check (yes/no) or refusal (choice), or
+// multi_factor's candidate estimates (yes/no and choice).
 func validateDecisionSystemOneQuestions(cfg *RouterConfig, decision Decision) error {
 	algorithm := decision.Algorithm
 	switch {
+	case algorithm.MultiFactorEstimates() != nil:
+		estimates := algorithm.MultiFactorEstimates()
+		if err := validateQuestionDeployment(cfg, estimates.Deployment, "candidate estimate"); err != nil {
+			return fmt.Errorf("decision '%s', algorithm.multi_factor.estimates: %w", decision.Name, err)
+		}
+		for _, questionType := range []string{SystemOneQuestionNoul, SystemOneQuestionChoice} {
+			if err := validateDeclaredQuestionType(cfg, cfg.MultiFactorEstimatesDeployment(*estimates), questionType); err != nil {
+				return fmt.Errorf("decision '%s', algorithm.multi_factor.estimates: %w", decision.Name, err)
+			}
+		}
 	case algorithm != nil && strings.EqualFold(strings.TrimSpace(algorithm.Type), DecisionAlgorithmSystemOne) && algorithm.SystemOne != nil:
 		if err := validateQuestionDeployment(cfg, algorithm.SystemOne.Deployment, "selector"); err != nil {
 			return fmt.Errorf("decision '%s', algorithm.systemone: %w", decision.Name, err)

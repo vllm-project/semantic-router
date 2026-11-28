@@ -191,9 +191,20 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	if m.ExpectedOutputTokens != nil {
 		fields["expected_output_tokens"] = IntValue{V: *m.ExpectedOutputTokens}
 	}
+	if m.Estimates != nil {
+		fields["estimates"] = multiFactorEstimatesValue(m.Estimates)
+	}
 	setStringValue(fields, "latency_metric", m.LatencyMetric)
 	setIntValue(fields, "latency_percentile", m.LatencyPercentile)
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
+}
+
+func multiFactorEstimatesValue(estimates *config.MultiFactorEstimatesConfig) ObjectValue {
+	fields := map[string]Value{}
+	setStringValue(fields, "mode", estimates.Mode)
+	setStringValue(fields, "deployment", estimates.Deployment)
+	setIntValue(fields, "timeout_ms", estimates.TimeoutMs)
+	return ObjectValue{Fields: fields}
 }
 
 func qualityEvidenceValue(quality *config.QualityEvidenceConfig) ObjectValue {

@@ -141,6 +141,9 @@ func DeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
 				}
 				mark(deployment)
 			}
+			if estimates := decision.Algorithm.MultiFactorEstimates(); estimates != nil {
+				mark(estimates.Deployment)
+			}
 			for _, judge := range decision.MatchJudges() {
 				mark(judge.Deployment)
 			}

@@ -673,6 +673,9 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 	default:
 		return fmt.Errorf("%s.on_no_candidates must be %q, %q, or %q", path, "cheapest", "first", "fail")
 	}
+	if err := validateMultiFactorEstimates(cfg.Estimates, path+".estimates"); err != nil {
+		return err
+	}
 	if cfg.Quality == nil {
 		return nil
 	}
@@ -697,6 +700,29 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 	default:
 		return fmt.Errorf("%s.quality: on_missing must be %q or %q", path, QualityEvidenceOnMissingExclude, QualityEvidenceOnMissingDisable)
 	}
+}
+
+// validateMultiFactorEstimates checks the estimate setting on its own; the
+// deployment it names is checked with the configuration's deployments
+// (validateDecisionSystemOneQuestions).
+func validateMultiFactorEstimates(estimates *MultiFactorEstimatesConfig, path string) error {
+	if estimates == nil {
+		return nil
+	}
+	switch estimates.Mode {
+	case MultiFactorEstimatesModeObserve:
+	case "":
+		return fmt.Errorf("%s.mode is required; %q is the only mode", path, MultiFactorEstimatesModeObserve)
+	default:
+		return fmt.Errorf("%s.mode must be %q: estimates are only recorded, they do not change the selection yet", path, MultiFactorEstimatesModeObserve)
+	}
+	if strings.TrimSpace(estimates.Deployment) != estimates.Deployment {
+		return fmt.Errorf("%s: deployment must name a model_runtime or systemone deployment; omit it to ask the decision model", path)
+	}
+	if estimates.TimeoutMs < 0 || estimates.TimeoutMs > MaxSystemOneTimeoutMs {
+		return fmt.Errorf("%s: timeout_ms must be within [1, %d] when set", path, MaxSystemOneTimeoutMs)
+	}
+	return nil
 }
 
 func validateMultiFactorObjective(cfg *MultiFactorSelectionConfig, path string) error {

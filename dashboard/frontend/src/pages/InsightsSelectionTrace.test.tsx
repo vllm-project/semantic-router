@@ -205,3 +205,85 @@ describe('recorded selection stages', () => {
     expect(html).not.toContain('selection_trace')
   })
 })
+
+describe('recorded candidate estimates', () => {
+  const direct = candidate(alpha.Model, { UseReasoning: false })
+  const high = candidate(alpha.Model, { UseReasoning: true, ReasoningEffort: 'high' })
+  const estimates: SelectionTrace['estimates'] = {
+    mode: 'observe',
+    candidates: [
+      {
+        candidate: direct,
+        status: 'available',
+        success_probability: 0.4,
+        calibrated: false,
+        expected_output_tokens: 128,
+        estimated_cost: 0.001256,
+        currency: 'USD',
+        source: 'systemone',
+        deployment: 'primary',
+      },
+      {
+        candidate: high,
+        status: 'available',
+        success_probability: 0.86,
+        calibrated: false,
+        expected_output_tokens: 1600,
+        source: 'systemone',
+        deployment: 'primary',
+      },
+      {
+        candidate: beta,
+        status: 'deadline_exceeded',
+        reason: 'deadline_exceeded',
+        calibrated: false,
+        source: 'systemone',
+        deployment: 'primary',
+      },
+    ],
+  }
+
+  it('shows each exact candidate estimate without the objective of a weighted selection', () => {
+    const html = renderTrace({ estimates }, alpha.Model)
+    expect(html).toContain('Candidate estimates')
+    expect(html).toContain('Observe only')
+    expect(html).toContain('did not change the selection')
+    expect(html).toContain('Success probabilities are not calibrated.')
+    expect(html).toContain('Estimated by primary')
+    expect(html).toContain('Reasoning off')
+    expect(html).toContain('Reasoning on · Effort: high')
+    expect(html).toContain('<td>0.4</td><td>128</td><td>$0.001256</td><td>Estimated</td>')
+    expect(html).toContain('<td>0.86</td><td>1,600</td><td>Not priced</td><td>Estimated</td>')
+    expect(html).toContain(
+      '<td>Unknown</td><td>Unknown</td><td>Unknown</td><td>Deadline exceeded · deadline_exceeded</td>',
+    )
+    expect(html).not.toContain('Candidates retained by the objective')
+    expect(html).not.toContain('No objective stages were recorded')
+    expect(html).not.toContain('These priority stages')
+  })
+
+  it('shows estimates beside the stages of a lexicographic objective', () => {
+    const html = renderTrace(
+      { stages: [latencyStage(2)], final_survivors: [alpha], estimates },
+      alpha.Model,
+    )
+    expect(html).toContain('Candidates retained by the objective')
+    expect(html).toContain('Inspect latency candidates')
+    expect(html).toContain('Candidate estimates')
+  })
+
+  it('labels an estimates-only record section by what it records', () => {
+    const record: InsightsRecord = {
+      id: 'estimates-record',
+      timestamp: '2026-11-21T00:00:00Z',
+      turn_index: 0,
+      decision_tier: 0,
+      decision_priority: 0,
+      signals: {},
+      selected_model: alpha.Model,
+      route_diagnostics: { selection_trace: { estimates } },
+    }
+    const [section] = buildRoutingExplanationSections(record)
+    expect(section.fields[0].label).toBe('Recorded candidate estimates')
+  })
+})
