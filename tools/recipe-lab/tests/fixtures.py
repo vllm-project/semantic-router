@@ -78,6 +78,56 @@ VALID_SPLITS_SPEC: dict = {
     },
 }
 
+# M5: the multi-workload form, shaped like the V3 cold-start acceptance
+# contract - tune workloads (MMLU-Pro three-way, office mcq) plus transfer
+# workloads (model_eval driven, final verify only).
+VALID_WORKLOADS_SPEC: dict = {
+    **{k: v for k, v in VALID_SPLITS_SPEC.items() if k != "workload"},
+    "workloads": [
+        {
+            "name": "mmlu-pro",
+            "kind": "mcq",
+            "weight": 2.0,
+            "profile": "standard",
+            "split_rule": "group by source_id; seed 42; 40/30/30",
+            "splits": {
+                "calib": {
+                    "manifest": "calib.jsonl",
+                    "content_hash": "sha256:" + "1" * 64,
+                },
+                "dev": {"manifest": "dev.jsonl", "content_hash": "sha256:" + "2" * 64},
+                "frozen_test": {
+                    "manifest": "frozen_test.jsonl",
+                    "content_hash": "sha256:" + "3" * 64,
+                },
+            },
+        },
+        {
+            "name": "office",
+            "kind": "mcq",
+            "driver": "model_eval",
+            "splits": {
+                "dev": {
+                    "manifest": "office.jsonl",
+                    "content_hash": "sha256:" + "4" * 64,
+                }
+            },
+        },
+        {
+            "name": "gpqa-transfer",
+            "kind": "mcq",
+            "driver": "model_eval",
+            "role": "transfer",
+            "splits": {
+                "eval": {
+                    "manifest": "gpqa.jsonl",
+                    "content_hash": "sha256:" + "5" * 64,
+                }
+            },
+        },
+    ],
+}
+
 
 def make_case(
     case_id: str, truth: str, matched_decision: str, routed: str, answer_ok, family=None
