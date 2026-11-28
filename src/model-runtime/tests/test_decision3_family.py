@@ -35,11 +35,16 @@ CPU_TORCH_PINS = {
     "tools/docker/Dockerfile.extproc": r"ARG TORCH_CPU=torch==(\S+)",
     "tools/make/model-runtime.mk": r"MODEL_RUNTIME_TORCH \?= torch==(\S+)",
 }
-# One FP32 reference for every CPU (--dtype auto), and BF16 ones per CPU class (--dtype bfloat16).
+# One FP32 reference for every CPU, and BF16 ones per CPU class: --dtype auto
+# holds BF16 on a class with its own (AMD AVX-512 BF16), --dtype bfloat16 anywhere;
+# with zentorch's linear on that class, against the key naming it
+# (docs/records/cpu-zentorch-d3-bf16.md).
+ZENTORCH_BF16 = "cpu:x86_64:avx512:bf16_native:amd:zentorch@bfloat16"
 CPU_REFERENCES = {
     "cpu",
     "cpu@bfloat16",
-    "cpu:x86_64:avx512:bf16_native@bfloat16",
+    "cpu:x86_64:avx512:bf16_native:amd@bfloat16",
+    ZENTORCH_BF16,
     "cpu:x86_64:avx2:bf16_emulated@bfloat16",
 }
 
@@ -720,6 +725,17 @@ def test_every_model_records_goldens_and_kernel_choices(model):
             "image_colour",
             "image_photo",
         }
+    # --dtype auto holds BF16 on AMD AVX-512 BF16 CPUs, which have their own
+    # BF16 references; AVX2 ones have them too but emulate BF16, so stay FP32.
+    from vllm_srun.registry import builtin
+    from vllm_srun.supervision.readiness import recorded_at
+
+    goldens = builtin.golden(model.model_sha256, "decisions", {})
+    assert recorded_at(goldens, "bfloat16") == {
+        "cpu:x86_64:avx512:bf16_native:amd",
+        "cpu:x86_64:avx512:bf16_native:amd:zentorch",
+        "cpu:x86_64:avx2:bf16_emulated",
+    }
     assert set(model.kernel_choices) == devices
     for device in devices:
         choices = model.kernel_choices[device]
@@ -754,6 +770,9 @@ def test_cpu_references_are_recorded_with_the_pinned_pytorch():
             device_class = key.split("@")[0].split(":")[0]
             if device_class == "cpu" and version.split("+")[0] != pinned:
                 stale.append(f"{model.repo_id} {key}: {version}")
+        # A key naming a kernel library also records the library's version.
+        kernels = recorded[model.repo_id].get("kernels", {})
+        assert kernels.get(ZENTORCH_BF16, {}).get("zentorch"), model.repo_id
     assert not stale, f"CPU references not recorded with PyTorch {pinned}: {stale}"
 
 

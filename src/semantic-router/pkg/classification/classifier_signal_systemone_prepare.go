@@ -50,73 +50,15 @@ func (c *Classifier) prepareSystemOneSignals() error {
 	services := c.models != nil && c.models.runtime != nil && c.models.runtime.Services() != nil
 	cards := make(map[string]modelservice.ModelCard)
 	for _, asked := range c.preparedSystemOneRules() {
-		rule := asked.rule
-		name, deployment := c.systemOneRuleDeployment(rule)
-		path := c.Config.ScopePath("signals.systemone[" + rule.Name + "]")
-		definition := modelservice.TaskDefinition{ID: config.SignalTypeSystemOne, Stage: rule.EffectiveStage()}
-		check := func(card modelservice.ModelCard, questionTypes []string) error {
-			return config.CheckSystemOneAnswerer(path, name, rule, questionTypes, card.ReadModalities())
+		primary := c.Config.SystemOneRuleDeployment(asked.rule)
+		deployments := []string{primary}
+		if asked.signalType == config.SignalTypeSystemOne {
+			deployments = c.Config.DecisionDeploymentChain(primary)
 		}
-		if asked.preset != "" {
-			path = c.Config.ApplicationRulePath(asked.signalType, rule.Name)
-			definition = modelservice.TaskDefinition{ID: modelservice.PresetTask(asked.preset), Stage: rule.EffectiveStage(), Preset: asked.preset}
-			application := config.ApplicationRule{Type: asked.signalType, Preset: asked.preset, Rule: rule}
-			check = func(card modelservice.ModelCard, questionTypes []string) error {
-				return config.CheckApplicationAnswerer(path, c.Config.ScopePath(""), name, application, questionTypes, card.Presets, card.ReadModalities())
-			}
-		}
-		if asked.path != "" {
-			path = asked.path
-		}
-		question := askedQuestion(asked)
-		if deployment.IsSystemOne() {
-			card := modelservice.DeploymentCard(deployment)
-			if remote := c.systemOne(); remote != nil {
-				var err error
-				if card, err = remote.PrepareCard(context.Background(), name); err != nil {
-					return fmt.Errorf("%s: %w", path, err)
-				}
-			}
-			var questionTypes []string
-			if len(card.QuestionTypes) > 0 {
-				questionTypes = card.AnsweredTypes()
-			}
-			if err := check(card, questionTypes); err != nil {
+		for _, deployment := range deployments {
+			if err := c.prepareSystemOneQuestion(asked, deployment, services, cards); err != nil {
 				return err
 			}
-			if questionTypes == nil {
-				continue
-			}
-			if _, err := modelservice.CompileTask(definition, question, card); err != nil {
-				return fmt.Errorf("%s: systemone deployment %q: %w", path, name, err)
-			}
-			continue
-		}
-		if !services {
-			continue
-		}
-		card, checked := cards[name]
-		if !checked {
-			if deployment.Managed() {
-				var err error
-				card, err = c.models.runtime.DeploymentCard(context.Background(), name, deployment)
-				if err != nil {
-					return fmt.Errorf("%s: %w", path, err)
-				}
-			} else if observed, ready := c.models.runtime.CurrentDeploymentCard(name); ready {
-				card = observed
-			} else {
-				// Its watcher owns discovery. Requests remain unknown until a
-				// ready card can compile this same question.
-				continue
-			}
-			cards[name] = card
-		}
-		if err := check(card, card.AnsweredTypes()); err != nil {
-			return err
-		}
-		if _, err := modelservice.CompileTask(definition, question, card); err != nil {
-			return fmt.Errorf("%s: deployment %q: %w", path, name, err)
 		}
 	}
 	if services {
@@ -125,14 +67,72 @@ func (c *Classifier) prepareSystemOneSignals() error {
 	return nil
 }
 
-// systemOneRuleDeployment returns the deployment a rule asks and its
-// definition: its own, or the decision model's shared deployment.
-func (c *Classifier) systemOneRuleDeployment(rule config.SystemOneRule) (string, config.ModelDeployment) {
-	if rule.Deployment != "" {
-		return rule.Deployment, c.Config.ModelDeployments[rule.Deployment]
+func (c *Classifier) prepareSystemOneQuestion(asked askedRule, name string, services bool, cards map[string]modelservice.ModelCard) error {
+	rule := asked.rule
+	path := c.Config.ScopePath("signals.systemone[" + rule.Name + "]")
+	definition := modelservice.TaskDefinition{ID: config.SignalTypeSystemOne, Stage: rule.EffectiveStage()}
+	if asked.preset != "" {
+		path = c.Config.ApplicationRulePath(asked.signalType, rule.Name)
+		definition = modelservice.TaskDefinition{ID: modelservice.PresetTask(asked.preset), Stage: rule.EffectiveStage(), Preset: asked.preset}
 	}
-	name, deployment, _, _ := c.Config.DecisionModelDeployment()
-	return name, deployment
+	if asked.path != "" {
+		path = asked.path
+	}
+	deployment := c.Config.ModelDeployments[name]
+	card, known, err := c.prepareSystemOneCard(name, deployment, services, cards)
+	if err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	if !known {
+		return nil
+	}
+	questionTypes := card.AnsweredTypes()
+	if deployment.IsSystemOne() && len(card.QuestionTypes) == 0 {
+		questionTypes = nil
+	}
+	if asked.preset == "" {
+		err = config.CheckSystemOneAnswerer(path, name, rule, questionTypes, card.ReadModalities())
+	} else {
+		application := config.ApplicationRule{Type: asked.signalType, Preset: asked.preset, Rule: rule}
+		err = config.CheckApplicationAnswerer(path, c.Config.ScopePath(""), name, application, questionTypes, card.Presets, card.ReadModalities())
+	}
+	if err != nil || (deployment.IsSystemOne() && questionTypes == nil) {
+		return err
+	}
+	if _, err := modelservice.CompileTask(definition, askedQuestion(asked), card); err != nil {
+		return fmt.Errorf("%s: deployment %q: %w", path, name, err)
+	}
+	return nil
+}
+
+func (c *Classifier) prepareSystemOneCard(name string, deployment config.ModelDeployment, services bool, cards map[string]modelservice.ModelCard) (modelservice.ModelCard, bool, error) {
+	if deployment.IsSystemOne() {
+		if remote := c.systemOne(); remote != nil {
+			card, err := remote.PrepareCard(context.Background(), name)
+			return card, err == nil, err
+		}
+		return modelservice.DeploymentCard(deployment), true, nil
+	}
+	if !services {
+		return modelservice.ModelCard{}, false, nil
+	}
+	if card, known := cards[name]; known {
+		return card, true, nil
+	}
+	if deployment.Managed() {
+		card, err := c.models.runtime.DeploymentCard(context.Background(), name, deployment)
+		if err == nil {
+			cards[name] = card
+		}
+		return card, err == nil, err
+	}
+	// An attached deployment's watcher owns discovery. An unavailable card
+	// is not an incompatible one; callers check when it becomes ready.
+	card, known := c.models.runtime.CurrentDeploymentCard(name)
+	if known {
+		cards[name] = card
+	}
+	return card, known, nil
 }
 
 // decisionTaskCard reads prepared managed metadata or this generation's current

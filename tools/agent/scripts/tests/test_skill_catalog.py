@@ -21,11 +21,18 @@ class SkillCatalogTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        public_copies = [
+            Path(entry["published"])
+            for entry in yaml.safe_load((catalog.ROOT / catalog.CATALOG).read_text())[
+                "skills"
+            ]
+            if "published" in entry
+        ]
         for source in (
             catalog.CATALOG,
             catalog.README,
-            catalog.PUBLIC_COPY,
             Path("tools/agent/docs/README.md"),
+            *public_copies,
         ):
             target = self.root / source
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -44,6 +51,13 @@ class SkillCatalogTests(unittest.TestCase):
 
     def test_repository_catalog_and_links_are_complete(self):
         self.assertEqual(catalog.check(self.root), [])
+
+    def test_every_public_skill_is_discoverable_in_the_website_guide(self):
+        guide = (catalog.ROOT / "website/docs/installation/agent-skills.md").read_text()
+        entries = yaml.safe_load((catalog.ROOT / catalog.CATALOG).read_text())["skills"]
+        for entry in entries:
+            if "published" in entry:
+                self.assertIn(entry["public_url"], guide, entry["id"])
 
     def test_unlisted_skill_is_rejected(self):
         extra = self.root / "tools/agent/skills/extra/SKILL.md"

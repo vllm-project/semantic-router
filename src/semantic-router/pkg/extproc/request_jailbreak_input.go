@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"slices"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
@@ -133,17 +135,35 @@ func jailbreakMessageContents(message llmprotocol.Message) []classification.Jail
 	if message.Role != llmprotocol.RoleUser && message.Role != llmprotocol.RoleTool {
 		return nil
 	}
-	var contents []classification.JailbreakContent
-	if text := semanticText(message.Content); text != "" {
-		contents = append(contents, classification.JailbreakContent{Role: string(message.Role), Text: text})
-	}
+	direct := classification.JailbreakContent{Role: string(message.Role), Text: semanticText(message.Content)}
+	var toolResults []classification.JailbreakContent
 	for _, content := range message.Content {
-		if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
-			continue
-		}
-		if text := semanticText(content.ToolResult.Content); text != "" {
-			contents = append(contents, classification.JailbreakContent{Role: "tool", Text: text})
+		switch content.Kind {
+		case llmprotocol.ContentText:
+		case llmprotocol.ContentToolResult:
+			result := jailbreakToolResult(content.ToolResult)
+			if result.Text != "" || result.Incomplete {
+				toolResults = append(toolResults, result)
+			}
+		default:
+			direct.Incomplete = true
 		}
 	}
-	return contents
+	if direct.Text == "" && !direct.Incomplete {
+		return toolResults
+	}
+	return append([]classification.JailbreakContent{direct}, toolResults...)
+}
+
+func jailbreakToolResult(result *llmprotocol.ToolResult) classification.JailbreakContent {
+	content := classification.JailbreakContent{Role: string(llmprotocol.RoleTool)}
+	if result == nil {
+		content.Incomplete = true
+		return content
+	}
+	content.Text = semanticText(result.Content)
+	content.Incomplete = slices.ContainsFunc(result.Content, func(block llmprotocol.Content) bool {
+		return block.Kind != llmprotocol.ContentText
+	})
+	return content
 }

@@ -2360,8 +2360,8 @@ global:
     # messages[].role sends a Chat backend the leading system and developer
     # messages as one system message and those inside the conversation as user
     # text, for chat templates that accept one system message, only first; an
-    # Anthropic system message inside the conversation reaches Responses
-    # backends as user text too. content.file sends each file in the
+    # in-conversation system or developer message reaches Responses backends
+    # as user text too. content.file sends each file in the
     # conversation as a short note to a model whose capabilities leave out
     # file_input.
     # tools.defer_loading sends tools that a coding agent marks for tool search
@@ -2881,6 +2881,19 @@ global:
         conn_max_lifetime: 300
         table_name: vector_store_registry
 
+    # Optional sharing of complete request-stage guard window answers.
+    # Omit this block (or use backend: local) for process-local caching.
+    guard_verdicts:
+      backend: redis
+      hmac_key_env: VLLM_SR_GUARD_HMAC_KEY
+      timeout_ms: 50
+      redis:
+        address: redis.example.com:6379
+        username: router
+        password_env: VLLM_SR_GUARD_REDIS_PASSWORD
+        database: 0
+        tls: false
+
     # Session-scoped sticky tool-set selection's shared store (issue #3347).
     # Constructed only when at least one decision's tools.select.sticky is
     # enabled; see website/docs/tutorials/plugin/tools.md. backend:
@@ -2914,6 +2927,8 @@ global:
       timeout_seconds: 120
       headers:
         X-Trace-Source: looper
+      streaming:
+        enabled: false
       flow:
         state:
           store_backend: file
@@ -3109,6 +3124,9 @@ global:
         auth:
           api_key_env: SYSTEMONE_STANDARD_KEY
         timeout_ms: 6000
+        # Custom System One signals can try this ordered list after a
+        # retryable outage, within the original signal deadline.
+        fallbacks: [decision-kai]
         # A routing question (a rule that does not read its whole input)
         # reads at most max_tokens of a long input: its head (head_share of
         # it) and its tail around a marker. A guard rule (jailbreak, safety,

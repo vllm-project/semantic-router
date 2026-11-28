@@ -176,16 +176,21 @@ func (r *OpenAIRouter) sendStructuredOutputCall(ctx *RequestContext, pass *struc
 	return body, nil
 }
 
-// structuredOutputTimeout bounds the second call by the shortest timeout the
-// matched decision and the model set, else by structuredOutputCallTimeout.
+// structuredOutputTimeout picks the shortest positive bound from the effective
+// total timeout and the configured per-try timeouts. A decision's explicit zero
+// disables the inherited model total timeout.
 func (r *OpenAIRouter) structuredOutputTimeout(ctx *RequestContext, dispatch *providerDispatch) time.Duration {
 	var bounds []*time.Duration
-	if override := callReliability(ctx.VSRSelectedDecision); override != nil {
+	override := callReliability(ctx.VSRSelectedDecision)
+	if override != nil {
 		bounds = append(bounds, override.TotalTimeout, override.PerTryTimeout)
 	}
 	if r.Config != nil {
 		reliability := r.Config.ModelConfig[dispatch.effectiveBackendModel()].Reliability
-		bounds = append(bounds, reliabilityDuration(reliability.TotalTimeout), reliabilityDuration(reliability.PerTryTimeout))
+		if override == nil || override.TotalTimeout == nil {
+			bounds = append(bounds, reliabilityDuration(reliability.TotalTimeout))
+		}
+		bounds = append(bounds, reliabilityDuration(reliability.PerTryTimeout))
 	}
 	timeout := time.Duration(0)
 	for _, bound := range bounds {

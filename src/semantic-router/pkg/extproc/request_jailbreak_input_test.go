@@ -168,10 +168,27 @@ func TestGuardProvenanceCurrentToolAndNonText(t *testing.T) {
 				{Kind: llmprotocol.ContentImage, Data: "media-is-not-text", MediaType: "image/png"},
 			}},
 		}}}}}
-		want := []classification.JailbreakContent{{Role: "tool", Text: "tool-visible-text"}}
+		want := []classification.JailbreakContent{{Role: "tool", Text: "tool-visible-text", Incomplete: true}}
 		if got := extractJailbreakInput(request); !reflect.DeepEqual(got.Current, want) {
 			t.Fatalf("role %s current tool projection = %#v", role, got)
 		}
+	}
+}
+
+func TestGuardProvenanceUnreadUserContent(t *testing.T) {
+	image := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png"}
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{image}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{image}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Describe the image."}, image}},
+		{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{image}},
+	}}
+	want := &classification.JailbreakInput{
+		Current: []classification.JailbreakContent{{Role: "user", Text: "Describe the image.", Incomplete: true}},
+		History: []classification.JailbreakContent{{Role: "user", Incomplete: true}},
+	}
+	if got := extractJailbreakInput(request); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Guard projection = %#v, want %#v", got, want)
 	}
 }
 

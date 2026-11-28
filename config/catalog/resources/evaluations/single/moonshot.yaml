@@ -1399,3 +1399,138 @@
     verification: claimed
     source: https://arxiv.org/abs/2510.26692v2
     redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-terminal-bench-4@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: harbor/terminal-bench@4.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    terminal_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.657
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-deepswe@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    swe_harness: Claude Code
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.755
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    hle_mode: full_no_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.511
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-humanitys-last-exam-with-tools@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    hle_mode: full_with_tools
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-gpqa-diamond@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.942
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: no-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    tool_policy: no_tools
+    trials: 4
+    source_kind: official_model_card
+  metrics:
+    score: 0.89
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true
+- id: moonshot/kimi-k3.1-pro-model-card-charxiv-reasoning-with-tools@1.0.0
+  model: moonshot/kimi-k3.1-pro
+  benchmark: princeton-nlp/charxiv@1.0.0
+  benchmark_profile: with-tools
+  reasoning_effort: max
+  subject:
+    variant: Kimi K3.1 Pro
+    reasoning_effort: max
+    tool_policy: with_tools
+    tools: python
+    trials: 4
+    source_kind: official_model_card
+  metrics:
+    score: 0.934
+  status: available
+  observed_at: 2026-11-20
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/moonshotai/Kimi-K3.1-Pro/blob/d9e99b0792a5e93b78ea9bea62a68167e36ddd9e/README.md
+    redistributable: true

@@ -20,9 +20,9 @@ import (
 // request's system prompt. A single system instruction is left as it is.
 //
 // A system or developer message inside the conversation becomes user text in
-// the same place: a Chat or Responses client's later instruction toward a Chat
-// backend, and a Messages request's system message toward Chat and Responses
-// backends. Claude Code inserts these messages at the point they refer to (a
+// the same place, whichever client protocol sent it, toward Chat and Responses
+// backends. One between a tool call and its results first moves after the
+// results. Claude Code inserts these messages at the point they refer to (a
 // file changed on disk, a truncated read, a new working directory), so the
 // text joins the user message right before it, or becomes a user message of
 // its own after a tool result or an assistant turn. Earlier turns are never
@@ -33,6 +33,7 @@ func ProjectSystemMessages(request Request, target WireFormat) (Request, Diagnos
 	if target != OpenAIChatV1 && target != OpenAIResponsesV1 {
 		return request, nil
 	}
+	request, omitted := omitEmptyInstructionMessages(request)
 	var leading, later []InstructionBlock
 	if target == OpenAIChatV1 {
 		for _, instruction := range request.Instructions {
@@ -48,16 +49,19 @@ func ProjectSystemMessages(request Request, target WireFormat) (Request, Diagnos
 		merged = len(leading)
 		leading = []InstructionBlock{oneSystemInstruction(leading)}
 	}
-	messages, inPlace := instructionsAsUserText(request.Messages, later)
-	if merged == 0 && inPlace == 0 {
-		return request, nil
+	projected, diagnostics := ProjectInstructionsAfterToolResults(request, target)
+	messages, inPlace, changed := instructionsAsUserText(projected.Messages, later)
+	if merged == 0 && !changed && !omitted {
+		return projected, diagnostics
 	}
-	projected := request
 	if target == OpenAIChatV1 {
 		projected.Instructions = leading
 	}
 	projected.Messages = messages
 	projected.Generation++ // The source envelope still carries the messages as the client sent them.
+	if merged == 0 && inPlace == 0 {
+		return projected, diagnostics
+	}
 	reason := fmt.Sprintf("%d system messages sent as user text in place", inPlace)
 	switch {
 	case merged > 0 && inPlace > 0:
@@ -65,19 +69,43 @@ func ProjectSystemMessages(request Request, target WireFormat) (Request, Diagnos
 	case merged > 0:
 		reason = fmt.Sprintf("%d system and developer messages sent as one system message", merged)
 	}
-	return projected, Diagnostics{{
+	return projected, append(diagnostics, Diagnostic{
 		Source: request.Trusted.SourceFormat, Target: target, Field: LossyFieldSystemMessageRole,
 		Action: DiagnosticApproximated, Reason: reason,
-	}}
+	})
+}
+
+// Omit instructions that this projection would discard before tool placement
+// can report moving them. Effort controls still need their own message, and
+// positioned instruction blocks must retain their place among the kept turns.
+func omitEmptyInstructionMessages(request Request) (Request, bool) {
+	empty := func(message Message) bool {
+		return isInstructionMessage(message) && message.ReasoningEffort == "" && emptyText(message.Content)
+	}
+	if !slices.ContainsFunc(request.Messages, empty) {
+		return request, false
+	}
+	projected := request
+	projected.Messages = make([]Message, 0, len(request.Messages))
+	kept := make([]bool, len(request.Messages))
+	for index, message := range request.Messages {
+		kept[index] = !empty(message)
+		if kept[index] {
+			projected.Messages = append(projected.Messages, message)
+		}
+	}
+	projected.Instructions = KeepInstructionPositions(request.Instructions, kept)
+	return projected, true
 }
 
 // instructionsAsUserText sends the later instructions at their positions, and
 // the system and developer messages inside the conversation, as user text, and
 // returns how many it sent. A later instruction without text is left out.
-func instructionsAsUserText(conversation []Message, later []InstructionBlock) ([]Message, int) {
+func instructionsAsUserText(conversation []Message, later []InstructionBlock) ([]Message, int, bool) {
 	slices.SortStableFunc(later, func(a, b InstructionBlock) int { return cmp.Compare(a.Position, b.Position) })
 	messages := make([]Message, 0, len(conversation)+len(later))
 	count := 0
+	changed := false
 	asUserText := func(content []Content) {
 		if last := len(messages) - 1; last >= 0 && messages[last].Role == RoleUser {
 			messages[last].Content = append(append([]Content(nil), messages[last].Content...), content...)
@@ -87,8 +115,9 @@ func instructionsAsUserText(conversation []Message, later []InstructionBlock) ([
 	}
 	for index, next := 0, 0; ; index++ {
 		for ; next < len(later) && (later[next].Position <= index || index == len(conversation)); next++ {
-			count++
+			changed = true
 			if !emptyText(later[next].Content) {
+				count++
 				asUserText(later[next].Content)
 			}
 		}
@@ -96,20 +125,23 @@ func instructionsAsUserText(conversation []Message, later []InstructionBlock) ([
 			break
 		}
 		message := conversation[index]
-		if message.Role != RoleSystem && message.Role != RoleDeveloper || len(message.Content) == 0 {
+		if !isInstructionMessage(message) || len(message.Content) == 0 && message.ReasoningEffort != "" {
 			messages = append(messages, message)
 			continue
 		}
-		count++
-		asUserText(message.Content)
+		changed = true
+		if !emptyText(message.Content) {
+			count++
+			asUserText(message.Content)
+		}
 		if message.ReasoningEffort != "" {
 			messages = append(messages, Message{ID: message.ID, Role: RoleSystem, ReasoningEffort: message.ReasoningEffort})
 		}
 	}
-	if count == 0 {
-		return conversation, 0
+	if !changed {
+		return conversation, 0, false
 	}
-	return messages, count
+	return messages, count, true
 }
 
 // oneSystemInstruction joins instructions into one system instruction with a

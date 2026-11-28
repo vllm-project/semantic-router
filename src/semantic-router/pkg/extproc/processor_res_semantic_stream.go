@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/latency"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -18,6 +22,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/principal"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // semanticResponseStreamState is request-scoped reconstruction state for
@@ -26,6 +32,9 @@ import (
 type semanticResponseStreamState struct {
 	responseID string
 	model      string
+	// sawContent marks the first model content, including a choice held by
+	// the decoder for ordering. It ignores keepalive and metadata frames.
+	sawContent bool
 	createdAt  time.Time
 	stop       llmprotocol.StopReason
 	stopSeq    string
@@ -45,6 +54,7 @@ type semanticStreamItem struct {
 	refusal          string
 	reasoning        string
 	reasoningSig     string
+	reasoningScope   llmprotocol.ReasoningScope
 	toolCall         *llmprotocol.ToolCall
 	image            *llmprotocol.GeneratedImage
 	completed        bool
@@ -60,7 +70,6 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 	endOfStream bool,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	recordStreamingTTFT(ctx)
 	if ctx.ResponseGuardHold != nil {
 		return r.handleHeldStreamBody(responseBody, endOfStream, ctx)
 	}
@@ -72,6 +81,11 @@ func (r *OpenAIRouter) handleSemanticStreamingResponseBody(
 		// The client gets what a buffered client gets for such a body.
 		return r.invalidUpstreamResponse(ctx, "The selected model returned an invalid response")
 	}
+	// TTFT waits for the first upstream content: a keepalive or comment
+	// frame a gateway sends while it queues is not the model's answer.
+	// It is recorded before the stream settles, because the turn's session
+	// evidence is written there and takes the latency it has by then.
+	recordStreamingTTFT(ctx)
 	if endOfStream {
 		buffers.finalize(ctx)
 		r.finalizeSemanticStreamingResponse(ctx, buffers.streamErr)
@@ -120,21 +134,23 @@ type semanticStreamBuffers struct {
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
-		return
-	}
 	if ctx.PublicChatUsageFilter != nil {
+		// An empty final read still marks the boundary for a codec failure
+		// discovered while finalizing an unterminated frame.
 		filtered, err := ctx.PublicChatUsageFilter.Push(responseBody)
 		buffers.public = append(buffers.public, filtered...)
 		buffers.recordError(ctx, err, true)
 	}
-	if ctx.ProtocolResponseStream != nil {
+	if len(responseBody) != 0 && ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
 		buffers.translated = appendProtocolFrames(buffers.translated, frames)
 		if frame := failureFrame(frames, events); frame != nil {
 			buffers.errorFrame = frame
 		}
 		observeProtocolStream(ctx, events, diagnostics)
+		if state := ctx.SemanticStreamState; err == nil && state != nil && ctx.ProtocolResponseStream.HasPendingContent() {
+			state.sawContent = true
+		}
 		buffers.recordError(ctx, err, true)
 	}
 }
@@ -261,6 +277,40 @@ func observeProtocolStream(
 	ctx.SemanticStreamState.observe(events)
 }
 
+func estimateAbortedLooperOutputTokens(state *semanticResponseStreamState) int {
+	if state == nil || len(state.items) == 0 {
+		return 0
+	}
+	var b strings.Builder
+	for _, item := range state.items {
+		if item == nil {
+			continue
+		}
+		if item.text != "" {
+			b.WriteString(item.text)
+		}
+		if item.reasoning != "" {
+			b.WriteString(item.reasoning)
+		}
+		if item.refusal != "" {
+			b.WriteString(item.refusal)
+		}
+		if item.toolCall != nil {
+			if item.toolCall.Name != "" {
+				b.WriteString(item.toolCall.Name)
+			}
+			if item.toolCall.Arguments != "" {
+				b.WriteString(item.toolCall.Arguments)
+			}
+		}
+	}
+	combined := b.String()
+	if combined == "" {
+		return 0
+	}
+	return contextcompression.EstimateTokens(combined)
+}
+
 // failureFrame returns the frame the encoder wrote for an upstream failure in
 // this batch. The Chat encoder writes a failure as the batch's last frame
 // (TestChatStreamFailureEndsItsBatch).
@@ -317,16 +367,21 @@ func recordStreamingTTFT(ctx *RequestContext) {
 	if ctx == nil || ctx.TTFTRecorded || ctx.ProcessingStartTime.IsZero() || ctx.RequestModel == "" {
 		return
 	}
+	if state := ctx.SemanticStreamState; state == nil || !state.sawContent {
+		return
+	}
 
 	ttft := time.Since(ctx.ProcessingStartTime).Seconds()
 	if ttft <= 0 {
 		return
 	}
 
-	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
-	latency.UpdateTTFT(ctx.RequestModel, ttft)
+	if !ctx.LooperStreamingActive {
+		metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
+		latency.UpdateTTFT(ctx.RequestModel, ttft)
+	}
 	ctx.CacheWarmthEstimate = latency.EstimateCacheProbability(latency.CacheEstimationInput{
 		Model:       ctx.RequestModel,
 		TTFTSeconds: ttft,
@@ -378,6 +433,9 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	ctx.ProtocolResponseStream = stream
 	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
 		ctx.PublicChatUsageFilter = engine.NewChatPublicStreamFilter(streamUsageRequestedByClient(ctx))
+		if ctx.LooperStreamingActive && ctx.RequestModel != "" {
+			ctx.PublicChatUsageFilter.SetPublicModel(ctx.RequestModel)
+		}
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -398,6 +456,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	}
 	state.decoded = state.decoded || len(events) > 0
 	for _, event := range events {
+		state.sawContent = state.sawContent || streamEventCarriesContent(event)
 		if event.ResponseID != "" {
 			state.responseID = event.ResponseID
 		}
@@ -424,6 +483,7 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentReasoning {
 				item.reasoningSig = event.Content.Signature
+				item.reasoningScope = event.Content.Reasoning
 			}
 			if event.Content != nil && event.Content.Kind == llmprotocol.ContentServerTool {
 				item.serverTool = event.Content.Raw
@@ -457,8 +517,13 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				continue
 			}
 			item.reasoning += event.Delta
-			if event.Content != nil && event.Content.Signature != "" {
-				item.reasoningSig = event.Content.Signature
+			if event.Content != nil {
+				if event.Content.Signature != "" {
+					item.reasoningSig = event.Content.Signature
+				}
+				if event.Content.Reasoning != "" {
+					item.reasoningScope = event.Content.Reasoning
+				}
 			}
 		case llmprotocol.EventToolCallDelta:
 			item := state.item(event.ItemIndex)
@@ -501,6 +566,38 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 	}
 }
 
+// streamEventCarriesContent recognizes the first model output for TTFT.
+func streamEventCarriesContent(event llmprotocol.Event) bool {
+	switch {
+	case event.Delta != "":
+		return true
+	case event.ToolCall != nil:
+		call := event.ToolCall
+		return call.ID != "" || call.Name != "" || call.Arguments != ""
+	case event.GeneratedImage != nil:
+		return event.GeneratedImage.PartialImage != ""
+	default:
+		return streamBlockCarriesContent(event.Content)
+	}
+}
+
+func streamBlockCarriesContent(block *llmprotocol.Content) bool {
+	if block == nil {
+		return false
+	}
+	switch block.Kind {
+	case llmprotocol.ContentReasoning:
+		return block.Text != "" || block.ReasoningDetail != nil && block.ReasoningDetail.PayloadBytes() > 0
+	case llmprotocol.ContentServerTool:
+		return len(block.Raw) > 0
+	case llmprotocol.ContentGeneratedImage:
+		image := block.GeneratedImage
+		return image != nil && image.Result != nil && *image.Result != ""
+	default:
+		return block.Text != ""
+	}
+}
+
 func (state *semanticResponseStreamState) item(index int) *semanticStreamItem {
 	item := state.items[index]
 	if item != nil {
@@ -518,9 +615,34 @@ func (state *semanticResponseStreamState) delivered() bool {
 	return state != nil && state.failed == nil && state.terminal
 }
 
+// streamFailureSummary names a protocol failure by its normalized category and,
+// for an error the Router authored, its code. A decoder copies a provider
+// frame's code, message and parameter verbatim, and those can echo request
+// content, so a provider-framed error contributes only its category. Only a
+// Router-authored ErrorDiagnostic is printed from the cause chain: a parser
+// error's text can name provider fields. The client keeps the failure it always
+// saw.
+func streamFailureSummary(err *llmprotocol.ProtocolError) string {
+	summary := "category=" + string(err.Category)
+	if err.ProviderFramed {
+		return summary
+	}
+	if err.Code != "" {
+		summary += ", code=" + err.Code
+	}
+	var diagnostic llmprotocol.ErrorDiagnostic
+	if errors.As(err, &diagnostic) {
+		summary += "; " + string(diagnostic)
+	}
+	return summary
+}
+
 //nolint:cyclop // Response assembly validates every terminal stream invariant in one place.
 func (state *semanticResponseStreamState) response() (*llmprotocol.Response, error) {
 	if !state.delivered() {
+		if state != nil && state.failed != nil {
+			return nil, fmt.Errorf("semantic stream did not complete successfully: %s", streamFailureSummary(state.failed))
+		}
 		return nil, fmt.Errorf("semantic stream did not complete successfully")
 	}
 	indices := append([]int(nil), state.order...)
@@ -544,7 +666,7 @@ func (state *semanticResponseStreamState) response() (*llmprotocol.Response, err
 		if item.reasoning != "" || item.reasoningSig != "" {
 			contents = append(contents, llmprotocol.Content{
 				Kind: llmprotocol.ContentReasoning, Text: item.reasoning,
-				Signature: item.reasoningSig,
+				Signature: item.reasoningSig, Reasoning: item.reasoningScope,
 			})
 		}
 		if item.refusal != "" {
@@ -635,7 +757,7 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 	completionLatency := time.Duration(0)
 	if !ctx.StartTime.IsZero() {
 		completionLatency = time.Since(ctx.StartTime)
-		if ctx.RequestModel != "" {
+		if !ctx.LooperStreamingActive && ctx.RequestModel != "" {
 			metrics.RecordModelCompletionLatency(ctx.RequestModel, completionLatency.Seconds())
 		}
 	}
@@ -652,7 +774,51 @@ func (r *OpenAIRouter) completeSemanticStreamWith(
 	}
 	observeUpstreamResponse(ctx, responseModel, usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
-	r.calibrateTokenEstimator(ctx, usage.promptTokens)
+	if ctx.LooperStreamingActive {
+		if !usage.invalid {
+			ctx.LooperUsageSettled = true
+			logging.ComponentEvent("extproc", "looper_streaming_completed", map[string]interface{}{
+				"request_id":        ctx.RequestID,
+				"decision":          ctx.VSRSelectedDecisionName,
+				"algorithm":         ctx.VSRSelectionMethod,
+				"models_used":       ctx.LooperModelsUsed,
+				"iterations":        ctx.LooperIterations,
+				"selected_model":    firstNonEmpty(ctx.LooperTargetModel, ctx.VSRSelectedModel),
+				"prompt_tokens":     usage.promptTokens,
+				"completion_tokens": usage.completionTokens,
+				"total_tokens":      responseUsageTotal(usage),
+				"trace_recorded":    ctx.LooperExecutionTrace != nil,
+			})
+		} else {
+			abortErr := streamErr
+			if abortErr == nil {
+				abortErr = responseErr
+			}
+			r.settleAbortedLooperStreamingUsage(ctx, abortErr)
+		}
+	}
+
+	calibrationPromptTokens := usage.promptTokens
+	if ctx.LooperStreamingActive {
+		calibrationPromptTokens = 0
+		if ctx.SemanticResponse != nil {
+			synthesisUsage := responseUsageFromSemanticUsage(ctx.SemanticResponse.Usage)
+			if !synthesisUsage.invalid {
+				calibrationPromptTokens = synthesisUsage.promptTokens
+			}
+		}
+	}
+	r.calibrateTokenEstimatorForModel(
+		ctx,
+		calibrationTargetModel(ctx),
+		streamingCalibrationByteLen(ctx),
+		calibrationPromptTokens,
+	)
+
+	if ctx.LooperStreamingActive && (responseErr != nil || usage.invalid) {
+		ctx.StreamingAborted = true
+		r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "upstream_stream_incomplete")
+	}
 
 	if responseErr != nil {
 		observeStreamedApprovalReviewFailure(ctx)
@@ -702,11 +868,44 @@ func (r *OpenAIRouter) commitStreamedAnswer(ctx *RequestContext, semanticRespons
 		metrics.RecordCacheWriteSkipped(delegatedCredentialCode)
 		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", delegatedCredentialCode, false)
 	} else {
-		r.updateResponseCache(ctx, encoded)
+		if !ctx.LooperStreamingActive {
+			r.updateResponseCache(ctx, encoded)
+		}
 		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 		r.persistResponseObject(ctx)
 	}
-	r.attachRouterReplayResponse(ctx, encoded, true)
+	r.attachRouterReplayResponse(ctx, attachLooperTraceToReplaySnapshot(ctx, encoded), true)
+}
+
+func streamingCalibrationByteLen(ctx *RequestContext) int {
+	if ctx == nil {
+		return 0
+	}
+	if ctx.LooperStreamingActive {
+		if ctx.LooperSynthesisTextBytes > 0 {
+			return ctx.LooperSynthesisTextBytes
+		}
+		return 0
+	}
+	return tokenCalibrationByteLen(ctx)
+}
+
+func attachLooperTraceToReplaySnapshot(ctx *RequestContext, encoded []byte) []byte {
+	if ctx == nil || !ctx.LooperStreamingActive || ctx.LooperExecutionTrace == nil || len(encoded) == 0 {
+		return encoded
+	}
+	traceJSON, err := json.Marshal(ctx.LooperExecutionTrace)
+	if err != nil || len(traceJSON) == 0 || string(traceJSON) == "null" {
+		return encoded
+	}
+	field := "looper_trace"
+	switch ctx.VSRSelectionMethod {
+	case config.DecisionAlgorithmFusion:
+		field = "fusion"
+	case config.DecisionAlgorithmWorkflows:
+		field = "flow"
+	}
+	return restoreLooperFieldJSON(encoded, traceJSON, field)
 }
 
 // reportStreamingAnswerEstimate debits a stream that carried no usage from its
@@ -742,7 +941,11 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	if ctx == nil {
 		return
 	}
-	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+	pricing := r.sessionTurnPricing(ctx.RequestModel)
+	if ctx.LooperStreamingActive {
+		pricing = sessiontelemetry.TurnPricing{}
+	}
+	recordSessionTurnOutcome(ctx, usage, pricing)
 	if usage.invalid {
 		if r.recordInterruptedStreamUsage(ctx) {
 			// Request finalization settles the partial charge.
@@ -765,22 +968,24 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		})
 	}
 	if totalTokens > 0 {
-		recordSessionTurn(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+		recordSessionTurn(ctx, usage, pricing)
 	}
 	if ctx.RequestModel == "" {
 		return
 	}
-	recordModelUsageTokens(ctx.RequestModel, usage)
-	metrics.RecordModelWindowedRequest(
-		ctx.RequestModel,
-		completionLatency.Seconds(),
-		int64(usage.promptTokens),
-		int64(usage.completionTokens),
-	)
-	if usage.completionTokens > 0 && completionLatency > 0 {
-		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
-		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
+	if !ctx.LooperStreamingActive {
+		recordModelUsageTokens(ctx.RequestModel, usage)
+		metrics.RecordModelWindowedRequest(
+			ctx.RequestModel,
+			completionLatency.Seconds(),
+			int64(usage.promptTokens),
+			int64(usage.completionTokens),
+		)
+		if usage.completionTokens > 0 && completionLatency > 0 {
+			timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
+			metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
+			latency.UpdateTPOT(ctx.RequestModel, timePerToken)
+		}
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
 	r.settleRequestSpend(ctx, &replayUsage)

@@ -779,12 +779,15 @@ func validateTextContent(content Content, limits Limits) error {
 	}
 	if content.Kind == ContentReasoning {
 		switch content.Reasoning {
-		case "", ReasoningScopeText, ReasoningScopeSummary:
+		case "", ReasoningScopeText, ReasoningScopeSummary, ReasoningScopeRedacted:
 		default:
 			return NewError(ErrorInvalidRequest, "invalid_reasoning_scope", "reasoning content scope is unsupported", nil)
 		}
 		if content.Reasoning == ReasoningScopeSummary && content.Signature != "" {
 			return NewError(ErrorInvalidRequest, "invalid_reasoning_signature", "reasoning summaries cannot carry a private reasoning signature", nil)
+		}
+		if content.Reasoning == ReasoningScopeRedacted && (content.Signature == "" || content.Text != "") {
+			return NewError(ErrorInvalidRequest, "invalid_reasoning_signature", "redacted reasoning requires an opaque signature and no text", nil)
 		}
 	}
 	if content.Kind != ContentText && len(content.Citations) != 0 {

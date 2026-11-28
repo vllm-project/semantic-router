@@ -21,15 +21,18 @@ import (
 func TestStructuredOutputUsesTheRemainingUpstreamTimeout(t *testing.T) {
 	const fast = 35 * time.Millisecond
 	for _, test := range []struct {
-		name, listener, model string
-		first, second         time.Duration
-		status                int
+		name, listener, model, decision string
+		first, second                   time.Duration
+		status                          int
 	}{
-		{"second call exceeds listener timeout", "150ms", "", fast, 400 * time.Millisecond, http.StatusGatewayTimeout},
-		{"first call spends part of the budget", "500ms", "", 350 * time.Millisecond, 350 * time.Millisecond, http.StatusGatewayTimeout},
-		{"both calls fit", "150ms", "", fast, fast, http.StatusOK},
-		{"model overrides the listener", "150ms", "2s", fast, 400 * time.Millisecond, http.StatusOK},
-		{"model disables the total timeout", "150ms", "0s", fast, 400 * time.Millisecond, http.StatusOK},
+		{"second call exceeds listener timeout", "150ms", "", "", fast, 400 * time.Millisecond, http.StatusGatewayTimeout},
+		{"first call spends part of the budget", "500ms", "", "", 350 * time.Millisecond, 350 * time.Millisecond, http.StatusGatewayTimeout},
+		{"both calls fit", "150ms", "", "", fast, fast, http.StatusOK},
+		{"model overrides the listener", "150ms", "2s", "", fast, 400 * time.Millisecond, http.StatusOK},
+		{"model disables the total timeout", "150ms", "0s", "", fast, 400 * time.Millisecond, http.StatusOK},
+		{"no decision override keeps the model timeout", "3s", "350ms", "", fast, 700 * time.Millisecond, http.StatusGatewayTimeout},
+		{"decision extends the model timeout", "3s", "350ms", "2s", fast, 700 * time.Millisecond, http.StatusOK},
+		{"decision disables the model total timeout", "3s", "350ms", "0s", fast, 700 * time.Millisecond, http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			backend := &umbrellaBackend{t: t, format: llmprotocol.OpenAIChatV1}
@@ -64,6 +67,10 @@ func TestStructuredOutputUsesTheRemainingUpstreamTimeout(t *testing.T) {
 			if test.model != "" {
 				yaml = strings.Replace(yaml, "      api_format: openai\n",
 					"      api_format: openai\n      reliability:\n        total_timeout: "+test.model+"\n", 1)
+			}
+			if test.decision != "" {
+				yaml = strings.Replace(yaml, "        priority: 10\n",
+					"        priority: 10\n        reliability:\n          total_timeout: "+test.decision+"\n", 1)
 			}
 			cfg, err := config.ParseYAMLBytes([]byte(yaml))
 			require.NoError(t, err)

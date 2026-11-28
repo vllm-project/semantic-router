@@ -34,6 +34,23 @@ recipes:
 
 在 **Models → Model Hub** 中浏览内置身份及其 Provider 支持，或在 **Models → Backend models → Connect model** 中选择 Provider。控制面板将目录选项标记为 **Built-in**，并同时保存本地别名和 canonical 身份。
 
+## GPT-6.2 Astra、GPT-6.2 Sol 和 GPT-6.1 Terra
+
+将 `openai/gpt-6.2-astra`、`openai/gpt-6.2-sol` 或 `openai/gpt-6.1-terra` 绑定到 `openai` Provider。三者在 Chat Completions 和 Responses 上均支持 `low`、`medium`、`high`、`xhigh`、`max`。只有 Terra 支持关闭推理：设置 `use_reasoning: false` 会发送 `none`。Terra 默认使用 `medium`。工具调用需要 Responses（`api_format: responses`）。
+
+目录为每张卡收录五条已发布的评测。Astra 和 Sol 的记录来自 `xhigh`，Terra 的记录来自 `high`；分数不会复制到其他档位。只有同一评测条件下可比模型数量足够时，结果才会进入 Model Hub 的公开对比。
+
+## Muse Wonder 和 Muse Ember
+
+将 `meta/muse-wonder-1.0` 或 `meta/muse-ember-1.0` 绑定到 `meta` Provider。
+Wonder 处于预览阶段。两个 API 模型 ID 都使用 Meta 的 Standard 服务模式。
+目录为每个模型收录了五项独立评测，Wonder 的实测推理级别为 `max`，Ember 为 `xhigh`。[Meta 模型文档](https://dev.meta.ai/docs/models)
+
+两个模型的推理均始终启用，默认级别为 `max`。在决策的模型引用中设置 `use_reasoning: true`，再将 `reasoning_effort`
+设为 `minimal`、`low`、`medium`、`high`、`xhigh` 或 `max` 即可调整。
+Router 在 Chat Completions 请求中发送顶层字段 `reasoning_effort`，在 Responses 请求中发送嵌套字段
+`reasoning.effort`。[Meta 推理文档](https://dev.meta.ai/docs/reasoning)
+
 ## MiniMax M3.1 Flash
 
 `minimax/minimax-m3.1-flash` 对应采用 MiniMax Community License 的[官方公开权重](https://huggingface.co/MiniMaxAI/MiniMax-M3.1-Flash/tree/262ae6830934f3512211081b8a3f16425b93a239)。MiniMax API 与实验性的 vLLM 映射共用该模型卡，两条映射目前均声明支持 Chat Completions。

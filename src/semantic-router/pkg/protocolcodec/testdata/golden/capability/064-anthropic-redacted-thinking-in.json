@@ -1,0 +1,34 @@
+{
+  "operation": "request",
+  "body": {
+    "model": "client-model",
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "user",
+        "content": "first"
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "redacted_thinking",
+            "data": "opaque-Λ-data=="
+          },
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": "second"
+      }
+    ],
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 2048
+    }
+  }
+}

@@ -123,23 +123,46 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 }
 
 func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPromptTokens int) {
-	if r == nil || ctx == nil || actualPromptTokens <= 0 {
+	if r == nil || ctx == nil {
+		return
+	}
+	r.calibrateTokenEstimatorForModel(
+		ctx,
+		calibrationTargetModel(ctx),
+		tokenCalibrationByteLen(ctx),
+		actualPromptTokens,
+	)
+}
+
+func (r *OpenAIRouter) calibrateTokenEstimatorForModel(
+	ctx *RequestContext,
+	targetModel string,
+	byteLen int,
+	actualPromptTokens int,
+) {
+	if r == nil || ctx == nil || actualPromptTokens <= 0 || byteLen <= 0 {
+		return
+	}
+	model := strings.TrimSpace(targetModel)
+	if ctx.LooperStreamingActive && model == "" {
+		return
+	}
+	if model != "" && r.isVirtualCalibrationModel(model, ctx) {
 		return
 	}
 	classifier := r.classifierForRequest(ctx)
 	if classifier == nil {
 		return
 	}
-	byteLen := tokenCalibrationByteLen(ctx)
-	if byteLen <= 0 {
-		return
-	}
 
 	classifier.ObserveTokenUsage("", byteLen, actualPromptTokens)
+	if model != "" {
+		classifier.ObserveTokenUsage("model:"+model, byteLen, actualPromptTokens)
+	}
 	if category := tokenCalibrationCategory(ctx); category != "" {
 		classifier.ObserveTokenUsage(category, byteLen, actualPromptTokens)
 	}
-	if compressionCategory := contextCompressionTokenCalibrationCategory(ctx); compressionCategory != "" {
+	if compressionCategory := contextCompressionTokenCalibrationCategoryForModel(ctx, model); compressionCategory != "" {
 		classifier.ObserveTokenUsage(
 			compressionCategory,
 			len(cacheRequestBodyForContext(ctx)),
@@ -148,15 +171,57 @@ func (r *OpenAIRouter) calibrateTokenEstimator(ctx *RequestContext, actualPrompt
 	}
 }
 
+func calibrationTargetModel(ctx *RequestContext) string {
+	if ctx == nil {
+		return ""
+	}
+	if ctx.LooperStreamingActive {
+		return firstNonEmpty(strings.TrimSpace(ctx.LooperTargetModel), strings.TrimSpace(ctx.VSRSelectedModel))
+	}
+	return firstNonEmpty(strings.TrimSpace(ctx.VSRSelectedModel), strings.TrimSpace(ctx.RequestModel))
+}
+
+func (r *OpenAIRouter) isVirtualCalibrationModel(model string, ctx *RequestContext) bool {
+	trimmed := strings.TrimSpace(model)
+	if trimmed == "" {
+		return true
+	}
+	if strings.EqualFold(trimmed, "auto") {
+		return true
+	}
+	if r != nil && r.Config != nil && r.Config.IsEntrypointModelName(trimmed) {
+		return true
+	}
+	if ctx != nil && ctx.LooperStreamingActive {
+		if ctx.LooperTargetModel != "" && trimmed != strings.TrimSpace(ctx.LooperTargetModel) {
+			return true
+		}
+		if strings.TrimSpace(ctx.RequestModel) != "" &&
+			trimmed == strings.TrimSpace(ctx.RequestModel) &&
+			trimmed != strings.TrimSpace(ctx.LooperTargetModel) &&
+			trimmed != strings.TrimSpace(ctx.VSRSelectedModel) {
+			return true
+		}
+	}
+	return false
+}
+
 func contextCompressionTokenCalibrationCategory(ctx *RequestContext) string {
+	return contextCompressionTokenCalibrationCategoryForModel(ctx, calibrationTargetModel(ctx))
+}
+
+func contextCompressionTokenCalibrationCategoryForModel(ctx *RequestContext, targetModel string) string {
 	if ctx == nil || ctx.ContextCompressionRevision == "" {
 		return ""
 	}
-	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	model := strings.TrimSpace(targetModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.VSRSelectedModel)
+	}
 	if model == "" {
 		model = strings.TrimSpace(ctx.RequestModel)
 	}
-	if model == "" {
+	if model == "" || strings.EqualFold(model, "auto") {
 		return ""
 	}
 	return "context_compression:" + model
@@ -207,6 +272,23 @@ func (r *OpenAIRouter) recordResponseCost(
 		"completion_tokens":     usage.completionTokens,
 		"total_tokens":          totalTokens,
 		"completion_latency_ms": completionLatency.Milliseconds(),
+	}
+	if ctx.LooperStreamingActive {
+		eventFields["target_model"] = firstNonEmpty(ctx.LooperTargetModel, ctx.VSRSelectedModel)
+		eventFields["intermediate_prompt_tokens"] = ctx.LooperIntermediateUsage.PromptTokens
+		eventFields["intermediate_completion_tokens"] = ctx.LooperIntermediateUsage.CompletionTokens
+		if len(ctx.LooperModelsUsed) > 0 {
+			eventFields["looper_models_used"] = ctx.LooperModelsUsed
+		}
+		if ctx.LooperIterations > 0 {
+			eventFields["looper_iterations"] = ctx.LooperIterations
+		}
+		eventFields["looper_trace_recorded"] = ctx.LooperExecutionTrace != nil
+		eventFields["cost"] = 0.0
+		eventFields["currency"] = "unknown"
+		eventFields["pricing"] = "looper_cascade_unpriced"
+		logging.LogEvent("llm_usage", eventFields)
+		return replayUsage
 	}
 
 	if r.Config != nil {

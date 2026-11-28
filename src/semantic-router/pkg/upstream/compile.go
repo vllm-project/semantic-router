@@ -126,11 +126,9 @@ func compileCluster(cfg *config.RouterConfig, alias string, endpoints []config.V
 		}
 		spec.Endpoints = append(spec.Endpoints, ep)
 	}
-	// One endpoint behind a DNS name is a LOGICAL_DNS cluster in the
-	// template, which resolves IPv4 addresses only.
-	if len(spec.Endpoints) == 1 && !isIPLiteral(spec.Endpoints[0].Host) {
-		spec.Endpoints[0].IPv4Only = true
-	}
+	// The Envoy template uses IPv4 for single-hostname LOGICAL_DNS clusters.
+	// Standalone keeps that preference and falls back when there is no IPv4 address.
+	spec.preferIPv4 = len(spec.Endpoints) == 1 && !isIPLiteral(spec.Endpoints[0].Host)
 	// Backend pools are homogeneous (the config loader rejects mixed
 	// schemes, base paths, TLS settings and headers), so the first endpoint
 	// speaks for the cluster, as it does in the template.

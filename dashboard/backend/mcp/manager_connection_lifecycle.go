@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 )
 
 var errConnectionSuperseded = errors.New("server configuration changed while connecting")
@@ -23,7 +22,7 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 	config, ok := m.configs[id]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("server with ID %s not found", id)
+		return serverNotFound(id)
 	}
 
 	// Cancel and close any previous generation before publishing its replacement.
@@ -53,12 +52,16 @@ func (m *Manager) Connect(ctx context.Context, id string) error {
 		m.mu.Unlock()
 		return connectErr
 	}
+	_, stillConfigured := m.configs[id]
 	m.mu.Unlock()
 
 	// A concurrent update, delete, disconnect, or replacement won the race. The
 	// SDK may not have observed cancellation before publishing its transport, so
 	// close this stale generation again after Connect returns.
 	_ = m.disconnectClient(client)
+	if !stillConfigured {
+		return serverNotFound(id)
+	}
 	return errConnectionSuperseded
 }
 
@@ -67,6 +70,9 @@ func (m *Manager) Disconnect(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if _, ok := m.configs[id]; !ok {
+		return serverNotFound(id)
+	}
 	return m.disconnectClientLocked(id)
 }
 

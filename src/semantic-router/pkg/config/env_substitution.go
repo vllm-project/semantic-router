@@ -147,6 +147,17 @@ func EnvironmentReferenceNames(value string) []string {
 	return names
 }
 
+// IsSecretEnvReferenceField identifies configuration fields that name a secret
+// environment variable without using interpolation. Config editors and recipe
+// activation must protect these references just like ${NAME} values.
+func IsSecretEnvReferenceField(field string) bool {
+	switch field {
+	case "api_key_env", "key_env", "password_env", "hmac_key_env":
+		return true
+	}
+	return false
+}
+
 // resolve returns the value of a reference without a default.
 func (e envExpander) resolve(name, reference string) string {
 	if value, ok := e.lookup(name); ok {
