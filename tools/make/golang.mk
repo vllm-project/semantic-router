@@ -59,6 +59,17 @@ check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
 		fi
 	@echo "perf go mod tidy check passed"
 
+check-websearch-mcp-go-mod-tidy: ## Check that the web search MCP server module is tidy
+	@$(LOG_TARGET)
+	@echo "Checking tools/mcp/websearch..."
+	@cd tools/mcp/websearch && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in tools/mcp/websearch. Please run 'go mod tidy' in tools/mcp/websearch directory and commit the changes."; \
+			git diff go.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "tools/mcp/websearch go mod tidy check passed"
+
 check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@$(LOG_TARGET)
 	@echo "Checking go mod tidy for all Go modules..."
@@ -71,6 +82,7 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
 	@$(MAKE) check-perf-go-mod-tidy
+	@$(MAKE) check-websearch-mcp-go-mod-tidy
 	@echo "All go mod tidy checks passed"
 
 install-controller-gen: ## Install controller-gen for code generation
@@ -120,7 +132,7 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 		exit 1; \
 	fi
 
-.PHONY: config-schema-generate config-schema-check headers-generate headers-check check-perf-go-mod-tidy check-go-mod-tidy
+.PHONY: config-schema-generate config-schema-check headers-generate headers-check check-perf-go-mod-tidy check-go-mod-tidy check-websearch-mcp-go-mod-tidy
 
 .PHONY: training-contract-generate training-contract-check
 training-contract-generate: ## Generate the shared training schema and Console types

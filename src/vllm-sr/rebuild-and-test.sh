@@ -58,6 +58,8 @@ echo "3. Verifying dependencies in images..."
 docker run --rm --entrypoint /bin/sh "${ROUTER_IMAGE}" -c "
     echo '  Checking router binary...'
     test -x /usr/local/bin/router && echo '    ✓ router binary present'
+    echo '  Checking web search MCP server binary...'
+    test -x /usr/local/bin/websearch-mcp && echo '    ✓ websearch-mcp binary present'
     echo '  Checking setup helper yaml import...'
     python3 -c 'import yaml; print(\"    ✓ yaml import ok\")'
     echo '  Checking curl...'

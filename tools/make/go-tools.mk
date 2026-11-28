@@ -51,6 +51,31 @@ go-tools-lint: $(addprefix lint-,$(ROUTER_GO_TOOLS)) ## Lint repository Go tools
 
 .PHONY: go-tools-build go-tools-test go-tools-vet go-tools-lint
 
+# The search MCP server is its own module (tools/mcp/websearch/go.mod): the
+# Router module carries no MCP SDK, so the server imports Router packages
+# through a replace directive instead of building inside the Router module.
+WEBSEARCH_MCP_DIR := tools/mcp/websearch
+
+build-websearch-mcp: ## Build the web search MCP server
+	@mkdir -p bin
+	@cd $(WEBSEARCH_MCP_DIR) && go build $(GO_TOOL_BUILD_FLAGS) -o ../../../bin/websearch-mcp .
+
+test-websearch-mcp: ## Test the web search MCP server
+	@cd $(WEBSEARCH_MCP_DIR) && go test $(GO_TOOL_TEST_FLAGS) ./...
+
+vet-websearch-mcp:
+	@cd $(WEBSEARCH_MCP_DIR) && go vet ./...
+
+lint-websearch-mcp:
+	@cd $(WEBSEARCH_MCP_DIR) && golangci-lint run --config $(GOLANGCI_LINT_CONFIG) ./...
+
+go-tools-build: build-websearch-mcp
+go-tools-test: test-websearch-mcp
+go-tools-vet: vet-websearch-mcp
+go-tools-lint: lint-websearch-mcp
+
+.PHONY: build-websearch-mcp test-websearch-mcp vet-websearch-mcp lint-websearch-mcp
+
 # The collector consumes exactly the same test sources and flags as Make.
 go-tools-inventory:
 	@printf '%s\t%s\t%s\n' $(foreach tool,$(ROUTER_GO_TOOLS),'$(tool)' '$($(tool)_TEST_FLAGS)' '$(call go_tool_test_sources,$(tool))')
