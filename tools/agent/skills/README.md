@@ -20,6 +20,7 @@ Router behavior. Choose one by the task below. The development harness
 | Compare two Router benchmark runs | [Compare configurations](vllm-sr-compare-configurations/SKILL.md) | Check paired cases and compatible settings before comparing. |
 | Calibrate a maintained recipe | [Routing calibration](routing-calibration/SKILL.md) | Validate the versioned probe manifest. |
 | Turn a diagnosed misroute into one tested recipe candidate | [Tune recipe](vllm-sr-tune-recipe/SKILL.md) | Freeze development cases and guard floors, then choose manual calibration or recipe-lab. |
+| Draft or optimize a two-model recipe with Recipe Lab | [Recipe Lab loop](recipe-lab-loop/SKILL.md) | Read the attribution evidence, then propose and evaluate one candidate. |
 | Change a request-visible Router contract | [Router contract change](router-contract-change/SKILL.md) | Read the affected change surfaces and nearest `AGENTS.md`. |
 | Review issues, PRs, or releases | [Maintainer operations](maintainer-ops/SKILL.md) | Resolve the exact target and current revision. |
 | Set up the vSR Claude Code plugin | [Plugin setup](../../../src/agent-harness/claude-code/skills/setup/SKILL.md) | Detect the machine and current runtime. |

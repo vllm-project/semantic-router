@@ -284,7 +284,7 @@ def weighted_macro_average(
 
 def resolve_constraint(
     constraint: dict[str, Any],
-    references: dict[str, float | None] | None = None,
+    references: dict[str, float | dict[str, float | None] | None] | None = None,
 ) -> dict[str, Any]:
     """Status and resolved bound for one constraint evidence entry (E).
 
@@ -298,7 +298,9 @@ def resolve_constraint(
     serializes unknown spend as null - unknown usage must never count as
     zero). A "baseline" bound resolves against the measured baseline
     value; a "ref:strong"/"ref:weak" bound (M4) resolves against the
-    named reference arm's value via `references`, multiplied by `factor`
+    named reference arm's value via `references`, and a
+    "ref:random_mix" bound (C8) against the model_eval driver's computed
+    cost-matched random mix, multiplied by `factor`
     when declared. tolerance_pct relaxes the bound multiplicatively and
     tolerance_pp (M4) additively in the permissive direction. A missing
     reference value is unevaluated (INCONCLUSIVE), never zero.
@@ -319,8 +321,13 @@ def resolve_constraint(
         ref_role = "strong"
     elif bound == "ref:weak":
         ref_role = "weak"
+    elif bound == "ref:random_mix":
+        ref_role = "random_mix"
     if ref_role is not None:
         ref_value = (references or {}).get(ref_role)
+        if isinstance(ref_value, dict):
+            ref_value = ref_value.get(constraint["metric"])
+            out["ref_metric"] = constraint["metric"]
         if ref_value is None:
             out["not_evaluated_reason"] = (
                 f"constraint {name} not evaluable: reference arm {ref_role!r} "
@@ -413,7 +420,8 @@ def evaluate_verdict(
     stats: PairedStats | None = None,
     min_cases: int = 1,
     min_improvement_pp: float | None = None,
-    references: dict[str, float | None] | None = None,
+    references: dict[str, float | dict[str, float | None] | None] | None = None,
+    agentic_gates: list[Any] | None = None,
 ) -> VerdictResult:
     """Decide PASS / FAIL / INCONCLUSIVE from live-tier evidence.
 
@@ -425,6 +433,13 @@ def evaluate_verdict(
     Guards are safety vetoes and outrank constraints (E): when both a guard
     and a constraint are violated the guard reasons are listed first.
 
+    AG7: `agentic_gates` carries the agentic stability ceilings as
+    duck-typed `AgenticGateResult` values (`name` / `evaluated` / `passed`,
+    ceiling semantics: a measured value above the bound is a violation).
+    They rank with the guards: an exceeded ceiling fails the verdict, an
+    unevaluated one keeps it INCONCLUSIVE (missing evidence is never a
+    pass).
+
     M2: when paired statistics are available they replace the point-estimate
     comparison entirely - PASS needs the CI lower bound at or above the
     `min_improvement_pp` bar, FAIL means the upper bound is below it, and a
@@ -434,7 +449,8 @@ def evaluate_verdict(
     statistics a declared pp bar has nothing to apply to (INCONCLUSIVE) and
     the point-estimate path applies `min_improvement_pct` unchanged.
 
-    M4: constraint bounds may pin a reference arm (`ref:strong`/`ref:weak`);
+    M4: constraint bounds may pin a reference arm (`ref:strong`/`ref:weak`,
+    and C8's `ref:random_mix`);
     `references` carries those arms' measured values, and a missing
     reference value keeps the constraint unevaluated (INCONCLUSIVE).
     """
@@ -442,6 +458,13 @@ def evaluate_verdict(
     unevaluated = [g.name for g in guards if not g.evaluated]
     if unevaluated:
         reasons.append("guard evaluation incomplete: " + ", ".join(unevaluated))
+    agentic_gate_list = list(agentic_gates or [])
+    unevaluated_agentic = [g.name for g in agentic_gate_list if not g.evaluated]
+    if unevaluated_agentic:
+        reasons.append(
+            "agentic stability gate evaluation incomplete: "
+            + ", ".join(unevaluated_agentic)
+        )
     resolved_constraints = [
         resolve_constraint(c, references) for c in (constraints or [])
     ]
@@ -475,18 +498,26 @@ def evaluate_verdict(
 
     improvement = _improvement_pct(baseline_metric, candidate_metric, direction)
     failed_guards = [g for g in guards if not g.passed]
+    failed_agentic = [g for g in agentic_gate_list if not g.passed]
     violated_constraints = [
         c for c in resolved_constraints if c["status"] == "violated"
     ]
-    if failed_guards:
-        details = "; ".join(
+    if failed_guards or failed_agentic:
+        guard_details = "; ".join(
             f"{g.name}: {g.value:.4f} < floor {g.floor:.4f}" for g in failed_guards
         )
-        # safety veto first; any simultaneously violated constraint is still listed
+        agentic_details = "; ".join(
+            f"{g.name}: {g.value:g} > bound {g.bound:g}" for g in failed_agentic
+        )
+        veto_reasons = []
+        if guard_details:
+            veto_reasons.append(f"guard floor violated ({guard_details})")
+        if agentic_details:
+            veto_reasons.append(f"agentic stability gate exceeded ({agentic_details})")
+        # safety vetoes first; any simultaneously violated constraint is still listed
         return VerdictResult(
             VERDICT_FAIL,
-            [f"guard floor violated ({details})"]
-            + [c["reason"] for c in violated_constraints],
+            veto_reasons + [c["reason"] for c in violated_constraints],
             improvement_pct=round(improvement, 6),
             constraints=resolved_constraints,
         )
@@ -513,9 +544,11 @@ def evaluate_verdict(
         return VerdictResult(
             VERDICT_INCONCLUSIVE,
             [
-                "objective.min_improvement_pp requires paired CI evidence "
-                "(sr-bench compare comparisons[]); this comparison carries "
-                "no paired statistics"
+                (
+                    "objective.min_improvement_pp requires paired CI evidence "
+                    "(sr-bench compare comparisons[]); this comparison carries "
+                    "no paired statistics"
+                )
             ],
             improvement_pct=round(improvement, 6),
             constraints=resolved_constraints,
@@ -562,8 +595,10 @@ def _paired_decision(
     if stats.paired_cases < min_cases:
         return undecided(
             [
-                f"insufficient paired sample: {stats.paired_cases} paired cases "
-                f"< min_cases {min_cases}"
+                (
+                    f"insufficient paired sample: {stats.paired_cases} paired cases "
+                    f"< min_cases {min_cases}"
+                )
             ]
         )
     if stats.quality_delta_ci95 is None:
@@ -573,17 +608,21 @@ def _paired_decision(
     if direction != "maximize":
         return undecided(
             [
-                "paired CI evidence is defined for maximize objectives only; "
-                f"objective.direction is {direction!r}"
+                (
+                    "paired CI evidence is defined for maximize objectives only; "
+                    f"objective.direction is {direction!r}"
+                )
             ]
         )
     if min_improvement_pp is None:
         return undecided(
             [
-                "paired CI evidence requires objective.min_improvement_pp "
-                "(absolute percentage points); min_improvement_pct "
-                f"{min_improvement_pct:g} is relative and cannot be applied to "
-                "an absolute interval"
+                (
+                    "paired CI evidence requires objective.min_improvement_pp "
+                    "(absolute percentage points); min_improvement_pct "
+                    f"{min_improvement_pct:g} is relative and cannot be applied to "
+                    "an absolute interval"
+                )
             ]
         )
     low, high = stats.quality_delta_ci95
@@ -592,9 +631,11 @@ def _paired_decision(
         return VerdictResult(
             VERDICT_PASS,
             [
-                f"paired CI lower bound {low * 100:.2f}pp >= min "
-                f"{min_improvement_pp:.2f}pp ({stats.paired_cases} paired cases, "
-                f"delta {stats.quality_delta * 100:.2f}pp)"
+                (
+                    f"paired CI lower bound {low * 100:.2f}pp >= min "
+                    f"{min_improvement_pp:.2f}pp ({stats.paired_cases} paired cases, "
+                    f"delta {stats.quality_delta * 100:.2f}pp)"
+                )
             ],
             improvement_pct=round(improvement, 6),
             constraints=constraints,
@@ -603,16 +644,20 @@ def _paired_decision(
         return VerdictResult(
             VERDICT_FAIL,
             [
-                f"paired CI upper bound {high * 100:.2f}pp below min "
-                f"{min_improvement_pp:.2f}pp ({stats.paired_cases} paired cases, "
-                f"delta {stats.quality_delta * 100:.2f}pp)"
+                (
+                    f"paired CI upper bound {high * 100:.2f}pp below min "
+                    f"{min_improvement_pp:.2f}pp ({stats.paired_cases} paired cases, "
+                    f"delta {stats.quality_delta * 100:.2f}pp)"
+                )
             ],
             improvement_pct=round(improvement, 6),
             constraints=constraints,
         )
     return undecided(
         [
-            f"paired CI [{low * 100:.2f}pp, {high * 100:.2f}pp] spans the threshold "
-            f"{min_improvement_pp:.2f}pp; not enough evidence to decide"
+            (
+                f"paired CI [{low * 100:.2f}pp, {high * 100:.2f}pp] spans the threshold "
+                f"{min_improvement_pp:.2f}pp; not enough evidence to decide"
+            )
         ]
     )

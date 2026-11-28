@@ -1,0 +1,98 @@
+{
+  "comment": "AG8 scripted-agent fixtures, shared by agentic_probe.py (client side: sessions, tool results, sub-agent wiring) and mock_backend.py (server side: tool-call steps, final completions, per-model completion rates and token budgets). Every field is deterministic so two runs of the same fixture produce byte-identical conversations.",
+  "sessions": [
+    {
+      "fixture": "simple",
+      "task": "simple",
+      "description": "single user turn, no tool calls, immediate final answer"
+    },
+    {
+      "fixture": "long-loop",
+      "task": "long-loop",
+      "description": "four assistant turns inside one tool loop before completion"
+    },
+    {
+      "fixture": "sub-agent",
+      "task": "sub-agent",
+      "sub_agent_tool": "delegate_search",
+      "subtask_task": "sub-agent-subtask",
+      "description": "main loop delegates to a sub-agent that runs its own loop under a second agent identity header"
+    },
+    {
+      "fixture": "correction",
+      "task": "correction",
+      "user_correction_after_step": 0,
+      "correction_text": "Actually, name it load_config instead, and update the src/limiter.py call sites.",
+      "description": "user interrupts the tool loop with a correction before completion"
+    }
+  ],
+  "tasks": {
+    "simple": {
+      "task_prompt": "Summarise the project README in one sentence.",
+      "tool_call_steps": [],
+      "final_content": "The README explains how to install, configure and run the router."
+    },
+    "long-loop": {
+      "task_prompt": "Fix the failing test in src/limiter.py, then run the full suite.",
+      "tool_call_steps": [0, 1, 2, 3],
+      "tool_names": ["read_file", "edit_file", "run_tests", "run_tests"],
+      "tool_args": {
+        "read_file": {"path": "src/limiter.py"},
+        "edit_file": {"path": "src/limiter.py", "change": "r > 10 -> r > 11"},
+        "run_tests": {}
+      },
+      "final_content": "Fixed the off-by-one boundary check in src/limiter.py; all 12 tests pass."
+    },
+    "sub-agent": {
+      "task_prompt": "Find the slowest build step and fix it. Delegate the search to a sub-agent.",
+      "tool_call_steps": [0, 1],
+      "tool_names": ["delegate_search", "apply_fix"],
+      "tool_args": {
+        "delegate_search": {"subtask": "Profile the build and report the slowest step."},
+        "apply_fix": {"target": "build warm-up cache"}
+      },
+      "final_content": "The classifier warm-up was the slow step; I cached it and cut build time."
+    },
+    "sub-agent-subtask": {
+      "task_prompt": "Profile the build and report the slowest step.",
+      "tool_call_steps": [0],
+      "tool_names": ["read_file"],
+      "tool_args": {"read_file": {"path": "Makefile"}},
+      "final_content": "The classifier warm-up dominates: 40s of a 43s build."
+    },
+    "correction": {
+      "task_prompt": "Rename the helper function to parse_config.",
+      "tool_call_steps": [0],
+      "tool_names": ["edit_file"],
+      "tool_args": {"edit_file": {"old": "parse_conf", "new": "parse_config"}},
+      "final_content": "Renamed the helper as corrected."
+    }
+  },
+  "tool_results": {
+    "read_file": "def limit(r): return r > 10  # off-by-one",
+    "edit_file": "patched",
+    "run_tests": "12 passed, 0 failed",
+    "apply_fix": "applied the fix to the build warm-up path",
+    "delegate_search": "(replaced by the sub-agent's final answer)"
+  },
+  "models": {
+    "google/gemini-2.5-flash-lite": {
+      "completion_rate": 1.0,
+      "prompt_tokens_per_message": 8,
+      "completion_tokens_per_step": 2,
+      "cached_tokens_per_step": 1
+    },
+    "google/gemini-3.1-pro": {
+      "completion_rate": 1.0,
+      "prompt_tokens_per_message": 12,
+      "completion_tokens_per_step": 6,
+      "cached_tokens_per_step": 2
+    },
+    "qwen/qwen3.6-rocm": {
+      "completion_rate": 1.0,
+      "prompt_tokens_per_message": 6,
+      "completion_tokens_per_step": 1,
+      "cached_tokens_per_step": 1
+    }
+  }
+}

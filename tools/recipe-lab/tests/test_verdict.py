@@ -503,6 +503,32 @@ def test_resolve_constraint_factor_scales_reference_bound():
     assert resolved["status"] == "violated"
 
 
+def test_resolve_constraint_random_mix_bound():
+    # C8: ref:random_mix resolves against the driver's computed mix value
+    references = {"strong": 0.90, "weak": 0.40, "random_mix": 0.60}
+    resolved = resolve_constraint(
+        m4_constraint(bound="ref:random_mix", candidate=0.7), references
+    )
+    assert resolved["status"] == "pass"
+    assert resolved["bound_value"] == pytest.approx(0.60)
+    resolved = resolve_constraint(
+        m4_constraint(bound="ref:random_mix", factor=0.9, candidate=0.55),
+        references,
+    )
+    assert resolved["status"] == "pass"
+    assert resolved["bound_value"] == pytest.approx(0.54)
+    resolved = resolve_constraint(
+        m4_constraint(bound="ref:random_mix", factor=0.9, candidate=0.5),
+        references,
+    )
+    assert resolved["status"] == "violated"
+    resolved = resolve_constraint(
+        m4_constraint(bound="ref:random_mix", candidate=0.7), {"strong": 0.90}
+    )
+    assert resolved["status"] == "not_evaluated"
+    assert "random_mix" in resolved["not_evaluated_reason"]
+
+
 def test_resolve_constraint_tolerance_pp_relaxes_by_absolute_points():
     # lte: the candidate may spend up to bound + 2pp
     resolved = resolve_constraint(
