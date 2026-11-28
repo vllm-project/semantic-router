@@ -121,7 +121,10 @@ func DeploymentsInUse(cfg *RouterConfig) map[string]ModelDeployment {
 	}
 	scan := func(signals Signals, decisions []Decision, defaults []DecisionPlugin) {
 		for _, rule := range signals.SystemOneRules {
-			mark(rule.Deployment)
+			primary := cmp.Or(rule.Deployment, cfg.DecisionModel, DefaultDecisionDeployment)
+			for _, deployment := range cfg.DecisionDeploymentChain(primary) {
+				mark(deployment)
+			}
 		}
 		for _, judge := range MatchJudgesOf(defaults) {
 			mark(judge.Deployment)

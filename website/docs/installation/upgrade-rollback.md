@@ -209,6 +209,22 @@ Helm stores the release values and manifests for each revision. A rollback
 creates a new rollout; nodes may still need to pull an older image, so wait for
 workload readiness before treating it as complete.
 
+When `vllm-sr serve --target kubernetes` rotates a CLI-managed credential Secret, it
+keeps the Secret while a retained Helm revision references it. Later CLI
+upgrades can remove managed revisions once Helm history and live Deployments
+no longer reference them. The credentials must still be valid with the provider
+for a rollback to restore traffic.
+
+The shared legacy `vllm-sr-env-secrets` Secret may remain after migration.
+Before removing it manually, check live workloads and retained Helm revision
+manifests for references across releases in the namespace.
+
+Before rolling back, inspect the target revision with `helm get manifest` and
+`--revision`. For each required credential Secret in the Deployment's `secretRef`
+or `secretKeyRef` entries, confirm it exists in the Deployment's namespace with
+`kubectl get secret` and `-o name`. Restore any missing Secret with its required
+credentials before running `helm rollback`.
+
 ```bash
 # View history
 helm history semantic-router -n vllm-semantic-router-system

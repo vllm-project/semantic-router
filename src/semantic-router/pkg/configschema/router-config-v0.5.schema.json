@@ -3659,6 +3659,18 @@
         },
         "flow": {
           "$ref": "#/$defs/FlowRuntimeConfig"
+        },
+        "streaming": {
+          "$ref": "#/$defs/LooperStreamingConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LooperStreamingConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -4444,6 +4456,13 @@
         },
         "max_retries": {
           "type": "integer"
+        },
+        "fallbacks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
         },
         "tls": {
           "$ref": "#/$defs/DeploymentTLS"
