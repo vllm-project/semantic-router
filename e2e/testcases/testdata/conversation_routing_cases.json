@@ -1,7 +1,33 @@
 [
   {
+    "name": "Late session turn match",
+    "description": "late_session matches from the third user turn onward (turn_index >= 2)",
+    "messages": [
+      {"role": "user", "content": "First question about Go slices."},
+      {"role": "assistant", "content": "Slices are views over arrays."},
+      {"role": "user", "content": "Second question about Go maps."},
+      {"role": "assistant", "content": "Maps are hash tables."},
+      {"role": "user", "content": "Third question about Go channels."}
+    ],
+    "expected_decision": "late_session_routing",
+    "expected_matched_signal": "multi_turn_user,late_session",
+    "should_match": true
+  },
+  {
+    "name": "Early session turn falls through",
+    "description": "A second user turn has turn_index 1, so late_session does not fire and multi_turn_user wins",
+    "messages": [
+      {"role": "user", "content": "First question about Go slices."},
+      {"role": "assistant", "content": "Slices are views over arrays."},
+      {"role": "user", "content": "Second question about Go maps."}
+    ],
+    "expected_decision": "multi_turn_user_routing",
+    "expected_matched_signal": "multi_turn_user",
+    "should_match": true
+  },
+  {
     "name": "Multi-turn user history match",
-    "description": "multi_turn_user matches once the conversation has two or more user messages",
+    "description": "multi_turn_user matches once the conversation has two or more user messages (two user turns stay below the late_session threshold)",
     "messages": [
       {"role": "user", "content": "What's the weather like in Paris?"},
       {"role": "assistant", "content": "It's currently sunny and 22C in Paris."},

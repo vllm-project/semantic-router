@@ -82,9 +82,31 @@ recipes:
 | `flow_tool_state` | — | Returns 1 only when the request ends with a Router Flow tool result carrying resumable workflow state. Historical Flow tool results do not match. |
 | `invalid_tool_call` | — | Counts tool calls in the last assistant message whose arguments miss a required property of the named tool's schema, or are not a JSON object at all. |
 | `failed_tool_result` | — | Counts the failed tool results of the current user turn since the last two successful results in a row. See [Escalate when tool calls keep failing](#escalate-when-tool-calls-keep-failing). |
+| `turn_index` | — | Zero-based user turn index within the session. Tool continuations (tool results, including tool-result text the client sent as user content) are grouped with the user message that started them, matching the router-replay turn semantics. Resolves to 0 when no user history is visible. |
+| `session_history_tokens` | — | Estimated token size of the conversation history the request carries, excluding the current user message. Resolves to 0 when no history is visible. |
 
 To route on images in the request, use an [`input_modality`](./input-modality)
 rule with `modality: image`.
+
+### Session-position example
+
+`turn_index` enables position-aware policies, such as only allowing a cheaper
+lane once a session has progressed past its early exploration turns:
+
+```yaml
+recipes:
+  - name: default
+    signals:
+      conversation:
+        - name: late_session
+          description: Third or later user turn of the session.
+          feature:
+            type: count
+            source:
+              type: turn_index
+          predicate:
+            gte: 2
+```
 
 ## Decision Usage
 

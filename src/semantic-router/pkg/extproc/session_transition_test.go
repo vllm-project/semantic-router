@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
@@ -208,5 +209,120 @@ func TestPopulatePinnedSessionFromHeaders_NoSessionHeader_ProvenanceStaysNone(t 
 	// the session header itself.
 	if ctx.AuthenticatedPrincipal != "user-42" {
 		t.Fatalf("AuthenticatedPrincipal = %q, want %q", ctx.AuthenticatedPrincipal, "user-42")
+	}
+}
+
+// The session_history_tokens estimate must count the text a tool loop adds to
+// the history: tool-result payloads and tool-call arguments. Growing a
+// historical tool result from a few bytes to thousands once left the estimate
+// flat, so a gte threshold on the signal never fired.
+func TestHistoryTokensCountToolResultPayload(t *testing.T) {
+	result := strings.Repeat("x", 8000)
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run it"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "shell", Arguments: `{"command":"ls"}`}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: result}}}}}},
+	}
+	if got := historyTokensFromSemanticMessages(messages); got < 1024 {
+		t.Fatalf("an 8000-byte tool result estimated %d tokens, want at least 1024", got)
+	}
+}
+
+func TestStoredResponseTokensCountToolOutput(t *testing.T) {
+	output, err := json.Marshal(strings.Repeat("x", 8000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := &responseapi.StoredResponse{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}
+	if got := estimateStoredResponseTokens(resp); got < 1024 {
+		t.Fatalf("an 8000-byte tool output estimated %d tokens, want at least 1024", got)
+	}
+}
+
+// The signal must match the post-routing record: a Responses continuation
+// counts the retained responses' billed usage instead of re-estimating the
+// projection the object store prepended to the request.
+func TestSessionPositionFactsPreferRetainedUsage(t *testing.T) {
+	history := contextcompression.CaptureHistory(&llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", 4000)}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "next"}}},
+	}})
+	ctx := &RequestContext{
+		OriginalContextHistory: history,
+		ResponseObjectState: &ResponseObjectState{ConversationHistory: []*responseapi.StoredResponse{
+			{Usage: &responseapi.Usage{InputTokens: 12, OutputTokens: 3}},
+		}},
+	}
+	if _, tokens := sessionPositionFacts(ctx); tokens != 15 {
+		t.Fatalf("history tokens = %d, want the retained usage 15", tokens)
+	}
+}
+
+// Instructions are resent with every request and belong to the history the gate
+// measures; reading only messages dropped the system and developer text.
+func TestHistoryTokensIncludeOriginalInstructions(t *testing.T) {
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "do it"}}},
+	}
+	ctx := &RequestContext{OriginalContextHistory: contextcompression.CaptureHistory(&llmprotocol.Request{
+		Instructions: []llmprotocol.InstructionBlock{{
+			Role:    llmprotocol.RoleSystem,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: strings.Repeat("x", 4000)}},
+		}},
+		Messages: messages,
+	})}
+	_, withInstructions := sessionPositionFacts(ctx)
+
+	withoutInstructions := &RequestContext{
+		OriginalContextHistory: contextcompression.CaptureHistory(&llmprotocol.Request{Messages: messages}),
+	}
+	_, messagesOnly := sessionPositionFacts(withoutInstructions)
+	if withInstructions < 1000 || withInstructions <= messagesOnly {
+		t.Fatalf("instructions estimated %d tokens, messages only %d", withInstructions, messagesOnly)
+	}
+}
+
+// An official function_call_output array uses input_text parts; the output-side
+// extractor reads only output_text, which dropped the whole payload.
+func TestStoredResponseTokensCountInputTextOutput(t *testing.T) {
+	output, err := json.Marshal([]map[string]string{
+		{"type": "input_text", "text": strings.Repeat("x", 4000)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := &responseapi.StoredResponse{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}
+	if got := estimateStoredResponseTokens(resp); got < 1000 {
+		t.Fatalf("a 4000-byte input_text output estimated %d tokens, want at least 1000", got)
+	}
+}
+
+// The signal feeds comparison operators, so the estimate must be the history's
+// real size: a session_history_tokens gate above a ceiling the estimate never
+// passed could never match.
+func TestHistoryTokensEstimateIsNotCapped(t *testing.T) {
+	result := strings.Repeat("x", 40000)
+	messages := []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run it"}}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "shell", Arguments: `{"command":"ls"}`}}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1", Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: result}}}}}},
+	}
+	if got := historyTokensFromSemanticMessages(messages); got <= 8192 {
+		t.Fatalf("a 40000-byte tool result estimated %d tokens, want an uncapped count above 8192", got)
+	}
+
+	output, err := json.Marshal(strings.Repeat("x", 40000))
+	if err != nil {
+		t.Fatal(err)
+	}
+	history := []*responseapi.StoredResponse{{Input: []responseapi.InputItem{
+		{Type: "function_call_output", CallID: "call_1", Output: output},
+	}}}
+	if got := historyTokensFromStoredResponses(history); got <= 8192 {
+		t.Fatalf("a 40000-byte stored output estimated %d tokens, want an uncapped count above 8192", got)
 	}
 }

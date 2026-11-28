@@ -180,7 +180,7 @@ func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput
 	if ctx.SemanticRequest != nil && len(ctx.SemanticRequest.Messages) != 0 {
 		populateSemanticSessionIDIfNeeded(ctx)
 		ctx.TurnIndex = sessiontelemetry.ChatTurnNumber(sessionTransitionMessages(ctx.SemanticRequest.Messages)) - 1
-		ctx.HistoryTokenCount = historyTokensFromSemanticMessages(ctx.SemanticRequest.Messages)
+		ctx.HistoryTokenCount = historyTokensFromConversation(originalConversation(ctx))
 	}
 	if ctx.learningPreview != nil {
 		key := routingSessionStateKey(ctx)

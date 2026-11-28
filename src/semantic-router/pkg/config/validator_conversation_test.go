@@ -65,6 +65,29 @@ func TestValidateConversationRuleContract_ToolChoiceSources(t *testing.T) {
 	}
 }
 
+func TestValidateConversationRuleContract_SessionPositionSources(t *testing.T) {
+	for _, sourceType := range []string{"turn_index", "session_history_tokens"} {
+		rule := ConversationRule{
+			Name: sourceType,
+			Feature: ConversationFeature{
+				Type:   "count",
+				Source: ConversationSource{Type: sourceType},
+			},
+			Predicate: &NumericPredicate{GTE: ptrFloat64(1)},
+		}
+		if err := ValidateConversationRuleContract(rule); err != nil {
+			t.Fatalf("expected %s source to pass, got: %v", sourceType, err)
+		}
+		// Session-position sources describe the session, not a message role.
+		roleRule := rule
+		roleRule.Feature.Source.Role = "user"
+		err := ValidateConversationRuleContract(roleRule)
+		if err == nil || !strings.Contains(err.Error(), "source.role is only valid") {
+			t.Fatalf("expected %s with role to be refused, got: %v", sourceType, err)
+		}
+	}
+}
+
 func TestValidateConversationRuleContract_EmptyName(t *testing.T) {
 	rule := validConversationRule()
 	rule.Name = ""
