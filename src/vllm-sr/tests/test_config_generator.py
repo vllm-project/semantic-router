@@ -397,6 +397,7 @@ recipes:
     cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
+    assert "dns_lookup_family" not in cluster
     # an idle connection closes before a 5s keep-alive backend closes it
     options = cluster["typed_extension_protocol_options"][
         "envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
@@ -694,7 +695,7 @@ recipes:
     # --- cluster assertions ---
     cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
-    assert cluster["dns_lookup_family"] == "V4_ONLY"
+    assert cluster["dns_lookup_family"] == "V4_PREFERRED"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
     assert ep["address"]["socket_address"]["address"] == "api.example.com"
     assert ep["address"]["socket_address"]["port_value"] == 443
@@ -714,6 +715,53 @@ recipes:
         default_route_action["regex_rewrite"]["substitution"]
         == "/compatible-mode/v1\\1"
     )
+
+
+def test_hostname_backend_pool_uses_strict_dns_preferring_ipv4(tmp_path, monkeypatch):
+    """Two hostname backends should render a STRICT_DNS cluster with V4_PREFERRED."""
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.5
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    model: "test-model"
+  models:
+    - name: "test-model"
+      backend_refs:
+        - name: "primary"
+          endpoint: "http://host.docker.internal:8000/v1"
+          provider: "vllm"
+          weight: 1
+        - name: "secondary"
+          endpoint: "http://host.docker.internal:8001/v1"
+          provider: "vllm"
+          weight: 1
+recipes:
+  - name: default
+    decisions:
+      - name: "default-route"
+        description: "default route"
+        priority: 100
+        rules:
+          operator: "AND"
+          conditions: []
+        modelRefs:
+          - model: "test-model"
+            use_reasoning: false
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
+    assert cluster["type"] == "STRICT_DNS"
+    assert cluster["dns_lookup_family"] == "V4_PREFERRED"
 
 
 def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
