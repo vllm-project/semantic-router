@@ -462,7 +462,8 @@ def test_cli_recipe_and_public_model_are_exclusive(tmp_path, capsys):
             ]
         )
     assert caught.value.code == 2
-    assert "not allowed with argument" in capsys.readouterr().err
+    # usage errors are JSON receipts, never prose
+    assert "not allowed with argument" in json.loads(capsys.readouterr().out)["reason"]
 
 
 # ---- run --validate and sidecar provenance ----
@@ -570,7 +571,7 @@ def test_run_sidecar_provenance_and_partial_rejection(monkeypatch, tmp_path, cap
     (cands / "candidate-002.yaml").write_text("routing: {}\n", encoding="utf-8")
     validator = tmp_path / "validator.sh"
     validator.write_text(
-        '#!/bin/sh\ncase "$4" in *candidate-002*) exit 1;; esac\nexit 0\n',
+        '#!/bin/sh\ncase "$*" in *candidate-002*) exit 1;; esac\nexit 0\n',
         encoding="utf-8",
     )
     validator.chmod(0o755)

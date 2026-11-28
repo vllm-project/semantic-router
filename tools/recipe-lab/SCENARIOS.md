@@ -54,22 +54,13 @@ recipe-lab suggest-depth --workspace "$WORK" --config "$PARENT_YAML" \
   --endpoint "$PARENT_ORIGIN" --out "$WORK/candidate.yaml"
 ```
 
-Read the JSON `observations`. A move needs a comparable opening request that used the strong reasoning branch, a correct and faster whole task on the direct fast backend, and no competing conditional branch. A slower or unsuccessful fast result supplies a protected observation. The threshold must leave a protected score on the strong lane. If the result is `keep-parent`, retain the original package and use the recorded observations to decide whether more development evidence is worthwhile. For later tool turns, use the [development ledger](REFERENCE.md#speed-depth-evidence-for-the-development-ledger).
+Read the JSON `observations`. A move needs a comparable opening request that used the strong reasoning branch, a correct and faster whole task on the direct fast backend, and no competing conditional branch. A slower or unsuccessful fast result supplies a protected observation. The threshold must leave a protected score on the strong lane. If the result is `keep-parent`, retain the original package and use the recorded observations to decide whether more development evidence is worthwhile.
 
 Check `output_policy`, the requested output limit and both finish reasons in the proposal receipt. A fast model that reached `length` was graded under that output reservation. To assess its ability to finish naturally, use a separate, comparable run under the deployment's native output policy where supported. Keep the original measurements available.
 
-If the result is `proposed`, deploy the exact output to a test stack, run a public route probe on both sides of the proposed change and register its sr-bench MoM target. Read the new `active_runtime_hash` from that Router's `/api/v1/config/hash`. Set the minimum acceptable speedup in percent before running the comparison. This example uses the original routed target as the baseline.
+If the result is `proposed`, the candidate is a development proposal, not an adoption claim. Freeze it like any other candidate configuration and let it earn a verdict in the recipe-lab loop: evaluate it in the replay tier against the parent's recorded routing (`recipe-lab run` with `--candidates "$WORK/candidate.yaml" --proposer agent:recipe-tuner`), then confirm it live with the sr-bench verifier (`recipe-lab verify`) or compare two recorded runs (`recipe-lab live-verdict`) with the contract's guard floors. The [recipe-lab skill](../agent/skills/recipe-lab-loop/SKILL.md) walks that loop end to end.
 
-```bash
-recipe-lab run --workspace "$WORK" --candidate "$WORK/candidate.yaml" \
-  --proposer agent:recipe-tuner --baseline-run "$DEV_RUN" --baseline-target "$PARENT_TARGET" \
-  --candidate-target "$CANDIDATE_TARGET" --active-runtime-hash "$ACTIVE_HASH" \
-  --min-speedup-pct "$MIN_SPEEDUP_PCT"
-```
-
-Supply `--deployed-config "$CANDIDATE_RUNTIME_YAML"` for a materialized candidate in the same way as for the parent. The receipt names the submitted run. Reuse it with `--candidate-run "$CANDIDATE_RUN"` to read the evidence again or compare against the direct strong target in the same baseline. Exit 0 means `PASS`, 1 means `FAIL`, and 2 means `INCONCLUSIVE` for a valid invocation. Case times are summed on jointly correct tasks. With the default guards, losing any baseline success fails the comparison. The command's wait limit controls how long the client watches the run. The worker follows the benchmark's own execution policy.
-
-Freeze the chosen candidate and the adoption criteria before revealing any holdout grades. Prepare a separate full baseline on the unseen cases, then repeat `run` with its ID and targets. Record both comparisons and deliver the package that satisfies the criteria. The development verdict alone cannot establish a holdout gain.
+Freeze the chosen candidate and the adoption criteria before revealing any holdout grades: only `recipe-lab verify --final` (or `live-verdict --final`) may touch `frozen_test`. Record both comparisons and deliver the package that satisfies the criteria. The development verdict alone cannot establish a holdout gain.
 
 ## Adapt a hand-tuned rule to a new deployment
 
@@ -123,12 +114,12 @@ Start with the strict grades on the guard and target. If the guard loses a previ
 
 ## Run the examples with synthetic receipts
 
-With Python, PyYAML and pytest available, these tests exercise the planner, paired scheduling and a frozen three-method comparison in temporary workspaces. They require no serving endpoints or benchmark downloads.
+With Python, PyYAML and pytest available, these tests exercise the planner, paired scheduling and the decision readout in temporary workspaces. They require no serving endpoints or benchmark downloads.
 
 ```bash
 python -m pytest -q \
   tools/recipe-lab/tests/test_planner.py::PlannerTest::test_plan_publish_anchor_and_duplicate_predicate \
   tools/recipe-lab/tests/test_planner.py::PlannerTest::test_ready_plan_enrolls_separately_measured_guard_and_freezes_feedback \
   tools/recipe-lab/tests/test_schedule.py::ScheduleTest::test_opposite_quality_pairs_require_repeat_before_latency_promotion \
-  tools/recipe-lab/tests/test_improver_eval.py
+  tools/recipe-lab/tests/test_decision_summary.py
 ```

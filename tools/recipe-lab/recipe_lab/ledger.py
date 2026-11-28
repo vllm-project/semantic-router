@@ -84,6 +84,19 @@ class LedgerRecord:
     # / quality_delta_bootstrap_ci95 / wins / losses / ties), recorded
     # verbatim for report replay; None when the payload carried none.
     paired: dict | None = None
+    # AG1: agentic continuity evidence - the candidate arm's per-target
+    # `continuity` sections (switch counts, per-phase switches, switched /
+    # unswitched task accuracy) read from the run reports; None otherwise.
+    agentic: dict | None = None
+    # Measurements needed to replay the decision against the promotion spec.
+    verification: dict | None = None
+    replay_failures: list[dict] = field(default_factory=list)
+    candidate_tag: str | None = None
+    request_tag: str | None = None
+    # Y4: the promotion flag - a record produced by a --final verdict. The
+    # bundle reads this instead of reverse-engineering finality from the
+    # contract's split roles; only live-tier records may carry it.
+    final: bool = False
 
     def to_dict(self) -> dict:
         out: dict[str, Any] = {
@@ -123,6 +136,18 @@ class LedgerRecord:
             out["constraint_warning"] = True
         if self.paired is not None:
             out["paired"] = dict(self.paired)
+        if self.agentic is not None:
+            out["agentic"] = dict(self.agentic)
+        if self.verification is not None:
+            out["verification"] = dict(self.verification)
+        if self.replay_failures:
+            out["replay_failures"] = list(self.replay_failures)
+        if self.candidate_tag is not None:
+            out["candidate_tag"] = self.candidate_tag
+        if self.request_tag is not None:
+            out["request_tag"] = self.request_tag
+        if self.final:
+            out["final"] = True
         return out
 
     @classmethod
@@ -149,14 +174,20 @@ class LedgerRecord:
             coverage_warning=bool(raw.get("coverage_warning", False)),
             notes=str(raw.get("notes", "")),
             split=raw.get("split"),
+            legacy_workload=bool(raw.get("legacy_workload", False)),
+            workload=raw.get("workload"),
             status=raw.get("status"),
             constraints=(
                 dict(raw["constraints"]) if raw.get("constraints") is not None else None
             ),
             constraint_warning=bool(raw.get("constraint_warning", False)),
-            legacy_workload=bool(raw.get("legacy_workload", False)),
-            workload=raw.get("workload"),
             paired=dict(raw["paired"]) if raw.get("paired") is not None else None,
+            agentic=dict(raw["agentic"]) if raw.get("agentic") is not None else None,
+            verification=raw.get("verification"),
+            replay_failures=list(raw.get("replay_failures", [])),
+            candidate_tag=raw.get("candidate_tag"),
+            request_tag=raw.get("request_tag"),
+            final=bool(raw.get("final", False)),
         )
 
 
@@ -170,9 +201,9 @@ def validate_record(raw: dict) -> None:
     if tier not in TIERS:
         raise ContractError(f"tier must be one of {sorted(TIERS)}, got {tier!r}")
     verdict = raw["verdict"]
-    if tier == "replay" and verdict not in REPLAY_VERDICTS:
+    if tier in ("replay", "route_replay") and verdict not in REPLAY_VERDICTS:
         raise ContractError(
-            f"replay-tier records must use RANKED verdict (got {verdict!r}); "
+            f"{tier}-tier records must use RANKED verdict (got {verdict!r}); "
             "unverified numbers must not look like conclusions"
         )
     if tier == "live" and verdict not in LIVE_VERDICTS:
@@ -182,6 +213,8 @@ def validate_record(raw: dict) -> None:
         )
     if not isinstance(raw["metrics"], dict):
         raise ContractError("metrics must be a mapping")
+    if "verification" in raw and not isinstance(raw["verification"], dict):
+        raise ContractError("verification must be a mapping")
     if not isinstance(raw["candidate"], dict):
         raise ContractError("candidate must be a mapping")
     _require_nonempty_str(raw["dataset_hash"], "dataset_hash")
@@ -201,7 +234,7 @@ def validate_record(raw: dict) -> None:
                 "live records with a concluded verdict must reference at least one sr-bench run "
                 "(bench_refs); INCONCLUSIVE records may have an empty list"
             )
-    for optional_list in ("reasons", "bench_refs"):
+    for optional_list in ("reasons", "bench_refs", "replay_failures"):
         if optional_list in raw and not isinstance(raw[optional_list], list):
             raise ContractError(f"{optional_list} must be a list")
     if "attribution_ref" in raw and raw["attribution_ref"] is not None:
@@ -218,12 +251,31 @@ def validate_record(raw: dict) -> None:
         # hot-reload replay pull lost or duplicated records for the candidate's
         # request ids. Neither carries a metric and both are excluded from
         # top_replay, so a broken capture can never rank as a worse recipe.
-        if raw["status"] not in ("timeout", "incomplete"):
+        # route_replay additionally records "gate-violated" when routing
+        # evidence clears the run but exceeds a stability gate; best_replay
+        # only ranks replay-tier records, so it can never rank either.
+        allowed = ("timeout", "incomplete")
+        if tier == "route_replay":
+            allowed += ("gate-violated",)
+        if raw["status"] not in allowed:
+            suffix = (
+                " or 'gate-violated' (route_replay)" if tier == "route_replay" else ""
+            )
             raise ContractError(
-                f"status must be 'timeout' or 'incomplete', got {raw['status']!r}"
+                f"status must be 'timeout' or 'incomplete'{suffix}, "
+                f"got {raw['status']!r}"
             )
     if "constraint_warning" in raw and not isinstance(raw["constraint_warning"], bool):
         raise ContractError("constraint_warning must be a boolean")
+    if raw.get("paired") is not None and not isinstance(raw["paired"], dict):
+        raise ContractError("paired must be a mapping")
+    if raw.get("agentic") is not None and not isinstance(raw["agentic"], dict):
+        raise ContractError("agentic must be a mapping")
+    # Y4: final is a live-tier promotion flag; nothing else may claim it.
+    if "final" in raw and not isinstance(raw["final"], bool):
+        raise ContractError("final must be a boolean")
+    if raw.get("final") and raw["tier"] != "live":
+        raise ContractError("final is a live-tier promotion flag")
 
 
 def _require_present(raw: dict, name: str) -> None:
@@ -236,7 +288,7 @@ def _require_nonempty_str(value: Any, name: str) -> None:
         raise ContractError(f"{name} must be a non-empty string")
 
 
-def _best_replay(records: list[dict], metric_key: str) -> dict | None:
+def best_replay(records: list[dict], metric_key: str) -> dict | None:
     """A2: pure best-replay selection over raw ledger records.
 
     Highest ``metrics[metric_key]`` among tier "replay" / verdict "RANKED"
@@ -399,4 +451,4 @@ class Ledger:
 
         This is the hand-off contract to the live tier (Sub-issue 3); A2 routes
         it through the shared pure `best_replay` selection."""
-        return _best_replay(self.read(), metric_key)
+        return best_replay(self.read(), metric_key)

@@ -4,6 +4,8 @@ Start from the requested quality, cost, latency or reliability objective and
 its acceptable trade-offs. Discover the active recipe and the schema you need;
 use [sr-bench](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md) for measured single-model and MoM comparisons and
 [Optimization](https://vllm-sr.ai/install/agent/vllm-sr/references/optimization.md) for the decision model, caches and cost.
+For the automated, evidence-led version of this loop (attribution, replay-tier
+search, live verdicts, ledger), see the `recipe-lab-loop` skill.
 
 ## Locate the policy change
 

@@ -1,4 +1,30 @@
-"""Drive and read one live sr-bench experiment through its public CLI."""
+"""sr-bench CLI adapter (Sub-issue 3).
+
+Thin, honest wrapper around `vllm-sr benchmark`: recipe-lab owns the loop,
+sr-bench owns evaluation - this module only shells out, parses, and reads.
+
+Verified against the actual CLI (I, src/vllm-sr/cli/commands/benchmark.py):
+
+- `preview` and `run` take `--manifest <path>` (never a run id) and, without
+  `--detach`, block until the run finishes and print its report. This module
+  always submits with `--detach` (returns the run document immediately) and
+  then polls `show <run_id>` until the status is terminal, so the caller -
+  not a black-box CLI wait - owns the loop and can record per-trial state.
+- `candidate-plan <baseline_run_id> --target <id> (--target ...)* [--mode
+  live|preview] [--name] [--hypothesis]` reviews a terminal baseline's frozen
+  protocol; `--target` is required and repeatable. The review never dispatches
+  (status "validated") - the returned frozen manifest must then be submitted
+  through `run --manifest` to create the run.
+- terminal run states: completed / failed / cancelled / interrupted
+  (cli/sr_bench/store.py TERMINAL).
+
+Metric extraction is a recursive key search - sr-bench payloads are nested
+and versioned, and hard-coding one path would couple us to a schema that
+may move. Missing keys return None; the verdict layer turns that into
+INCONCLUSIVE, never into a bad number.
+"""
+
+from __future__ import annotations
 
 import json
 import math
@@ -17,6 +43,18 @@ import yaml
 from .contract import ContractError
 from .deployed_config import config_identity
 from .loop_evidence import check, digest, sha, target
+from .report_delivery import snapshot
+
+
+class SrbenchError(RuntimeError):
+    """Raised when the sr-bench CLI cannot be executed or parsed."""
+
+
+# Verified: the sr-bench service marks these run states terminal.
+TERMINAL_RUN_STATES = frozenset({"completed", "failed", "cancelled", "interrupted"})
+
+# The largest latency reduction a candidate may request, in percent.
+MAX_SPEEDUP_PCT = 100
 
 
 def encoded(value):
@@ -46,8 +84,16 @@ def persist(directory, receipt):
 
 
 def save_result(workspace, receipt):
-    """Keep the raw machine evidence retrievable; the report helper is #5492."""
+    """Persist the authoritative receipt, then deliver its report.
+
+    The machine evidence stays retrievable even when Markdown delivery
+    fails; the saved receipt never changes shape.
+    """
     receipt["receipt"] = persist(workspace / "sr-bench", receipt)
+    try:
+        receipt["report"] = snapshot(workspace, receipt)
+    except (OSError, ValueError) as exc:
+        receipt["report_error"] = str(exc)
 
 
 class SrBench:
@@ -288,6 +334,13 @@ def verdict(baseline, candidate, guards, minimum):
 
 
 def read_candidate(args, receipt):
+    """Y4/R2: validate one candidate submission and stamp its receipt.
+
+    The proposer tag must name its author (`agent:<id>` for a candidate the
+    agent authored itself, recorded verbatim in the ledger provenance); the
+    receipt carries the candidate's frozen content hash before any run is
+    spent on it.
+    """
     check(
         re.fullmatch(r"agent:\S+", args.proposer),
         "expected proposer agent:<id>",
@@ -501,18 +554,6 @@ def evaluate(args):
             receipt=None,
         )
     return receipt
-
-
-# The largest latency reduction a candidate may request, in percent.
-MAX_SPEEDUP_PCT = 100
-
-
-class SrbenchError(RuntimeError):
-    """Raised when the sr-bench CLI cannot be executed or parsed."""
-
-
-# Verified: the sr-bench service marks these run states terminal.
-TERMINAL_RUN_STATES = frozenset({"completed", "failed", "cancelled", "interrupted"})
 
 
 def cases_to_srbench_rows(

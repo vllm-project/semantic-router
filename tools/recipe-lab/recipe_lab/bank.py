@@ -36,14 +36,18 @@ class BankEntry:
     model: str
     answer: str
     answer_ok: bool | None  # None when the case declares no grading rule
+    tokens: int | None = None  # completion tokens when the source carries them
 
     def to_dict(self) -> dict:
-        return {
+        out = {
             "case_id": self.case_id,
             "model": self.model,
             "answer": self.answer,
             "answer_ok": self.answer_ok,
         }
+        if self.tokens is not None:
+            out["tokens"] = self.tokens
+        return out
 
 
 def _load_mcq_letter() -> Any:
@@ -187,6 +191,13 @@ def load_bank(path: str | Path) -> dict[tuple[str, str], BankEntry]:
                     raise ContractError(
                         f"answer bank line {lineno} is missing required field: {name}"
                     )
+            tokens = raw.get("tokens")
+            if tokens is not None and (
+                not isinstance(tokens, int) or isinstance(tokens, bool) or tokens < 0
+            ):
+                raise ContractError(
+                    f"answer bank line {lineno}: tokens must be a non-negative integer"
+                )
             key = (raw["case_id"], raw["model"])
             if key in bank:
                 raise ContractError(
@@ -201,8 +212,57 @@ def load_bank(path: str | Path) -> dict[tuple[str, str], BankEntry]:
                     if raw["answer_ok"] is None
                     else bool(raw["answer_ok"])
                 ),
+                tokens=tokens,
             )
     return bank
+
+
+def import_judged(alias: str, judged_rows: list[dict[str, Any]]) -> list[BankEntry]:
+    """C6: convert one model's judged.jsonl rows into bank entries.
+
+    The cold-start profile (C3) grades every model directly on the dev
+    split with mcq_judge.py; this reuses that evidence as the answer bank
+    instead of re-querying the models through `bank build`. One judged row
+    maps to one entry: task_id -> case_id, is_correct -> answer_ok,
+    completion -> answer, completion_tokens -> tokens. Duplicate task_ids
+    are a contract error (the bank join keys on (case_id, model)); a row
+    without task_id is skipped by mcq_judge itself and never written.
+    """
+    entries: list[BankEntry] = []
+    seen: set[str] = set()
+    for row in judged_rows:
+        task_id = row.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise ContractError(
+                f"judged rows for model {alias!r} contain a row without a task_id"
+            )
+        if task_id in seen:
+            raise ContractError(
+                f"judged rows for model {alias!r}: duplicate task_id {task_id!r}"
+            )
+        seen.add(task_id)
+        is_correct = row.get("is_correct")
+        if not isinstance(is_correct, bool):
+            raise ContractError(
+                f"judged rows for model {alias!r}, task {task_id!r}: "
+                "is_correct must be a boolean"
+            )
+        completion = row.get("completion")
+        tokens = row.get("completion_tokens")
+        entries.append(
+            BankEntry(
+                case_id=task_id,
+                model=alias,
+                answer=completion if isinstance(completion, str) else "",
+                answer_ok=is_correct,
+                tokens=(
+                    tokens
+                    if isinstance(tokens, int) and not isinstance(tokens, bool)
+                    else None
+                ),
+            )
+        )
+    return entries
 
 
 def apply_bank(
@@ -219,6 +279,8 @@ def apply_bank(
             stats["no_bank_entry"] += 1
         else:
             new_row["answer_ok"] = entry.answer_ok
+            if entry.tokens is not None:
+                new_row["tokens"] = entry.tokens
             stats["joined"] += 1
         out.append(new_row)
     return out, stats

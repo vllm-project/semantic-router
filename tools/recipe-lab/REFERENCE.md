@@ -1,25 +1,40 @@
-# Recipe Lab command and evidence reference
+## Reports, manifests and promotion drafts
 
-Use the [project overview](README.md) for a first run and the
-[worked examples](SCENARIOS.md) for complete workflows. This reference
-describes the inputs, output fields and deployment checks for each step.
-
-## Deliver a user report
-
-Open `report.md` beside the generated draft's `config.yaml`. It identifies the template, model bindings and static checks. For `suggest-depth` and `run`, use the `report` path in the JSON result. The `loop compare`, `loop decision-summary`, `loop improver-eval` and `loop plan-dev --probe-receipt` commands print the report location to standard error so their standard output remains usable as canonical evidence. Each workspace report has a sibling `evidence.json` that you can use again.
-
-To hand off a multi-round study, select its receipts in execution order and give the deployment objective in plain language. For example, after evaluating the candidate from a two-model draft:
+The ledger is the single replay source for every human-facing artifact: the
+same ledger renders byte-identically, and mixed dataset hashes are flagged as
+not directly comparable.
 
 ```bash
-recipe-lab report \
-  --background "Keep the baseline's task successes and reduce time on shared successes." \
-  --evidence ./speed-draft/manifest.json \
-  --evidence "$DEVELOPMENT_EVIDENCE" \
-  --evidence "$COMPARISON_EVIDENCE" \
-  --out ./handoff.md
+recipe-lab report --ledger ledger.jsonl --output report.md
+recipe-lab provenance --ledger ledger.jsonl --output manifest.json
+recipe-lab record-draft --ledger ledger.jsonl --output promotion-draft.md
+recipe-lab next --spec spec.yaml --ledger ledger.jsonl --output ctx.md
 ```
 
-Use the receipts for the same study and identify the evaluated baseline. Include rejected and inconclusive rounds when they affected your choice. The report reads the files you select and requires no model calls. Static validation establishes configuration compatibility. Route probes establish behavior for the requests exercised. Whole-task comparisons support conclusions for the measured tasks, models and conditions. Use a frozen holdout when making claims about performance beyond development.
+`report` also renders explicitly selected receipts from outside the ledger
+(`--evidence path.json`, repeat in workflow order, `--background` for the
+operator's own context); unknown or malformed schemas are refused and the
+output is published atomically - a failed render never replaces an existing
+report. `provenance` emits a `recipe-lab-run-v1` manifest whose vocabulary
+aligns with the upstream provenance schemas (record IDs, ledger hash,
+bench_refs). `record-draft` produces a docs/records draft from the latest
+PASS live record for human review; drafts are never merged automatically.
+`next` exports the agent context with the untrusted-material header and the
+citable refs described in the report section above.
+
+## Speed depth receipts
+
+`recipe-lab suggest-depth` prints and saves one
+`recipe-lab-sr-bench-depth-v1` receipt: `status` (`proposed` / `keep-parent`
+/ `inconclusive`), the run and target identity (`dev_run`, `parent_target`,
+`fast_target`), `parent_sha256`, `deployed_source_sha256`,
+`parent_runtime_hash` and `output_policy`, the per-case `observations`
+(`role` `move` / `protect` / `skip`, both finish reasons, the comparable
+opening-request hash and whole-task seconds; case IDs only, never task
+text), and when a threshold separates the observations `before`, `after`,
+`candidate` and `candidate_sha256`. `report --evidence` renders the receipt
+in supplied order; the saved receipt never changes shape even when Markdown
+delivery fails (`report_error` on the receipt, evidence still on disk).
 
 ## Draft a two-model Speed recipe
 
@@ -84,17 +99,17 @@ actually execute a harmless tool and send its result back; separately send an
 input neither backend supports and verify no generation backend was invoked.
 When a signal reads tool output, send two otherwise identical histories through
 the public chat endpoint, one with a passing check and one with an outstanding
-change. Record the decision and actual backend for each. In Router revision
-`e50115865`, management preview counts tool results but omits their text from
-SystemOne classification. Replay representative agent histories through the public
-endpoint before using preview results to choose a recipe.
+change. Record the decision and actual backend for each. Management preview
+counts tool results but omits their text from SystemOne classification; replay
+representative agent histories through the public endpoint before using preview
+results to choose a recipe.
 For a semantic signal guarded by a tool-count threshold, measure classification
-time on requests below the threshold too. In this revision the Router evaluates
-referenced signals before it combines their predicates. A rarely selected branch
+time on requests below the threshold too. The Router evaluates
+referenced signals before it combines their predicates, so a rarely selected branch
 can add classification time to most requests.
 
-When moving a Speed draft to the pinned `vllm-sr/vela3-fast` 3.0 package
-(`7cbefd4b`), check its `noul` questions. Put the meanings of yes and no
+When moving a Speed draft to the pinned `vllm-sr/vela3-fast` 3.0 package,
+check its `noul` questions. Put the meanings of yes and no
 in `question.instructions` and omit described `question.choices`. This
 package rejects descriptions on the individual binary options. Inspect the
 SystemOne answer for an actual score and check the backend reached by the
@@ -105,8 +120,9 @@ Find request examples in the [maintained probes](../../config/recipes/built-in/l
 Measure answer quality and task completion time against both direct deployments
 before claiming an improvement.
 
-Run the offline regression suite with `make test-calibration`. To exercise the
-generator's command-line path with your installed validator, set
+Run the offline regression suite with
+`python -m pytest -q tools/recipe-lab/tests/test_speed_draft.py tools/recipe-lab/tests/test_user_report.py`.
+To exercise the generator's command-line path with your installed validator, set
 `RECIPE_LAB_V05_CLI` and `RECIPE_LAB_V05_ROUTER` to the respective executables,
 then run `python -m pytest tools/recipe-lab/tests/native_speed_draft.py`.
 
@@ -554,116 +570,3 @@ before proposing an edit. A length finish alone does not trigger it.
 Supply one `--schedule-card` per study to pass completed decisions to the next
 proposer. The unpaired list always withholds assignment-bound measurements.
 A changed source receipt invalidates readback.
-
-### Check whether a matched-budget search comparison can start
-
-Use `search-preflight --protocol protocol.json` through the same CLI before
-comparing an existing skill, random search and a guided agent. A protocol
-specifies `schema: recipe-lab-search-preflight-v1`, the study, development
-parent (`based_on`), prefix record (`prefixes`), sibling space file and its
-SHA-256, integer `seed`, and an identical budget for each method
-(`episodes` and `proposal_model_tokens`). Proposal tokens measure the
-optimizer's work. They do not set limits on the task-solving agent.
-
-The `split_plans` object has a `dev` and a `holdout` entry. Set either to
-`null` until its split is allocated. A frozen entry supplies a sibling JSON
-`file` and its `sha256`. Each split file contains only its
-`schema: recipe-lab-search-split-v1`, study, split, the ordered methods
-`["existing_skill", "random", "guided"]`, and an `instruction_sha256` array
-of unique task fingerprints. Use common allocations for all three methods.
-The preflight checks overlap with the named development parent and the other
-allocation. The study owner must also exclude tasks used for earlier tuning.
-
-The existing protocol and command remain valid. In report v2 a historical
-prefix result with both split plans can reach `protocol_ready`. Top-level
-signatures still refer to the original `prefixes` record. Earlier v1 reports
-called this paperwork state `ready_for_comparison`.
-
-To measure action differences on the target workload, pass one or more
-verified development records and the number of distinct candidates each
-method may try. For example, with two trials per method:
-
-```bash
-python recipe_lab/loop.py --workspace "$WORK" search-preflight --protocol protocol.json \
-  --target-prefixes "$TARGET_DEV_RECORD" --candidate-trials-per-method 2
-```
-
-The target receipts must belong to the frozen dev allocation and the exact
-parent configuration identified by `based_on`. The historical prefix arm
-can retain its original configuration. The report identifies missing tasks,
-unknown coverage and the number of distinct new predicate signatures.
-Once the target records cover the allocation, the same dev instructions can
-serve as their own prefix source. The holdout is checked by allocation hashes.
-The seeded representatives in `comparison` then use the target prefixes.
-If two trials cover both distinct new actions, all methods can try the same
-set. Testing selection among final configurations requires more distinct
-choices than trials. An omitted trial count leaves that question open.
-
-When the allocation hashes raw instructions and the solver hashes
-rendered prompts, add `--target-dev-manifest PATH` and
-`--target-dev-manifest-sha256 SHA` from the independent dev packet export.
-Use `schema: recipe-lab-target-dev-manifest-v2`, the same `study`, `split: dev`,
-a `template` object with `file` and `sha256`, and a `tasks` list of objects
-with `instruction_sha256` and `instruction_file`. All file paths are relative
-to the manifest. The UTF-8 template accepts the placeholder `{instruction}`;
-it preserves line endings and whitespace in both files. The frozen task packet
-must record the same template path and digest in `solver_files`. Preflight
-reconstructs and checks each rendered prompt against the measured hash.
-The legacy SWE v1 manifest uses `prompt-template.txt` and per-task `repo` and
-`statement_file` to reconstruct the original solver's prompts. For solvers
-that receive the raw instruction directly, omit the manifest and preflight
-compares the instruction hashes directly.
-
-`target_actions_distinguished` describes observed predicates. Use the
-study's separate grader receipts and existing budget for execution decisions.
-A preflight reports `search_executed: false`. It leaves
-`paid_search_authorized` null because budget authorization belongs to the
-study owner.
-
-For frozen development objectives, historical skill replay, prospective
-three-method enrollment and final scoring see [Search and evaluation](SEARCH.md).
-
-## Live verdict against sr-bench runs
-
-`verify` drives sr-bench end to end for one candidate on a frozen split;
-`live-verdict` replays the verdict for two runs that already exist. Both
-record one live-tier ledger entry whose `bench_refs` cite the sr-bench run
-IDs - the evaluation numbers themselves are never copied into the ledger.
-
-```bash
-# end to end: preview the routing distribution, then AB/BA pairs
-recipe-lab verify --spec spec.yaml --split dev --cases splits/dev.jsonl \
-  --candidate candidate.json --ledger ledger.jsonl \
-  --srbench-bin vllm-sr --srbench-url http://127.0.0.1:9000 \
-  --srbench-store ~/.srbench-store --candidate-targets target-a,target-b
-
-# verdict for two recorded runs (guard floors from spec.gates, A3)
-recipe-lab live-verdict --spec spec.yaml --split dev \
-  --baseline-run baseline-id --candidate-run candidate-id \
-  --candidate candidate.json --ledger ledger.jsonl --json
-```
-
-The three-state rule (INCONCLUSIVE > FAIL > PASS): incomplete, timed-out or
-hash-mismatched evidence is INCONCLUSIVE; a breached guard floor fails the
-verdict even when the objective metric wins; PASS requires the objective
-improvement, every declared guard pass, every cost constraint within its
-bound, and enough paired samples. `verify_promotion_evidence` replays a
-recorded PASS from its ledger record for audit.
-
-### Score one deployed candidate
-
-`score-candidate` scores an authored v0.5 source YAML that is already
-deployed against a saved baseline run. A coding agent submits its own
-proposal through it (`--proposer agent:<id>`); no spec is needed.
-
-```bash
-recipe-lab score-candidate --workspace lab/ \
-  --candidate config.yaml --proposer agent:claude-loop \
-  --baseline-run baseline-id --baseline-target single \
-  --candidate-target recipe --active-runtime-hash <sha256> \
-  --guard-case case-17 --min-speedup-pct 5
-```
-
-The receipt is one JSON line and is saved under `<workspace>/sr-bench`.
-`--candidate-run <id>` re-opens a submitted run instead of dispatching it
-again. The exit code is 0 PASS, 1 FAIL, 2 INCONCLUSIVE.
