@@ -146,6 +146,19 @@ skills:
     handoff: Review quality evidence and rollback point before promotion.
     support: Current maintained recipes and probe schema.
 
+  - id: recipe-lab-loop
+    name: recipe-lab-loop
+    audience: contributor
+    source: tools/agent/skills/recipe-lab-loop/SKILL.md
+    distribution: repository
+    owner: MoM & Routing / Evaluation & Quality
+    trigger: Improve routing accuracy through the recipe-lab evidence loop on graded tasks.
+    prerequisites: An experiment spec, graded case splits and a replay answer bank.
+    inputs: Misroute attribution evidence, candidate configs and ledger records.
+    outputs: Ranked candidates, a three-state live verdict and a keep or revert decision in the ledger.
+    handoff: Preserve the baseline and pass the ledger and next context to the following agent.
+    support: Recipe Lab tools in this checkout.
+
   - id: maintainer-ops
     name: maintainer-ops
     audience: maintainer

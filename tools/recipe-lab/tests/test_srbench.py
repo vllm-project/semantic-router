@@ -199,3 +199,42 @@ def test_submit_without_run_id_is_an_error():
         pytest.raises(SrbenchError, match="did not return a run id"),
     ):
         SrbenchCli().run_manifest("m.json")
+
+
+# ---- S5: proposer identity is validated and recorded on the receipt ----
+
+
+def _read_candidate(tmp_path, proposer, receipt):
+    import types
+
+    from recipe_lab.srbench import read_candidate
+
+    candidate = tmp_path / "candidate.yaml"
+    candidate.write_text("version: v0.5\nrecipes: []\n", encoding="utf-8")
+    return read_candidate(
+        types.SimpleNamespace(
+            proposer=proposer,
+            min_speedup_pct=10,
+            wait_seconds=1.0,
+            active_runtime_hash="a" * 64,
+            candidate=candidate,
+            deployed_config=None,
+        ),
+        receipt,
+    )
+
+
+def test_read_candidate_accepts_agent_provenance(tmp_path):
+    from recipe_lab.loop_evidence import digest
+
+    receipt = {}
+    source = _read_candidate(tmp_path, "agent:planner", receipt)
+    assert isinstance(source, dict)
+    assert receipt["candidate_sha256"] == digest(
+        (tmp_path / "candidate.yaml").read_bytes()
+    )
+
+
+def test_read_candidate_rejects_non_agent_provenance(tmp_path):
+    with pytest.raises(ValueError, match="expected proposer agent:<id>"):
+        _read_candidate(tmp_path, "threshold-search", {})

@@ -236,16 +236,39 @@ def _require_nonempty_str(value: Any, name: str) -> None:
         raise ContractError(f"{name} must be a non-empty string")
 
 
-def _best_replay(records: list[dict], metric_key: str) -> dict | None:
+def scoped_records(records: list[dict]) -> list[dict]:
+    """Records comparable with the newest one.
+
+    Metrics are only comparable within one dataset and split, so exports rank
+    candidates against the newest record's ``dataset_hash`` and ``split``: a
+    higher-scoring candidate measured on another dataset or split cannot win.
+    A dimension the newest record does not declare stays unfiltered.
+    """
+    if not records:
+        return []
+    latest = records[-1]
+    dataset_hash = latest.get("dataset_hash")
+    split = latest.get("split")
+    return [
+        record
+        for record in records
+        if (dataset_hash is None or record.get("dataset_hash") == dataset_hash)
+        and (split is None or record.get("split") == split)
+    ]
+
+
+def best_replay(records: list[dict], metric_key: str) -> dict | None:
     """A2: pure best-replay selection over raw ledger records.
 
     Highest ``metrics[metric_key]`` among tier "replay" / verdict "RANKED"
-    records; coverage_warning records, A5 status records (a trial that
+    records; coverage_warning records and A5 status records (a trial that
     produced no usable metric) and E2 constraint_warning records (a
     candidate that violates a declared constraint under the replay cost
     proxy) are excluded. Ties keep the earliest record.
-    Shared by ``Ledger.top_replay`` and the ``next`` context export so the
-    hand-off to the live tier and the agent context always agree.
+    Shared by ``Ledger.top_replay``, the ``next`` context export and the
+    provenance manifest so every reader of the ledger ranks the same
+    candidate. Callers that rank across rounds pass ``scoped_records`` so
+    only same-dataset / same-split candidates compete.
     """
     best: dict | None = None
     best_value: float | None = None
@@ -399,4 +422,4 @@ class Ledger:
 
         This is the hand-off contract to the live tier (Sub-issue 3); A2 routes
         it through the shared pure `best_replay` selection."""
-        return _best_replay(self.read(), metric_key)
+        return best_replay(self.read(), metric_key)

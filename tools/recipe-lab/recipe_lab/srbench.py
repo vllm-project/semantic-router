@@ -17,6 +17,7 @@ import yaml
 from .contract import ContractError
 from .deployed_config import config_identity
 from .loop_evidence import check, digest, sha, target
+from .report_delivery import snapshot
 
 
 def encoded(value):
@@ -46,8 +47,16 @@ def persist(directory, receipt):
 
 
 def save_result(workspace, receipt):
-    """Keep the raw machine evidence retrievable; the report helper is #5492."""
+    """Persist the authoritative receipt, then deliver its report.
+
+    The machine evidence stays retrievable even when Markdown delivery
+    fails; the saved receipt never changes shape.
+    """
     receipt["receipt"] = persist(workspace / "sr-bench", receipt)
+    try:
+        receipt["report"] = snapshot(workspace, receipt)
+    except (OSError, ValueError) as exc:
+        receipt["report_error"] = str(exc)
 
 
 class SrBench:

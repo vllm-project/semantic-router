@@ -54,7 +54,8 @@ STACK_MODES = {"external", "serve"}
 # A1: the replay tier ranks candidates with exactly one contracted metric.
 # `metric_key` stays the live sr-bench metric; `replay_metric` is what the
 # replay ledger records and `ledger top --spec` ranks by.
-REPLAY_METRICS = {"routed_accuracy"}
+DEFAULT_REPLAY_METRIC = "routed_accuracy"
+REPLAY_METRICS = {DEFAULT_REPLAY_METRIC}
 # M2: default minimum paired sample for a live verdict (objective.min_cases).
 DEFAULT_MIN_CASES = 200
 # M3: default output-quality ceilings for live evidence (evidence_quality).
@@ -330,7 +331,7 @@ class Objective:
     metric_key: str
     direction: str
     min_improvement_pct: float
-    replay_metric: str = "routed_accuracy"
+    replay_metric: str = DEFAULT_REPLAY_METRIC
     # M2: paired-decision thresholds. `min_cases` is the minimum paired
     # sample a live verdict needs (fewer -> INCONCLUSIVE). `min_improvement_pp`
     # is an absolute percentage-point bar applied to the paired confidence
@@ -380,7 +381,7 @@ class Objective:
             and min_cases >= 1,
             "objective.min_cases must be an integer >= 1",
         )
-        replay_metric = raw.get("replay_metric", "routed_accuracy")
+        replay_metric = raw.get("replay_metric", DEFAULT_REPLAY_METRIC)
         _require(
             replay_metric in REPLAY_METRICS,
             f"objective.replay_metric must be one of {sorted(REPLAY_METRICS)} (got {replay_metric!r})",

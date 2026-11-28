@@ -34,6 +34,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import NoReturn
 
 import yaml
 
@@ -63,7 +64,11 @@ from .insights import merge_insight_refs, parse_insight_refs, resolve_insight_re
 from .layout import select_recipe
 from .ledger import Ledger, LedgerRecord
 from .live import live_verdict_from_runs, measurements_from_rows, verify_live
+from .next import write_next_context
 from .proposers import rule_threshold, threshold_search
+from .provenance import promotion_candidate, write_run_manifest
+from .report import render_promotion_draft, write_run_report
+from .report_delivery import write_report
 from .runner import (
     COST_PROXY_METRIC,
     HotReloadSession,
@@ -1058,7 +1063,9 @@ def cmd_live_verdict(args: argparse.Namespace) -> int:
         record = LedgerRecord(
             round=args.round,
             ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            candidate=candidate_row,
+            candidate=(
+                promotion_candidate(candidate_row) if args.final else candidate_row
+            ),
             tier="live",
             baseline_ref=args.baseline_run_id,
             metrics={spec.objective.metric_key: result["metrics"]["candidate"]},
@@ -1197,7 +1204,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
         record = LedgerRecord(
             round=args.round,
             ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            candidate=candidate_row,
+            candidate=(
+                promotion_candidate(candidate_row) if args.final else candidate_row
+            ),
             tier="live",
             # R2: when the baseline came from --baseline-manifest the run id
             # is resolved inside verify_live and echoed in the result.
@@ -1226,6 +1235,74 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return verdict_exit_code(result["verdict"])
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """One help entry, two unambiguous inputs: the ledger replay (G1) or
+    explicitly selected receipts (--evidence, rendered in supplied order)."""
+    try:
+        if args.evidence:
+            if args.ledger:
+                raise ValueError("pass either --ledger or --evidence, not both")
+            evidence = [json.loads(path.read_bytes()) for path in args.evidence]
+            report = write_report(
+                Path(args.output), evidence, background=args.background
+            )
+            _print_json({"report": report, "evidence_count": len(evidence)})
+            return 0
+        if not args.ledger:
+            raise ValueError("report needs --ledger or --evidence")
+        report = write_run_report(args.ledger, args.output)
+    except ValueError as exc:
+        _fail(f"recipe-lab report: {exc}")
+    _print_json({"report": args.output, "bytes": len(report)})
+    return 0
+
+
+def cmd_next(args: argparse.Namespace) -> int:
+    """G3: full next-round context - contract summary, ledger tail, best
+    replay candidate (A2 best_replay), last live verdict, latest attribution
+    summary (hash-verified via attribution_ref), optional diagnosis highlights
+    and casebook references, each with its citable insight-ref. Byte-stable
+    for the same inputs; frozen_test case content is never exported."""
+    spec = _load_spec(args.spec)
+    context = write_next_context(
+        args.ledger,
+        args.output,
+        spec=spec,
+        diagnosis_path=args.diagnosis,
+        symptoms=args.symptom,
+        tail=args.tail,
+    )
+    _print_json({"context": args.output, "bytes": len(context)})
+    return 0
+
+
+def cmd_provenance(args: argparse.Namespace) -> int:
+    manifest = write_run_manifest(args.ledger, args.output)
+    _print_json(
+        {
+            "manifest": args.output,
+            "kind": manifest["kind"],
+            "rounds": manifest["rounds"]["count"],
+        }
+    )
+    return 0
+
+
+def cmd_record_draft(args: argparse.Namespace) -> int:
+    ledger = Ledger(args.ledger)
+    records = ledger.filter(tier="live", verdict="PASS")
+    if not records:
+        _fail("no PASS live record in the ledger; nothing to draft")
+    record = records[-1]
+    draft = render_promotion_draft(record)
+    Path(args.output).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.output).write_text(draft, encoding="utf-8")
+    _print_json(
+        {"draft": args.output, "candidate": (record.get("candidate") or {}).get("ref")}
+    )
+    return 0
+
+
 def cmd_score_candidate(args: argparse.Namespace) -> int:
     """Score one deployed candidate against a saved sr-bench baseline.
 
@@ -1238,8 +1315,31 @@ def cmd_score_candidate(args: argparse.Namespace) -> int:
     return verdict_exit_code(receipt["verdict"])
 
 
+class CommandParser(argparse.ArgumentParser):
+    """Report a usage error in the JSON contract that agents consume.
+
+    Every command prints one JSON document on stdout; argparse's default
+    (prose on stderr) would leave a driving agent with nothing to parse. The
+    receipt is INCONCLUSIVE, like any other run that could not be evaluated.
+    """
+
+    def error(self, message: str) -> NoReturn:
+        print(
+            json.dumps(
+                {
+                    "schema": "recipe-lab-cli-error-v1",
+                    "verdict": "INCONCLUSIVE",
+                    "reason": message,
+                },
+                ensure_ascii=False,
+                allow_nan=False,
+            )
+        )
+        raise SystemExit(2)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = CommandParser(
         prog="recipe-lab",
         description="Closed-loop experiments for semantic-router routing recipes (RSI workbench).",
     )
@@ -1887,6 +1987,69 @@ def build_parser() -> argparse.ArgumentParser:
         help="experiment spec YAML; rank by its objective.replay_metric (A1)",
     )
     p_top.set_defaults(func=cmd_ledger)
+
+    p_report = sub.add_parser(
+        "report",
+        help="render a report: replay a ledger (--ledger) or deliver explicitly "
+        "selected receipts (--evidence), never both",
+    )
+    p_report.add_argument(
+        "--ledger", default=None, help="ledger JSONL to replay the run report from"
+    )
+    p_report.add_argument(
+        "--evidence",
+        action="append",
+        default=[],
+        type=Path,
+        help="one saved JSON manifest or receipt; repeat in workflow order",
+    )
+    p_report.add_argument(
+        "--background", default=None, help="user-supplied context for this handoff"
+    )
+    p_report.add_argument("--output", required=True, help="output Markdown path")
+    p_report.set_defaults(func=cmd_report)
+
+    p_next = sub.add_parser(
+        "next",
+        help="agent context export (untrusted reference material header included)",
+    )
+    p_next.add_argument(
+        "--spec",
+        required=True,
+        help="experiment spec YAML (objective.replay_metric ranks the best replay candidate, A2)",
+    )
+    p_next.add_argument("--ledger", required=True, help="ledger JSONL")
+    p_next.add_argument("--output", required=True, help="output Markdown path")
+    p_next.add_argument(
+        "--symptom",
+        action="append",
+        default=[],
+        help="observed symptom for the casebook's prior-evidence references; repeatable",
+    )
+    p_next.add_argument(
+        "--tail", type=int, default=10, help="how many recent records to include"
+    )
+    p_next.add_argument(
+        "--diagnosis",
+        default=None,
+        help="diagnosis.json artifact; its highlights join the context with a citable diag: ref (G3)",
+    )
+    p_next.set_defaults(func=cmd_next)
+
+    p_prov = sub.add_parser(
+        "provenance", help="emit the recipe-lab-run-v1 manifest for a ledger"
+    )
+    p_prov.add_argument("--ledger", required=True, help="ledger JSONL")
+    p_prov.add_argument("--output", required=True, help="output manifest JSON path")
+    p_prov.set_defaults(func=cmd_provenance)
+
+    p_draft = sub.add_parser(
+        "record-draft",
+        help="draft a docs/records promotion entry from the latest PASS live record",
+    )
+    p_draft.add_argument("--ledger", required=True, help="ledger JSONL")
+    p_draft.add_argument("--output", required=True, help="output Markdown draft path")
+    p_draft.set_defaults(func=cmd_record_draft)
 
     return parser
 
