@@ -24,6 +24,7 @@ import CompareSheet from '../components/sr-bench/CompareSheet'
 import DatasetsView from '../components/sr-bench/DatasetsView'
 import NewEvaluationSheet, { type EvaluationMode } from '../components/sr-bench/NewEvaluationSheet'
 import { rerunSource } from '../components/sr-bench/rerunSource'
+import { EMPTY_TARGETS_POLL_MS, watchTargets } from '../components/sr-bench/targetRefresh'
 import { Notice } from '../components/sr-bench/benchUi'
 import {
   parseRunFilters,
@@ -234,6 +235,29 @@ export default function EvaluationPage() {
       }
     : undefined
   const composerOpen = !!composerMode && (!rerun || !!rerunRun || !loaded.runs)
+  const targetsShown = composerOpen && composerMode !== 'estimate'
+  const waitingForTargets = targetsShown && !!loaded.targets && targets.length === 0
+  useEffect(() => {
+    // Targets registered from the CLI appear without reopening the composer.
+    if (!targetsShown) return
+    let controller: AbortController | undefined
+    const refetch = () => {
+      controller?.abort()
+      const current = new AbortController()
+      controller = current
+      benchApi.targets(current.signal).then(
+        (value) => {
+          if (!current.signal.aborted) setTargets(value.targets)
+        },
+        () => {},
+      )
+    }
+    const stop = watchTargets(window, refetch, waitingForTargets ? EMPTY_TARGETS_POLL_MS : null)
+    return () => {
+      stop()
+      controller?.abort()
+    }
+  }, [targetsShown, waitingForTargets])
 
   return (
     <PageContainer>
