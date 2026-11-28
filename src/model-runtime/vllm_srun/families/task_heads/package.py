@@ -109,6 +109,8 @@ def labels_of(config: dict[str, Any]) -> tuple[str, ...]:
         indexed = {int(key): str(value) for key, value in id2label.items()}
     except ValueError as exc:
         raise PackageError("config.json id2label keys must be integers") from exc
+    if len(indexed) != len(id2label):
+        raise PackageError("config.json id2label has duplicate numeric indices")
     if sorted(indexed) != list(range(len(indexed))):
         raise PackageError("config.json id2label must cover 0..n-1")
     return tuple(indexed[index] for index in range(len(indexed)))
