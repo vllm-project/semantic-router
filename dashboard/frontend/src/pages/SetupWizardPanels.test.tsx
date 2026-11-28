@@ -63,6 +63,39 @@ describe('setup wizard panels', () => {
     expect(markup).toContain('Remove model model-1')
   })
 
+  it('keeps provider secrets out of the browser login password manager', () => {
+    const model = { ...createModelDraft(1), id: 'model-1', endpointName: 'primary' }
+    const markup = renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(ModelStepPanel, {
+          models: [model],
+          defaultModelId: 'model-1',
+          shouldShowStepOneIssues: false,
+          stepOneErrors: [],
+          stepOneAttempted: false,
+          draftBuildError: null,
+          removedModel: null,
+          onAddModel: vi.fn(),
+          onUpdateModel: vi.fn(),
+          onRemoveModel: vi.fn(),
+          onUndoRemoveModel: vi.fn(),
+          onSelectDefaultModel: vi.fn(),
+        }),
+      ),
+    )
+    const inputTag = (id: string) => markup.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0]
+
+    const key = inputTag('model-1-key')
+    expect(key).toContain('type="password"')
+    expect(key).toMatch(/autocomplete="new-password"/i)
+    expect(key).toContain('name="model-1-provider-access-key"')
+    for (const id of ['model-1-name', 'model-1-base-url', 'model-1-endpoint']) {
+      expect(inputTag(id)).toMatch(/autocomplete="off"/i)
+    }
+  })
+
   it('makes remote and preset async failures recoverable', () => {
     const markup = renderToStaticMarkup(
       createElement(RoutingStarterPanel, {

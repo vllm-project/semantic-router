@@ -93,6 +93,27 @@ describe('structured object field editors', () => {
     expect(markup).toContain('Add item')
   })
 
+  it('keeps object-list secrets out of the browser login password manager', () => {
+    type Backend = { endpoint?: string; api_key?: string }
+    const markup = renderToStaticMarkup(
+      createElement(ObjectListEditor<Backend>, {
+        value: [{ endpoint: 'primary', api_key: '' }],
+        onChange: vi.fn(),
+        fields: [
+          { key: 'endpoint', label: 'Endpoint' },
+          { key: 'api_key', label: 'API key', type: 'password' },
+        ],
+        createItem: () => ({}),
+      }),
+    )
+    const inputs = markup.match(/<input[^>]*>/g) ?? []
+    const secret = inputs.find((tag) => tag.includes('type="password"'))
+    const text = inputs.find((tag) => tag.includes('type="text"'))
+
+    expect(secret).toMatch(/autocomplete="new-password"/i)
+    expect(text).toMatch(/autocomplete="off"/i)
+  })
+
   it('preserves empty strings only for presence-aware object fields', () => {
     type Backend = { auth_prefix?: string }
     const presenceAware: ObjectEditorField<Backend> = {
