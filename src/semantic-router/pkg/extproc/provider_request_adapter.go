@@ -53,6 +53,10 @@ func (r *OpenAIRouter) adaptProviderRequest(
 		if err != nil {
 			return body, err
 		}
+		body, err = projectReasoningBudget(body, dispatch.targetFormat, dispatch.profile)
+		if err != nil {
+			return body, err
+		}
 	}
 	reportDroppedReasoningSummary(ctx, dispatch, encoded, body)
 	r.reportApproximatedReasoningDisplay(ctx, dispatch)
@@ -151,6 +155,29 @@ func adaptMaxTokensOutputLimit(body []byte, format llmprotocol.WireFormat, profi
 		return nil, err
 	}
 	return sjson.DeleteBytes(body, "max_completion_tokens")
+}
+
+// vllmProviderType is the catalog provider id for vLLM, whose Chat API reads
+// the per-request reasoning budget from thinking_token_budget:
+// https://docs.vllm.ai/en/latest/features/reasoning_outputs/
+const vllmProviderType = "vllm"
+
+// projectReasoningBudget moves the Router-neutral reasoning_budget_tokens to
+// the native field a provider reads. An explicit native value wins: the client
+// spoke the provider's dialect, so the Router must not overwrite it. A neutral
+// budget sent to a provider with no native control is refused rather than
+// silently dropped, so the caller can fall back or report the loss.
+func projectReasoningBudget(body []byte, format llmprotocol.WireFormat, profile *config.ProviderProfile) ([]byte, error) {
+	budget := gjson.GetBytes(body, "reasoning_budget_tokens")
+	if !budget.Exists() || gjson.GetBytes(body, "thinking_token_budget").Exists() {
+		return body, nil
+	}
+	if format != llmprotocol.OpenAIChatV1 || profile == nil ||
+		!strings.EqualFold(strings.TrimSpace(profile.Type), vllmProviderType) {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			"the selected provider has no native reasoning-budget control", nil)
+	}
+	return sjson.SetRawBytes(body, "thinking_token_budget", []byte(budget.Raw))
 }
 
 // projectProviderRequest shares the exact provider dialect with dispatch while
