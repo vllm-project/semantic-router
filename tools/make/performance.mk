@@ -49,8 +49,7 @@ perf-bench-quick: ## Run quick performance benchmarks (3s benchtime)
 perf-bench-quick: ensure-reports-dir
 	@$(LOG_TARGET)
 	@echo "Running quick performance benchmarks..."
-	@cd perf && go test -run "^$$" -bench=. -benchmem -benchtime=3s ./benchmarks/... \
-	  -timeout=15m
+	@bash perf/scripts/run-component-benchmarks.sh all 3s 15m
 
 # Run specific benchmark suite
 perf-bench-classification: ## Run classification benchmarks
@@ -185,8 +184,8 @@ perf-check: ## Run benchmarks and fail if regressions exceed thresholds
 perf-check: ensure-reports-dir perf-model-baseline
 	@$(LOG_TARGET)
 	@echo "Running benchmarks for regression check..."
-	@cd perf && bash -o pipefail -c \
-	  'go test -run "^$$" -bench=. -benchmem -benchtime=10s ./benchmarks/... | tee ../reports/bench-output.txt'
+	@bash -o pipefail -c \
+	  'bash perf/scripts/run-component-benchmarks.sh all 10s 10m | tee reports/bench-output.txt'
 	@cd src/semantic-router && bash -o pipefail -c \
 	  'go test -run "^$$" -bench="^Benchmark(ReMoM|Fusion|Flow|Base)" -benchmem -benchtime=10s ./pkg/looper/... | tee -a ../../reports/bench-output.txt'
 	@echo "Building current results and comparing against baseline..."

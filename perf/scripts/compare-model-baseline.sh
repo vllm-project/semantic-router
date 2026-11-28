@@ -100,8 +100,7 @@ fi
 (
   cd "$BASE_TREE/perf"
   export GIT_WORK_TREE="$BASE_TREE"
-  if ! go test -run '^$' -bench '^(BenchmarkClassify|BenchmarkCache)' \
-    -benchmem -benchtime="${PERF_MODEL_BENCHTIME:-3s}" -timeout=30m ./benchmarks/... \
+  if ! bash scripts/run-component-benchmarks.sh models "${PERF_MODEL_BENCHTIME:-3s}" 30m \
     2>&1 | tee "$OUTPUT_DIR/model-baseline-output.txt"; then
     echo "Base revision $BASE_COMMIT cannot run the current model benchmark contract; inspect compile/runtime output and choose an explicitly compatible base." >&2
     exit 1
