@@ -288,6 +288,10 @@ func (r *OpenAIRouter) performCacheLookup(
 		tracing.RecordError(span, "cache_lookup_failed")
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
+		if refusal := r.checkFinalModelRateLimit(ctx, ctx.CacheSelectedModel); refusal != nil {
+			tracing.EndPluginSpan(span, "success", lookupTime, "rate_limited")
+			return refusal, true
+		}
 		ctx.VSRCacheHit = true
 		ctx.VSRCacheSimilarity = lookupResult.Similarity
 		ctx.VSRCacheHitKind = string(lookupResult.HitKind)

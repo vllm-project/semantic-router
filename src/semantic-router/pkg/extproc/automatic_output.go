@@ -26,22 +26,8 @@ func (r *OpenAIRouter) resolveAutomaticOutput(request *llmprotocol.Request, disp
 	if request == nil || !request.Sampling.AutomaticOutput {
 		return nil
 	}
-	if dispatch == nil || dispatch.profile == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
-		return automaticOutputUnsupported("a vLLM Chat backend with the render API enabled")
-	}
-	provider, err := dispatch.profile.ProviderType()
-	if err != nil || provider != "vllm" {
-		return automaticOutputUnsupported("an explicit vllm provider")
-	}
-	params, ok := r.Config.ModelConfig[dispatch.logicalModel]
-	if !ok || params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 || len(params.PreferredEndpoints) != 1 {
-		return automaticOutputUnsupported("known model limits and exactly one configured backend")
-	}
-	if request.Truncation != "" && request.Truncation != "disabled" {
-		return automaticOutputUnsupported("router-managed input compression instead of provider truncation")
-	}
-	if r.isLooperRequest(ctx) {
-		return automaticOutputUnsupported("single-dispatch routing; Looper stages are not supported")
+	if err := r.checkAutomaticBackend(request, dispatch, ctx); err != nil {
+		return err
 	}
 	// A detached request retires ingress replay and previously materialized auto
 	// limits. Provider generation defaults are included in render's returned cap.
@@ -51,6 +37,7 @@ func (r *OpenAIRouter) resolveAutomaticOutput(request *llmprotocol.Request, disp
 	view.Sampling.AutomaticInputTokens = nil
 	view.Generation++
 	renderCtx := *ctx
+	renderCtx.projectionObservations = new([]func())
 	renderCtx.SemanticRequest = &view
 	renderCtx.TargetFormat = dispatch.targetFormat
 	body, err := r.encodeDispatchRequest(&renderCtx)
@@ -61,6 +48,32 @@ func (r *OpenAIRouter) resolveAutomaticOutput(request *llmprotocol.Request, disp
 	if err != nil {
 		return err
 	}
+	return r.applyRenderedBudget(body, request, dispatch, ctx)
+}
+
+func (r *OpenAIRouter) checkAutomaticBackend(request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) error {
+	if dispatch == nil || dispatch.profile == nil || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		return automaticOutputUnsupported("a vLLM Chat backend with the render API enabled")
+	}
+	provider, err := dispatch.profile.ProviderType()
+	if err != nil || provider != "vllm" {
+		return automaticOutputUnsupported("an explicit vllm provider")
+	}
+	params, ok := r.Config.ModelConfig[dispatch.effectiveBackendModel()]
+	if !ok || params.ContextWindowSize <= 0 || params.MaxOutputTokens <= 0 || len(params.PreferredEndpoints) != 1 {
+		return automaticOutputUnsupported("known model limits and exactly one configured backend")
+	}
+	if request.Truncation != "" && request.Truncation != "disabled" {
+		return automaticOutputUnsupported("router-managed input compression instead of provider truncation")
+	}
+	if r.isLooperRequest(ctx) {
+		return automaticOutputUnsupported("single-dispatch routing; Looper stages are not supported")
+	}
+	return nil
+}
+
+func (r *OpenAIRouter) applyRenderedBudget(body []byte, request *llmprotocol.Request, dispatch *providerDispatch, ctx *RequestContext) error {
+	params := r.Config.ModelConfig[dispatch.effectiveBackendModel()]
 	result, err := r.renderAutomaticOutput(body, dispatch, ctx)
 	if err != nil {
 		return err

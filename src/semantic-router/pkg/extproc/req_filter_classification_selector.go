@@ -36,6 +36,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 	if ctx != nil {
 		ctx.VSRSelectedCandidate = nil
 		ctx.VSRSelectionTrace = nil
+		ctx.dispatchSelection = nil
 		ctx.pendingSessionDecision = nil
 	}
 	defer func() {
@@ -200,6 +201,7 @@ func (r *OpenAIRouter) selectWithSelector(
 		return nil, string(method), learningErr
 	}
 	ctx.VSRSelectionReasoning = boundedSelectionReasoning(result.Reasoning)
+	ctx.dispatchSelection = result
 	logSelectionResult(method, result, selectedModel, learningApplied)
 	selection.RecordSelection(
 		string(method),

@@ -149,24 +149,22 @@ func (r *OpenAIRouter) automaticEligibleRefs(refs []config.ModelRef, ctx *Reques
 	return eligible, nil
 }
 
-// Re-run after all provider-facing mutations. A second render is bounded and
-// only follows the configured compression of an explicitly confirmed overflow.
-func (r *OpenAIRouter) prepareAutomaticDispatch(ctx *RequestContext, request *llmprotocol.Request, dispatch *providerDispatch) error {
-	err := r.resolveAutomaticOutput(request, dispatch, ctx)
-	var budget *selection.RequestBudgetError
-	if !errors.As(err, &budget) || budget.Code != "context_length_exceeded" {
-		return err
-	}
+func (r *OpenAIRouter) compressAutomaticOverflow(ctx *RequestContext, request *llmprotocol.Request, dispatch *providerDispatch, overflow error) error {
 	cfg := contextOverflowConfig(r.Config, ctx)
 	if cfg == nil {
-		return err
+		return overflow
 	}
-	available := r.automaticOverflowInputBudget(dispatch.logicalModel, cfg)
+	model := dispatch.effectiveBackendModel()
+	available := r.automaticOverflowInputBudget(model, cfg)
 	if available <= 0 {
+		return overflow
+	}
+	generation := request.Generation
+	if err := r.applyContextOverflow(ctx, request, cfg, nil, model, available); err != nil {
 		return err
 	}
-	if err = r.applyContextOverflow(ctx, request, cfg, nil, dispatch.logicalModel, available); err != nil {
-		return err
+	if request.Generation == generation {
+		return overflow
 	}
-	return r.resolveAutomaticOutput(request, dispatch, ctx)
+	return nil
 }

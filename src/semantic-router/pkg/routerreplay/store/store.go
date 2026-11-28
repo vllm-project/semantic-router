@@ -184,6 +184,27 @@ type RequestDemandSnapshot struct {
 	RequestGeneration    uint64 `json:"request_generation"`
 }
 
+type FinalAdmissionDiagnostics struct {
+	Model                string `json:"model"`
+	RequestPart          string `json:"request_part,omitempty"`
+	Source               string `json:"source"`
+	Verdict              string `json:"verdict"`
+	PromptTokens         int    `json:"prompt_tokens,omitempty"`
+	PromptTokenBound     int    `json:"prompt_token_bound,omitempty"`
+	ReservedOutputTokens *int   `json:"reserved_output_tokens,omitempty"`
+	ContextWindow        int    `json:"context_window,omitempty"`
+	ExcludedCandidates   int    `json:"excluded_candidates,omitempty"`
+}
+
+func (a *FinalAdmissionDiagnostics) Clone() *FinalAdmissionDiagnostics {
+	if a == nil {
+		return nil
+	}
+	clone := *a
+	clone.ReservedOutputTokens = cloneIntPtr(a.ReservedOutputTokens)
+	return &clone
+}
+
 // RouteDiagnostics summarizes the final route, Router Learning protection,
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
@@ -197,6 +218,7 @@ type RouteDiagnostics struct {
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
 	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
+	FinalAdmission                 *FinalAdmissionDiagnostics           `json:"final_admission,omitempty"`
 	OriginalModel                  string                               `json:"original_model,omitempty"`
 	ProposalModel                  string                               `json:"proposal_model,omitempty"`
 	PreviousModel                  string                               `json:"previous_model,omitempty"`
@@ -688,6 +710,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
+	cloned.FinalAdmission = value.FinalAdmission.Clone()
 	if value.PreparedDispatch != nil {
 		receipt := *value.PreparedDispatch
 		cloned.PreparedDispatch = &receipt

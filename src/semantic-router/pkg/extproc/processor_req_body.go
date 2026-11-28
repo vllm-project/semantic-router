@@ -222,7 +222,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 			request, originalModel, decisionName, reasoningDecision.UseReasoning, ctx,
 		)
 		if err != nil {
-			return r.imageFileDispatchFailure(err, ctx)
+			return r.providerPreparationFailure(err, originalModel, ctx)
 		}
 		response := r.buildProviderDispatchResponse(dispatch, ctx)
 		r.applyToolsPlugin(request, response, ctx)
@@ -238,27 +238,15 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 		return finalized, nil
 	}
 
-	// Record routing decision with tracing
-	r.recordRoutingDecision(ctx, decisionName, originalModel, matchedModel, reasoningDecision)
-
-	// Track VSR decision information
-	// categoryName is already set in ctx.VSRSelectedCategory by performDecisionEvaluation
 	r.trackVSRDecision(ctx, ctx.VSRSelectedCategory, decisionName, matchedModel, reasoningDecision.UseReasoning)
-
-	// Track model routing metrics
-	metrics.RecordModelRouting(originalModel, matchedModel)
-
-	dispatch, err := r.prepareProviderDispatch(
-		request, matchedModel, decisionName, reasoningDecision.UseReasoning, ctx,
+	dispatch, err := r.prepareModelDispatch(
+		request, matchedModel, decisionName, reasoningDecision.UseReasoning, originalModel, ctx,
 	)
 	if err != nil {
-		return r.imageFileDispatchFailure(err, ctx)
+		return r.providerPreparationFailure(err, originalModel, ctx)
 	}
 
-	response := r.buildProviderDispatchResponse(dispatch, ctx)
-
-	// Log routing decision
-	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
+	response := buildRequestBodyContinueResponse(&routeHeaderState{}, nil, false)
 
 	// Persist the final dispatch demand, including automatic output resolved
 	// below. Defer also preserves a record when finalization fails or panics;
@@ -283,6 +271,12 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	}
 	// An immediate response rejects the request, so there is nothing to mirror.
 	dispatched = response.GetImmediateResponse() == nil
+	if dispatched {
+		reasoningDecision.UseReasoning = dispatch.useReasoning
+		r.recordRoutingDecision(ctx, decisionName, originalModel, dispatch.logicalModel, reasoningDecision)
+		metrics.RecordModelRouting(originalModel, dispatch.logicalModel)
+		r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, dispatch.logicalModel, decisionName, reasoningDecision.UseReasoning)
+	}
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -315,7 +309,7 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 
 	dispatch, err := r.prepareProviderDispatch(request, originalModel, "", false, ctx)
 	if err != nil {
-		return r.imageFileDispatchFailure(err, ctx)
+		return r.providerPreparationFailure(err, originalModel, ctx)
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
@@ -337,6 +331,13 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	r.recordRoutingLatency(ctx)
 
 	return response, nil
+}
+
+func (r *OpenAIRouter) providerPreparationFailure(err error, model string, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if isDispatchBudgetError(err) {
+		return r.respondSelectionRejected(ctx, model, err), nil
+	}
+	return r.imageFileDispatchFailure(err, ctx)
 }
 
 func (r *OpenAIRouter) unavailableModelResponse(

@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,9 @@ func (e *maskingDispatchError) Unwrap() error { return e.cause }
 type ruleSpans interface {
 	RuleSpans(ctx context.Context, signalType, rule, text string) ([]modelservice.Span, error)
 }
+
+// Candidate rewrites may reuse detections only for identical text.
+type maskingScanCache map[[sha256.Size]byte][]masking.Span
 
 // maskingSpansFor resolves the signal layer of the request's recipe. It is a
 // variable so tests can supply spans without a model.
@@ -71,11 +75,25 @@ func (r *OpenAIRouter) applyMaskingBeforeDispatch(ctx *RequestContext) error {
 		ctx.Masking = allocator
 	}
 	scan := spanScannerFor(ctx.embeddingContext(), finder, cfg)
+	if cached := ctx.maskingScans; cached != nil {
+		scanText := scan
+		scan = func(text string) ([]masking.Span, error) {
+			key := sha256.Sum256([]byte(text))
+			if spans, ok := cached[key]; ok {
+				return spans, nil
+			}
+			spans, scanErr := scanText(text)
+			if scanErr == nil {
+				cached[key] = spans
+			}
+			return spans, scanErr
+		}
+	}
 	result, err := masking.Apply(ctx.SemanticRequest, ctx.Masking, scan)
 	if err != nil {
 		return &maskingDispatchError{cause: err}
 	}
-	recordMaskingObservability(ctx, result)
+	ctx.observeProjection(func() { recordMaskingObservability(ctx, result) })
 	if result.Changed {
 		// Without this the envelope still claims the original client bytes
 		// describe the request, and EncodeRequest forwards them verbatim --

@@ -6,7 +6,12 @@ import (
 )
 
 func TestRequestDemandSnapshotsRoundTripAndClone(t *testing.T) {
+	reserve := 64
 	record := Record{RouteDiagnostics: &RouteDiagnostics{
+		FinalAdmission: &FinalAdmissionDiagnostics{
+			Model: "model-a", Source: "provider_render", Verdict: "fits", PromptTokens: 144,
+			ReservedOutputTokens: &reserve, ContextWindow: 208,
+		},
 		RequestDemandSnapshots: []RequestDemandSnapshot{{
 			Stage:                "provider_bound",
 			Representation:       "semantic",
@@ -33,11 +38,19 @@ func TestRequestDemandSnapshotsRoundTripAndClone(t *testing.T) {
 		decoded.RouteDiagnostics.RequestDemandSnapshots[0].TotalDemandTokens != 192 {
 		t.Fatalf("request demand snapshot changed during JSON round trip: %+v", decoded.RouteDiagnostics)
 	}
+	admission := decoded.RouteDiagnostics.FinalAdmission
+	if admission == nil || admission.PromptTokens != 144 || admission.ReservedOutputTokens == nil || *admission.ReservedOutputTokens != 64 {
+		t.Fatalf("final admission changed during JSON round trip: %+v", admission)
+	}
 
 	cloned := cloneRecord(record)
 	cloned.RouteDiagnostics.RequestDemandSnapshots[0].PromptTokens = 999
 	if record.RouteDiagnostics.RequestDemandSnapshots[0].PromptTokens != 128 {
 		t.Fatalf("clone mutation changed original request demand: %+v", record.RouteDiagnostics.RequestDemandSnapshots)
+	}
+	*cloned.RouteDiagnostics.FinalAdmission.ReservedOutputTokens = 999
+	if *record.RouteDiagnostics.FinalAdmission.ReservedOutputTokens != 64 {
+		t.Fatal("clone mutation changed the original admitted output reserve")
 	}
 }
 
@@ -48,5 +61,8 @@ func TestRequestDemandSnapshotsRemainOptionalForLegacyReplay(t *testing.T) {
 	}
 	if record.RouteDiagnostics == nil || record.RouteDiagnostics.RequestDemandSnapshots != nil {
 		t.Fatalf("legacy replay invented request demand snapshots: %+v", record.RouteDiagnostics)
+	}
+	if record.RouteDiagnostics.FinalAdmission != nil {
+		t.Fatal("legacy replay invented final admission evidence")
 	}
 }
