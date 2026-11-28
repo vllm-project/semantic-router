@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 from ci_results import actual_platform
+from core_test_selection import plan_selection, summary_line, write_observation
 from storage_inventory import ROOT, ginkgo_storage_suites, go_storage_tests
 
 MODULE = ROOT / "src/semantic-router"
@@ -288,14 +289,22 @@ def unit_groups(
     excluded: dict[str, set[str]],
     suites: dict[str, str],
     race_required: dict[str, set[str]],
+    filters: dict[str, set[str]] | None = None,
 ) -> tuple[dict, list[str]]:
     groups, expected = {}, []
+    filters = filters or {}
+    for package, names in filters.items():
+        if names - inventory.get(package, set()):
+            raise ValueError(f"filtered tests not collected: {package}")
     for package, names in race_required.items():
         if names - inventory.get(package, set()):
             raise ValueError(f"required race tests not collected: {package}")
     for package, names in inventory.items():
         selected = names - excluded.get(package, set()) - {suites.get(package)}
         race_names = race_required.get(package, set())
+        if package in filters:
+            selected &= filters[package]
+            race_names &= filters[package]
         if race_names - selected:
             raise ValueError(f"required race tests excluded from core: {package}")
         expected.extend(f"{package}/{name}" for name in sorted(selected))
@@ -377,15 +386,67 @@ def execute_tool_units(
 
 
 def execute_unit(output: Path, env: dict[str, str]) -> dict:
+    selection = plan_selection(ROOT, env)
+    selection["mode"] = (
+        "enforced" if env.get("CORE_TEST_SELECTION_ENFORCE") == "1" else "shadow"
+    )
+    before = {p: p.stat().st_mtime_ns for p in output.glob("*.jsonl")}
+    completed = False
+    write_observation(output, selection, [], completed=False)
+    try:
+        result = execute_selected_unit(output, env, selection)
+        completed = True
+        return result
+    finally:
+        logs = [
+            p
+            for p in output.glob("*.jsonl")
+            if not p.name.startswith("tool-") and before.get(p) != p.stat().st_mtime_ns
+        ]
+        line = summary_line(
+            write_observation(output, selection, logs, completed=completed)
+        )
+        print(line, flush=True)
+        if env.get("GITHUB_STEP_SUMMARY"):
+            with open(env["GITHUB_STEP_SUMMARY"], "a") as summary:
+                summary.write(line + "\n")
+
+
+def execute_selected_unit(output: Path, env: dict[str, str], selection: dict) -> dict:
     excluded, profiles = unit_exclusions()
     suites = ginkgo_suites()
-    listed = run_go(
-        ["-list", "^(Test|Fuzz|Example)", "./..."], output / "inventory.jsonl", env
+    selected = selection["selected_packages"]
+    enforce = selection["mode"] == "enforced" and selected is not None
+    targets = selected if enforce else ["./..."]
+    listed = (
+        run_go(
+            ["-list", "^(Test|Fuzz|Example)", *targets], output / "inventory.jsonl", env
+        )
+        if targets
+        else []
     )
+    filters = {}
+    if enforce:
+        relative = {package_id(package) for package in selected}
+        filters = {
+            package_id(package): set(names)
+            for package, names in (selection.get("test_filters") or {}).items()
+        }
+        # A filtered package runs only its scanning tests, not its suite.
+        suites = {
+            package: suite
+            for package, suite in suites.items()
+            if package in relative and package not in filters
+        }
+
     inventory = collected_go_inventory(listed)
     cases = []
     race_required = race_inventory(profiles)
-    groups, expected = unit_groups(inventory, excluded, suites, race_required)
+    if enforce:
+        race_required = {
+            p: names for p, names in race_required.items() if p in relative
+        }
+    groups, expected = unit_groups(inventory, excluded, suites, race_required, filters)
     for index, ((skipped, race), packages) in enumerate(groups.items()):
         skip = (
             ["-skip", "^(" + "|".join(map(re.escape, skipped)) + ")$"]
@@ -439,7 +500,8 @@ def execute_unit(output: Path, env: dict[str, str]) -> dict:
     tool_cases, tool_expected = execute_tool_units(output, env)
     cases.extend(tool_cases)
     expected.extend(tool_expected)
-    require_complete(cases, expected)
+    if expected or not enforce:
+        require_complete(cases, expected)
     return {"cases": cases, "expected_cases": expected, "excluded_profiles": profiles}
 
 
