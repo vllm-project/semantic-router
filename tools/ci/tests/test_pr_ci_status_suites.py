@@ -237,6 +237,8 @@ class SuiteDiagnosticTests(unittest.TestCase):
                 client = self.client()
                 # Replay public IDs and suite topology; bind the recorded head
                 # and external ID to the existing synthetic Plan/run fixture.
+                # Queue outcomes document what happened in production and
+                # are deliberately outside the diagnostic inputs.
                 gate = copy.deepcopy(case["gate"])
                 gate.update(
                     head_sha=fixtures.HEAD, external_id="semantic-router-ci:3:101:1"
@@ -255,7 +257,11 @@ class SuiteDiagnosticTests(unittest.TestCase):
                 client.rollup["state"] = case["rollup"]["statusCheckRollup"]["state"]
                 result = self.diagnose(client)
                 self.assertEqual(result["state"], case["expected_state"])
+                self.assertIn(case["expected_reason"], result["reason_codes"])
+                self.assertEqual(result["rollup_state"], client.rollup["state"])
                 self.assertEqual(result["run_suite_id"], client.run["check_suite_id"])
+                self.assertTrue(result["evidence"]["full_qualification"])
+                self.assertTrue(result["evidence"]["current_source"])
 
     def test_partial_or_malformed_graphql_response_cannot_establish_health(self):
         for payload in (

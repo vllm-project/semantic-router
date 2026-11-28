@@ -1,0 +1,44 @@
+{
+  "status": "ok",
+  "body": {
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "content": [
+          {
+            "text": "first",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      },
+      {
+        "content": [
+          {
+            "data": "opaque-Λ-data==",
+            "type": "redacted_thinking"
+          },
+          {
+            "text": "answer",
+            "type": "text"
+          }
+        ],
+        "role": "assistant"
+      },
+      {
+        "content": [
+          {
+            "text": "second",
+            "type": "text"
+          }
+        ],
+        "role": "user"
+      }
+    ],
+    "model": "routed-model",
+    "thinking": {
+      "budget_tokens": 2048,
+      "type": "enabled"
+    }
+  }
+}

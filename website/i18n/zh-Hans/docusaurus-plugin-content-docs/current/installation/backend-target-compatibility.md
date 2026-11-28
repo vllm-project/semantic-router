@@ -172,7 +172,7 @@ Operator 当前发现：
 
 这些适配器生成后端名称、端点、协议和权重。将完整的外部 provider 目标放入通过 Helm 或其他 canonical 配置工作流提供的 canonical 配置中。更广泛的 CRD 与 Helm 对等属于 [#2355](https://github.com/vllm-project/semantic-router/issues/2355)。
 
-KServe 发现当前假设常规的 `<InferenceService>-predictor.<namespace>.svc.cluster.local:8443` HTTPS 目标。它不会解析 `status.url` 或检查生成的 Service，因此自定义或命名 predictor 的服务布局需要显式的 Service 后端。
+KServe 发现使用与 `SemanticRouter` 同一命名空间下的 `<InferenceService>-predictor` Service。Operator 读取 Service 的端口和协议提示。如果 Service 同时提供 HTTPS 和 HTTP，则优先使用 HTTPS。对于使用默认 HTTP 端口的 Standard predictor，Operator 使用 `<InferenceService>-predictor.<namespace>.svc.cluster.local:80`。即使 `InferenceService` 发布了不同的 `status.url`，发现也以 Service 的 DNS 名称为准。如果使用自定义或命名 predictor 的 Service 布局，请显式指定 Service 后端。
 
 跨生成方的未知字段和受支持版本对等由 [#2469](https://github.com/vllm-project/semantic-router/issues/2469) 跟踪。在该工作落地之前，不要依赖未知扩展在生成方之间迁移后仍然保留。
 

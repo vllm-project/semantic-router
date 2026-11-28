@@ -53,7 +53,10 @@ func withoutReasoningSignatures(items []llmprotocol.OutputItem) ([]llmprotocol.O
 		projected[index] = item
 		copied := false
 		for blockIndex, block := range item.Content {
-			if block.Kind != llmprotocol.ContentReasoning || block.Signature == "" {
+			if block.Kind != llmprotocol.ContentReasoning || block.Signature == "" ||
+				block.Reasoning == llmprotocol.ReasoningScopeRedacted {
+				// Redacted state has no approximation; leave it so the
+				// capability check that follows still refuses the response.
 				continue
 			}
 			if !copied {

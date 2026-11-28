@@ -94,7 +94,7 @@ func TestCompileMapsEndpointsAndRouteBehavior(t *testing.T) {
 
 	alpha := topology.cluster("alpha")
 	wantAlpha := []EndpointSpec{{
-		Name: "alpha_primary", Scheme: "https", Host: "api.example.test", Port: 443, Weight: 1, IPv4Only: true,
+		Name: "alpha_primary", Scheme: "https", Host: "api.example.test", Port: 443, Weight: 1,
 	}}
 	if !reflect.DeepEqual(alpha.Endpoints, wantAlpha) || alpha.LBPolicy != LBRoundRobin {
 		t.Fatalf("alpha endpoints = %+v policy = %s", alpha.Endpoints, alpha.LBPolicy)
