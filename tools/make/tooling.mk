@@ -65,6 +65,9 @@ test-looper-tts: $(HARNESS_VENV_DEPS) ## Test the offline Looper experiment and 
 test-agent-kv-tier-bench: $(HARNESS_VENV_DEPS) ## Test the agent KV tier placement rules and report arithmetic offline
 	@"$(AGENT_PYTHON)" -m pytest -q bench/agent_kv_tier
 
-test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench ## Test every registered bench/ research tool
+test-coding-agent-live: $(HARNESS_VENV_DEPS) ## Test the Claude Code lane's command, alias mapping and report without Harbor
+	@"$(AGENT_PYTHON)" -m pytest -q bench/coding_agent_live
 
-.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-bench-tools
+test-bench-tools: test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-coding-agent-live ## Test every registered bench/ research tool
+
+.PHONY: bench-test-deps test-grounded-fusion-bench test-hallucination-bench test-reasoning-bench test-router-flow-bench test-agent-crew test-looper-tts test-agent-kv-tier-bench test-coding-agent-live test-bench-tools
