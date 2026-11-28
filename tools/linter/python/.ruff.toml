@@ -44,6 +44,10 @@ ignore = [
 ]
 "tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
 "tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/recipe-lab/tests/*.py" = ["PLC0415", "PLR2004"]
+# The mcq grader keeps an intentional lazy import + module-level cache so the
+# training package stays optional on sys.path.
+"tools/recipe-lab/recipe_lab/bank.py" = ["PLC0415", "PLW0603"]
 "tools/calibration/systemone_auto/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 # vSR's thresholds and probe scores are the calibrated values themselves; they read

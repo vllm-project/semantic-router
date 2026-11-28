@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -11,6 +12,8 @@ import pytest
 import yaml
 from cli import local_stack_config, runtime_service_status
 from cli.commands import config_management
+from cli.commands.runtime_observability import runtime_tracing_disabled
+from cli.commands.runtime_serve_config import _prepare_docker_runtime_config
 from cli.local_stack_config import LocalStack, save_pending_restart
 from cli.main import main
 from cli.pending_activation import ORIGIN_CLI, read_pending_activation
@@ -355,7 +358,7 @@ def test_restart_required_is_saved_for_the_next_serve(monkeypatch, stack, tmp_pa
     monkeypatch.setattr(
         config_management,
         "save_pending_restart",
-        lambda *args: saved.append(args) or tmp_path / "runtime-config.yaml",
+        lambda *args, **_kwargs: saved.append(args) or tmp_path / "runtime-config.yaml",
     )
     result = _apply(
         monkeypatch, stack, FakeClient(plan=refuse), tmp_path / "config.yaml"
@@ -388,6 +391,63 @@ def test_restart_required_without_a_local_stack_names_the_restart(
     assert "Envoy" not in result.output
 
 
+@pytest.mark.parametrize(
+    ("new_version", "edit_during_save", "preserve_mtime"),
+    [
+        ("v0.5", False, False),
+        ("v99.0", False, False),
+        ("v0.5", True, False),
+        ("v0.5", False, True),
+    ],
+)
+def test_restart_required_rejects_a_source_change(
+    monkeypatch, stack, tmp_path, new_version, edit_during_save, preserve_mtime
+):
+    source = tmp_path / "config.yaml"
+    original_stat = source.stat()
+    runtime = stack.runtime_config()
+    previous_config = SOURCE.replace(f"port: {MOVED_PORT}", "port: 8899").encode()
+    runtime.write_bytes(previous_config)
+
+    def edit_source():
+        source.write_text(
+            SOURCE.replace(f"port: {MOVED_PORT}", "port: 8891").replace(
+                "version: v0.5", f"version: {new_version}"
+            ),
+            encoding="utf-8",
+        )
+        if preserve_mtime:
+            os.utime(source, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+    def refuse():
+        if edit_during_save:
+            build = local_stack_config.build_effective_config_bytes
+
+            def build_after_edit(*args, **kwargs):
+                edit_source()
+                return build(*args, **kwargs)
+
+            monkeypatch.setattr(
+                local_stack_config, "build_effective_config_bytes", build_after_edit
+            )
+        else:
+            edit_source()
+        raise RouterManagementError("HTTP 409", status=409, code="RESTART_REQUIRED")
+
+    client = FakeClient(plan=refuse)
+    result = _apply(monkeypatch, stack, client, source)
+
+    assert len(client.sent) == 1
+    planned = yaml.safe_load(client.sent[0])
+    assert planned["listeners"][0]["port"] == 8890
+    assert planned["version"] == "v0.5"
+    assert result.exit_code == 1, result.output
+    assert "Config source changed" in result.output
+    assert runtime.read_bytes() == previous_config
+    assert read_pending_activation(runtime) is None
+    assert not runtime.with_suffix(".provenance.json").exists()
+
+
 def test_a_timed_out_apply_says_the_change_may_still_activate(
     monkeypatch, stack, tmp_path
 ):
@@ -414,6 +474,82 @@ def test_apply_waits_for_model_warmup_by_default():
     assert (
         timeout.default == config_management.MUTATION_TIMEOUT_SECONDS == WARMUP_SECONDS
     )
+
+
+def _tracing(document: dict) -> dict:
+    return document["global"]["services"]["observability"]["tracing"]
+
+
+def _serve(monkeypatch, config_path: Path, *, minimal: bool) -> dict:
+    """The runtime config `vllm-sr serve` leaves for config_path."""
+
+    monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(config_path.parent))
+    monkeypatch.setattr(
+        "cli.commands.runtime_serve_config.stop_runtime_before_config_replacement",
+        lambda stack: None,
+    )
+    runtime, _, lock = _prepare_docker_runtime_config(
+        config_path, None, False, None, (), False, minimal=minimal
+    )
+    lock.close()
+    return yaml.safe_load(runtime.read_text(encoding="utf-8"))
+
+
+def _on_stack(monkeypatch, stack: LocalStack, stack_name: str | None) -> LocalStack:
+    """The fixture's stack, or the same state under a named stack."""
+
+    if stack_name is None:
+        return stack
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", stack_name)
+    stack = replace(stack, layout=resolve_runtime_stack())
+    _publish_management_endpoint(monkeypatch, stack, 8080, 8080)
+    return stack
+
+
+# #6768: serve --minimal turns tracing off because it starts no collector.
+# Apply sends the tracing serve left, or the Router refuses every change as a
+# tracing change that needs a restart. A named stack scopes the collector
+# endpoint and its runtime files to its name.
+@pytest.mark.parametrize("stack_name", [None, "named-trial"])
+@pytest.mark.parametrize("minimal", [True, False])
+def test_apply_sends_the_tracing_serve_left(
+    monkeypatch, stack, tmp_path, minimal, stack_name
+):
+    stack = _on_stack(monkeypatch, stack, stack_name)
+    served = _serve(monkeypatch, tmp_path / "config.yaml", minimal=minimal)
+    assert ("enabled" in _tracing(served)) == minimal
+    assert _tracing(served)["exporter"]["endpoint"] == (
+        stack.layout.otlp_service_endpoint.removeprefix("http://")
+    )
+
+    client = FakeClient()
+    result = _apply(monkeypatch, stack, client, tmp_path / "config.yaml")
+
+    assert result.exit_code == 0, result.output
+    assert _tracing(yaml.safe_load(client.sent[-1])) == _tracing(served)
+
+
+# A pending change is the next serve's to project: that serve turns tracing off
+# and records it only if it starts without the collector. Turning it off when
+# saving would leave an `enabled: false` no serve recorded: a full serve would
+# keep tracing off, and a --minimal serve would drop the record apply reads.
+@pytest.mark.parametrize("next_minimal", [True, False])
+def test_the_next_serve_projects_a_pending_tracing_change(
+    monkeypatch, stack, tmp_path, next_minimal
+):
+    source = tmp_path / "config.yaml"
+    _serve(monkeypatch, source, minimal=True)
+    document = yaml.safe_load(source.read_text(encoding="utf-8"))
+    document.setdefault("global", {}).setdefault("services", {})["observability"] = {
+        "tracing": {"sampling": {"type": "probabilistic", "rate": 0.5}}
+    }
+    source.write_text(yaml.safe_dump(document), encoding="utf-8")
+    save_pending_restart(stack, source, "tracing configuration changed")
+
+    served = _serve(monkeypatch, source, minimal=next_minimal)
+
+    assert ("enabled" in _tracing(served)) == next_minimal
+    assert runtime_tracing_disabled(stack.runtime_config()) == next_minimal
 
 
 def test_save_pending_restart_writes_what_serve_applies(stack, tmp_path):

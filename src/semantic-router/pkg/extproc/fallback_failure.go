@@ -79,6 +79,7 @@ func (r *OpenAIRouter) failedAttemptResponse(ctx *RequestContext, attempt *faile
 	if attempt == nil {
 		return nil
 	}
+	r.releaseFailedSpend(ctx)
 	return r.answerFailedCall(ctx, attempt.status, r.failedAttemptError(ctx, attempt), attempt.replayReason())
 }
 

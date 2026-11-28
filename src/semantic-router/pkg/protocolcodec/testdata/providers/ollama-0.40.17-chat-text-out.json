@@ -1,0 +1,1 @@
+{"id":"chatcmpl-127","object":"chat.completion","created":1795269274,"model":"qwen3:0.6b","system_fingerprint":"fp_ollama","choices":[{"index":0,"message":{"role":"assistant","content":"\"Hi!\""},"finish_reason":"stop"}],"usage":{"prompt_tokens":22,"prompt_tokens_details":{"cached_tokens":3},"completion_tokens":4,"total_tokens":26}}

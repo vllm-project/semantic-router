@@ -145,8 +145,8 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            # A masking identity namespace may read its key from key_env.
-            for field in (API_KEY_ENV_FIELD, "key_env"):
+            # Runtime credentials may be named rather than interpolated.
+            for field in (API_KEY_ENV_FIELD, "key_env", "hmac_key_env", "password_env"):
                 named = node.get(field)
                 if isinstance(named, str) and named.strip():
                     names.add(named.strip())
@@ -156,6 +156,25 @@ def required_config_env_references(config_path: Path | str | None) -> set[str]:
         elif isinstance(node, str):
             names.update(_router_consulted_env_names(node))
     return names
+
+
+def guard_verdict_secret_env_names(config_path: Path | str) -> set[str]:
+    """Guard signing and store credentials belong only to the Router."""
+    try:
+        node = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError):
+        return set()
+    for field in ("global", "stores", "guard_verdicts"):
+        node = node.get(field) if isinstance(node, dict) else None
+    if not isinstance(node, dict) or node.get("backend") != "redis":
+        return set()
+    redis = node.get("redis")
+    values = [node.get("hmac_key_env")]
+    if isinstance(redis, dict):
+        values.append(redis.get("password_env"))
+    return {
+        value.strip() for value in values if isinstance(value, str) and value.strip()
+    }
 
 
 def _router_consulted_env_names(value: str) -> set[str]:
@@ -352,6 +371,7 @@ def _resolve_effective_config_document(
     setup_mode: bool,
     *,
     materialize_local_runtime: bool = True,
+    enable_observability: bool = True,
 ) -> tuple[dict[str, object], bool]:
     with config_path.open(encoding="utf-8") as handle:
         config = yaml.safe_load(handle) or {}
@@ -363,6 +383,12 @@ def _resolve_effective_config_document(
         changed = inject_local_service_runtime_defaults(config, stack) or changed
         changed = inject_local_store_runtime_defaults(config, stack) or changed
         changed = apply_local_tracing_endpoint(config, stack) or changed
+        if not enable_observability:
+            # Repeat serve's projection for a stack without the local collector.
+            changed = (
+                apply_local_tracing_endpoint(config, stack, enable_observability=False)
+                or changed
+            )
     normalized_algorithm = _normalized_algorithm_override(algorithm, setup_mode)
     if normalized_algorithm:
         changed = _apply_algorithm_override(config, normalized_algorithm) or changed
@@ -373,13 +399,20 @@ def build_effective_config_bytes(
     config_path: Path,
     algorithm: str | None,
     setup_mode: bool,
+    *,
+    enable_observability: bool = True,
 ) -> bytes:
-    """Build the effective config bytes."""
+    """Build the effective config bytes.
+
+    *enable_observability* False also turns off tracing aimed at the local
+    collector, as serve does for a stack that does not run one.
+    """
 
     config, changed = _resolve_effective_config_document(
         config_path,
         algorithm,
         setup_mode,
+        enable_observability=enable_observability,
     )
     if not changed:
         return config_path.read_bytes()

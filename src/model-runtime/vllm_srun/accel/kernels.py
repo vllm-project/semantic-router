@@ -47,6 +47,27 @@ class KernelSet:
     approximate_slots: frozenset[str] | None = None
     variants: dict[str, str] = field(default_factory=dict)
 
+    def consent(
+        self, consents: bool | frozenset[str], exact_only: bool = False
+    ) -> None:
+        """Allow the approximate kernels a family consents to: every slot, or the named ones."""
+        self.allow_approximate = not exact_only and bool(consents)
+        self.approximate_slots = consents if isinstance(consents, frozenset) else None
+
+    def approximate_sources(self) -> tuple[str, ...]:
+        """Where the approximate kernels ``select`` picks come from, sorted."""
+        return tuple(
+            sorted(
+                {
+                    kernel.source
+                    for name in self.available
+                    if self.has(name)
+                    for kernel in (self.select(name),)
+                    if not kernel.exact
+                }
+            )
+        )
+
     def allows(self, name: str) -> bool:
         """Whether this slot may run an approximate kernel."""
         return self.allow_approximate and (

@@ -1,3 +1,133 @@
+- id: meta/muse-wonder-1.0
+  display_name: Muse Wonder
+  description: Preview model for software engineering and multi-step tool use on the Meta Model API.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://dev.meta.ai/docs/muse-wonder
+  family: muse-wonder
+  released_at: '2026-10-12'
+  reasoning_family: muse-max-default
+  lifecycle: experimental
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    - document
+    output:
+    - text
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: 2026-11-27
+    source: https://dev.meta.ai/docs/muse-wonder
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
+  - coding
+  - preview
+- id: meta/muse-ember-1.0
+  display_name: Muse Ember
+  description: Standard mode Meta Model API model for high-volume tool calls, routing, and document processing.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://dev.meta.ai/docs/muse-ember
+  family: muse-ember
+  released_at: '2026-11-09'
+  reasoning_family: muse-max-default
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 524288
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    - document
+    output:
+    - text
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: 2026-11-27
+    source: https://dev.meta.ai/docs/muse-ember
+  tags:
+  - proprietary
+  - multimodal
+  - agentic
+- id: meta/muse-spark-open
+  display_name: Muse Spark Open
+  description: Meta's multimodal mixture-of-experts model for reasoning and tool use. Access to the weights requires approval.
+  kind: physical
+  publisher: Meta
+  presentation:
+    logo: package:meta
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+    license: Muse Model License
+  family: muse-spark
+  parameter_size: 816B (42B active)
+  released_at: '2026-10-15'
+  reasoning_family: muse-spark-open
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - vision
+  - video
+  - audio
+  - long_context
+  modalities:
+    input: [text, image, video, audio]
+    output: [text]
+  verification:
+    authority: Meta
+    status: claimed
+    verified_at: 2026-11-21
+    source: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B
+  tags: [open_weights, multimodal, moe, long_context]
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.

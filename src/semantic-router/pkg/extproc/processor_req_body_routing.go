@@ -128,10 +128,15 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 		}
 		return err
 	}
-	if err := r.validateDispatchRequirements(&projected, dispatch, ctx); err != nil {
+	if err = r.validateDispatchRequirements(&projected, dispatch, ctx); err != nil {
 		return err
 	}
-	if err := r.providerCapabilityMismatch(backendModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected)); err != nil {
+	err = r.providerCapabilityMismatch(backendModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected))
+	if err == nil {
+		// Runs after request plugins, so a request_params cap on n still applies.
+		err = protocolcodec.RequireStreamableCandidates(dispatch.targetFormat, projected)
+	}
+	if err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -307,6 +312,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.OpenAIResponsesV1, nil
 	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
 		return llmprotocol.OpenAIImagesV1, nil
+	case config.APIFormatSpeech, "openai.speech", string(llmprotocol.OpenAISpeechV1):
+		return llmprotocol.OpenAISpeechV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}

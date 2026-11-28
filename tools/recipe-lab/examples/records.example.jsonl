@@ -1,0 +1,5 @@
+{"case_id": "case-001", "truth": "math", "matched_decision": "math", "routed": "local/model-math", "family": "d3", "answer_ok": true}
+{"case_id": "case-002", "truth": "math", "matched_decision": "code", "routed": "local/model-code", "family": "d3", "answer_ok": false}
+{"case_id": "case-003", "truth": "code", "matched_decision": "code", "routed": "local/model-code", "family": "d3", "answer_ok": true}
+{"case_id": "case-004", "truth": "reasoning", "matched_decision": "reasoning", "routed": "local/model-math", "family": "d3", "answer_ok": true}
+{"case_id": "case-005", "truth": "math", "matched_decision": "math", "routed": "local/model-math", "family": "d3", "answer_ok": null}

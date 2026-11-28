@@ -724,6 +724,14 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 	return frames, acceptedEvents, diagnostics, nil
 }
 
+// HasPendingContent reports provider content that the decoder has accepted
+// but not emitted as events yet. It is available after a successful Push and
+// does not change event delivery or order.
+func (engine *StreamEngine) HasPendingContent() bool {
+	decoder, ok := engine.decoder.(interface{ hasPendingContent() bool })
+	return ok && decoder.hasPendingContent()
+}
+
 func (engine *StreamEngine) validatePushState() error {
 	if engine == nil || engine.decoder == nil || engine.encoder == nil {
 		return fmt.Errorf("stream codec engine is unavailable")

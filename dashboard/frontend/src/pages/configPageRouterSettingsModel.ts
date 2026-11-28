@@ -21,6 +21,7 @@ import {
   Repeat,
   RotateCcw,
   ServerCog,
+  ShieldCheck,
   Telescope,
   Timer,
   Wallet,
@@ -334,6 +335,7 @@ const SECTION_ICONS: Record<string, LucideIcon> = {
   memory: Brain,
   vector_store: Database,
   tool_sessions: Wrench,
+  guard_verdicts: ShieldCheck,
   kv_transfer: ArrowLeftRight,
   looper: Repeat,
   system_models: BrainCircuit,
@@ -355,6 +357,11 @@ const SECTION_COPY: Record<string, { title: string; description: string }> = {
     title: 'Tool sessions',
     description:
       'Where the router keeps the state of tool calls that span several requests, and how much of it.',
+  },
+  guard_verdicts: {
+    title: 'Guard verdicts',
+    description:
+      'Reuse complete request-stage guard checks across Router replicas through an authenticated store.',
   },
   kv_transfer: {
     title: 'KV transfer',

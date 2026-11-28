@@ -161,7 +161,14 @@ class DtypePolicy:
     strength of a record on that device class: a GPU record says nothing about
     a CPU kernel, and the reverse. ``approximate_cpu_kernels`` is True for every
     slot, or the names of the slots (``linear``, ``sdpa``) the family's record
-    covers, so a kernel added to another slot later does not change its answers. Consented
+    covers, so a kernel added to another slot later does not change its answers.
+    ``approximate_accelerators`` scopes ``approximate_kernels`` to the named
+    accelerators (None: every GPU and NPU accelerator the spec runs on); the
+    CPU consent is ``approximate_cpu_kernels`` alone.
+    ``cpu_bf16_references`` names the CPU hardware keys
+    (``CPUAccelerator.golden_reference``) on which every golden request has a
+    BF16 reference: on such a host ``--dtype auto`` holds BF16 instead of
+    ``cpu_weights`` (``dtypes.on_host``), checked against that reference. Consented
     copies and kernels run by default at the published precision, so a family
     consents only where its records show no decision changed and at least 99%
     agreement per answer type against the model's own batches (embeddings:
@@ -178,6 +185,23 @@ class DtypePolicy:
     reduced_cpu: str | None = None
     approximate_kernels: bool = False
     approximate_cpu_kernels: bool | frozenset[str] = False
+    cpu_bf16_references: frozenset[str] = frozenset()
+    approximate_accelerators: frozenset[str] | None = None
+
+    def consents_on(self, accelerator: str, cpu: bool) -> bool | frozenset[str]:
+        """The approximate kernels this policy consents to on ``accelerator`` (a CPU's or another device class's).
+
+        ``approximate_accelerators`` scopes ``approximate_kernels`` only: the
+        CPU consent rests on a CPU record of its own.
+        """
+        if cpu:
+            return self.approximate_cpu_kernels
+        if (
+            self.approximate_accelerators is not None
+            and accelerator not in self.approximate_accelerators
+        ):
+            return False
+        return self.approximate_kernels
 
     @property
     def needs_gpu_bf16(self) -> bool:
@@ -759,6 +783,11 @@ class Accelerator(ABC):
     def golden_reference(self, device: DeviceInfo) -> str | None:
         """Optional hardware reference key; callers own device-class fallback."""
         return f"{self.name}:{device.arch}" if device.arch else None
+
+    def golden_references(self, device: DeviceInfo) -> tuple[str, ...]:
+        """The hardware reference keys to try, most specific first; callers own device-class fallback."""
+        key = self.golden_reference(device)
+        return (key,) if key else ()
 
     def lacks(self, device: DeviceInfo, capability: str) -> str:
         """Why ``device`` can't serve a model that requires ``capability`` (``ModelSpec.requires``), and the remedy."""

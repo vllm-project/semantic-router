@@ -6,9 +6,11 @@ description: Match client-facing inference APIs to supported backend model proto
 # Protocol Compatibility Matrix
 
 Semantic Router supports three inference wire formats on both sides of the
-data plane, and the Images API for image generation. A client request is decoded into a protocol-neutral form, routing
+data plane, the Images API for image generation, and the Speech API for
+text-to-speech. A client request is decoded into a protocol-neutral form, routing
 policy selects a model, and that model's `api_format` selects the backend codec.
-The response is translated back to the client's original format.
+Chat, Responses, Messages and Images responses are translated back to the client's
+original format. A Speech response is the backend's audio bytes, forwarded unchanged.
 
 ```text
 client endpoint -> client codec -> routing -> backend codec -> model endpoint
@@ -33,6 +35,7 @@ start with [Connect an agent harness](agent-harness).
 | OpenAI Responses | `POST /v1/responses` | Supported | Supported | Requires `global.services.response_api` and its store to be available. Router-owned object operations are not forwarded to a model backend. |
 | Anthropic Messages | `POST /v1/messages` | Supported | Supported | Send the Anthropic request shape and an appropriate `anthropic-version` header. Client authentication remains deployment-specific. |
 | OpenAI Images | `POST /v1/images/generations` | Supported | Not supported | Answered only by a decision whose `output` is an image. See [Images API](../api/router#images-api). |
+| OpenAI Speech | `POST /v1/audio/speech` | Supported | Not supported | Routed on the input text to a model with `api_format: speech`. The audio bytes are forwarded unchanged. See [Speech API](../api/router#speech-api). |
 
 The public listener also serves `GET /v1/models` and Anthropic's
 `POST /v1/messages/count_tokens`, which coding agents use to size a file before
@@ -64,6 +67,7 @@ contract implemented by that model endpoint, not the provider brand.
 | `responses` | OpenAI Responses | `/v1/responses` | The backend itself must implement the Responses wire contract; enabling the Router's Responses service does not add that API to a backend. |
 | `anthropic` | Anthropic Messages | `/v1/messages` | Configure provider authentication and required version headers on the backend ref. vLLM serves this API from 0.11.1, so a vLLM backend keeps `provider: vllm`, which sends the bearer token vLLM checks for `--api-key`. |
 | `images` | OpenAI Images | `/v1/images/generations` | Generates images only, for a decision whose [output](../tutorials/decision/output) is an image; it never streams. |
+| `speech` | OpenAI Speech | `/v1/audio/speech` | Speaks the input text. `stream: true` and `stream_format` are rejected. The response is the backend's audio, not a JSON completion, so response policy, the response cache, token limits and cost estimates do not apply. Request-text checks still run, on `input` only: `instructions`, `ref_text` and the other fields are forwarded unchecked. A model that cannot speak fails closed with `unsupported_capability`. |
 
 These fields are easy to confuse:
 
@@ -204,7 +208,7 @@ instead of being silently dropped.
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
-| Multiple response candidates | Supported | Not supported | Not supported |
+| Multiple response candidates (`n` above 1) | Buffered only. A streamed request fails with `stream_multiple_choices` before dispatch, unless `request_params` `max_n: 1` lowers it to one choice | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not forwarded; reported as `dropped` |
 | Reasoning token budget | Supported extension | Not supported | Supported |
@@ -1009,9 +1013,19 @@ tools or error translation.
 - When the output limit ends a streamed tool call inside its arguments, or
   right after its name with none, the Router passes the partial call on with
   the limit stop, as the providers do: `max_tokens` for Messages, `length` for
-  Chat, and `incomplete` with `max_output_tokens` for Responses. In every other case, arguments that are
-  not a JSON object end the stream with `invalid_stream_tool_arguments`. A cut
-  response is not cached, stored, or kept as the replay response body.
+  Chat, and `incomplete` with `max_output_tokens` for Responses. For
+  Chat-to-Responses streaming only, a function call confirmed to have finished
+  normally with omitted, empty, or whitespace-only arguments is normalized to
+  `{}`. The joined argument deltas, arguments-done event, completed item, and
+  terminal output agree; whitespace-only argument prefixes are held until an
+  object follows or the call finishes. This is a wire-level guarantee, not tool
+  schema validation: required-field validation remains with the tool consumer.
+  A wire `arguments: null` can be a streaming placeholder: later object argument
+  text is accepted, but a normally finished call with only null and no non-whitespace
+  argument text is rejected. Arrays, other non-objects, and malformed non-empty JSON
+  still end the stream with `invalid_stream_tool_arguments`; other translation
+  directions retain their existing validation. A cut response is not cached,
+  stored, or kept as the replay response body.
 - A Responses reasoning item can carry different non-empty `encrypted_content`
   strings in `response.output_item.done` and the corresponding output item in
   `response.completed` or `response.incomplete`. The Router accepts this

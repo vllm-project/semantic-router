@@ -36,6 +36,7 @@ const sidebars: SidebarsConfig = {
         'installation/installation',
         'installation/agent-harness',
         'installation/agent',
+        'installation/agent-skills',
         'installation/shell-completion',
         {
           type: 'category',
@@ -426,6 +427,13 @@ const sidebars: SidebarsConfig = {
             'proposals/model-execution-fallback',
             'proposals/Prism-153key',
             'proposals/hallucination-mitigation-milestone',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Evaluation & Quality',
+          items: [
+            'proposals/mom-first-class-evaluation',
           ],
         },
         {

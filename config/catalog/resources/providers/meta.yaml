@@ -24,6 +24,32 @@ presentation:
 conformance:
   status: unverified
 models:
+- catalog: meta/muse-wonder-1.0
+  relationship: first_party
+  id: muse-wonder-1.0
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    service_mode: standard
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-11-27
+    source: https://dev.meta.ai/docs/muse-wonder
+- catalog: meta/muse-ember-1.0
+  relationship: first_party
+  id: muse-ember-1.0
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  restrictions:
+    service_mode: standard
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-11-27
+    source: https://dev.meta.ai/docs/muse-ember
 - catalog: meta/muse-spark-1.2
   relationship: first_party
   id: muse-spark-1.2

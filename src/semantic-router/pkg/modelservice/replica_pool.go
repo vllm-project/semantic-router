@@ -66,17 +66,22 @@ type replicaLoad struct {
 type replicaWorker struct {
 	id     string
 	member member
+	// precision is set on the copy returned by classifyLocked, from the same
+	// card that made this worker eligible for dispatch.
+	precision string
 }
 type replicaPool struct {
-	manager     *Manager
-	declaration config.ModelDeployment
-	name        string
-	workers     []replicaWorker
-	client      *Client
-	served      *servedModel
-	ejection    config.ReplicaEjection
-	mu          sync.Mutex
-	baseline    *ModelCard
+	manager        *Manager
+	declaration    config.ModelDeployment
+	name           string
+	workers        []replicaWorker
+	client         *Client
+	served         *servedModel
+	ejection       config.ReplicaEjection
+	mu             sync.Mutex
+	baseline       *ModelCard
+	precision      string
+	precisionEpoch uint64
 }
 
 func newReplicaPool(manager *Manager, name string, declaration config.ModelDeployment, workers []replicaWorker) *replicaPool {
@@ -138,6 +143,10 @@ const backoffReason = "replica is in health backoff"
 func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.readyWorkersLocked()
+}
+
+func (p *replicaPool) readyWorkersLocked() ([]replicaWorker, map[string]string) {
 	ready, ejected, reasons := p.classifyLocked(time.Now())
 	if len(ready) == 0 {
 		for _, w := range ejected {
@@ -146,11 +155,20 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 		ready = ejected
 	}
 	limit := int64(0)
-	for _, w := range ready {
+	var precision string
+	for i, w := range ready {
+		if i == 0 {
+			precision = w.precision
+		} else if w.precision != precision {
+			precision = ""
+		}
 		current := w.member.group.client.bundleTasks.Load()
 		if limit == 0 || current < limit {
 			limit = current
 		}
+	}
+	if precision != p.precision {
+		p.precision, p.precisionEpoch = precision, p.precisionEpoch+1
 	}
 	if len(ready) > 0 {
 		p.client.bundleTasks.Store(limit)
@@ -162,6 +180,19 @@ func (p *replicaPool) readyWorkers() ([]replicaWorker, map[string]string) {
 	p.served.ready.Store(len(ready) > 0)
 	readyGauge.WithLabelValues(p.name).Set(boolGauge(len(ready) > 0))
 	return ready, reasons
+}
+
+func (p *replicaPool) currentCard() (ModelCard, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ready, _ := p.readyWorkersLocked()
+	if len(ready) == 0 {
+		return ModelCard{}, false
+	}
+	card := *p.baseline
+	card.ID, card.Ready, card.Status = p.name, true, "ready"
+	card.Dtype, card.PrecisionEpoch = p.precision, p.precisionEpoch
+	return card, true
 }
 
 // classifyLocked sorts the compatible ready workers into those dispatch may
@@ -183,6 +214,7 @@ func (p *replicaPool) classifyLocked(now time.Time) (ready, ejected []replicaWor
 			reasons[w.id] = "replica identity or capabilities differ from pool"
 			continue
 		}
+		w.precision = card.Dtype
 		load := &w.member.served.load
 		load.mu.Lock()
 		readmitted := load.expireLocked(now)

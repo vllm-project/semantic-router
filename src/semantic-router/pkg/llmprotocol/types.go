@@ -28,6 +28,11 @@ const (
 	// to /v1/images/generations, and the generated image is decoded back into
 	// the protocol-neutral GeneratedImage output item.
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
+	// OpenAISpeechV1 is the OpenAI Speech API dialect (POST /v1/audio/speech)
+	// served by TTS backends such as vLLM-Omni. It is a sink dialect: the
+	// router reads the input text and forwards the other request fields, and
+	// the audio response bypasses the neutral response.
+	OpenAISpeechV1 WireFormat = "openai.speech.v1"
 )
 
 // APIName is the API a wire format serves, as clients and operators call it;
@@ -59,10 +64,10 @@ const (
 
 type ContentKind string
 
-// ReasoningScope preserves whether a provider exposed full reasoning text or
-// a user-facing summary. An empty scope means the source format did not make
-// that distinction; codecs must not guess that unspecified reasoning is a
-// summary.
+// ReasoningScope preserves whether a provider exposed full reasoning text,
+// a user-facing summary, or opaque redacted state. An empty scope means the
+// source format did not make that distinction; codecs must not guess that
+// unspecified reasoning is a summary.
 type ReasoningScope string
 
 const (
@@ -89,6 +94,10 @@ const (
 const (
 	ReasoningScopeText    ReasoningScope = "text"
 	ReasoningScopeSummary ReasoningScope = "summary"
+	// ReasoningScopeRedacted marks opaque reasoning that the provider hid. Its
+	// payload lives in Signature and has no text-only approximation, so only a
+	// wire format that can carry the same opacity may accept it.
+	ReasoningScopeRedacted ReasoningScope = "redacted"
 )
 
 // Content is one ordered semantic block. Fields are closed by Kind. Data and
@@ -315,12 +324,15 @@ type TrustedMetadata struct {
 }
 
 type Request struct {
-	Generation        uint64
-	Model             string
-	Instructions      []InstructionBlock
-	Messages          []Message
-	Tools             []Tool
-	ImageGeneration   *ImageGenerationOptions
+	Generation      uint64
+	Model           string
+	Instructions    []InstructionBlock
+	Messages        []Message
+	Tools           []Tool
+	ImageGeneration *ImageGenerationOptions
+	// SpeechGeneration is set for a Speech API request. Its presence requires
+	// CapabilitySpeechGeneration. The text to speak is the last user message.
+	SpeechGeneration  *SpeechGenerationOptions
 	ToolChoice        ToolChoice
 	ParallelToolCalls *bool
 	CandidateCount    *int64

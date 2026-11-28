@@ -151,8 +151,8 @@ A recipe published with `api: systemone` runs escalate with
   deciding whether to call Vega.
 - There is no separate mandatory Kai classification call, and the recipe does
   not run again after the first answer.
-- It supports `choice`, `score`, `noul` and `box` requests, and keeps the
-  original question bundle together. A stage runs only if its model answers
+- It supports `choice`, `score`, `noul`, `box`, `set` and `span` requests, and
+  keeps the original question bundle together. A stage runs only if its model answers
   what the request needs; see
   [Route by what each model answers](#route-by-what-each-model-answers).
 
@@ -435,9 +435,38 @@ global:
 A `box` answer counts as complete when its box lies within the image.
 Acceptance rules can gate it with
 `{question_type: box, field: confidence, gte: ...}`. A calibrated policy never
-accepts it, because calibration covers `choice`, `score` and `noul`. Auto does
-not route `set`, `span` or `track` questions yet: their answers are
-family-specific, so a request with one is refused with `400`.
+accepts it, because calibration covers `choice`, `score` and `noul`.
+
+Auto needs a `set` question to name its labels in `criteria`. A `set` answer
+counts as complete when `sets` gives every label a probability, selects only
+those labels, and agrees with each label's own `<question>.<label>` answer.
+Selecting no label is a complete answer. Acceptance rules can gate it with
+`{question_type: set, field: probability_margin, gte: ...}`. A calibrated
+policy never accepts it either.
+
+Auto needs a `span` question to name its labels in `criteria`, and needs to
+know the text the question reads: send a text state, or name a text part of an
+object state with `over`. Any other request leaves the part to the model, so
+auto refuses it with `400`. It also refuses two states that models read in
+different ways:
+
+- A text state that holds a JSON object, which some models read as that
+  object. Send the object as the state and name its part with `over`.
+- An object state without roles, which some models read as one text. A
+  `vllm-sr/5.0` request has no roles unless it gives them, so give `roles`
+  there.
+
+A `span` answer counts as complete when the question's own answer is a valid
+`noul` and `spans` lists its spans. Each span names a declared label, a
+probability, and a `start` and an `end` in code points of the text the question
+read, the end excluded, and its `text` is that range of the text. An empty list
+is a complete answer; a missing or `null` list is not. Acceptance rules can
+gate it on that `noul`, with
+`{question_type: span, field: probability_margin, gte: ...}` or
+`top_probability`. A calibrated policy reads that `noul` too.
+
+Auto does not route `track` questions yet, so a request with one is refused
+with `400`.
 
 #### Add routing signals
 
@@ -479,9 +508,9 @@ An uncalibrated rule can inspect these observations:
 
 | Field | Meaning |
 | --- | --- |
-| `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)` |
+| `top_probability` | Largest probability in the native answer distribution; for `noul`, `max(p, 1-p)`. For `span`, that of the question's `noul` |
 | `confidence` | The confidence reported by the native model, when present: System One's published statistic for Choice and Score (see [Decisions](https://vllm-sr.ai/docs/model-runtime/reference/http-api#decisions)); since runtime contract 3.2.0 its values differ from earlier releases, so recheck thresholds |
-| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin |
+| `probability_margin` | For `noul`, `2 × abs(p - 0.5)`; both confident true and confident false answers have a large margin. For `set`, the smallest such margin among its labels. For `span`, the margin of the question's `noul` |
 
 - **Bounds.** A rule bounds its field with `gt`, `gte`, `lt` or `lte`, in
   `[0, 1]`.

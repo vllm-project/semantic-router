@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -151,6 +152,43 @@ func TestContextSourcesInjectInSourceOrder(t *testing.T) {
 			require.Len(t, ctx.MemoryToolCallIDs, 1)
 		})
 	}
+}
+
+// A later step of a tool loop injects the same text under the same call IDs.
+func TestContextCallIDsRepeatAcrossToolSteps(t *testing.T) {
+	router, storeID := contextRouter(t)
+	inject := func(steps ...llmprotocol.Message) []llmprotocol.Message {
+		ctx, request := contextRequestContext(config.ContextPluginConfig{Enabled: true, Sources: []config.ContextSource{
+			ragSource(storeID, recallOnly(1)), {Type: config.ContextSourceMemory},
+		}})
+		ctx.RequestID = fmt.Sprintf("request-%d", len(steps))
+		request.Messages = append(request.Messages, steps...)
+		require.NoError(t, router.retrieveContextSources(ctx, contextQuery, request))
+		require.Equal(t, ragContextToolName, request.Messages[1].Content[0].ToolCall.Name)
+		require.Equal(t, memoryContextToolName, request.Messages[3].Content[0].ToolCall.Name)
+		return request.Messages
+	}
+	first := inject()
+	next := inject(
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: "call_1", Name: "lookup", Arguments: "{}"},
+		}}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{CallID: "call_1"},
+		}}},
+	)
+	require.Equal(t, first, next[:len(first)])
+}
+
+func TestInjectedCallIDSkipsIDsInTheConversation(t *testing.T) {
+	request := testNeutralRequest("entrypoint", contextQuery)
+	id := injectedCallID(request, "rag_", "doc")
+	require.NotEqual(t, id, injectedCallID(request, "rag_", "other doc"))
+
+	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{
+		Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: id, Name: "lookup", Arguments: "{}"},
+	}}})
+	require.Equal(t, id+"_2", injectedCallID(request, "rag_", "doc"))
 }
 
 // system_prompt injection leaves the conversation alone.
