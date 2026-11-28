@@ -14,9 +14,10 @@ timing; the receipt says so.
 
 Both paths answer the same ``system_one`` work. After timing, every response
 must contain the request's question IDs, nonempty answers, and no item-level
-error codes. ``--warmup-passes`` (default 2) runs the full panel untimed so
-CUDA graphs capture on a shape's second use before the clock starts; the
-receipt records capture/replay/eager counts and refuses a timed panel that
+error codes. ``--warmup-passes`` (default 2) runs the full panel untimed.
+Ordinary shapes capture on their second use; under cache pressure they
+need eight sightings, so increase the warmup passes when needed. The receipt
+records lookup/miss/capture/replay/eager counts and refuses a timed panel that
 still captured. ``--rounds N`` repeats the measurement (default 1, which is
 not an acceptance verdict); ``--extend M`` continues through round M when
 evidence is under five rounds or a latency or throughput interval is worse at the point
@@ -89,13 +90,15 @@ class BenchmarkSide:
         synchronize(self.device)
         return response["answers"]
 
-    def graph_stats(self) -> dict[str, int]:
-        """Read native graph counters; the released runtime has none here."""
+    def graph_stats(self) -> dict[str, Any]:
+        """Read native graph counters and pressure diagnostics; the released side has none."""
         if not self.native:
             return {}
         receipt = self.model.engine_model.receipt()
         counters = receipt.get("graphs", receipt.get("encoder_graphs", {}))
-        return {key: int(counters.get(key, 0)) for key in GRAPH_COUNTERS}
+        return {key: int(counters.get(key, 0)) for key in GRAPH_COUNTERS} | {
+            key: counters[key] for key in GRAPH_DIAGNOSTICS if key in counters
+        }
 
     def close(self) -> None:
         self.model = None
@@ -107,17 +110,31 @@ class BenchmarkSide:
                 torch.cuda.empty_cache()
 
 
-GRAPH_COUNTERS = ("captures", "replays", "eager")
+GRAPH_COUNTERS = ("lookups", "misses", "captures", "replays", "eager")
+GRAPH_DIAGNOSTICS = (
+    "cached",
+    "candidates",
+    "spent_bytes",
+    "budget_bytes",
+    "eager_reasons",
+)
 
 
-def graph_delta(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+def graph_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, int]:
     return {key: after.get(key, 0) - before.get(key, 0) for key in GRAPH_COUNTERS}
 
 
-def refuse_capture_during_timing(delta: dict[str, int], side: str) -> None:
+def refuse_capture_during_timing(
+    delta: dict[str, int], side: str, snapshot: dict[str, Any]
+) -> None:
     if delta.get("captures", 0) > 0:
+        diagnostics = {
+            key: snapshot[key] for key in GRAPH_DIAGNOSTICS if key in snapshot
+        }
         raise SystemExit(
-            f"{side}: {delta['captures']} CUDA graph captures during the timed panel"
+            f"{side}: {delta['captures']} CUDA graph captures during the timed panel; "
+            "increase --warmup-passes to finish graph admission before timing; "
+            f"graph cache: {json.dumps(diagnostics, sort_keys=True)}"
         )
 
 
@@ -210,8 +227,9 @@ def paired_measurements(
                 answers = paths[name](body)
                 seconds[name].append(time.perf_counter() - started)
                 collected[name].append(answers)
-        delta = graph_delta(before, engine.graph_stats())
-        refuse_capture_during_timing(delta, "native")
+        after = engine.graph_stats()
+        delta = graph_delta(before, after)
+        refuse_capture_during_timing(delta, "native", after)
         graphs_timed.append(delta)
         validate_panel(collected["released"], bodies, "released")
         validate_panel(collected["native"], bodies, "native")
@@ -260,14 +278,15 @@ def paired_measurements(
 
 def _load_and_time(
     kind: str, args: argparse.Namespace, bodies: list[dict[str, Any]]
-) -> tuple[list[float], Any, dict[str, dict[str, int]]]:
+) -> tuple[list[float], Any, dict[str, dict[str, Any]]]:
     load = bundled if kind == "released" else native
     with closing(load(args)) as side:
         warmup(side, bodies, args.warmup_passes)
         before = side.graph_stats()
         seconds, collected = time_answers(side, bodies)
-        delta = graph_delta(before, side.graph_stats())
-        refuse_capture_during_timing(delta, kind)
+        after = side.graph_stats()
+        delta = graph_delta(before, after)
+        refuse_capture_during_timing(delta, kind, after)
         validate_panel(collected, bodies, kind)
         stats = {"graphs_after_warmup": before, "graphs_timed": delta}
         return seconds, collected[0], stats
@@ -354,7 +373,7 @@ def main() -> int:
             "--warmup-passes",
             type=int,
             default=2,
-            help="untimed full-panel passes so every measured shape is captured before timing",
+            help="untimed full-panel passes; increase when cache pressure delays graph admission",
         )
         command.add_argument("--no-graphs", action="store_true")
         command.add_argument("--no-fused", action="store_true")
