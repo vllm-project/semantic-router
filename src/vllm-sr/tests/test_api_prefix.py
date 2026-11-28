@@ -36,6 +36,11 @@ def test_listener_reports_prefixes_by_canonical_api_name():
     assert listener.api_prefixes() == {"messages": "/anthropic"}
 
 
+def test_empty_prefix_is_no_prefix_as_the_router_reads_it():
+    listener = Listener(name="p", port=1, apis={"anthropic": {"prefix": ""}})
+    assert listener.api_prefixes() == {}
+
+
 def test_bad_prefix_is_refused():
     for bad in ("/", "anthropic", "/anthropic/", "/a b"):
         try:
