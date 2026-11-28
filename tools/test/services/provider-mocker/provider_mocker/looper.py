@@ -30,6 +30,8 @@ async def reset(request: Request):
 
 
 def judge_content(prompt: str) -> str:
+    if "__LOOPER_FUSION_EMPTY_JUDGE_PROBE__" in prompt:
+        return ""
     if "return only valid JSON" in prompt:
         return json.dumps(
             {
