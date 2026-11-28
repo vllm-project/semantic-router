@@ -367,6 +367,7 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 		},
 	}
 	previousWasToolResult := false
+	previousTurnRole := ""
 	toolFailures := intentToolFailures{calls: map[string]*llmprotocol.ToolCall{}}
 	routing := selector.Walk(intentUserTexts(selector, messages)...)
 
@@ -395,6 +396,12 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 				history.inputModality.TextContentCount++
 			}
 		}
+		if role == "assistant" {
+			observeIntentLastToolCalls(&history.conversationFacts, previousTurnRole != "assistant" || previousWasToolResult, msg.ToolCalls)
+		}
+		if role != "system" && role != "developer" {
+			previousTurnRole = role
+		}
 		previousWasToolResult = observeIntentConversationMessage(
 			&history.conversationFacts,
 			role,
@@ -415,6 +422,27 @@ func extractIntentConversationHistory(messages []IntentMessage, toolDefinitionCo
 	history.conversationFacts.FailedToolResults = toolFailures.count.Failed
 
 	return history
+}
+
+// observeIntentLastToolCalls keeps the calls of the latest assistant turn, as
+// live routing does: consecutive assistant messages are one turn, and a turn
+// keeps each call's name and raw arguments.
+func observeIntentLastToolCalls(facts *classification.ConversationFacts, newTurn bool, toolCalls []json.RawMessage) {
+	if newTurn {
+		facts.LastAssistantToolNames, facts.LastAssistantToolArgs = nil, nil
+	}
+	for _, raw := range toolCalls {
+		var call struct {
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		}
+		if json.Unmarshal(raw, &call) == nil && call.Function.Name != "" {
+			facts.LastAssistantToolNames = append(facts.LastAssistantToolNames, call.Function.Name)
+			facts.LastAssistantToolArgs = append(facts.LastAssistantToolArgs, call.Function.Arguments)
+		}
+	}
 }
 
 // intentToolFailures counts failed tool results as live routing counts them
