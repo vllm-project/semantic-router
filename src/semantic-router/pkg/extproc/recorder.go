@@ -336,8 +336,11 @@ func buildReplayRoutingRecord(
 		record.ToolDefinitions = toolDefinitions
 		record.ReasoningEffort = replayReasoningEffort(ctx)
 		if !suppressBody {
-			if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
-				record.RequestBody = string(requestBody)
+			policy := ctx.RouterReplayPluginConfig
+			if policy.CapturesRawContent() && policy.CapturesRequestText() {
+				if requestBody, err := cache.MarshalSemanticRequest(replayRequest); err == nil {
+					record.RequestBody = string(requestBody)
+				}
 			}
 			record.Prompt = prompt
 		}
