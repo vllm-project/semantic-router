@@ -135,6 +135,11 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			ctx.fullDuplexHold = nil
 			return r.handleProcessReceiveError(ctx, err)
 		}
+		// Only the ext_proc stream reads the listener its Envoy gateway names;
+		// the header phase it shares with in-process sessions never does.
+		if requestHeaders := req.GetRequestHeaders(); requestHeaders != nil {
+			ctx.GatewayListener = gatewayListener(requestHeaders)
+		}
 
 		if err := r.handleProcessRequest(stream, req, ctx); err != nil {
 			r.settleAbortedLooperStreamingUsage(ctx, err)

@@ -80,6 +80,11 @@ const (
 	// the provider request on. The Router sets it; a client's value is dropped.
 	VSRRouteModel = "x-vsr-route-model"
 
+	// VSRListener names the listener an Envoy gateway received the request
+	// on. The generated Envoy listener sets it ahead of ext_proc, replacing a
+	// client's value, and the Router applies that listener's apis.
+	VSRListener = "x-vsr-listener"
+
 	// VSRSkipProcessing opts the request out of all router processing when
 	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
 	// See https://github.com/vllm-project/semantic-router/issues/1808.

@@ -223,6 +223,9 @@ export const X_VSR_KV_MAPPER_ID = 'x-vsr-kv-mapper-id'
 /** Address of the pod that holds the source model's KV cache. Surface: internal. */
 export const X_VSR_KV_SOURCE_POD = 'x-vsr-kv-source-pod'
 
+/** Listener an Envoy gateway received the request on; the generated Envoy listener sets it ahead of ext_proc, replacing a client's value, and the Router applies that listener's `apis`. The standalone gateway ignores it. Surface: internal. */
+export const X_VSR_LISTENER = 'x-vsr-listener'
+
 /** `off` keeps Router-managed memory out of the request. Surface: control. */
 export const X_VSR_MEMORY = 'x-vsr-memory'
 

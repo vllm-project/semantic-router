@@ -529,6 +529,17 @@
       "doc": "Route key: the model whose route the gateway sends the provider request on; the Router drops a client's value and sets its own."
     },
     {
+      "name": "x-vsr-listener",
+      "direction": [
+        "request"
+      ],
+      "surface": "internal",
+      "sensitivity": "none",
+      "owner": "routing",
+      "version": "v0.5",
+      "doc": "Listener an Envoy gateway received the request on; the generated Envoy listener sets it ahead of ext_proc, replacing a client's value, and the Router applies that listener's `apis`. The standalone gateway ignores it."
+    },
+    {
       "name": "x-vsr-upstream-host",
       "direction": [
         "provider response"
@@ -1051,6 +1062,7 @@
     "x-vsr-budget-scope",
     "x-vsr-trace",
     "x-vsr-route-model",
+    "x-vsr-listener",
     "x-vsr-upstream-host",
     "x-vsr-kv-source-pod",
     "x-vsr-kv-cache-id",

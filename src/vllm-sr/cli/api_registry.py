@@ -8,8 +8,6 @@ The generated config schema lists the same names (tests check the two agree).
 
 from __future__ import annotations
 
-import re
-
 API_NAMES = (
     "chat_completions",
     "responses",
@@ -46,33 +44,6 @@ SETTINGS = {
     "messages": ("unserved_models",),
     "systemone": ("max_deadline_ms", "vsr"),
 }
-# Every request path each API answers (RE2, anchored), the Azure OpenAI forms
-# among them, as the Router gates them; the generated Envoy listener routes by
-# them too.
-PATTERNS = {
-    "chat_completions": r"^(/v1/chat/completions|/openai/v1/chat/completions|/openai/deployments/.+/chat/completions)$",
-    "responses": r"^(/v1/responses(/[^/]+(/input_items)?)?|/openai/responses|/openai/v1/responses)$",
-    "messages": r"^/v1/messages(/count_tokens)?$",
-    "images": r"^/v1/images/generations$",
-    "speech": r"^/v1/audio/speech$",
-    "systemone": r"^/v1/(systemone(/batch|/models)?|decisions)$",
-}
-# The model listing every listener serves.
-MODELS_PATH = "/v1/models"
-
-
-def served_path_regex(
-    apis: tuple[str, ...], prefixes: dict[str, str] | None = None
-) -> str:
-    """One RE2 expression a whole request path matches when one of the APIs, or the model listing, serves it;
-    an API with a prefix is also served under it."""
-    alternatives = []
-    for name in apis:
-        inner = PATTERNS[name].removeprefix("^").removesuffix("$")
-        alternatives.append(inner)
-        if prefix := (prefixes or {}).get(name):
-            alternatives.append(re.escape(prefix) + "(?:" + inner + ")")
-    return "(" + "|".join([*alternatives, MODELS_PATH]) + ")"
 
 
 def accepted_names() -> tuple[str, ...]:
