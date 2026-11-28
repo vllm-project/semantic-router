@@ -278,7 +278,12 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	return encodeLooperEvidence(body, format, ctx)
+	body, err = encodeLooperEvidence(body, format, ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx.responseGroundingRequest = &dispatchRequest
+	return body, nil
 }
 
 // appendUnheldDiagnostics adds the losses another encode of the request

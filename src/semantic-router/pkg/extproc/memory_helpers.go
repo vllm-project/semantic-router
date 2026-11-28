@@ -311,13 +311,23 @@ func extractCurrentUserMessage(ctx *RequestContext) string {
 }
 
 func semanticText(contents []llmprotocol.Content) string {
+	text, _ := semanticTextWithCoverage(contents)
+	return text
+}
+
+func semanticTextWithCoverage(contents []llmprotocol.Content) (string, bool) {
 	parts := make([]string, 0, len(contents))
+	incomplete := false
 	for _, content := range contents {
-		if content.Kind == llmprotocol.ContentText && content.Text != "" {
+		if content.Kind != llmprotocol.ContentText {
+			incomplete = true
+			continue
+		}
+		if content.Text != "" {
 			parts = append(parts, content.Text)
 		}
 	}
-	return strings.Join(parts, " ")
+	return strings.Join(parts, " "), incomplete
 }
 
 func extractSemanticAssistantResponseText(response *llmprotocol.Response) string {

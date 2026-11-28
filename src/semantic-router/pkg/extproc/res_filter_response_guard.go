@@ -102,16 +102,25 @@ func (r *OpenAIRouter) runResponseGuard(ctx *RequestContext, answer string) *res
 func (ctx *RequestContext) responseInput(answer string) classification.ResponseInput {
 	input := ctx.ResponseStage
 	input.Answer = answer
+	input.ContextIncomplete = false
 	var grounding []string
 	for _, retrieved := range []string{ctx.RAGRetrievedContext, ctx.MemoryContext} {
 		if retrieved != "" {
 			grounding = append(grounding, retrieved)
 		}
 	}
-	if ctx.SemanticRequest != nil {
-		for _, message := range ctx.SemanticRequest.Messages {
+	request := ctx.responseGroundingRequest
+	if request == nil {
+		request = ctx.SemanticRequest
+	}
+	if request != nil {
+		for _, message := range request.Messages {
 			for _, content := range message.Content {
-				if content.Kind != llmprotocol.ContentToolResult || content.ToolResult == nil {
+				if content.Kind != llmprotocol.ContentToolResult {
+					continue
+				}
+				if content.ToolResult == nil {
+					input.ContextIncomplete = true
 					continue
 				}
 				_, rag := ctx.RAGToolCallIDs[content.ToolResult.CallID]
@@ -119,9 +128,11 @@ func (ctx *RequestContext) responseInput(answer string) classification.ResponseI
 				if rag || memory {
 					continue
 				}
-				if text := semanticText(content.ToolResult.Content); text != "" {
+				text, incomplete := semanticTextWithCoverage(content.ToolResult.Content)
+				if text != "" {
 					grounding = append(grounding, text)
 				}
+				input.ContextIncomplete = input.ContextIncomplete || incomplete
 			}
 		}
 	}

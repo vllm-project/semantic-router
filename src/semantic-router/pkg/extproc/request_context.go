@@ -395,6 +395,9 @@ type RequestContext struct {
 	// ResponseStage is what response-stage rules read about the request; the
 	// answer and its grounding context join it once the model has answered.
 	ResponseStage classification.ResponseInput
+	// responseGroundingRequest holds the projected input of the backend that
+	// answers the request.
+	responseGroundingRequest *llmprotocol.Request
 	// ResponseGuard is what the selected decision's response_guard made of
 	// the answer, nil until it ran.
 	ResponseGuard *responseGuardRun

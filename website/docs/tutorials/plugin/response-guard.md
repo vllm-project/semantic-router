@@ -93,7 +93,11 @@ or `403` up to ten times, and shows a `403` as a failed login.
 
 The grounding context is the documents and memories the
 [context plugin](./context.md) injected, in either injection mode, and the
-request's own tool results.
+text from the tool results projected for the backend that answered the
+request. A rule that reads `input.context` with `coverage: full` applies
+`on_unscanned` when the grounding projection omits tool-result content, even
+if the model read all the supplied text. If the omission leaves no readable
+grounding, the Router applies the policy without a model call.
 
 `POST /api/v1/plugins/response_guard/preview` reads an active binding's guard
 over a supplied question, context and answer; `mode: probe` asks the
@@ -160,7 +164,8 @@ for a similar earlier request, without evaluating the guard's conditions on the
 new request, such as a `keyword` or `fact_check` condition. Where that matters,
 use `mode: exact` for that decision's cache.
 
-Changing the guard starts the decision's cache fresh. Changing a signal it
-reads, such as a jailbreak rule's `predicate`, does not: set a new
-`revision.policy_revision` in the decision's `response_cache` configuration.
+Changing the guard or upgrading to a new guard evaluation version starts the
+decision's cache fresh. Changing a signal it reads, such as a jailbreak rule's
+`predicate`, does not: set a new `revision.policy_revision` in the decision's
+`response_cache` configuration.
 See [With a response guard](./response-cache.md#with-a-response-guard).

@@ -306,6 +306,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	origTraceContext := ctx.TraceContext
 	ctx.TraceContext = attemptCtx
 	origSemanticRequest := ctx.SemanticRequest
+	origGroundingRequest := ctx.responseGroundingRequest
 	origRateLimitCtx := ctx.RateLimitCtx
 	origDiags := ctx.ProtocolDiagnostics
 	origTargetFormat := ctx.TargetFormat
@@ -315,6 +316,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 		if !candidateSucceeded {
 			ctx.VSRSelectedCandidate = origSelectedCandidate
 			ctx.SemanticRequest = origSemanticRequest
+			ctx.responseGroundingRequest = origGroundingRequest
 			ctx.RateLimitCtx = origRateLimitCtx
 			ctx.ProtocolDiagnostics = origDiags
 		}
@@ -510,6 +512,7 @@ func (r *OpenAIRouter) executeFallbackCandidate(
 	// is rendered with its own stream options.
 	reqCopy.Stream, reqCopy.StreamOptions = origSemanticRequest.Stream, origSemanticRequest.StreamOptions
 	ctx.SemanticRequest = reqCopy
+	ctx.responseGroundingRequest = candidate.projectedRequest
 	ctx.ResponseEnvelope = translated.Envelope
 	ctx.ResponseUnknownFields = protocolcodec.DiagnosticsDroppedUnknownFields(translated.Diagnostics)
 
@@ -657,12 +660,13 @@ func logSkippedFallbackCandidate(
 // fallbackCandidate is a fallback candidate's request, prepared the way the
 // primary dispatch was prepared.
 type fallbackCandidate struct {
-	model    string
-	ref      *config.ModelRef
-	dispatch *providerDispatch
-	request  *llmprotocol.Request
-	body     []byte
-	engine   *protocolcodec.Engine
+	model            string
+	ref              *config.ModelRef
+	dispatch         *providerDispatch
+	request          *llmprotocol.Request
+	projectedRequest *llmprotocol.Request
+	body             []byte
+	engine           *protocolcodec.Engine
 }
 
 // prepareFallbackCandidate resolves a candidate's provider dispatch and
@@ -796,7 +800,7 @@ func (r *OpenAIRouter) prepareFallbackCandidate(
 
 	return &fallbackCandidate{
 		model: candidateModel, ref: candidateRef, dispatch: dispatch, request: reqCopy, body: requestBody,
-		engine: engine,
+		engine: engine, projectedRequest: &projected,
 	}, fallback.EvaluationResult{CanFallback: true}, nil
 }
 

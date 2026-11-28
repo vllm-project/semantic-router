@@ -1,12 +1,15 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routing"
@@ -249,6 +252,76 @@ func TestResponseCachePartitionFollowsTheDecisionsGuard(t *testing.T) {
 	}
 	if !strings.HasSuffix(unguarded, ":") {
 		t.Fatalf("partition %q of a decision without a guard carries an epoch", unguarded)
+	}
+}
+
+// An upgrade changes the guarded partition even with the same config and a
+// shared store. The upgraded router can still serve entries in its partition.
+func TestResponseGuardCacheMissesPreUpgradeEntries(t *testing.T) {
+	for _, mode := range []string{config.ResponseCacheModeExact, config.ResponseCacheModeSemantic} {
+		t.Run(mode, func(t *testing.T) {
+			provider, err := embedding.NewFuncProvider("test", 3, func(context.Context, string) ([]float32, error) {
+				return []float32{1, 0, 0}, nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, MaxEntries: 16, SimilarityThreshold: 0.8, EmbeddingProvider: provider})
+			t.Cleanup(func() { _ = backend.Close() })
+			store := cache.NewLegacyBackendAdapter(backend, cache.InMemoryCacheType)
+			service := cache.NewResponseCacheService(store, cache.DefaultResponseCacheServiceOptions())
+			router := &OpenAIRouter{Config: &config.RouterConfig{}, Cache: backend, ResponseCache: service}
+			decision := responseGuardDecision(jailbreakGuard(config.ResponseGuardAnnotate, ""))
+			decision.Plugins = append(decision.Plugins, config.DecisionPlugin{
+				Type: config.DecisionPluginResponseCache,
+				Configuration: config.MustStructuredPayload(config.ResponseCachePluginConfig{
+					Enabled: true, Mode: mode, Scope: "global",
+				}),
+			})
+			request := func(id string) *RequestContext {
+				return &RequestContext{
+					RequestID: id, TraceContext: t.Context(), SourceFormat: llmprotocol.OpenAIChatV1,
+					SemanticRequest: testNeutralRequest("test-model", "What color are the folders?"), VSRSelectedDecision: decision,
+				}
+			}
+			prior := request("before-upgrade")
+			identity, err := cacheIdentityForContext(prior)
+			if err != nil {
+				t.Fatal(err)
+			}
+			applyCacheIdentity(router.Config, prior, identity, nil)
+			guardFingerprint, err := cache.FingerprintValue(requestResponseGuard(prior))
+			if err != nil {
+				t.Fatal(err)
+			}
+			previousService := cache.NewResponseCacheService(store, cache.DefaultResponseCacheServiceOptions())
+			write := previousService.StoreExact
+			if mode == config.ResponseCacheModeSemantic {
+				write = previousService.StoreSemantic
+			}
+			for _, epoch := range []string{
+				cache.CombineFingerprints("", guardFingerprint),
+				cache.CombineFingerprints("", guardFingerprint, "grounding-coverage-v1"),
+			} {
+				prior.CacheIdentity.Partition.Epoch = epoch
+				if err := write(t.Context(), cache.CacheWrite{
+					Identity: prior.CacheIdentity, RequestID: prior.RequestID, ResponseBody: []byte(exactCacheHitBody), TTL: cache.DefaultTTL(),
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			current := request("after-upgrade")
+			if _, hit := router.handleCaching(current, decision.Name); hit {
+				t.Fatal("the upgraded router served a pre-upgrade cache entry")
+			}
+			body := strings.Replace(exactCacheHitBody, "cached answer", "The folders are blue.", 1)
+			router.updateResponseCache(current, []byte(body))
+			response, hit := router.handleCaching(request("repeat"), decision.Name)
+			if !hit || !strings.Contains(string(response.GetImmediateResponse().GetBody()), "The folders are blue.") {
+				t.Fatalf("repeat = %v, %v, want the current cached answer", response, hit)
+			}
+		})
 	}
 }
 
