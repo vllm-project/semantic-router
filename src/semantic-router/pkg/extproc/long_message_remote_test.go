@@ -358,10 +358,11 @@ func TestAGuardReadsALongTrailingToolOutputInWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	engine := routing.NewEngine(newLooperRouter(t, cfg), routing.DefaultOptions)
+	const instruction = "Find the barge records of the river town archive."
 	route := func(name, toolOutput, followup string) string {
 		t.Helper()
 		messages := []map[string]any{
-			{"role": "user", "content": "Find the barge records of the river town archive."},
+			{"role": "user", "content": instruction},
 			{"role": "assistant", "content": "", "tool_calls": []map[string]any{{"id": "call_1", "type": "function", "function": map[string]any{"name": "search_archive", "arguments": "{}"}}}},
 			{"role": "tool", "tool_call_id": "call_1", "content": toolOutput},
 		}
@@ -407,6 +408,10 @@ func TestAGuardReadsALongTrailingToolOutputInWindows(t *testing.T) {
 	if got := route("user-and-tool", toolOutput, followup); got != "fast" {
 		t.Fatalf("a benign long tool output with a follow-up routes to fast, got %q", got)
 	}
+	// The user message that opened the tool cycle stays current with every
+	// request the cycle makes, so the request part carries it ahead of the
+	// follow-up the latest turn added, not the follow-up alone.
+	requestText := instruction + "\n\n" + followup
 	guard.mu.Lock()
 	found := slices.ContainsFunc(guard.states, func(state json.RawMessage) bool {
 		var parts map[string]string
@@ -414,7 +419,7 @@ func TestAGuardReadsALongTrailingToolOutputInWindows(t *testing.T) {
 			return false
 		}
 		toolText := parts["tool_results"]
-		return len(parts) == 2 && parts["request"] == followup &&
+		return len(parts) == 2 && parts["request"] == requestText &&
 			len(toolText) > 0 && len(toolText) < len(toolOutput) && strings.HasSuffix(toolOutput, toolText)
 	})
 	guard.mu.Unlock()

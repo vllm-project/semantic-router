@@ -239,8 +239,10 @@ func assistantToolCall(callID string, narration string) llmprotocol.Message {
 	if narration != "" {
 		content = append(content, llmprotocol.Content{Kind: llmprotocol.ContentText, Text: narration})
 	}
-	content = append(content, llmprotocol.Content{Kind: llmprotocol.ContentToolCall,
-		ToolCall: &llmprotocol.ToolCall{ID: callID, Name: "lookup", Arguments: "{}"}})
+	content = append(content, llmprotocol.Content{
+		Kind:     llmprotocol.ContentToolCall,
+		ToolCall: &llmprotocol.ToolCall{ID: callID, Name: "lookup", Arguments: "{}"},
+	})
 	return llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: content}
 }
 
