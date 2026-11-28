@@ -622,3 +622,48 @@ study owner.
 
 For frozen development objectives, historical skill replay, prospective
 three-method enrollment and final scoring see [Search and evaluation](SEARCH.md).
+
+## Live verdict against sr-bench runs
+
+`verify` drives sr-bench end to end for one candidate on a frozen split;
+`live-verdict` replays the verdict for two runs that already exist. Both
+record one live-tier ledger entry whose `bench_refs` cite the sr-bench run
+IDs - the evaluation numbers themselves are never copied into the ledger.
+
+```bash
+# end to end: preview the routing distribution, then AB/BA pairs
+recipe-lab verify --spec spec.yaml --split dev --cases splits/dev.jsonl \
+  --candidate candidate.json --ledger ledger.jsonl \
+  --srbench-bin vllm-sr --srbench-url http://127.0.0.1:9000 \
+  --srbench-store ~/.srbench-store --candidate-targets target-a,target-b
+
+# verdict for two recorded runs (guard floors from spec.gates, A3)
+recipe-lab live-verdict --spec spec.yaml --split dev \
+  --baseline-run baseline-id --candidate-run candidate-id \
+  --candidate candidate.json --ledger ledger.jsonl --json
+```
+
+The three-state rule (INCONCLUSIVE > FAIL > PASS): incomplete, timed-out or
+hash-mismatched evidence is INCONCLUSIVE; a breached guard floor fails the
+verdict even when the objective metric wins; PASS requires the objective
+improvement, every declared guard pass, every cost constraint within its
+bound, and enough paired samples. `verify_promotion_evidence` replays a
+recorded PASS from its ledger record for audit.
+
+### Score one deployed candidate
+
+`score-candidate` scores an authored v0.5 source YAML that is already
+deployed against a saved baseline run. A coding agent submits its own
+proposal through it (`--proposer agent:<id>`); no spec is needed.
+
+```bash
+recipe-lab score-candidate --workspace lab/ \
+  --candidate config.yaml --proposer agent:claude-loop \
+  --baseline-run baseline-id --baseline-target single \
+  --candidate-target recipe --active-runtime-hash <sha256> \
+  --guard-case case-17 --min-speedup-pct 5
+```
+
+The receipt is one JSON line and is saved under `<workspace>/sr-bench`.
+`--candidate-run <id>` re-opens a submitted run instead of dispatching it
+again. The exit code is 0 PASS, 1 FAIL, 2 INCONCLUSIVE.

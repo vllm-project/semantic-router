@@ -173,7 +173,7 @@ func TestProjectSystemMessagesSendsLaterChatInstructionsAsUserTextInPlace(t *tes
 	if !reflect.DeepEqual(projected.Instructions, request.Instructions[:1]) {
 		t.Fatalf("instructions = %+v", projected.Instructions)
 	}
-	if len(diagnostics) != 1 || diagnostics[0].Reason != "4 system messages sent as user text in place" {
+	if len(diagnostics) != 1 || diagnostics[0].Reason != "3 system messages sent as user text in place" {
 		t.Fatalf("diagnostics = %+v", diagnostics)
 	}
 	if len(request.Messages) != 5 || len(request.Messages[2].Content) != 1 || len(request.Instructions) != 5 {
@@ -302,5 +302,129 @@ func TestProjectSystemMessagesLeavesNoDeveloperRoleToReport(t *testing.T) {
 	}
 	if _, developerDiagnostics := ProjectUnsupportedDeveloperRole(projected, Capabilities(CapabilityDeveloperRole), OpenAIChatV1); developerDiagnostics != nil {
 		t.Fatalf("the developer-role projection reported again: %+v", developerDiagnostics)
+	}
+}
+
+// Chat and Responses clients put a later instruction where it applies, as a
+// system or developer message. Strict templates need it as user text in the
+// same place as well, and one between a tool call and its output first moves
+// after the output, so the call keeps its results right after it.
+func TestProjectSystemMessagesCoversChatAndResponsesClients(t *testing.T) {
+	call := Content{Kind: ContentToolCall, ToolCall: &ToolCall{ID: "call_1", Name: "lookup", Arguments: "{}"}}
+	result := Content{Kind: ContentToolResult, ToolResult: &ToolResult{CallID: "call_1", Content: systemProjectionText("found")}}
+	for _, source := range []WireFormat{OpenAIChatV1, OpenAIResponsesV1} {
+		request := Request{
+			Trusted: TrustedMetadata{SourceFormat: source},
+			Messages: []Message{
+				{Role: RoleUser, Content: systemProjectionText("hi")},
+				{Role: RoleDeveloper, Content: systemProjectionText("answer in French")},
+				{Role: RoleAssistant, Content: []Content{call}},
+				{Role: RoleDeveloper, Content: systemProjectionText("be brief")},
+				{Role: RoleTool, Content: []Content{result}},
+			},
+		}
+		projected, diagnostics := ProjectSystemMessages(request, OpenAIChatV1)
+		want := []Message{
+			{Role: RoleUser, Content: append(systemProjectionText("hi"), systemProjectionText("answer in French")...)},
+			{Role: RoleAssistant, Content: []Content{call}},
+			{Role: RoleTool, Content: []Content{result}},
+			{Role: RoleUser, Content: systemProjectionText("be brief")},
+		}
+		if !reflect.DeepEqual(projected.Messages, want) {
+			t.Fatalf("%s conversation = %+v", source, projected.Messages)
+		}
+		if len(diagnostics) != 2 || diagnostics[1].Source != source || diagnostics[1].Field != LossyFieldSystemMessageRole ||
+			diagnostics[1].Reason != "2 system messages sent as user text in place" {
+			t.Fatalf("%s diagnostics = %+v", source, diagnostics)
+		}
+	}
+}
+
+func TestProjectSystemMessagesLeavesMessagesBackends(t *testing.T) {
+	messages := []Message{
+		{Role: RoleUser, Content: systemProjectionText("first")},
+		{Role: RoleSystem, Content: systemProjectionText("environment")},
+	}
+	for _, source := range []WireFormat{AnthropicMessagesV1, OpenAIChatV1, OpenAIResponsesV1} {
+		request := Request{Trusted: TrustedMetadata{SourceFormat: source}, Messages: messages}
+		projected, diagnostics := ProjectSystemMessages(request, AnthropicMessagesV1)
+		if diagnostics != nil || !reflect.DeepEqual(projected, request) {
+			t.Fatalf("%s to a Messages backend changed the request: %+v %+v", source, projected, diagnostics)
+		}
+	}
+}
+
+func TestProjectSystemMessagesSkipsEmptyInstructionText(t *testing.T) {
+	for _, role := range []Role{RoleSystem, RoleDeveloper} {
+		for _, target := range []WireFormat{OpenAIChatV1, OpenAIResponsesV1} {
+			request := Request{Messages: []Message{
+				placementText(RoleUser, "hi"), placementText(role, ""), placementText(RoleAssistant, "hello"),
+				{Role: role, Content: systemProjectionText(""), ReasoningEffort: "low"},
+			}}
+			projected, diagnostics := ProjectSystemMessages(request, target)
+			if len(diagnostics) != 0 {
+				t.Fatalf("empty text counted as user text: %+v", diagnostics)
+			}
+			want := []Message{request.Messages[0], request.Messages[2], {Role: RoleSystem, ReasoningEffort: "low"}}
+			if !reflect.DeepEqual(projected.Messages, want) {
+				t.Fatalf("empty instruction produced user text: %+v", projected.Messages)
+			}
+			if projected.Generation != request.Generation+1 {
+				t.Fatal("source envelope still replays empty instructions")
+			}
+		}
+	}
+}
+
+func TestProjectSystemMessagesOmitsEmptyInstructionsBeforePlacement(t *testing.T) {
+	for _, role := range []Role{RoleSystem, RoleDeveloper} {
+		for _, target := range []WireFormat{OpenAIChatV1, OpenAIResponsesV1} {
+			request := Request{
+				Trusted:  TrustedMetadata{SourceFormat: OpenAIResponsesV1},
+				Messages: []Message{placementCall("a"), placementText(role, ""), placementResult("a"), placementText(RoleSystem, "later")},
+			}
+			projected, diagnostics := ProjectSystemMessages(request, target)
+			want := []Message{request.Messages[0], request.Messages[2], placementText(RoleUser, "later")}
+			if !reflect.DeepEqual(projected.Messages, want) {
+				t.Fatalf("messages = %+v, want %+v", projected.Messages, want)
+			}
+			if len(diagnostics) != 1 || diagnostics[0].Field != LossyFieldSystemMessageRole {
+				t.Fatalf("omitted instruction generated a placement warning: %+v", diagnostics)
+			}
+			if request.Messages[1].Role != role || len(request.Messages) != 4 {
+				t.Fatal("projection changed the source request")
+			}
+		}
+	}
+}
+
+func TestProjectSystemMessagesKeepsPositionsWhenOmittingEmptyInstructions(t *testing.T) {
+	request := Request{
+		Instructions: []InstructionBlock{{Role: RoleSystem, Content: systemProjectionText("later"), Position: 2}},
+		Messages:     []Message{placementText(RoleUser, "first"), placementText(RoleSystem, ""), placementText(RoleAssistant, "answer")},
+	}
+	projected, _ := ProjectSystemMessages(request, OpenAIChatV1)
+	want := []Message{placementText(RoleUser, "first"), placementText(RoleAssistant, "answer")}
+	want[0].Content = append(want[0].Content, systemProjectionText("later")...)
+	if !reflect.DeepEqual(projected.Messages, want) {
+		t.Fatalf("positioned instruction moved: %+v", projected.Messages)
+	}
+	if request.Instructions[0].Position != 2 {
+		t.Fatal("projection changed the source position")
+	}
+}
+
+func TestProjectSystemMessagesPreservesEmptyEffortInToolSpan(t *testing.T) {
+	instruction := Message{Role: RoleSystem, Content: systemProjectionText(""), ReasoningEffort: "low"}
+	request := Request{Trusted: TrustedMetadata{SourceFormat: OpenAIResponsesV1}, Messages: []Message{
+		placementCall("a"), instruction, placementResult("a"),
+	}}
+	projected, diagnostics := ProjectSystemMessages(request, OpenAIChatV1)
+	want := []Message{request.Messages[0], request.Messages[2], {Role: RoleSystem, ReasoningEffort: "low"}}
+	if !reflect.DeepEqual(projected.Messages, want) {
+		t.Fatalf("per-message effort lost: %+v", projected.Messages)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Field != "input" {
+		t.Fatalf("effort placement warning = %+v", diagnostics)
 	}
 }

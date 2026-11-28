@@ -337,9 +337,12 @@ func decodeChatMessages(messages []chatMessageWire, request *llmprotocol.Request
 		if err != nil {
 			return err
 		}
-		if message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper {
+		// System and developer messages before the conversation lead the
+		// request. A later one applies from where the client put it, so it
+		// stays in place, as it does for a Messages client.
+		if (message.Role == llmprotocol.RoleSystem || message.Role == llmprotocol.RoleDeveloper) && len(request.Messages) == 0 {
 			request.Instructions = append(request.Instructions, llmprotocol.InstructionBlock{
-				Role: message.Role, Content: message.Content, Name: message.Name, Position: len(request.Messages),
+				Role: message.Role, Content: message.Content, Name: message.Name,
 			})
 		} else {
 			request.Messages = append(request.Messages, message)

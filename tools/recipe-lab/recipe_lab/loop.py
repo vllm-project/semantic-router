@@ -18,6 +18,7 @@ from .loop_evidence import (
     packet_split,
     target,
 )
+from .schedule import episode_ids
 
 
 def record_id(row):
@@ -177,3 +178,57 @@ def publish_config(path, text):
     finally:
         staged.unlink(missing_ok=True)
     return digest(raw)
+
+
+def compare(ledger, args):
+    """Pair two comparable measurements and record the comparison (paired)."""
+    base, candidate = ledger.measure(args.baseline), ledger.measure(args.candidate)
+    check(
+        base["record_id"] != candidate["record_id"],
+        "comparison requires distinct records",
+    )
+    for row in (base, candidate):
+        verify(row)
+    comparable(base, candidate)
+    check(
+        not episode_ids(base).intersection(episode_ids(candidate)),
+        "comparison reuses a physical episode",
+    )
+    wins, losses, jointly_correct = [], [], {}
+    for task, left in base["cases"].items():
+        right = candidate["cases"][task]
+        if left["correct"] and right["correct"]:
+            jointly_correct[task] = {
+                "baseline_seconds": left["seconds"],
+                "candidate_seconds": right["seconds"],
+            }
+        elif left["correct"]:
+            losses.append(task)
+        elif right["correct"]:
+            wins.append(task)
+    if args.disposition == "advance-to-holdout":
+        paired_gain = sum(
+            v["baseline_seconds"] - v["candidate_seconds"]
+            for v in jointly_correct.values()
+        )
+        check(
+            base["split"] == "dev" and not losses and (wins or paired_gain > 0),
+            "advance requires a development gain with no lost strict passes",
+        )
+    check(
+        not args.disposition or bool(args.reason and args.reason.strip()),
+        "record the reason for the disposition",
+    )
+    return ledger.append(
+        {
+            "kind": "comparison",
+            "baseline": base["record_id"],
+            "candidate": candidate["record_id"],
+            "split": base["split"],
+            "wins": wins,
+            "losses": losses,
+            "jointly_correct": jointly_correct,
+            "disposition": args.disposition,
+            "reason": args.reason,
+        }
+    )

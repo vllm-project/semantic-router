@@ -34,6 +34,9 @@ pip install -e '.[dev]'
 | `propose-rule-thresholds` | move every predicate site of one signal inside a decision's rule at once, with site provenance (C) |
 | `run` | replay-tier evaluation of candidate configs -> RANKED ledger records (A1/A5) |
 | `ledger` | inspect or append to the evidence ledger (`show` / `append` / `top`) |
+| `cases-to-srbench` | render the labeled case list as an sr-bench dataset; the printed `srbench_sha256` freezes into the contract's split declaration (X3) |
+| `verify` | drive sr-bench end to end for one candidate: Preview routing, `--repetitions` AB/BA pairs, per-pair compare and the shared three-state verdict (I) |
+| `live-verdict` | compare two already-recorded sr-bench runs -> PASS / FAIL / INCONCLUSIVE with guard floors from `spec.gates` (A3) |
 
 Worked examples with a runnable spec and records live in
 [`examples/`](examples/):
@@ -218,18 +221,68 @@ key type: `classifier:` -> `vela_classify`, `decision:` -> `vela_decisions`,
 without signal evidence keep whatever `family` tag the input record carries
 (e.g. from `collect-replays --family`).
 
+## Live tier
+
+The replay tier's winner is cheap but not proof: it assumes answers are
+routing-independent and knows nothing about real service behavior. The live
+tier attaches the loop to sr-bench and adds evidence gates strong enough to
+support a keep-or-rollback decision:
+
+1. **sr-bench integration, not a parallel engine.** recipe-lab drives sr-bench
+   through a thin `SrbenchCli` wrapper (`experiment` / `preview` /
+   `candidate-plan` / `compare` / `report`); the ledger records sr-bench run
+   IDs (`bench_refs`) and never copies evaluation results - sr-bench stays the
+   single source of truth.
+2. **`verify`** drives one candidate end to end: Preview confirms the routing
+   distribution first, then `--repetitions` AB/BA pairs (even pairs lead with
+   the baseline, odd pairs with the candidate), each pair re-running the
+   baseline's frozen manifest and submitting a fresh candidate-plan, with
+   per-pair compares and the shared three-state verdict. Reference-arm run
+   IDs are cached so repeated invocations do not re-run expensive arms (M4).
+3. **`live-verdict`** produces the three-state verdict for two recorded runs:
+   INCONCLUSIVE > FAIL > PASS. Timeout or interrupted trials are INCONCLUSIVE,
+   never FAIL; a declared guard floor (privacy / jailbreak safety, quality)
+   that is breached fails the verdict even when the objective metric wins;
+   missing guard evidence is also INCONCLUSIVE. Guard measurements are passed
+   as rows (`--guard-measurements`) and never override the spec's floors.
+4. **Identity discipline.** Frozen dataset and metric identity is enforced
+   (A4 re-hash before touching data; sr-bench runs must bind to the split's
+   dataset identity, X3); `frozen_test` is quarantined behind `--final`;
+   transfer workloads are final-verify only (M5). AB/BA arm order is paired
+   and explicit; paired statistics across repetitions carry an honest
+   "statistical significance is not established" note. Cost gates read from
+   the contract's objective constraints (E) with explicit cost assumptions.
+5. **Promotion evidence replay.** `verify_promotion_evidence` re-checks a
+   recorded PASS verdict from its ledger record alone, so a promotion claim
+   can be audited without re-running anything.
+6. **`score-candidate`** is the agent's own channel: it scores one deployed
+   candidate against a saved sr-bench baseline run through the installed
+   `vllm-sr benchmark` worker. The candidate plan must reproduce the frozen
+   baseline (same cases, profile, seed and subject protocol) and match the
+   expected active runtime hash before anything is dispatched. The receipt
+   (`recipe-lab-sr-bench-run-v1`) is printed as one JSON line and saved
+   under `<workspace>/sr-bench`. Exit codes follow the verdict: 0 PASS,
+   1 FAIL, 2 INCONCLUSIVE.
+
 ## Scope of this slice
 
-This slice owns the replay tier: contracts (spec/candidate/gates/budget),
-splits, the answer bank, the deterministic proposers, replay evaluation
-through the real router, and the ledger. The live tier (sr-bench integration,
-AB/BA and verdict gating) arrives with
-[sub-issue 3](https://github.com/vllm-project/semantic-router/issues/5491);
-reports, context export and provenance manifests with
+This slice owns the replay tier and the live tier: contracts
+(spec/candidate/gates/budget/constraints), splits, the answer bank, the
+deterministic proposers, replay evaluation through the real router, the
+ledger, sr-bench integration and the three-state live verdict. Reports,
+context export and provenance manifests arrive with
 [sub-issue 4](https://github.com/vllm-project/semantic-router/issues/5492).
 
 ## Tests
 
 ```bash
 pytest
+```
+
+`tests/native_srbench_run.py` is opt-in: it drives `score-candidate` through
+the installed `recipe-lab` executable against the real sr-bench worker with
+local HTTP fixtures, so it needs the Recipe Lab wheel on `PATH`:
+
+```bash
+pytest tests/native_srbench_run.py
 ```
