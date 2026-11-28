@@ -262,6 +262,12 @@ func validateProjectionScoreInput(
 	if strings.EqualFold(input.Type, SignalTypeProjection) {
 		return validateProjectionInputProjectionRef(scoreName, input, outputToSource)
 	}
+	if strings.EqualFold(input.Type, ProjectionInputImageFeatures) {
+		if IsImageFeatureProjectionInput(input.Name, input.ValueSource) {
+			return nil
+		}
+		return fmt.Errorf("projections.scores[%q]: image_features requires blur or edge_density and value_source raw", scoreName)
+	}
 	if strings.EqualFold(input.Type, SignalTypeSystemOne) {
 		if err := validateSystemOneProjectionInput(cfg, scoreName, input); err != nil {
 			return err

@@ -119,7 +119,7 @@ func extractSemanticRequestSignalsWith(request *llmprotocol.Request, selector *r
 		consumeSemanticMessage(result, message)
 	}
 	result.RoutingInput = routing.Outcome()
-	result.Images = requestImages(request)
+	result.Images, result.CurrentUserImages = requestImages(request)
 	result.UserVideos = requestVideos(request)
 	result.ToolDefinitionCount = len(request.Tools)
 	result.InvalidToolCalls = classification.InvalidRecentToolCalls(request)
@@ -262,39 +262,50 @@ func saturatingNeutralAdd(left, right int) int {
 	return left + right
 }
 
-// requestImages are every image the request as sent carries, in order, as
+// requestImages returns every image the request as sent carries, in order, as
 // base64 data URLs: each turn's, earlier ones included, and those in tool
-// results and generated-image items, since the backend gets them all.
-// Remote URLs and local paths never cross this boundary: such an image is an
-// empty entry, so a rule that reads images is unknown rather than asked
-// about the rest.
-func requestImages(request *llmprotocol.Request) []string {
-	var images []string
-	var consume func([]llmprotocol.Content)
-	consume = func(contents []llmprotocol.Content) {
+// results and generated-image items, since the backend gets them all. Remote
+// URLs and local paths never cross this boundary: such an image is an empty
+// entry, so a rule that reads images is unknown rather than asked about the
+// rest. The current-turn candidates that image_features reads come from the
+// same walk, so an inline payload is normalized once per request rather than
+// once per view.
+func requestImages(request *llmprotocol.Request) (all []string, currentUser []string) {
+	currentTurn := currentTurnStart(request.Messages)
+	var consume func(contents []llmprotocol.Content, userTurn bool)
+	consume = func(contents []llmprotocol.Content, userTurn bool) {
 		for _, content := range contents {
 			switch content.Kind {
 			case llmprotocol.ContentImage:
-				images = append(images, neutralInlineImageDataURL(content))
+				normalized := neutralInlineImageDataURL(content)
+				all = append(all, normalized)
+				// The current turn's candidates are its top-level user images,
+				// in order, bounded so the decoder work stays capped. Codecs can
+				// split a turn across messages, so the shared boundary decides
+				// which messages are current; nested tool-result images never
+				// count.
+				if userTurn && len(currentUser) < classification.MaxImageFeatureCandidates {
+					currentUser = append(currentUser, normalized)
+				}
 			case llmprotocol.ContentGeneratedImage:
 				if generated := content.GeneratedImage; generated != nil && generated.Result != nil && *generated.Result != "" {
 					format := "image/" + cmp.Or(generated.OutputFormat, "png")
-					images = append(images, neutralInlineImageDataURL(llmprotocol.Content{MediaType: format, Data: *generated.Result}))
+					all = append(all, neutralInlineImageDataURL(llmprotocol.Content{MediaType: format, Data: *generated.Result}))
 				}
 			case llmprotocol.ContentToolResult:
 				if content.ToolResult != nil {
-					consume(content.ToolResult.Content)
+					consume(content.ToolResult.Content, false)
 				}
 			}
 		}
 	}
 	for _, instruction := range request.Instructions {
-		consume(instruction.Content)
+		consume(instruction.Content, false)
 	}
-	for _, message := range request.Messages {
-		consume(message.Content)
+	for index, message := range request.Messages {
+		consume(message.Content, index >= currentTurn && message.Role == llmprotocol.RoleUser)
 	}
-	return images
+	return all, currentUser
 }
 
 // requestVideos are every video the request as sent carries, in any turn or

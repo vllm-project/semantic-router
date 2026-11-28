@@ -2,10 +2,76 @@ package extproc
 
 import (
 	"encoding/base64"
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func TestImageFeatureCandidatesAreCurrentTurnOnly(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/image.png"}
+	request := userImageRequest(inline)
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{inline}},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote, inline, remote, remote, inline}},
+		llmprotocol.Message{Role: llmprotocol.RoleSystem, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Use a concise answer."}}},
+	)
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; !slices.Equal(got, []string{"", "data:image/png;base64," + tinyPNG, "", ""}) {
+		t.Fatalf("unexpected current turn candidates: %v", got)
+	}
+	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant})
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; len(got) != 0 {
+		t.Fatal("an assistant continuation must not re-score historical images")
+	}
+}
+
+func TestImageFeatureCandidatesKeepUserPartsAcrossSplitTurn(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/other.png"}
+	request := userImageRequest(inline)
+	request.Messages = append(request.Messages,
+		llmprotocol.Message{Role: llmprotocol.RoleAssistant},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote}},
+		llmprotocol.Message{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Content: []llmprotocol.Content{inline}},
+		}}},
+		llmprotocol.Message{Role: llmprotocol.RoleDeveloper, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Summarize results."}}},
+		llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{inline}, WithToolResults: true},
+	)
+	if got := extractSemanticRequestSignals(request).CurrentUserImages; !slices.Equal(got, []string{"", "data:image/png;base64," + tinyPNG}) {
+		t.Fatalf("expected the current turn's two user image slots, not history or tool images; got %d slots", len(got))
+	}
+}
+
+// Both image views come from one walk: the full list keeps history, tool-result
+// and generated images in request order, while the candidates stay the current
+// turn's top-level user images, bounded for decoder work.
+func TestRequestImagesCollectsBothViews(t *testing.T) {
+	inline := llmprotocol.Content{Kind: llmprotocol.ContentImage, MediaType: "image/png", Data: tinyPNG}
+	remote := llmprotocol.Content{Kind: llmprotocol.ContentImage, URL: "https://example.com/history.png"}
+	generated := llmprotocol.Content{Kind: llmprotocol.ContentGeneratedImage, GeneratedImage: &llmprotocol.GeneratedImage{
+		Result: &tinyPNG, OutputFormat: "png",
+	}}
+	request := userImageRequest(inline)
+	request.Messages = []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{remote}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{generated}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{
+			Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{Content: []llmprotocol.Content{inline}},
+		}}},
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{inline}},
+	}
+	snapshot := extractSemanticRequestSignals(request)
+	inlineURL := "data:image/png;base64," + tinyPNG
+	wantAll := []string{"", inlineURL, inlineURL, inlineURL}
+	if !slices.Equal(snapshot.Images, wantAll) {
+		t.Fatalf("Images = %v, want every image in request order", snapshot.Images)
+	}
+	if got := snapshot.CurrentUserImages; !slices.Equal(got, []string{inlineURL}) {
+		t.Fatalf("CurrentUserImages = %v, want only the current user turn", got)
+	}
+}
 
 // A 1x1 PNG; small enough to inline and a valid image for the safety gate.
 var tinyPNG = base64.StdEncoding.EncodeToString([]byte{

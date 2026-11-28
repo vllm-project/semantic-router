@@ -117,6 +117,73 @@ The DSL exposes the same three concepts through `PROJECTION partition`,
 `PROJECTION score`, and `PROJECTION mapping` blocks. The Dashboard exposes them
 under **Routing → Projections**.
 
+## Route by image quality and layout
+
+Opt in by referencing `image_features` in a recipe's projection score with
+`value_source: raw`. Both indicators range from 0 to 1:
+
+- `blur`: higher means lower Laplacian variance, which can indicate blur or
+  simply a smooth image.
+- `edge_density`: higher means larger average grayscale changes between
+  adjacent pixels, which can indicate dense text or chart structure.
+
+These are heuristics, not calibrated quality scores. The router takes the
+maximum of each indicator independently across readable images. It considers
+the first four top-level image parts from user messages in the current turn.
+System and developer messages do not end the turn; tool results and earlier
+turns do not contribute images. It accepts only inline base64 PNG or JPEG and
+never fetches URLs. After base64 decoding, each image is limited to 2 MiB of
+image data and 4,194,304 pixels, with dimensions of at least 3 × 3. The
+analysis reduces the long side to at most 384 pixels.
+Unreadable images do not contribute. If none can be scored, the projection is
+unknown; a lower-priority image-presence decision can provide the fallback.
+
+For example, put this in a recipe whose strategy is `priority`, using model
+aliases that accept images. Tune the illustrative thresholds to your traffic.
+
+```yaml
+signals:
+  input_modality:
+    - {name: has-image, modality: image}
+projections:
+  scores:
+    - name: blur-score
+      method: weighted_sum
+      inputs:
+        - {type: image_features, name: blur, value_source: raw, weight: 1}
+    - name: layout-score
+      method: weighted_sum
+      inputs:
+        - {type: image_features, name: edge_density, value_source: raw, weight: 1}
+  mappings:
+    - name: blur-band
+      source: blur-score
+      outputs:
+        - {name: blurry, gte: 0.5}
+    - name: layout-band
+      source: layout-score
+      outputs:
+        - {name: dense, gte: 0.5}
+        - {name: simple, lt: 0.5}
+decisions:
+  - name: difficult-image
+    priority: 30
+    rules:
+      operator: OR
+      conditions:
+        - {type: projection, name: blurry, on_unknown: no_match}
+        - {type: projection, name: dense, on_unknown: no_match}
+    modelRefs: [{model: strong-vision}]
+  - name: simple-image
+    priority: 20
+    rules: {type: projection, name: simple, on_unknown: no_match}
+    modelRefs: [{model: standard-vision}]
+  - name: image-fallback
+    priority: 10
+    rules: {type: input_modality, name: has-image}
+    modelRefs: [{model: fallback-vision}]
+```
+
 ## Dependencies and Limitations
 
 - Projections make no additional model or storage calls; they consume signal

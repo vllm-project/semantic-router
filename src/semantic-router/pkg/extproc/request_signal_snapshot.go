@@ -25,9 +25,10 @@ type requestSignalSnapshot struct {
 	// last user one is the current turn (PriorTurns). Images are every image
 	// the request carries (requestImages); UserVideos are every video the
 	// request carries (requestVideos), unreadable ones as empty strings.
-	Turns      []classification.ConversationTurn
-	Images     []string
-	UserVideos []string
+	Turns             []classification.ConversationTurn
+	Images            []string
+	CurrentUserImages []string
+	UserVideos        []string
 	// InputModality holds the structural input-modality counts for the
 	// input_modality signal family, scoped to user messages.
 	InputModality classification.InputModalityFacts

@@ -182,6 +182,9 @@ func (c *Classifier) evaluateBaseSignals(input SignalEvaluationInput, signalScop
 	asks := func(signalType string) []string { return c.signalQuestionDeployments(signalType, usedSignals) }
 	runSignalDispatchers(stage, dispatchers, usedSignals, ready, bundle, asks, &wg)
 
+	// Image evidence is CPU-only and independent of the model bundle. Start
+	// other signals first, and finish collecting evidence before projections.
+	c.recordImageFeatureEvidence(stage, input.RequestFacts.CurrentUserImages, results, &mu)
 	wg.Wait()
 	request := textForSignal(systemOneQuestionText)
 	for _, evidence := range results.PIIEvidence {

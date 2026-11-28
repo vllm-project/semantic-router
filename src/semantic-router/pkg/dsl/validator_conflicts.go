@@ -541,6 +541,12 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 		v.checkProjectionScoreInputProjectionRef(context, pos, input, scoreNames)
 		return
 	}
+	if strings.EqualFold(input.SignalType, config.ProjectionInputImageFeatures) {
+		if !config.IsImageFeatureProjectionInput(input.SignalName, input.ValueSource) {
+			v.addDiag(DiagConstraint, pos, context+": image_features requires blur or edge_density and value_source raw", nil)
+		}
+		return
+	}
 	name := input.SignalName
 	if strings.EqualFold(input.SignalType, config.SignalTypeSystemOne) || config.IsApplicationSignalType(strings.ToLower(input.SignalType)) {
 		// A systemone or application input may read one option of its
@@ -575,7 +581,7 @@ func (v *Validator) checkProjectionScoreInput(context string, pos Position, inpu
 
 func isProjectionInputTypeSupported(signalType string) bool {
 	return config.IsSupportedSignalType(signalType) ||
-		signalType == config.SignalTypeProjection
+		signalType == config.SignalTypeProjection || strings.EqualFold(signalType, config.ProjectionInputImageFeatures)
 }
 
 func (v *Validator) checkProjectionMapping(mapping *ProjectionMappingDecl, scoreNames map[string]bool, outputNames map[string]bool) {
